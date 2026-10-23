@@ -1,7 +1,10 @@
 #requires -Version 3.0
-# Creates Game.desktop.exe; the original executable is never written to.
+# Creates <name>.desktop.exe beside the game executable, with the AppContainer
+# flag cleared; the original executable is never written to. -IncludeRuntime
+# instead creates a desktop\ copy of the game folder whose executable and VC
+# runtime DLLs are all cleared (Windows 8/8.1 refuse flagged DLLs as well).
 [CmdletBinding()]
-param([string]$Exe = '.\Game.exe', [switch]$IncludeRuntime)
+param([Parameter(Mandatory = $true)][string]$Exe, [switch]$IncludeRuntime)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -34,23 +37,33 @@ try {
         $folder = [IO.Path]::GetDirectoryName($source)
         $destination = Join-Path $folder 'desktop'
         if (Test-Path -LiteralPath $destination) { throw "$destination already exists; move it before retrying." }
-        $runtimeNames = @('msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll')
+        $desktopName = [IO.Path]::GetFileNameWithoutExtension($source) + '.desktop' + [IO.Path]::GetExtension($source)
+        # The VCLibs 110, 120 and 140 runtime DLLs, whichever the game ships with.
+        $runtimeNames = @('msvcr110.dll', 'msvcp110.dll', 'vccorlib110.dll',
+            'msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll',
+            'vcruntime140_app.dll', 'msvcp140_app.dll', 'vccorlib140_app.dll') |
+            Where-Object { Test-Path -LiteralPath (Join-Path $folder $_) -PathType Leaf }
+        if (-not $runtimeNames) { throw 'No VC runtime DLLs beside the source executable; run setup first.' }
         $images = @{}
         $originals = @{}
-        $originals['Game.desktop.exe'] = [IO.File]::ReadAllBytes($source)
-        $images['Game.desktop.exe'] = Convert-DesktopImage $originals['Game.desktop.exe'] $false
+        $originals[$desktopName] = [IO.File]::ReadAllBytes($source)
+        $images[$desktopName] = Convert-DesktopImage $originals[$desktopName] $false
         foreach ($name in $runtimeNames) {
             $originals[$name] = [IO.File]::ReadAllBytes((Join-Path $folder $name))
             $images[$name] = Convert-DesktopImage $originals[$name] $true
         }
-        foreach ($name in @('ctr2shim.dll', 'd3dcompiler_47.dll', 'Assets')) {
-            if (-not (Test-Path -LiteralPath (Join-Path $folder $name))) { throw "Missing $name beside the source executable." }
-        }
-        # Copy only runtime content, not package metadata or decompiled sources.
+        if (-not (Test-Path -LiteralPath (Join-Path $folder 'appxportable.dll'))) { throw 'Missing appxportable.dll beside the source executable.' }
+        # Copy the game folder, without package metadata, logs, earlier desktop
+        # copies, or decompiler and disassembler output kept beside the game.
         # Reject reparse points before recursively copying assets or saves.
-        $copyNames = @('ctr2shim.dll', 'd3dcompiler_47.dll', 'Assets', 'SaveData', 'ctr2shim.ini',
-            'App.xbf', 'MainPage.xbf', 'MovieMgrPage.xbf', 'VideoPlayerPage.xbf',
-            'resources.pri', 'ZF.winmd', 'VungleSDK.winmd')
+        $skip = @('AppxSignature.p7x', 'AppxBlockMap.xml', '[Content_Types].xml', 'AppxMetadata',
+            'microsoft.system.package.metadata', 'desktop', [IO.Path]::GetFileName($source)) + $runtimeNames
+        $skipPatterns = @('*.desktop.exe', 'appx-portable*.log', '*.c', '*.h', '*.cpp', '*.i64', '*.idb', '*.id0',
+            '*.id1', '*.id2', '*.nam', '*.til', '*.gzf', '*.rep')
+        $copyNames = @(Get-ChildItem -LiteralPath $folder -Force | ForEach-Object { $_.Name } | Where-Object {
+                $name = $_
+                $skip -notcontains $name -and -not ($skipPatterns | Where-Object { $name -like $_ })
+            })
         foreach ($name in $copyNames) {
             $path = Join-Path $folder $name
             if (Test-Path -LiteralPath $path) {
@@ -77,13 +90,13 @@ try {
             if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($target)) -cne [Convert]::ToBase64String($images[$name])) {
                 throw "Verification failed for $target; do not launch the copy."
             }
-            $originalPath = if ($name -eq 'Game.desktop.exe') { $source } else { Join-Path $folder $name }
+            $originalPath = if ($name -eq $desktopName) { $source } else { Join-Path $folder $name }
             if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($originalPath)) -cne [Convert]::ToBase64String($originals[$name])) {
                 throw "Source changed during preparation: $originalPath"
             }
         }
         Write-Output "Created $destination; original executable and runtime DLLs unchanged."
-        Write-Output "Launch $destination\Game.desktop.exe --log"
+        Write-Output "Launch $destination\$desktopName --log"
         exit 0
     }
     $output = Join-Path ([IO.Path]::GetDirectoryName($source)) (

@@ -8,7 +8,7 @@
 #include <wrl/wrappers/corewrappers.h>
 #include <map>
 #include <functional>
-namespace ctr2 {
+namespace appx {
 HRESULT MakePanel(IInspectable** value);
 HRESULT MakeGrid(IInspectable** value);
 HRESULT MakeMediaElement(IInspectable** value);

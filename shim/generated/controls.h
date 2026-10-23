@@ -9,87 +9,87 @@
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("68ea500b-3fe9-4735-b6a0-e7601933b089")) DefaultIFrame : public ABI::Windows::UI::Xaml::Controls::IFrame {
   HRESULT STDMETHODCALLTYPE get_CacheSize(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_CacheSize");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_CacheSize");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_CacheSize(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::put_CacheSize");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::put_CacheSize");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CanGoBack(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_CanGoBack");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_CanGoBack");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CanGoForward(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_CanGoForward");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_CanGoForward");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CurrentSourcePageType(ABI::Windows::UI::Xaml::Interop::TypeName* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_CurrentSourcePageType");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_CurrentSourcePageType");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_SourcePageType(ABI::Windows::UI::Xaml::Interop::TypeName* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_SourcePageType");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_SourcePageType");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_SourcePageType(ABI::Windows::UI::Xaml::Interop::TypeName value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::put_SourcePageType");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::put_SourcePageType");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_BackStackDepth(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_BackStackDepth");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::get_BackStackDepth");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_Navigated(ABI::Windows::UI::Xaml::Navigation::INavigatedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::add_Navigated");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::add_Navigated");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_Navigated(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::remove_Navigated");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::remove_Navigated");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_Navigating(ABI::Windows::UI::Xaml::Navigation::INavigatingCancelEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::add_Navigating");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::add_Navigating");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_Navigating(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::remove_Navigating");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::remove_Navigating");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_NavigationFailed(ABI::Windows::UI::Xaml::Navigation::INavigationFailedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::add_NavigationFailed");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::add_NavigationFailed");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_NavigationFailed(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::remove_NavigationFailed");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::remove_NavigationFailed");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_NavigationStopped(ABI::Windows::UI::Xaml::Navigation::INavigationStoppedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::add_NavigationStopped");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::add_NavigationStopped");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_NavigationStopped(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::remove_NavigationStopped");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::remove_NavigationStopped");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GoBack(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::GoBack");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::GoBack");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GoForward(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::GoForward");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::GoForward");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE Navigate(ABI::Windows::UI::Xaml::Interop::TypeName sourcePageType, IInspectable* parameter, boolean* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::Navigate");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::Navigate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetNavigationState(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::GetNavigationState");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::GetNavigationState");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SetNavigationState(HSTRING navigationState) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::SetNavigationState");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrame::SetNavigationState");
     return E_NOTIMPL;
   }
 };
@@ -97,7 +97,7 @@ struct __declspec(uuid("68ea500b-3fe9-4735-b6a0-e7601933b089")) DefaultIFrame : 
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("02ee93d4-448e-469e-9799-0a8a1f70f171")) DefaultIFrameFactory : public ABI::Windows::UI::Xaml::Controls::IFrameFactory {
   HRESULT STDMETHODCALLTYPE CreateInstance(IInspectable* baseInterface, IInspectable** innerInterface, ABI::Windows::UI::Xaml::Controls::IFrame** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrameFactory::CreateInstance");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IFrameFactory::CreateInstance");
     return E_NOTIMPL;
   }
 };
@@ -105,31 +105,31 @@ struct __declspec(uuid("02ee93d4-448e-469e-9799-0a8a1f70f171")) DefaultIFrameFac
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("c4b27075-e641-453e-824d-012fc7cf95cf")) DefaultIPage : public ABI::Windows::UI::Xaml::Controls::IPage {
   HRESULT STDMETHODCALLTYPE get_Frame(ABI::Windows::UI::Xaml::Controls::IFrame** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::get_Frame");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::get_Frame");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NavigationCacheMode(ABI::Windows::UI::Xaml::Navigation::NavigationCacheMode* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::get_NavigationCacheMode");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::get_NavigationCacheMode");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_NavigationCacheMode(ABI::Windows::UI::Xaml::Navigation::NavigationCacheMode value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::put_NavigationCacheMode");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::put_NavigationCacheMode");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_TopAppBar(ABI::Windows::UI::Xaml::Controls::IAppBar** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::get_TopAppBar");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::get_TopAppBar");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_TopAppBar(ABI::Windows::UI::Xaml::Controls::IAppBar* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::put_TopAppBar");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::put_TopAppBar");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_BottomAppBar(ABI::Windows::UI::Xaml::Controls::IAppBar** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::get_BottomAppBar");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::get_BottomAppBar");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_BottomAppBar(ABI::Windows::UI::Xaml::Controls::IAppBar* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::put_BottomAppBar");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPage::put_BottomAppBar");
     return E_NOTIMPL;
   }
 };
@@ -137,7 +137,7 @@ struct __declspec(uuid("c4b27075-e641-453e-824d-012fc7cf95cf")) DefaultIPage : p
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("dfa149ac-1849-445e-937c-40a9590cc076")) DefaultIPageFactory : public ABI::Windows::UI::Xaml::Controls::IPageFactory {
   HRESULT STDMETHODCALLTYPE CreateInstance(IInspectable* baseInterface, IInspectable** innerInterface, ABI::Windows::UI::Xaml::Controls::IPage** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPageFactory::CreateInstance");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPageFactory::CreateInstance");
     return E_NOTIMPL;
   }
 };
@@ -145,15 +145,15 @@ struct __declspec(uuid("dfa149ac-1849-445e-937c-40a9590cc076")) DefaultIPageFact
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("230b9cb8-3419-4306-aabe-4a8e680d3627")) DefaultIPageOverrides : public ABI::Windows::UI::Xaml::Controls::IPageOverrides {
   HRESULT STDMETHODCALLTYPE OnNavigatedFrom(ABI::Windows::UI::Xaml::Navigation::INavigationEventArgs* e) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPageOverrides::OnNavigatedFrom");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPageOverrides::OnNavigatedFrom");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE OnNavigatedTo(ABI::Windows::UI::Xaml::Navigation::INavigationEventArgs* e) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPageOverrides::OnNavigatedTo");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPageOverrides::OnNavigatedTo");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE OnNavigatingFrom(ABI::Windows::UI::Xaml::Navigation::INavigatingCancelEventArgs* e) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPageOverrides::OnNavigatingFrom");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPageOverrides::OnNavigatingFrom");
     return E_NOTIMPL;
   }
 };
@@ -161,11 +161,11 @@ struct __declspec(uuid("230b9cb8-3419-4306-aabe-4a8e680d3627")) DefaultIPageOver
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("a7a69ec9-ea35-4679-bf29-f4f09286d314")) DefaultIUserControl : public ABI::Windows::UI::Xaml::Controls::IUserControl {
   HRESULT STDMETHODCALLTYPE get_Content(ABI::Windows::UI::Xaml::IUIElement** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IUserControl::get_Content");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IUserControl::get_Content");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Content(ABI::Windows::UI::Xaml::IUIElement* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IUserControl::put_Content");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IUserControl::put_Content");
     return E_NOTIMPL;
   }
 };
@@ -173,7 +173,7 @@ struct __declspec(uuid("a7a69ec9-ea35-4679-bf29-f4f09286d314")) DefaultIUserCont
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("38b1ed92-a28a-4972-93df-f4f759b8afd2")) DefaultIUserControlFactory : public ABI::Windows::UI::Xaml::Controls::IUserControlFactory {
   HRESULT STDMETHODCALLTYPE CreateInstance(IInspectable* baseInterface, IInspectable** innerInterface, ABI::Windows::UI::Xaml::Controls::IUserControl** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IUserControlFactory::CreateInstance");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IUserControlFactory::CreateInstance");
     return E_NOTIMPL;
   }
 };
@@ -181,35 +181,35 @@ struct __declspec(uuid("38b1ed92-a28a-4972-93df-f4f759b8afd2")) DefaultIUserCont
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("a26dd1dc-cd44-435c-be94-01d6241c231c")) DefaultIContentControl : public ABI::Windows::UI::Xaml::Controls::IContentControl {
   HRESULT STDMETHODCALLTYPE get_Content(IInspectable** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::get_Content");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::get_Content");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Content(IInspectable* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::put_Content");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::put_Content");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ContentTemplate(ABI::Windows::UI::Xaml::IDataTemplate** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::get_ContentTemplate");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::get_ContentTemplate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ContentTemplate(ABI::Windows::UI::Xaml::IDataTemplate* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::put_ContentTemplate");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::put_ContentTemplate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ContentTemplateSelector(ABI::Windows::UI::Xaml::Controls::IDataTemplateSelector** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::get_ContentTemplateSelector");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::get_ContentTemplateSelector");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ContentTemplateSelector(ABI::Windows::UI::Xaml::Controls::IDataTemplateSelector* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::put_ContentTemplateSelector");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::put_ContentTemplateSelector");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ContentTransitions(__FIVector_1_Windows__CUI__CXaml__CMedia__CAnimation__CTransition** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::get_ContentTransitions");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::get_ContentTransitions");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ContentTransitions(__FIVector_1_Windows__CUI__CXaml__CMedia__CAnimation__CTransition* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::put_ContentTransitions");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentControl::put_ContentTransitions");
     return E_NOTIMPL;
   }
 };
@@ -217,167 +217,167 @@ struct __declspec(uuid("a26dd1dc-cd44-435c-be94-01d6241c231c")) DefaultIContentC
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("a8912263-2951-4f58-a9c5-5a134eaa7f07")) DefaultIControl : public ABI::Windows::UI::Xaml::Controls::IControl {
   HRESULT STDMETHODCALLTYPE get_FontSize(DOUBLE* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontSize");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontSize");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_FontSize(DOUBLE value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontSize");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontSize");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FontFamily(ABI::Windows::UI::Xaml::Media::IFontFamily** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontFamily");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontFamily");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_FontFamily(ABI::Windows::UI::Xaml::Media::IFontFamily* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontFamily");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontFamily");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FontWeight(ABI::Windows::UI::Text::FontWeight* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontWeight");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontWeight");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_FontWeight(ABI::Windows::UI::Text::FontWeight value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontWeight");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontWeight");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FontStyle(ABI::Windows::UI::Text::FontStyle* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontStyle");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontStyle");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_FontStyle(ABI::Windows::UI::Text::FontStyle value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontStyle");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontStyle");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FontStretch(ABI::Windows::UI::Text::FontStretch* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontStretch");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FontStretch");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_FontStretch(ABI::Windows::UI::Text::FontStretch value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontStretch");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_FontStretch");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CharacterSpacing(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_CharacterSpacing");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_CharacterSpacing");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_CharacterSpacing(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_CharacterSpacing");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_CharacterSpacing");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Foreground(ABI::Windows::UI::Xaml::Media::IBrush** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_Foreground");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_Foreground");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Foreground(ABI::Windows::UI::Xaml::Media::IBrush* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_Foreground");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_Foreground");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsTabStop(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_IsTabStop");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_IsTabStop");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_IsTabStop(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_IsTabStop");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_IsTabStop");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsEnabled(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_IsEnabled");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_IsEnabled");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_IsEnabled(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_IsEnabled");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_IsEnabled");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_TabIndex(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_TabIndex");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_TabIndex");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_TabIndex(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_TabIndex");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_TabIndex");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_TabNavigation(ABI::Windows::UI::Xaml::Input::KeyboardNavigationMode* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_TabNavigation");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_TabNavigation");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_TabNavigation(ABI::Windows::UI::Xaml::Input::KeyboardNavigationMode value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_TabNavigation");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_TabNavigation");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Template(ABI::Windows::UI::Xaml::Controls::IControlTemplate** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_Template");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_Template");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Template(ABI::Windows::UI::Xaml::Controls::IControlTemplate* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_Template");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_Template");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Padding(ABI::Windows::UI::Xaml::Thickness* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_Padding");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_Padding");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Padding(ABI::Windows::UI::Xaml::Thickness value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_Padding");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_Padding");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_HorizontalContentAlignment(ABI::Windows::UI::Xaml::HorizontalAlignment* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_HorizontalContentAlignment");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_HorizontalContentAlignment");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_HorizontalContentAlignment(ABI::Windows::UI::Xaml::HorizontalAlignment value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_HorizontalContentAlignment");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_HorizontalContentAlignment");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_VerticalContentAlignment(ABI::Windows::UI::Xaml::VerticalAlignment* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_VerticalContentAlignment");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_VerticalContentAlignment");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_VerticalContentAlignment(ABI::Windows::UI::Xaml::VerticalAlignment value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_VerticalContentAlignment");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_VerticalContentAlignment");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Background(ABI::Windows::UI::Xaml::Media::IBrush** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_Background");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_Background");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Background(ABI::Windows::UI::Xaml::Media::IBrush* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_Background");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_Background");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_BorderThickness(ABI::Windows::UI::Xaml::Thickness* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_BorderThickness");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_BorderThickness");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_BorderThickness(ABI::Windows::UI::Xaml::Thickness value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_BorderThickness");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_BorderThickness");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_BorderBrush(ABI::Windows::UI::Xaml::Media::IBrush** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_BorderBrush");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_BorderBrush");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_BorderBrush(ABI::Windows::UI::Xaml::Media::IBrush* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_BorderBrush");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::put_BorderBrush");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FocusState(ABI::Windows::UI::Xaml::FocusState* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FocusState");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::get_FocusState");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_IsEnabledChanged(ABI::Windows::UI::Xaml::IDependencyPropertyChangedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::add_IsEnabledChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::add_IsEnabledChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_IsEnabledChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::remove_IsEnabledChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::remove_IsEnabledChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE ApplyTemplate(boolean* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::ApplyTemplate");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::ApplyTemplate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE Focus(ABI::Windows::UI::Xaml::FocusState value, boolean* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::Focus");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControl::Focus");
     return E_NOTIMPL;
   }
 };
@@ -385,23 +385,23 @@ struct __declspec(uuid("a8912263-2951-4f58-a9c5-5a134eaa7f07")) DefaultIControl 
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("c589644f-eba8-427a-b75a-9f1f93a11ae9")) DefaultISwapChainPanel : public ABI::Windows::UI::Xaml::Controls::ISwapChainPanel {
   HRESULT STDMETHODCALLTYPE get_CompositionScaleX(FLOAT* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::get_CompositionScaleX");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::get_CompositionScaleX");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CompositionScaleY(FLOAT* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::get_CompositionScaleY");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::get_CompositionScaleY");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_CompositionScaleChanged(__FITypedEventHandler_2_Windows__CUI__CXaml__CControls__CSwapChainPanel_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::add_CompositionScaleChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::add_CompositionScaleChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_CompositionScaleChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::remove_CompositionScaleChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::remove_CompositionScaleChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CreateCoreIndependentInputSource(ABI::Windows::UI::Core::CoreInputDeviceTypes deviceTypes, ABI::Windows::UI::Core::ICoreInputSourceBase** result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::CreateCoreIndependentInputSource");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::CreateCoreIndependentInputSource");
     return E_NOTIMPL;
   }
 };
@@ -409,11 +409,11 @@ struct __declspec(uuid("c589644f-eba8-427a-b75a-9f1f93a11ae9")) DefaultISwapChai
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("fd104460-2e15-4ba3-8b8f-fa693a4161e9")) DefaultIGrid : public ABI::Windows::UI::Xaml::Controls::IGrid {
   HRESULT STDMETHODCALLTYPE get_RowDefinitions(__FIVector_1_Windows__CUI__CXaml__CControls__CRowDefinition** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IGrid::get_RowDefinitions");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IGrid::get_RowDefinitions");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ColumnDefinitions(__FIVector_1_Windows__CUI__CXaml__CControls__CColumnDefinition** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IGrid::get_ColumnDefinitions");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IGrid::get_ColumnDefinitions");
     return E_NOTIMPL;
   }
 };
@@ -421,27 +421,27 @@ struct __declspec(uuid("fd104460-2e15-4ba3-8b8f-fa693a4161e9")) DefaultIGrid : p
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("a50a4bbd-8361-469c-90da-e9a40c7474df")) DefaultIPanel : public ABI::Windows::UI::Xaml::Controls::IPanel {
   HRESULT STDMETHODCALLTYPE get_Children(__FIVector_1_Windows__CUI__CXaml__CUIElement** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::get_Children");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::get_Children");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Background(ABI::Windows::UI::Xaml::Media::IBrush** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::get_Background");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::get_Background");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Background(ABI::Windows::UI::Xaml::Media::IBrush* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::put_Background");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::put_Background");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsItemsHost(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::get_IsItemsHost");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::get_IsItemsHost");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ChildrenTransitions(__FIVector_1_Windows__CUI__CXaml__CMedia__CAnimation__CTransition** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::get_ChildrenTransitions");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::get_ChildrenTransitions");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ChildrenTransitions(__FIVector_1_Windows__CUI__CXaml__CMedia__CAnimation__CTransition* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::put_ChildrenTransitions");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IPanel::put_ChildrenTransitions");
     return E_NOTIMPL;
   }
 };
@@ -449,323 +449,323 @@ struct __declspec(uuid("a50a4bbd-8361-469c-90da-e9a40c7474df")) DefaultIPanel : 
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("a38ed2cf-13de-4299-ade2-ae18f74ed353")) DefaultIMediaElement : public ABI::Windows::UI::Xaml::Controls::IMediaElement {
   HRESULT STDMETHODCALLTYPE get_PosterSource(ABI::Windows::UI::Xaml::Media::IImageSource** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_PosterSource");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_PosterSource");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_PosterSource(ABI::Windows::UI::Xaml::Media::IImageSource* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_PosterSource");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_PosterSource");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Source(ABI::Windows::Foundation::IUriRuntimeClass** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Source");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Source");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Source(ABI::Windows::Foundation::IUriRuntimeClass* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Source");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Source");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsMuted(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_IsMuted");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_IsMuted");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_IsMuted(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_IsMuted");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_IsMuted");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsAudioOnly(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_IsAudioOnly");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_IsAudioOnly");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AutoPlay(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AutoPlay");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AutoPlay");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AutoPlay(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_AutoPlay");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_AutoPlay");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Volume(DOUBLE* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Volume");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Volume");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Volume(DOUBLE value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Volume");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Volume");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Balance(DOUBLE* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Balance");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Balance");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Balance(DOUBLE value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Balance");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Balance");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NaturalVideoHeight(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_NaturalVideoHeight");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_NaturalVideoHeight");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NaturalVideoWidth(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_NaturalVideoWidth");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_NaturalVideoWidth");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NaturalDuration(ABI::Windows::UI::Xaml::Duration* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_NaturalDuration");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_NaturalDuration");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Position(ABI::Windows::Foundation::TimeSpan* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Position");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Position");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Position(ABI::Windows::Foundation::TimeSpan value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Position");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Position");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_DownloadProgress(DOUBLE* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_DownloadProgress");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_DownloadProgress");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_BufferingProgress(DOUBLE* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_BufferingProgress");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_BufferingProgress");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_DownloadProgressOffset(DOUBLE* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_DownloadProgressOffset");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_DownloadProgressOffset");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CurrentState(ABI::Windows::UI::Xaml::Media::MediaElementState* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_CurrentState");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_CurrentState");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Markers(__FIVector_1_Windows__CUI__CXaml__CMedia__CTimelineMarker** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Markers");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Markers");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CanSeek(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_CanSeek");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_CanSeek");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CanPause(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_CanPause");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_CanPause");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AudioStreamCount(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AudioStreamCount");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AudioStreamCount");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AudioStreamIndex(__FIReference_1_int** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AudioStreamIndex");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AudioStreamIndex");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AudioStreamIndex(__FIReference_1_int* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_AudioStreamIndex");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_AudioStreamIndex");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_PlaybackRate(DOUBLE* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_PlaybackRate");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_PlaybackRate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_PlaybackRate(DOUBLE value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_PlaybackRate");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_PlaybackRate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsLooping(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_IsLooping");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_IsLooping");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_IsLooping(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_IsLooping");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_IsLooping");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_PlayToSource(ABI::Windows::Media::PlayTo::IPlayToSource** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_PlayToSource");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_PlayToSource");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_DefaultPlaybackRate(DOUBLE* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_DefaultPlaybackRate");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_DefaultPlaybackRate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_DefaultPlaybackRate(DOUBLE value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_DefaultPlaybackRate");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_DefaultPlaybackRate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AspectRatioWidth(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AspectRatioWidth");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AspectRatioWidth");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AspectRatioHeight(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AspectRatioHeight");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AspectRatioHeight");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_RealTimePlayback(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_RealTimePlayback");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_RealTimePlayback");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_RealTimePlayback(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_RealTimePlayback");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_RealTimePlayback");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AudioCategory(ABI::Windows::UI::Xaml::Media::AudioCategory* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AudioCategory");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AudioCategory");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AudioCategory(ABI::Windows::UI::Xaml::Media::AudioCategory value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_AudioCategory");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_AudioCategory");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AudioDeviceType(ABI::Windows::UI::Xaml::Media::AudioDeviceType* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AudioDeviceType");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_AudioDeviceType");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AudioDeviceType(ABI::Windows::UI::Xaml::Media::AudioDeviceType value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_AudioDeviceType");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_AudioDeviceType");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ProtectionManager(ABI::Windows::Media::Protection::IMediaProtectionManager** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_ProtectionManager");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_ProtectionManager");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ProtectionManager(ABI::Windows::Media::Protection::IMediaProtectionManager* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_ProtectionManager");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_ProtectionManager");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Stereo3DVideoPackingMode(ABI::Windows::UI::Xaml::Media::Stereo3DVideoPackingMode* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Stereo3DVideoPackingMode");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Stereo3DVideoPackingMode");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Stereo3DVideoPackingMode(ABI::Windows::UI::Xaml::Media::Stereo3DVideoPackingMode value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Stereo3DVideoPackingMode");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Stereo3DVideoPackingMode");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Stereo3DVideoRenderMode(ABI::Windows::UI::Xaml::Media::Stereo3DVideoRenderMode* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Stereo3DVideoRenderMode");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_Stereo3DVideoRenderMode");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Stereo3DVideoRenderMode(ABI::Windows::UI::Xaml::Media::Stereo3DVideoRenderMode value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Stereo3DVideoRenderMode");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::put_Stereo3DVideoRenderMode");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsStereo3DVideo(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_IsStereo3DVideo");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_IsStereo3DVideo");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_MediaOpened(ABI::Windows::UI::Xaml::IRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_MediaOpened");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_MediaOpened");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_MediaOpened(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_MediaOpened");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_MediaOpened");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_MediaEnded(ABI::Windows::UI::Xaml::IRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_MediaEnded");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_MediaEnded");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_MediaEnded(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_MediaEnded");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_MediaEnded");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_MediaFailed(ABI::Windows::UI::Xaml::IExceptionRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_MediaFailed");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_MediaFailed");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_MediaFailed(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_MediaFailed");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_MediaFailed");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_DownloadProgressChanged(ABI::Windows::UI::Xaml::IRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_DownloadProgressChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_DownloadProgressChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_DownloadProgressChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_DownloadProgressChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_DownloadProgressChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_BufferingProgressChanged(ABI::Windows::UI::Xaml::IRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_BufferingProgressChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_BufferingProgressChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_BufferingProgressChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_BufferingProgressChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_BufferingProgressChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_CurrentStateChanged(ABI::Windows::UI::Xaml::IRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_CurrentStateChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_CurrentStateChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_CurrentStateChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_CurrentStateChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_CurrentStateChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_MarkerReached(ABI::Windows::UI::Xaml::Media::ITimelineMarkerRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_MarkerReached");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_MarkerReached");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_MarkerReached(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_MarkerReached");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_MarkerReached");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_RateChanged(ABI::Windows::UI::Xaml::Media::IRateChangedRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_RateChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_RateChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_RateChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_RateChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_RateChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_VolumeChanged(ABI::Windows::UI::Xaml::IRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_VolumeChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_VolumeChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_VolumeChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_VolumeChanged");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_VolumeChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_SeekCompleted(ABI::Windows::UI::Xaml::IRoutedEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_SeekCompleted");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::add_SeekCompleted");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_SeekCompleted(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_SeekCompleted");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::remove_SeekCompleted");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE Stop(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::Stop");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::Stop");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE Play(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::Play");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::Play");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE Pause(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::Pause");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::Pause");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CanPlayType(HSTRING type, ABI::Windows::UI::Xaml::Media::MediaCanPlayResponse* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::CanPlayType");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::CanPlayType");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SetSource(ABI::Windows::Storage::Streams::IRandomAccessStream* stream, HSTRING mimeType) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::SetSource");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::SetSource");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetAudioStreamLanguage(__FIReference_1_int* index, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::GetAudioStreamLanguage");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::GetAudioStreamLanguage");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddAudioEffect(HSTRING effectID, boolean effectOptional, ABI::Windows::Foundation::Collections::IPropertySet* effectConfiguration) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::AddAudioEffect");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::AddAudioEffect");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddVideoEffect(HSTRING effectID, boolean effectOptional, ABI::Windows::Foundation::Collections::IPropertySet* effectConfiguration) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::AddVideoEffect");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::AddVideoEffect");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE RemoveAllEffects(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::RemoveAllEffects");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::RemoveAllEffects");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ActualStereo3DVideoPackingMode(ABI::Windows::UI::Xaml::Media::Stereo3DVideoPackingMode* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_ActualStereo3DVideoPackingMode");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement::get_ActualStereo3DVideoPackingMode");
     return E_NOTIMPL;
   }
 };
@@ -773,39 +773,39 @@ struct __declspec(uuid("a38ed2cf-13de-4299-ade2-ae18f74ed353")) DefaultIMediaEle
 namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("fd53da65-b186-4654-bfdb-180ed26cad07")) DefaultIMediaElement2 : public ABI::Windows::UI::Xaml::Controls::IMediaElement2 {
   HRESULT STDMETHODCALLTYPE get_AreTransportControlsEnabled(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::get_AreTransportControlsEnabled");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::get_AreTransportControlsEnabled");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AreTransportControlsEnabled(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::put_AreTransportControlsEnabled");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::put_AreTransportControlsEnabled");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Stretch(ABI::Windows::UI::Xaml::Media::Stretch* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::get_Stretch");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::get_Stretch");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Stretch(ABI::Windows::UI::Xaml::Media::Stretch value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::put_Stretch");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::put_Stretch");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsFullWindow(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::get_IsFullWindow");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::get_IsFullWindow");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_IsFullWindow(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::put_IsFullWindow");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::put_IsFullWindow");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SetMediaStreamSource(ABI::Windows::Media::Core::IMediaSource* source) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::SetMediaStreamSource");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::SetMediaStreamSource");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_PlayToPreferredSourceUri(ABI::Windows::Foundation::IUriRuntimeClass** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::get_PlayToPreferredSourceUri");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::get_PlayToPreferredSourceUri");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_PlayToPreferredSourceUri(ABI::Windows::Foundation::IUriRuntimeClass* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::put_PlayToPreferredSourceUri");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IMediaElement2::put_PlayToPreferredSourceUri");
     return E_NOTIMPL;
   }
 };

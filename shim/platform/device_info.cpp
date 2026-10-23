@@ -7,7 +7,7 @@
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::System::Display;
 using namespace ABI::Windows::Security::ExchangeActiveSyncProvisioning;
-namespace ctr2 {
+namespace appx {
 namespace {
 constexpr wchar_t displayClass[] = L"Windows.System.Display.DisplayRequest";
 constexpr wchar_t deviceClass[] = L"Windows.Security.ExchangeActiveSyncProvisioning.EasClientDeviceInformation";
@@ -43,12 +43,12 @@ public:
     HRESULT STDMETHODCALLTYPE get_Id(GUID* value) override {
         if (!value) return E_POINTER;
         // Fixed synthetic compatibility identity, independent of host/user.
-        *value = {0x63747232, 0x7769, 0x6e65, {0x80, 0, 0, 0, 0, 0, 0, 1}};
+        *value = {0x78707061, 0x6f70, 0x7472, {0x80, 0, 0, 0, 0, 0, 0, 1}};  // "appxport"
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_OperatingSystem(HSTRING* value) override { return Text(L"Windows", value); }
-    HRESULT STDMETHODCALLTYPE get_FriendlyName(HSTRING* value) override { return Text(L"ctr2-wine", value); }
-    HRESULT STDMETHODCALLTYPE get_SystemManufacturer(HSTRING* value) override { return Text(L"ctr2-wine", value); }
+    HRESULT STDMETHODCALLTYPE get_FriendlyName(HSTRING* value) override { return Text(L"appx-portable", value); }
+    HRESULT STDMETHODCALLTYPE get_SystemManufacturer(HSTRING* value) override { return Text(L"appx-portable", value); }
     HRESULT STDMETHODCALLTYPE get_SystemProductName(HSTRING* value) override {
         return Text(L"Compatibility Device", value);
     }

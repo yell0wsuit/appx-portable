@@ -41,10 +41,10 @@ else()
   set(VERSION "dev")
 endif()
 set(text "#pragma once
-#define CTR2SHIM_VERSION \"${VERSION}\"
-#define CTR2SHIM_COMMIT \"${commit}\"
-#define CTR2SHIM_VERSION_NUMBERS ${numbers}
-#define CTR2SHIM_PRODUCT_VERSION \"${VERSION} (${commit})\"
+#define APPX_PORTABLE_VERSION \"${VERSION}\"
+#define APPX_PORTABLE_COMMIT \"${commit}\"
+#define APPX_PORTABLE_VERSION_NUMBERS ${numbers}
+#define APPX_PORTABLE_PRODUCT_VERSION \"${VERSION} (${commit})\"
 ")
 set(previous "")
 if(EXISTS "${OUTPUT}")

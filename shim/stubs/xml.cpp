@@ -7,7 +7,7 @@
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Data::Xml::Dom;
 using ABI::Windows::UI::Notifications::ToastTemplateType;
-namespace ctr2 {
+namespace appx {
 namespace {
 class Node;
 // Private identity check: only nodes from this DOM can be linked into it.
@@ -76,7 +76,7 @@ public:
 class NodeList final
     : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIXmlNodeList, NodeView, NodeIterable, FtmBase> {
     InspectableClass(L"Windows.Data.Xml.Dom.XmlNodeList", BaseTrust);
-    CTR2_LOG_MISSING_INTERFACES("NodeList")
+    APPX_LOG_MISSING_INTERFACES("NodeList")
     std::vector<ComPtr<IXmlNode>> items_;
 
 public:
@@ -256,7 +256,7 @@ public:
 };
 class TextNode final : public NodeBase<TextNode, DefaultIXmlText, DefaultIXmlCharacterData> {
     InspectableClass(L"Windows.Data.Xml.Dom.XmlText", BaseTrust);
-    CTR2_LOG_MISSING_INTERFACES("TextNode")
+    APPX_LOG_MISSING_INTERFACES("TextNode")
 public:
     explicit TextNode(std::wstring data) : NodeBase(NodeType_TextNode, L"") { data_ = std::move(data); }
     HRESULT STDMETHODCALLTYPE get_Data(HSTRING* value) override { return Copy(data_, value); }
@@ -272,7 +272,7 @@ public:
 };
 class Element final : public NodeBase<Element, DefaultIXmlElement> {
     InspectableClass(L"Windows.Data.Xml.Dom.XmlElement", BaseTrust);
-    CTR2_LOG_MISSING_INTERFACES("Element")
+    APPX_LOG_MISSING_INTERFACES("Element")
 public:
     explicit Element(std::wstring name) : NodeBase(NodeType_ElementNode, std::move(name)) {}
     HRESULT STDMETHODCALLTYPE get_TagName(HSTRING* value) override { return Copy(name_, value); }
@@ -306,7 +306,7 @@ public:
 };
 class Document final : public NodeBase<Document, DefaultIXmlDocument> {
     InspectableClass(L"Windows.Data.Xml.Dom.XmlDocument", BaseTrust);
-    CTR2_LOG_MISSING_INTERFACES("Document")
+    APPX_LOG_MISSING_INTERFACES("Document")
 public:
     Document() : NodeBase(NodeType_DocumentNode, L"") {}
     HRESULT STDMETHODCALLTYPE CreateElement(HSTRING tag, IXmlElement** value) override {

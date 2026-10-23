@@ -8,7 +8,7 @@ using namespace Microsoft::WRL;
 using namespace ABI::Windows::Storage::Streams;
 using ABI::Windows::Foundation::IClosable;
 using Windows::Storage::Streams::IBufferByteAccess;
-namespace ctr2 {
+namespace appx {
 namespace {
 class BufferReader final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIDataReader, IClosable, FtmBase> {
     InspectableClass(L"Windows.Storage.Streams.DataReader", BaseTrust);

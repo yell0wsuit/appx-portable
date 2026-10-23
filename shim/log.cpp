@@ -7,9 +7,9 @@
 #include <mutex>
 #include <string>
 
-namespace ctr2 {
+namespace appx {
 bool TraceMode() noexcept { return GetOptions().passthrough; }
-// ctr2shim.log beside the game executable.
+// appx-portable.log beside the game executable.
 static const std::wstring& LogPath() noexcept {
     static const std::wstring path = []() noexcept -> std::wstring {
         try {
@@ -17,15 +17,15 @@ static const std::wstring& LogPath() noexcept {
             auto size = GetModuleFileNameW(nullptr, module.data(), static_cast<DWORD>(module.size()));
             module.resize(size < module.size() ? size : 0);
             auto slash = module.rfind(L'\\');
-            return slash == std::wstring::npos ? std::wstring() : module.substr(0, slash + 1) + L"ctr2shim.log";
+            return slash == std::wstring::npos ? std::wstring() : module.substr(0, slash + 1) + L"appx-portable.log";
         } catch (...) {
             return {}; // No log rather than a crash.
         }
     }();
     return path;
 }
-// Each logging run starts a new ctr2shim.log. The two before it are kept as
-// ctr2shim.1.log and ctr2shim.2.log; older ones are replaced. Runs without
+// Each logging run starts a new appx-portable.log. The two before it are kept as
+// appx-portable.1.log and appx-portable.2.log; older ones are replaced. Runs without
 // logging leave them alone.
 static void RotateLogs(const std::wstring& path) noexcept {
     static constexpr int kept = 2;

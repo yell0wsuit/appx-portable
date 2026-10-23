@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cstdio>
 using namespace Microsoft::WRL;
-namespace ctr2 {
+namespace appx {
 namespace {
 constexpr UINT_PTR SaveTimer = 0x43545232;
 void CreateSettingsFile(const std::wstring& path) {
@@ -16,7 +16,7 @@ void CreateSettingsFile(const std::wstring& path) {
     HANDLE file =
         CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) return;
-    constexpr char guide[] = "; ctr2shim window settings. Saved automatically between runs.\r\n"
+    constexpr char guide[] = "; appxportable window settings. Saved automatically between runs.\r\n"
                              "; Close the game before editing.\r\n"
                              "; Width/Height specify the game area; borders are added automatically.\r\n"
                              "; Examples: Width=1280 Height=720; Width=1366 Height=768; Width=1600 Height=900.\r\n"
@@ -35,7 +35,7 @@ void CreateSettingsFile(const std::wstring& path) {
 }
 std::wstring SettingsPath() {
     wchar_t disabled[8]{};
-    if (GetEnvironmentVariableW(L"CTR2SHIM_WINDOW_STATE", disabled, ARRAYSIZE(disabled)) &&
+    if (GetEnvironmentVariableW(L"APPX_PORTABLE_WINDOW_STATE", disabled, ARRAYSIZE(disabled)) &&
         _wcsicmp(disabled, L"off") == 0)
         return {};
     ComPtr<IActivationFactory> factory;

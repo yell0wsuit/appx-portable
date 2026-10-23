@@ -77,7 +77,7 @@ jobs:
                       throw "CMake does not support installed Visual Studio version $majorVersion; update CMake on the runner."
                   }
                   Write-Host "Using $generator at $($installation.installationPath)"
-                  cmake -S . -B build/release -G $generator -A Win32 "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)" "-DCTR2SHIM_VERSION=$env:RELEASE_TAG"
+                  cmake -S . -B build/release -G $generator -A Win32 "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)" "-DAPPX_PORTABLE_VERSION=$env:RELEASE_TAG"
                   if ($LASTEXITCODE -ne 0) { throw 'Failed to configure the x86 build.' }
 
             - name: Build
@@ -95,15 +95,16 @@ jobs:
                   RELEASE_TAG: ${{ steps.version.outputs.tag }}
               run: |
                   $assets = @(
-                    'build/release/RelWithDebInfo/ctr2shim.dll'
+                    'build/release/RelWithDebInfo/appxportable.dll'
                     'build/release/RelWithDebInfo/d3dcompiler_47.dll'
+                    'build/release/RelWithDebInfo/XAudio2_8.dll'
                   )
                   foreach ($asset in $assets) {
                     if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
                       throw "Missing release asset: $asset"
                     }
                   }
-                  $archive = "build/ctr2-uwp-shim-$env:RELEASE_TAG-x86.zip"
+                  $archive = "build/appx-portable-$env:RELEASE_TAG-x86.zip"
                   Compress-Archive -LiteralPath $assets -DestinationPath $archive -CompressionLevel Optimal -Force
                   gh release create $env:RELEASE_TAG $archive --target $env:GITHUB_SHA --title $env:RELEASE_TAG --generate-notes --latest
                   if ($LASTEXITCODE -ne 0) { throw 'Failed to publish release.' }

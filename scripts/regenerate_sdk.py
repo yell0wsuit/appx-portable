@@ -14,7 +14,7 @@ def main():
     for name, contract in manifest.items():
         source = args.sdk_winrt / contract['header']
         text = generate(source.read_text(encoding='utf-8-sig'), source.name, contract['interfaces'])
-        (output / name).write_text(text)
+        (output / name).write_bytes(text.encode())  # LF on every platform
 
 if __name__ == '__main__':
     main()

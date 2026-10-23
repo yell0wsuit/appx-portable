@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <vector>
 int main(int argc, char**) {
-    HWND hwnd = FindWindowW(L"CTR2ShimWindow", nullptr);
+    HWND hwnd = FindWindowW(L"AppxPortableWindow", nullptr);
     if (!hwnd) {
         puts("No shim window");
         return 1;

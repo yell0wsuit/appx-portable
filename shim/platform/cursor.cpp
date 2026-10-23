@@ -4,7 +4,7 @@
 #include "com/factory.h"
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Core;
-namespace ctr2 {
+namespace appx {
 class Cursor final : public RuntimeClass<RuntimeClassFlags<WinRt>, ICoreCursor, FtmBase> {
     InspectableClass(L"Windows.UI.Core.CoreCursor", BaseTrust);
     CoreCursorType type_;
@@ -41,7 +41,7 @@ HCURSOR LoadCoreCursor(ICoreCursor* cursor) noexcept {
     UINT32 id = 0;
     if (!cursor || FAILED(cursor->get_Type(&type)) || FAILED(cursor->get_Id(&id))) return arrow;
     if (type == CoreCursorType_Custom) {
-        // Store apps compile custom cursors into the executable; Game.exe has 101 and 102.
+        // Store apps compile custom cursors into the executable as cursor resources.
         HCURSOR custom = LoadCursorW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(id));
         if (!custom) Log("FAIL", "custom cursor %u is not in the executable; showing the arrow", id);
         return custom ? custom : arrow;

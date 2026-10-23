@@ -1,11 +1,12 @@
 #include "generated/coreapp.h"
 #include "com/factory.h"
 #include "host/host.h"
+#include "package/package.h"
 #include "registry.h"
 #include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::ApplicationModel::Core;
-namespace ctr2 {
+namespace appx {
 HRESULT MakeCoreWindow(ABI::Windows::UI::Core::ICoreWindow** value);
 class CoreView final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultICoreApplicationView, FtmBase> {
     InspectableClass(L"Windows.ApplicationModel.Core.CoreApplicationView", BaseTrust);
@@ -53,7 +54,9 @@ public:
     CoreAppFactory() : Factory(L"Windows.ApplicationModel.Core.CoreApplication") {}
     HRESULT STDMETHODCALLTYPE get_Id(HSTRING* value) override {
         if (!value) return E_POINTER;
-        return WindowsCreateString(L"ctr2", 4, value);
+        // Without a manifest, "App": the default application ID of Store packages.
+        const auto& id = CurrentPackage().applicationId.empty() ? std::wstring(L"App") : CurrentPackage().applicationId;
+        return WindowsCreateString(id.data(), static_cast<UINT32>(id.size()), value);
     }
     HRESULT STDMETHODCALLTYPE
     add_Suspending(ABI::Windows::Foundation::IEventHandler<ABI::Windows::ApplicationModel::SuspendingEventArgs*>* h,

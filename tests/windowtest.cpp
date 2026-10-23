@@ -36,7 +36,7 @@ int wmain(int argc, wchar_t** argv) {
                          mode == L"negative";
     const bool maximized = mode == L"max" || mode == L"maxfull";
     wchar_t root[32768]{};
-    if (!GetEnvironmentVariableW(L"CTR2SHIM_DATA", root, ARRAYSIZE(root))) return 1;
+    if (!GetEnvironmentVariableW(L"APPX_PORTABLE_DATA", root, ARRAYSIZE(root))) return 1;
     auto local = std::filesystem::path(root) / L"Local";
     std::filesystem::create_directories(local);
     auto file = local / L"window.ini";
@@ -80,7 +80,7 @@ int wmain(int argc, wchar_t** argv) {
         }
     }
     RoInitialize(RO_INIT_MULTITHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
     ComPtr<IActivationFactory> factory;

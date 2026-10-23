@@ -9,7 +9,7 @@ inline HWND TestWindow() {
         [](HWND window, LPARAM context) -> BOOL {
             wchar_t name[80]{};
             GetClassNameW(window, name, ARRAYSIZE(name));
-            if (wcscmp(name, L"CTR2ShimWindow") != 0) return TRUE;
+            if (wcscmp(name, L"AppxPortableWindow") != 0) return TRUE;
             *reinterpret_cast<HWND*>(context) = window;
             return FALSE;
         },

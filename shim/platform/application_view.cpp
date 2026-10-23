@@ -12,7 +12,7 @@
 #include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::ViewManagement;
-namespace ctr2 {
+namespace appx {
 namespace {
 ABI::Windows::Foundation::Rect VisibleBounds() {
     RECT r{0, 0, 1024, 768};

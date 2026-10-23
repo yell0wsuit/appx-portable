@@ -9,79 +9,79 @@
 namespace ABI::Windows::Web::Http::Filters {
 struct __declspec(uuid("71c89b09-e131-4b54-a53c-eb43ff37e9bb")) DefaultIHttpBaseProtocolFilter : public ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter {
   HRESULT STDMETHODCALLTYPE get_AllowAutoRedirect(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_AllowAutoRedirect");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_AllowAutoRedirect");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AllowAutoRedirect(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_AllowAutoRedirect");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_AllowAutoRedirect");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AllowUI(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_AllowUI");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_AllowUI");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AllowUI(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_AllowUI");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_AllowUI");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AutomaticDecompression(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_AutomaticDecompression");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_AutomaticDecompression");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AutomaticDecompression(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_AutomaticDecompression");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_AutomaticDecompression");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CacheControl(ABI::Windows::Web::Http::Filters::IHttpCacheControl** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_CacheControl");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_CacheControl");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_CookieManager(ABI::Windows::Web::Http::IHttpCookieManager** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_CookieManager");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_CookieManager");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ClientCertificate(ABI::Windows::Security::Cryptography::Certificates::ICertificate** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_ClientCertificate");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_ClientCertificate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ClientCertificate(ABI::Windows::Security::Cryptography::Certificates::ICertificate* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_ClientCertificate");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_ClientCertificate");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IgnorableServerCertificateErrors(__FIVector_1_Windows__CSecurity__CCryptography__CCertificates__CChainValidationResult** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_IgnorableServerCertificateErrors");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_IgnorableServerCertificateErrors");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_MaxConnectionsPerServer(UINT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_MaxConnectionsPerServer");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_MaxConnectionsPerServer");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_MaxConnectionsPerServer(UINT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_MaxConnectionsPerServer");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_MaxConnectionsPerServer");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ProxyCredential(ABI::Windows::Security::Credentials::IPasswordCredential** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_ProxyCredential");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_ProxyCredential");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ProxyCredential(ABI::Windows::Security::Credentials::IPasswordCredential* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_ProxyCredential");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_ProxyCredential");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ServerCredential(ABI::Windows::Security::Credentials::IPasswordCredential** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_ServerCredential");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_ServerCredential");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ServerCredential(ABI::Windows::Security::Credentials::IPasswordCredential* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_ServerCredential");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_ServerCredential");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_UseProxy(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_UseProxy");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::get_UseProxy");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_UseProxy(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_UseProxy");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpBaseProtocolFilter::put_UseProxy");
     return E_NOTIMPL;
   }
 };
@@ -89,19 +89,19 @@ struct __declspec(uuid("71c89b09-e131-4b54-a53c-eb43ff37e9bb")) DefaultIHttpBase
 namespace ABI::Windows::Web::Http::Filters {
 struct __declspec(uuid("c77e1cb4-3cea-4eb5-ac85-04e186e63ab7")) DefaultIHttpCacheControl : public ABI::Windows::Web::Http::Filters::IHttpCacheControl {
   HRESULT STDMETHODCALLTYPE get_ReadBehavior(ABI::Windows::Web::Http::Filters::HttpCacheReadBehavior* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpCacheControl::get_ReadBehavior");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpCacheControl::get_ReadBehavior");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_ReadBehavior(ABI::Windows::Web::Http::Filters::HttpCacheReadBehavior value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpCacheControl::put_ReadBehavior");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpCacheControl::put_ReadBehavior");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_WriteBehavior(ABI::Windows::Web::Http::Filters::HttpCacheWriteBehavior* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpCacheControl::get_WriteBehavior");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpCacheControl::get_WriteBehavior");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_WriteBehavior(ABI::Windows::Web::Http::Filters::HttpCacheWriteBehavior value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpCacheControl::put_WriteBehavior");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpCacheControl::put_WriteBehavior");
     return E_NOTIMPL;
   }
 };
@@ -109,7 +109,7 @@ struct __declspec(uuid("c77e1cb4-3cea-4eb5-ac85-04e186e63ab7")) DefaultIHttpCach
 namespace ABI::Windows::Web::Http::Filters {
 struct __declspec(uuid("a4cb6dd5-0902-439e-bfd7-e12552b165ce")) DefaultIHttpFilter : public ABI::Windows::Web::Http::Filters::IHttpFilter {
   HRESULT STDMETHODCALLTYPE SendRequestAsync(ABI::Windows::Web::Http::IHttpRequestMessage* request, __FIAsyncOperationWithProgress_2_Windows__CWeb__CHttp__CHttpResponseMessage_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpFilter::SendRequestAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::Filters::IHttpFilter::SendRequestAsync");
     return E_NOTIMPL;
   }
 };

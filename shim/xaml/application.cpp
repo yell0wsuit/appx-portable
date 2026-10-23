@@ -11,7 +11,7 @@
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::ApplicationModel::Activation;
-namespace ctr2 {
+namespace appx {
 static ComPtr<IApplication> current;
 HRESULT CurrentApplication(IApplication** value) {
     if (!value) return E_POINTER;

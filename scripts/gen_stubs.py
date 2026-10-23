@@ -32,7 +32,7 @@ def generate(text, header, interfaces):
         for method, args in methods:
             args = re.sub(r'\s+', ' ', args).strip()
             output += [f'  HRESULT STDMETHODCALLTYPE {method}({args}) override {{',
-                       f'    ctr2::Log("UNIMPL", "{qualified}::{method}");',
+                       f'    appx::Log("UNIMPL", "{qualified}::{method}");',
                        '    return E_NOTIMPL;', '  }']
         output += ['};', '}']
     output += ['#pragma warning(pop)']
@@ -47,7 +47,7 @@ def main():
     args = parser.parse_args()
     result = generate(args.header.read_text(encoding='utf-8-sig'), args.header.name, args.interfaces)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(result)
+    args.output.write_bytes(result.encode())  # LF on every platform
 
 
 if __name__ == '__main__':

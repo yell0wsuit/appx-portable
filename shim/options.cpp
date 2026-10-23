@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <cwchar>
 #include <string>
-namespace ctr2 {
+namespace appx {
 namespace {
 // First use can be inside DllMain, so this splits the command line itself
 // rather than loading shell32 under the loader lock. Switches never contain
@@ -29,11 +29,11 @@ bool Environment(const wchar_t* name, const wchar_t* expected) {
 }
 Options Parse() {
     Options options;
-    options.log = Environment(L"CTR2SHIM_LOG", L"1");
-    options.trace = Environment(L"CTR2SHIM_TRACE", L"1");
-    options.capture = Environment(L"CTR2SHIM_CAPTURE", L"1");
-    options.diagnostics = Environment(L"CTR2SHIM_DIAGNOSTICS", L"1");
-    options.passthrough = Environment(L"CTR2SHIM_MODE", L"trace");
+    options.log = Environment(L"APPX_PORTABLE_LOG", L"1");
+    options.trace = Environment(L"APPX_PORTABLE_TRACE", L"1");
+    options.capture = Environment(L"APPX_PORTABLE_CAPTURE", L"1");
+    options.diagnostics = Environment(L"APPX_PORTABLE_DIAGNOSTICS", L"1");
+    options.passthrough = Environment(L"APPX_PORTABLE_MODE", L"trace");
     bool program = true;
     ForEachWord(GetCommandLineW(), [&](const std::wstring& word) {
         if (program) {

@@ -9,27 +9,27 @@
 namespace ABI::Windows::UI::Xaml::Input {
 struct __declspec(uuid("da628f0a-9752-49e2-bde2-49eccab9194d")) DefaultIPointerRoutedEventArgs : public ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs {
   HRESULT STDMETHODCALLTYPE get_Pointer(ABI::Windows::UI::Xaml::Input::IPointer** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::get_Pointer");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::get_Pointer");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_KeyModifiers(ABI::Windows::System::VirtualKeyModifiers* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::get_KeyModifiers");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::get_KeyModifiers");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Handled(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::get_Handled");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::get_Handled");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Handled(boolean value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::put_Handled");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::put_Handled");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetCurrentPoint(ABI::Windows::UI::Xaml::IUIElement* relativeTo, ABI::Windows::UI::Input::IPointerPoint** result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::GetCurrentPoint");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::GetCurrentPoint");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetIntermediatePoints(ABI::Windows::UI::Xaml::IUIElement* relativeTo, __FIVector_1_Windows__CUI__CInput__CPointerPoint** result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::GetIntermediatePoints");
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs::GetIntermediatePoints");
     return E_NOTIMPL;
   }
 };

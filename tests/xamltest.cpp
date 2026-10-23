@@ -62,7 +62,7 @@ public:
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
     startupStorage = 17;
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     CHECK(dll);
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
@@ -153,7 +153,7 @@ int main() {
                             [](HWND hwnd, LPARAM data) -> BOOL {
                                 wchar_t name[64]{};
                                 GetClassNameW(hwnd, name, 64);
-                                if (wcscmp(name, L"CTR2ShimWindow") == 0) {
+                                if (wcscmp(name, L"AppxPortableWindow") == 0) {
                                     *reinterpret_cast<HWND*>(data) = hwnd;
                                     return FALSE;
                                 }

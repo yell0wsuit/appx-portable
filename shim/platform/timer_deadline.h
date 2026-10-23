@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <limits>
 #include <ratio>
-namespace ctr2 {
+namespace appx {
 using TimerClock = std::chrono::steady_clock;
 inline TimerClock::time_point TimerDeadline(TimerClock::time_point now, std::int64_t ticks) noexcept {
     // Both supported Windows standard libraries use signed 64-bit nanoseconds

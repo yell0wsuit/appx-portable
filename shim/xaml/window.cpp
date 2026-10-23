@@ -9,7 +9,7 @@
 #include "host/dispatcher.h"
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
-namespace ctr2 {
+namespace appx {
 HRESULT QueueElementLoaded(IInspectable* value);
 HRESULT RaiseElementSizeChanged();
 HRESULT MakeCoreWindow(ABI::Windows::UI::Core::ICoreWindow** value);

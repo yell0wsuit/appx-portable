@@ -1,9 +1,12 @@
 // Version details shown in the DLLs' Properties > Details.
-// CTR2SHIM_PROXY selects the d3dcompiler_47.dll proxy's names.
+// APPX_PORTABLE_PROXY selects a proxy's names, from its generated proxy_names.h.
 #include "version.h"
+#ifdef APPX_PORTABLE_PROXY
+#include "proxy_names.h"
+#endif
 1 VERSIONINFO
-FILEVERSION CTR2SHIM_VERSION_NUMBERS
-PRODUCTVERSION CTR2SHIM_VERSION_NUMBERS
+FILEVERSION APPX_PORTABLE_VERSION_NUMBERS
+PRODUCTVERSION APPX_PORTABLE_VERSION_NUMBERS
 FILEFLAGSMASK 0x3fL
 FILEFLAGS 0x0L
 FILEOS 0x40004L // VOS_NT_WINDOWS32
@@ -14,18 +17,18 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-#ifdef CTR2SHIM_PROXY
-            VALUE "FileDescription", "Cut the Rope 2 UWP shim (D3DCompiler proxy)"
-            VALUE "InternalName", "d3dcompiler_47"
-            VALUE "OriginalFilename", "d3dcompiler_47.dll"
+#ifdef APPX_PORTABLE_PROXY
+            VALUE "FileDescription", APPX_PROXY_DESCRIPTION
+            VALUE "InternalName", APPX_PROXY_INTERNAL
+            VALUE "OriginalFilename", APPX_PROXY_FILE
 #else
-            VALUE "FileDescription", "Cut the Rope 2 UWP shim"
-            VALUE "InternalName", "ctr2shim"
-            VALUE "OriginalFilename", "ctr2shim.dll"
+            VALUE "FileDescription", "appx-portable runtime"
+            VALUE "InternalName", "appxportable"
+            VALUE "OriginalFilename", "appxportable.dll"
 #endif
-            VALUE "FileVersion", CTR2SHIM_VERSION
-            VALUE "ProductName", "ctr2-uwp-shim"
-            VALUE "ProductVersion", CTR2SHIM_PRODUCT_VERSION
+            VALUE "FileVersion", APPX_PORTABLE_VERSION
+            VALUE "ProductName", "appx-portable"
+            VALUE "ProductVersion", APPX_PORTABLE_PRODUCT_VERSION
         END
     END
     BLOCK "VarFileInfo"

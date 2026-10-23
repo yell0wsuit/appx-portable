@@ -53,7 +53,7 @@ class PowerShellPatchExeTests(unittest.TestCase):
             result = self.run_patch(source)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(output.read_bytes(), b'preserve')
-            self.assertIn('already exists', result.stderr)
+            self.assertIn('already exists', ' '.join(result.stderr.split()))  # PowerShell wraps long paths
 
     def test_rejects_invalid_unsupported_and_truncated_headers(self):
         cases = [b'not a PE', executable()[:0xDF]]
@@ -92,7 +92,7 @@ class PowerShellPatchExeTests(unittest.TestCase):
                 originals[name] = bytes(data)
             for name, data in originals.items():
                 (base / name).write_bytes(data)
-            for name in ['ctr2shim.dll', 'd3dcompiler_47.dll']:
+            for name in ['appxportable.dll', 'd3dcompiler_47.dll']:
                 (base / name).write_bytes(b'shim')
             (base / 'Assets').mkdir()
             (base / 'Assets' / 'asset.txt').write_bytes(b'asset')
@@ -116,4 +116,31 @@ class PowerShellPatchExeTests(unittest.TestCase):
             self.assertFalse((base / 'desktop' / 'Game.exe.c').exists())
             result = subprocess.run(command, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn('already exists', result.stderr)
+            self.assertIn('already exists', ' '.join(result.stderr.split()))  # PowerShell wraps long paths
+
+    def test_runtime_mode_names_copy_after_source_and_finds_vclibs_110(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = pathlib.Path(folder)
+            (base / 'Game_Win8.exe').write_bytes(executable())
+            dll = bytearray(executable(0x1140))
+            struct.pack_into('<H', dll, 0x96, 0x2102)
+            for name in ['msvcr110.dll', 'msvcp110.dll', 'vccorlib110.dll']:
+                (base / name).write_bytes(bytes(dll))
+            (base / 'appxportable.dll').write_bytes(b'shim')
+            (base / 'XAudio2_8.dll').write_bytes(b'proxy')
+            (base / 'AppxManifest.xml').write_bytes(b'<Package/>')
+            (base / 'AppxSignature.p7x').write_bytes(b'signature')
+            shell = shutil.which('powershell') or shutil.which('pwsh')
+            result = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                                     '-File', str(ROOT / 'scripts' / 'patch_exe.ps1'),
+                                     '-Exe', str(base / 'Game_Win8.exe'), '-IncludeRuntime'],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            desktop = base / 'desktop'
+            self.assertEqual((desktop / 'Game_Win8.desktop.exe').read_bytes()[0xDF], executable()[0xDF] & 0xEF)
+            self.assertFalse((desktop / 'Game_Win8.exe').exists())
+            for name in ['msvcr110.dll', 'msvcp110.dll', 'vccorlib110.dll']:
+                self.assertEqual((desktop / name).read_bytes()[0xDF], dll[0xDF] & 0xEF)
+            self.assertEqual((desktop / 'XAudio2_8.dll').read_bytes(), b'proxy')
+            self.assertTrue((desktop / 'AppxManifest.xml').is_file())
+            self.assertFalse((desktop / 'AppxSignature.p7x').exists())

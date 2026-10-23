@@ -2,6 +2,7 @@
 #include "registry.h"
 #include "settings.h"
 #include "com/factory.h"
+#include "package/package.h"
 #include <roapi.h>
 #include <shlobj.h>
 #include <filesystem>
@@ -11,14 +12,15 @@
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::Storage;
-namespace ctr2 {
+namespace appx {
 namespace {
-// Where saves live. CTR2SHIM_DATA wins (scripts and tests); otherwise
-// SaveLocation in ctr2shim.ini beside the game executable:
+// Where saves live. APPX_PORTABLE_DATA wins (scripts and tests); otherwise
+// SaveLocation in appx-portable.ini beside the game executable:
 //   game (default)  <game folder>\SaveData
-//   documents       Documents\CutTheRope2UWP_SaveData
-//   appdata         %LOCALAPPDATA%\ctr2, the original location
+//   documents       Documents\appx-portable\<package name>
+//   appdata         %LOCALAPPDATA%\appx-portable\<package name>
 //   anything else   a folder; relative paths start at the game folder
+// <package name> is the manifest's identity name, so games never share saves.
 std::filesystem::path GameDirectory() {
     std::wstring path(MAX_PATH, L'\0');
     DWORD length = 0;
@@ -29,10 +31,10 @@ std::filesystem::path GameDirectory() {
 }
 std::wstring SaveLocationSetting() {
     wchar_t value[1024]{};
-    const auto length = GetEnvironmentVariableW(L"CTR2SHIM_DATA", value, 1024);
+    const auto length = GetEnvironmentVariableW(L"APPX_PORTABLE_DATA", value, 1024);
     if (length > 0 && length < 1024) return value;
     GetPrivateProfileStringW(L"storage", L"SaveLocation", L"", value, 1024,
-                             (GameDirectory() / L"ctr2shim.ini").c_str());
+                             (GameDirectory() / L"appx-portable.ini").c_str());
     std::wstring setting(value);
     setting.erase(0, setting.find_first_not_of(L" \t\""));
     setting.erase(setting.find_last_not_of(L" \t\"") + 1);
@@ -45,16 +47,21 @@ std::filesystem::path KnownFolder(REFKNOWNFOLDERID id) {
     CoTaskMemFree(path);
     return result;
 }
+std::wstring PackageFolderName() {
+    const auto& package = CurrentPackage();
+    if (!package.identityName.empty()) return package.identityName;
+    return GameDirectory().filename().wstring();  // no manifest: the game folder's name
+}
 std::filesystem::path AppDataRoot() {
     // The environment variable first, so tests can point it elsewhere.
     wchar_t value[MAX_PATH]{};
     auto length = GetEnvironmentVariableW(L"LOCALAPPDATA", value, MAX_PATH);
     auto base = length && length < MAX_PATH ? std::filesystem::path(value) : KnownFolder(FOLDERID_LocalAppData);
-    return base.empty() ? base : base / L"ctr2";
+    return base.empty() ? base : base / L"appx-portable" / PackageFolderName();
 }
 std::filesystem::path DocumentsRoot() {
     auto base = KnownFolder(FOLDERID_Documents);
-    return base.empty() ? base : base / L"CutTheRope2UWP_SaveData";
+    return base.empty() ? base : base / L"appx-portable" / PackageFolderName();
 }
 std::filesystem::path LocationPath(const std::wstring& setting) {
     if (setting.empty() || _wcsicmp(setting.c_str(), L"game") == 0) return GameDirectory() / L"SaveData";
@@ -75,34 +82,11 @@ bool PrepareRoot(const std::filesystem::path& root) {
         std::filesystem::create_directories(root / name, error);
         if (error) return false;
     }
-    HANDLE probe = CreateFileW((root / L"Local" / L".ctr2shim-write-test").c_str(), GENERIC_WRITE, 0, nullptr,
+    HANDLE probe = CreateFileW((root / L"Local" / L".appxportable-write-test").c_str(), GENERIC_WRITE, 0, nullptr,
                                CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
     if (probe == INVALID_HANDLE_VALUE) return false;
     CloseHandle(probe);
     return true;
-}
-bool HasSettings(const std::filesystem::path& root) {
-    std::error_code error;
-    return std::filesystem::exists(root / L"Local" / L"settings.json", error) ||
-           std::filesystem::exists(root / L"Local" / L"settings.json.journal", error);
-}
-// A new location starts with a copy of the saves from %LOCALAPPDATA%\ctr2,
-// so switching keeps progress. The original files stay where they are.
-void CopyLegacySaves(const std::filesystem::path& root) {
-    auto legacy = AppDataRoot();
-    std::error_code error;
-    if (legacy.empty() || std::filesystem::equivalent(root, legacy, error) || HasSettings(root) || !HasSettings(legacy))
-        return;
-    for (const auto* name : {L"Local", L"Roaming"}) {
-        std::filesystem::copy(legacy / name, root / name,
-                              std::filesystem::copy_options::recursive | std::filesystem::copy_options::skip_existing,
-                              error);
-        if (error) {
-            Log("FAIL", "copying saves from %ls failed: %s", legacy.c_str(), error.message().c_str());
-            return;
-        }
-    }
-    Log("INFO", "copied saves from %ls to %ls", legacy.c_str(), root.c_str());
 }
 HRESULT ResolveDataRoot(std::filesystem::path& root) {
     const auto setting = SaveLocationSetting();
@@ -115,7 +99,6 @@ HRESULT ResolveDataRoot(std::filesystem::path& root) {
             Log("FAIL", "save location %ls is not writable", candidate.c_str());
             continue;
         }
-        CopyLegacySaves(candidate);
         Log("INFO", "saves: %ls", candidate.c_str());
         root = std::move(candidate);
         return S_OK;

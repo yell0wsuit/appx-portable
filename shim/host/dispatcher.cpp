@@ -5,7 +5,7 @@
 #include "com/async_action.h"
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Core;
-namespace ctr2 {
+namespace appx {
 class IdleArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, IIdleDispatchedHandlerArgs> {
     InspectableClass(L"Windows.UI.Core.IdleDispatchedHandlerArgs", BaseTrust);
 

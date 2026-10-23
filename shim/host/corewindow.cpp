@@ -8,7 +8,7 @@
 #include "platform/cursor.h"
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Core;
-namespace ctr2 {
+namespace appx {
 class CoreWindow final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultICoreWindow> {
     InspectableClass(L"Windows.UI.Core.CoreWindow", BaseTrust);
     ComPtr<ICoreCursor> cursor_;

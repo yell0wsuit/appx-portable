@@ -11,7 +11,7 @@ using namespace ABI::Windows::System::Display;
 using namespace ABI::Windows::Security::ExchangeActiveSyncProvisioning;
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
     ComPtr<IActivationFactory> factory;
@@ -38,7 +38,7 @@ int main() {
                 &factory)))
         return 10;
     GUID original{};
-    const GUID expected{0x63747232, 0x7769, 0x6e65, {0x80, 0, 0, 0, 0, 0, 0, 1}};
+    const GUID expected{0x78707061, 0x6f70, 0x7472, {0x80, 0, 0, 0, 0, 0, 0, 1}};
     for (int repeat = 0; repeat < 2; ++repeat) {
         ComPtr<IInspectable> instance;
         if (FAILED(factory->ActivateInstance(&instance)) || !instance) return 11;
@@ -54,11 +54,11 @@ int main() {
             wcscmp(value.GetRawBuffer(nullptr), L"Windows") != 0)
             return 15;
         if (info->get_FriendlyName(nullptr) != E_POINTER || FAILED(info->get_FriendlyName(value.GetAddressOf())) ||
-            wcscmp(value.GetRawBuffer(nullptr), L"ctr2-wine") != 0)
+            wcscmp(value.GetRawBuffer(nullptr), L"appx-portable") != 0)
             return 16;
         if (info->get_SystemManufacturer(nullptr) != E_POINTER ||
             FAILED(info->get_SystemManufacturer(value.GetAddressOf())) ||
-            wcscmp(value.GetRawBuffer(nullptr), L"ctr2-wine") != 0)
+            wcscmp(value.GetRawBuffer(nullptr), L"appx-portable") != 0)
             return 17;
         if (info->get_SystemProductName(nullptr) != E_POINTER ||
             FAILED(info->get_SystemProductName(value.GetAddressOf())) ||

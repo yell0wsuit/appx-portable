@@ -10,7 +10,7 @@
 #include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Graphics::Display;
-namespace ctr2 {
+namespace appx {
 using DisplayHandler = ABI::Windows::Foundation::ITypedEventHandler<DisplayInformation*, IInspectable*>;
 class Display final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIDisplayInformation, FtmBase> {
     InspectableClass(L"Windows.Graphics.Display.DisplayInformation", BaseTrust);

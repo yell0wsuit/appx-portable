@@ -4,7 +4,7 @@
 #include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Foundation::Diagnostics;
-namespace ctr2 {
+namespace appx {
 // Store-build ppltasks.h reports every task to these statics and throws
 // ClassNotRegisteredException from task creation when the class is absent,
 // which killed the game's render work item. Tracing is never enabled here.

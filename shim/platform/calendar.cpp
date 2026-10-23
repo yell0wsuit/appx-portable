@@ -5,7 +5,7 @@
 #include <algorithm>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Globalization;
-namespace ctr2 {
+namespace appx {
 namespace {
 // Gregorian, 24-hour calendar in the local time zone over a UTC DateTime.
 // Day/hour arithmetic is exact elapsed time; fields read and write local time.

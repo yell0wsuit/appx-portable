@@ -1,7 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <cmath>
-namespace ctr2 {
+namespace appx {
 // MediaElement's Stretch modes; None draws like Uniform, as before.
 enum class VideoFit : unsigned char { Fill, Uniform, UniformToFill };
 // The part of the frame to draw (0..1 of its width and height), and where.

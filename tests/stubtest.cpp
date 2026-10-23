@@ -9,14 +9,14 @@ using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
     ComPtr<IActivationFactory> factory;
     if (FAILED(get(HStringReference(L"VungleSDK.AdFactory").Get(), &factory))) return 2;
-    ComPtr<ctr2::vungle::IAdFactoryStatic> statics;
+    ComPtr<appx::vungle::IAdFactoryStatic> statics;
     if (FAILED(factory.As(&statics))) return 3;
-    ComPtr<ctr2::vungle::IVungleAd> ad;
+    ComPtr<appx::vungle::IVungleAd> ad;
     if (FAILED(statics->GetInstance(HStringReference(L"test").Get(), &ad)) || !ad) return 4;
     boolean available = true;
     if (FAILED(ad->get_AdPlayable(&available)) || available) return 5;

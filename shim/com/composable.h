@@ -4,7 +4,7 @@
 #include <atomic>
 #include <new>
 #include "log.h"
-namespace ctr2 {
+namespace appx {
 // Type probes whose E_NOINTERFACE is the expected answer: ANGLE asking a
 // SwapChainPanel for ICoreWindow before trying ISwapChainPanel, and the Loaded
 // walker asking elements for IContentControl/IUserControl to find children.

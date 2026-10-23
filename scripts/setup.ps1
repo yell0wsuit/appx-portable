@@ -1,12 +1,33 @@
 #requires -Version 5.1
+# Stages an extracted Store package as a portable game folder:
+#   - copies the package, leaving out its signature and package metadata
+#   - adds the Visual C++ runtime the manifest depends on (VCLibs 110/120/140)
+#   - decodes the percent-encoded names a raw .appx extraction keeps
+#   - adds appxportable.dll and the proxy DLLs that load it
+# The game executable is never modified; its SHA-256 is checked after copying.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$SourceDirectory,
     [Parameter(Mandatory = $true)][string]$Destination,
-    [string]$BuildDirectory = (Join-Path $PSScriptRoot '../build/windows-x86')
+    [string]$BuildDirectory = (Join-Path $PSScriptRoot '../build/windows-x86'),
+    # Folders holding the x86 VCLibs DLLs, if the game folder lacks them: an
+    # extracted Microsoft.VCLibs.*.appx, or its installed WindowsApps folder.
+    [string[]]$RuntimeDirectory = @()
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+# The runtime DLLs each VCLibs framework package provides to Store apps.
+$VCLibs = @{
+    'Microsoft.VCLibs.110.00' = @('msvcr110.dll', 'msvcp110.dll', 'vccorlib110.dll')
+    'Microsoft.VCLibs.120.00' = @('msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll')
+    'Microsoft.VCLibs.140.00' = @('vcruntime140_app.dll', 'msvcp140_app.dll', 'vccorlib140_app.dll')
+}
+# System DLLs games import from their folder; each loads appxportable.dll.
+$Proxies = @('d3dcompiler_47.dll', 'XAudio2_8.dll')
+# Package files the game never reads, and files setup itself provides.
+$Excluded = @('AppxSignature.p7x', 'AppxBlockMap.xml', '[Content_Types].xml', 'AppxMetadata',
+    'microsoft.system.package.metadata', 'SaveData', 'appx-portable.ini', 'appxportable.dll') + $Proxies
 
 function Get-FullFileSystemPath([string]$Path) {
     if ($PWD.Provider.Name -ne 'FileSystem') { throw 'Run setup from a filesystem directory.' }
@@ -69,11 +90,33 @@ function Copy-AtomicDll([string]$Source, [string]$Target) {
         if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
     }
 }
+# The manifest's executable and framework dependencies. Elements are matched by
+# local name: Windows 8, 8.1 and 10 manifests use different namespaces.
+function Read-PackageManifest([string]$Directory) {
+    $path = Join-Path $Directory 'AppxManifest.xml'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Missing $path. Extract the whole .appx package, not only its files."
+    }
+    $settings = New-Object Xml.XmlReaderSettings
+    $settings.DtdProcessing = [Xml.DtdProcessing]::Prohibit
+    $settings.XmlResolver = $null
+    $reader = [Xml.XmlReader]::Create($path, $settings)
+    try { $xml = New-Object Xml.XmlDocument; $xml.Load($reader) } finally { $reader.Dispose() }
+    $application = $xml.SelectSingleNode("//*[local-name()='Application']")
+    if (-not $application) { throw "$path declares no Application." }
+    $executable = $application.GetAttribute('Executable')
+    if (-not $executable -or [IO.Path]::IsPathRooted($executable) -or $executable -match '(^|[\\/])\.\.([\\/]|$)') {
+        throw "$path has an unusable Executable: '$executable'"
+    }
+    $dependencies = @($xml.SelectNodes("//*[local-name()='PackageDependency']") | ForEach-Object { $_.GetAttribute('Name') })
+    return [pscustomobject]@{ Executable = $executable; Dependencies = $dependencies }
+}
 
 $source = Get-FullFileSystemPath $SourceDirectory
 $destinationPath = Get-FullFileSystemPath $Destination
 $build = Get-FullFileSystemPath $BuildDirectory
-foreach ($path in @($source, $destinationPath, $build)) { Assert-NoReparseAncestors $path }
+$runtimeFolders = @($RuntimeDirectory | ForEach-Object { Get-FullFileSystemPath $_ })
+foreach ($path in @($source, $destinationPath, $build) + $runtimeFolders) { Assert-NoReparseAncestors $path }
 if (-not (Test-Path -LiteralPath $source -PathType Container)) { throw "Missing game directory: $source" }
 $sourcePrefix = $source.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
 $destinationPrefix = $destinationPath.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
@@ -86,41 +129,60 @@ if (Test-Path -LiteralPath $destinationPath) {
     if (-not (Test-Path -LiteralPath $destinationPath -PathType Container)) { throw 'Destination must be a directory.' }
     Assert-NoReparseTree $destinationPath
 }
-foreach ($name in @('Game.exe', 'msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll')) {
-    Assert-X86PE (Join-Path $source $name)
+$package = Read-PackageManifest $source
+$executable = Join-Path $source $package.Executable
+Assert-X86PE $executable
+
+# Each VCLibs DLL comes from the game folder or a runtime folder, in that order.
+$runtimeFiles = @{}
+foreach ($dependency in $package.Dependencies) {
+    if (-not $VCLibs.ContainsKey($dependency)) { continue }
+    foreach ($name in $VCLibs[$dependency]) {
+        $found = @(@($source) + $runtimeFolders | ForEach-Object { Join-Path $_ $name } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1)
+        if (-not $found) {
+            throw "Missing $name ($dependency). Copy the x86 DLLs from the $dependency package beside the game, or pass its folder with -RuntimeDirectory."
+        }
+        Assert-X86PE $found[0]
+        $runtimeFiles[$name] = $found[0]
+    }
 }
-foreach ($name in @('ctr2shim.dll', 'd3dcompiler_47.dll')) { Assert-X86PE (Join-Path $build $name) }
-if (-not (Test-Path -LiteralPath (Join-Path $source 'Assets') -PathType Container)) { throw 'Source game Assets directory is missing.' }
-$originalHash = (Get-FileHash -LiteralPath (Join-Path $source 'Game.exe') -Algorithm SHA256).Hash
+foreach ($name in @('appxportable.dll') + $Proxies) { Assert-X86PE (Join-Path $build $name) }
+$originalHash = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
+
 [IO.Directory]::CreateDirectory($destinationPath) | Out-Null
-# Runtime whitelist: do not copy decompiles, certificates, package manifests, or keys.
-foreach ($name in @('Game.exe', 'msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll',
-    'App.xbf', 'MainPage.xbf', 'MovieMgrPage.xbf', 'VideoPlayerPage.xbf', 'resources.pri', 'ZF.winmd', 'VungleSDK.winmd')) {
-    $path = Join-Path $source $name
-    if (Test-Path -LiteralPath $path -PathType Leaf) { Copy-Item -LiteralPath $path -Destination (Join-Path $destinationPath $name) -Force }
+foreach ($item in Get-ChildItem -LiteralPath $source -Force) {
+    if ($Excluded -contains $item.Name -or $item.Name -like 'appx-portable*.log') { continue }
+    Copy-Item -LiteralPath $item.FullName -Destination $destinationPath -Recurse -Force
 }
-$assetsDestination = Join-Path $destinationPath 'Assets'
-[IO.Directory]::CreateDirectory($assetsDestination) | Out-Null
-foreach ($item in Get-ChildItem -LiteralPath (Join-Path $source 'Assets') -Force) {
-    Copy-Item -LiteralPath $item.FullName -Destination $assetsDestination -Recurse -Force
+foreach ($name in $runtimeFiles.Keys) {
+    Copy-Item -LiteralPath $runtimeFiles[$name] -Destination (Join-Path $destinationPath $name) -Force
 }
-# A raw .appx extraction keeps OPC percent-encoded names (%21_MasterGameDesignDocument.xml).
-# The installer decodes them, and the game opens the decoded names; missing design
-# XML leaves the game without its candy definition and crashes it after loading.
-$encoded = Get-ChildItem -LiteralPath $assetsDestination -Recurse -Force | Where-Object { $_.Name -match '%[0-9A-Fa-f]{2}' }
+# A raw .appx extraction keeps OPC percent-encoded names (%21_Name.xml,
+# User%20Controls); installed packages have them decoded, and games open the
+# decoded names. Saves are left alone. Deepest paths first, so renaming a
+# folder never invalidates a pending child.
+# (SaveData is skipped by never descending into it: path prefixes can differ in
+# 8.3 short and long forms.)
+$encoded = Get-ChildItem -LiteralPath $destinationPath -Force | Where-Object { $_.Name -ne 'SaveData' } | ForEach-Object {
+    $_
+    if ($_.PSIsContainer) { Get-ChildItem -LiteralPath $_.FullName -Recurse -Force }
+} | Where-Object { $_.Name -match '%[0-9A-Fa-f]{2}' }
 foreach ($item in $encoded | Sort-Object { $_.FullName.Length } -Descending) {
     $decoded = [Uri]::UnescapeDataString($item.Name)
-    if ($decoded.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Cannot decode asset name: $($item.FullName)" }
-    Move-Item -LiteralPath $item.FullName -Destination (Join-Path ([IO.Path]::GetDirectoryName($item.FullName)) $decoded) -Force
+    if ($decoded.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) { throw "Cannot decode package name: $($item.FullName)" }
+    $target = Join-Path ([IO.Path]::GetDirectoryName($item.FullName)) $decoded
+    if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+    Move-Item -LiteralPath $item.FullName -Destination $target
 }
 # Settings template, copied once so later edits survive re-staging.
-$settings = Join-Path $destinationPath 'ctr2shim.ini'
-if (-not (Test-Path -LiteralPath $settings)) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ctr2shim.ini') -Destination $settings }
-foreach ($name in @('ctr2shim.dll', 'd3dcompiler_47.dll')) {
+$settings = Join-Path $destinationPath 'appx-portable.ini'
+if (-not (Test-Path -LiteralPath $settings)) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'appx-portable.ini') -Destination $settings }
+foreach ($name in @('appxportable.dll') + $Proxies) {
     Copy-AtomicDll (Join-Path $build $name) (Join-Path $destinationPath $name)
 }
-$stagedHash = (Get-FileHash -LiteralPath (Join-Path $destinationPath 'Game.exe') -Algorithm SHA256).Hash
-$sourceHash = (Get-FileHash -LiteralPath (Join-Path $source 'Game.exe') -Algorithm SHA256).Hash
-if ($originalHash -ne $stagedHash -or $originalHash -ne $sourceHash) { throw 'Game.exe SHA-256 verification failed.' }
+$stagedHash = (Get-FileHash -LiteralPath (Join-Path $destinationPath $package.Executable) -Algorithm SHA256).Hash
+$sourceHash = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
+if ($originalHash -ne $stagedHash -or $originalHash -ne $sourceHash) { throw "$($package.Executable) SHA-256 verification failed." }
 Write-Output "Prepared $destinationPath"
-Write-Output "Game.exe SHA-256: $stagedHash (source and staged copy match)"
+Write-Output "$($package.Executable) SHA-256: $stagedHash (source and staged copy match)"

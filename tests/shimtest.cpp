@@ -24,17 +24,17 @@ static int failures = 0;
 using GetFactory = HRESULT(WINAPI*)(HSTRING, IActivationFactory**);
 
 int main() {
-    const auto fixedNow = ctr2::TimerClock::time_point(std::chrono::seconds(1));
+    const auto fixedNow = appx::TimerClock::time_point(std::chrono::seconds(1));
     constexpr std::int64_t sixtyDays = 60LL * 24 * 60 * 60 * 10000000;
-    CHECK(ctr2::TimerDeadline(fixedNow, sixtyDays) - fixedNow == std::chrono::hours(60 * 24));
-    CHECK(ctr2::TimerDeadline(fixedNow, (std::numeric_limits<std::int64_t>::max)()) ==
-          ctr2::TimerClock::time_point::max());
-    CHECK(ctr2::TimerDeadline(fixedNow, 0) == fixedNow);
-    CHECK(ctr2::TimerDeadline(fixedNow, 1) - fixedNow == std::chrono::nanoseconds(100));
-    auto nearMax = ctr2::TimerClock::time_point::max() - std::chrono::nanoseconds(50);
-    CHECK(ctr2::TimerDeadline(nearMax, 1) == ctr2::TimerClock::time_point::max());
+    CHECK(appx::TimerDeadline(fixedNow, sixtyDays) - fixedNow == std::chrono::hours(60 * 24));
+    CHECK(appx::TimerDeadline(fixedNow, (std::numeric_limits<std::int64_t>::max)()) ==
+          appx::TimerClock::time_point::max());
+    CHECK(appx::TimerDeadline(fixedNow, 0) == fixedNow);
+    CHECK(appx::TimerDeadline(fixedNow, 1) - fixedNow == std::chrono::nanoseconds(100));
+    auto nearMax = appx::TimerClock::time_point::max() - std::chrono::nanoseconds(50);
+    CHECK(appx::TimerDeadline(nearMax, 1) == appx::TimerClock::time_point::max());
     RoInitialize(RO_INIT_MULTITHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     CHECK(dll != nullptr);
     if (!dll) return 1;
     auto get = reinterpret_cast<GetFactory>(GetProcAddress(dll, "ShimGetFactory"));

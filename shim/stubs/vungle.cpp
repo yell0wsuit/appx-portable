@@ -5,8 +5,8 @@
 #include <map>
 #include <mutex>
 using namespace Microsoft::WRL;
-using namespace ctr2::vungle;
-namespace ctr2 {
+using namespace appx::vungle;
+namespace appx {
 class Ad final : public RuntimeClass<RuntimeClassFlags<WinRt>, IVungleAd, FtmBase> {
     InspectableClass(L"VungleSDK.VungleAd", BaseTrust);
     std::mutex mutex_;

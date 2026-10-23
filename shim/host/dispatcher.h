@@ -1,5 +1,5 @@
 #pragma once
 #include <windows.ui.core.h>
-namespace ctr2 {
+namespace appx {
 HRESULT MakeDispatcher(ABI::Windows::UI::Core::ICoreDispatcher** value);
 }

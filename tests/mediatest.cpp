@@ -23,7 +23,7 @@ static HWND TestWindow() {
         [](HWND window, LPARAM context) -> BOOL {
             wchar_t name[80]{};
             GetClassNameW(window, name, ARRAYSIZE(name));
-            if (wcscmp(name, L"CTR2ShimWindow") != 0) return TRUE;
+            if (wcscmp(name, L"AppxPortableWindow") != 0) return TRUE;
             *reinterpret_cast<HWND*>(context) = window;
             return FALSE;
         },
@@ -82,7 +82,7 @@ int wmain(int argc, wchar_t** argv) {
         if (FAILED(UrlCreateFromPathW(absolute, encoded, &length, 0))) return 1;
         url = encoded;
     }
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
     ComPtr<IActivationFactory> factory;

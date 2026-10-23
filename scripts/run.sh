@@ -14,10 +14,21 @@ done
 export WINEPREFIX=${WINEPREFIX:-"$root/local/wine-test"}
 export WINEDEBUG=${WINEDEBUG:--all}
 export MVK_CONFIG_LOG_LEVEL=${MVK_CONFIG_LOG_LEVEL:-0}
-export WINEDLLOVERRIDES="d3dcompiler_47=n,b;msvcr120_app,msvcp120_app,vccorlib120_app=n${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
+# The proxies load the shim; the VC runtimes are the package's own (VCLibs 110, 120, 140).
+export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
 wine=${WINE:-"$HOME/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine"}
 [[ -x "$wine" ]] || { echo 'Set WINE to your Wine executable.' >&2; exit 1; }
-[[ -f "$game/Game.exe" && -f "$game/ctr2shim.dll" ]] || { echo 'Run setup.sh first.' >&2; exit 1; }
+# The executable AppxManifest.xml names; Game.exe without a manifest.
+exe=$(python3 -c '
+import pathlib, sys, xml.etree.ElementTree as ET
+manifest = pathlib.Path(sys.argv[1]) / "AppxManifest.xml"
+exe = "Game.exe"
+if manifest.is_file():
+    for element in ET.parse(manifest).iter():
+        if element.tag.rsplit("}", 1)[-1] == "Application" and element.get("Executable"):
+            exe = element.get("Executable"); break
+print(exe)' "$game")
+[[ -f "$game/$exe" && -f "$game/appxportable.dll" ]] || { echo 'Run setup.sh first.' >&2; exit 1; }
 # A crash otherwise opens Wine's crash dialog, which keeps the process alive
 # until closed and stalls the relaunch below; print the backtrace and exit.
 "$wine" reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1 || true
@@ -27,9 +38,9 @@ cd "$game"
 # "CreateDXGIFactory1 begin" without a result in the log; retry only that case.
 status=0
 for attempt in 1 2 3; do
-  "$wine" Game.exe "${flags[@]}" && exit 0 || status=$?
-  # Wine launches always log, and each logging run starts a new ctr2shim.log.
-  run=$(cat ctr2shim.log 2>/dev/null || true)
+  "$wine" "$exe" "${flags[@]}" && exit 0 || status=$?
+  # Wine launches always log, and each logging run starts a new appx-portable.log.
+  run=$(cat appx-portable.log 2>/dev/null || true)
   if grep -q 'CreateDXGIFactory1 begin' <<< "$run" && ! grep -q 'CreateDXGIFactory1 hr=' <<< "$run"; then
     echo "Wine graphics startup crashed (attempt $attempt/3); relaunching." >&2
     continue

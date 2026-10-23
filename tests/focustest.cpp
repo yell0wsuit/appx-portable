@@ -39,7 +39,7 @@ static void Then(const std::function<void()>& step) {
 }
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     CHECK(dll);
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
@@ -92,7 +92,7 @@ int main() {
             [](HWND hwnd, LPARAM) -> BOOL {
                 wchar_t name[64]{};
                 GetClassNameW(hwnd, name, 64);
-                if (wcscmp(name, L"CTR2ShimWindow") != 0) return TRUE;
+                if (wcscmp(name, L"AppxPortableWindow") != 0) return TRUE;
                 host = hwnd;
                 return FALSE;
             },

@@ -1,6 +1,6 @@
-# Building the shim manually
+# Building appx-portable
 
-The shim targets **32-bit Windows (x86)** with the MSVC ABI. Build on Windows with MSVC or cross-compile on macOS with `clang-cl`. Game files are not needed to build the shim or run its automated tests.
+appx-portable targets **32-bit Windows (x86)** with the MSVC ABI. Build on Windows with MSVC or cross-compile on macOS with `clang-cl`. Game files are not needed to build it or run its automated tests.
 
 ## Windows
 
@@ -13,7 +13,7 @@ cmake --preset windows-x86
 cmake --build --preset windows-x86
 ```
 
-This creates `ctr2shim.dll` and `d3dcompiler_47.dll` in `build\windows-x86`. Follow the [setup instructions](../README.md#set-up-and-play) to copy them into a playable game folder.
+This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll` and `XAudio2_8.dll` in `build\windows-x86`. Follow the [setup instructions](../README.md#set-up-and-play) to stage them into a playable game folder.
 
 If CMake cannot find `cl`, use an x86 Visual Studio developer shell. If MSYS2's CMake appears first on `PATH`, put the native Windows CMake ahead of it (typically `C:\Program Files\CMake\bin`).
 
@@ -24,7 +24,7 @@ ctest --test-dir build/windows-x86 --output-on-failure
 python -m unittest discover -s tests/python
 ```
 
-Native tests keep saves in the build folder. PowerShell setup tests require PowerShell 7 (`pwsh`); shell setup tests are skipped on Windows.
+Native tests keep saves in the build folder and need no game files. PowerShell setup tests require PowerShell 7 (`pwsh`); shell setup tests are skipped on Windows.
 
 ## macOS cross-compilation
 
@@ -71,3 +71,11 @@ On macOS:
 ```sh
 python3 scripts/regenerate_sdk.py .sdk/sdk/include/winrt
 ```
+
+### Add a proxy DLL
+
+A game loads appx-portable through a system DLL it imports and looks up in its own folder first. To support a game that imports none of the existing proxies (`proxy/*/`), pick one of its imports that is not a [known DLL](https://learn.microsoft.com/windows/win32/dlls/dynamic-link-library-search-order), then:
+
+1. Create `proxy/<name>/exports.txt` listing the real DLL's exports, one per line, in the real DLL's ordinal order (games may import by ordinal).
+2. Run `python scripts/gen_proxy.py` to generate the thunks, `.def` file and names header.
+3. Add the name to the proxy list in `CMakeLists.txt`, `scripts/setup.ps1`, `scripts/setup.sh` and the release workflow.

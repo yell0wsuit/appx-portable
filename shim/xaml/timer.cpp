@@ -9,7 +9,7 @@
 #include <map>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
-namespace ctr2 {
+namespace appx {
 namespace {
 class DispatcherTimer;
 struct RunningTimer {

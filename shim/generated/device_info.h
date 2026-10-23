@@ -9,27 +9,27 @@
 namespace ABI::Windows::Security::ExchangeActiveSyncProvisioning {
 struct __declspec(uuid("54dfd981-1968-4ca3-b958-e595d16505eb")) DefaultIEasClientDeviceInformation : public ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation {
   HRESULT STDMETHODCALLTYPE get_Id(GUID* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_Id");
+    appx::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_Id");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_OperatingSystem(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_OperatingSystem");
+    appx::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_OperatingSystem");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FriendlyName(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_FriendlyName");
+    appx::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_FriendlyName");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_SystemManufacturer(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_SystemManufacturer");
+    appx::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_SystemManufacturer");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_SystemProductName(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_SystemProductName");
+    appx::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_SystemProductName");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_SystemSku(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_SystemSku");
+    appx::Log("UNIMPL", "ABI::Windows::Security::ExchangeActiveSyncProvisioning::IEasClientDeviceInformation::get_SystemSku");
     return E_NOTIMPL;
   }
 };

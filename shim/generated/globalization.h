@@ -9,395 +9,395 @@
 namespace ABI::Windows::Globalization {
 struct __declspec(uuid("ca30221d-86d9-40fb-a26b-d44eb7cf08ea")) DefaultICalendar : public ABI::Windows::Globalization::ICalendar {
   HRESULT STDMETHODCALLTYPE Clone(ABI::Windows::Globalization::ICalendar** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::Clone");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::Clone");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SetToMin(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SetToMin");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SetToMin");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SetToMax(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SetToMax");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SetToMax");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Languages(__FIVectorView_1_HSTRING** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Languages");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Languages");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumeralSystem(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumeralSystem");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumeralSystem");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_NumeralSystem(HSTRING value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_NumeralSystem");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_NumeralSystem");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetCalendarSystem(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::GetCalendarSystem");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::GetCalendarSystem");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE ChangeCalendarSystem(HSTRING value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::ChangeCalendarSystem");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::ChangeCalendarSystem");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetClock(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::GetClock");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::GetClock");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE ChangeClock(HSTRING value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::ChangeClock");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::ChangeClock");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetDateTime(ABI::Windows::Foundation::DateTime* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::GetDateTime");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::GetDateTime");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SetDateTime(ABI::Windows::Foundation::DateTime value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SetDateTime");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SetDateTime");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SetToNow(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SetToNow");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SetToNow");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FirstEra(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstEra");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstEra");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LastEra(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastEra");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastEra");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumberOfEras(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfEras");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfEras");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Era(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Era");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Era");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Era(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Era");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Era");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddEras(INT32 eras) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddEras");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddEras");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE EraAsFullString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::EraAsFullString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::EraAsFullString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE EraAsString(INT32 idealLength, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::EraAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::EraAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FirstYearInThisEra(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstYearInThisEra");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstYearInThisEra");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LastYearInThisEra(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastYearInThisEra");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastYearInThisEra");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumberOfYearsInThisEra(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfYearsInThisEra");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfYearsInThisEra");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Year(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Year");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Year");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Year(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Year");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Year");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddYears(INT32 years) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddYears");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddYears");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE YearAsString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::YearAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::YearAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE YearAsTruncatedString(INT32 remainingDigits, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::YearAsTruncatedString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::YearAsTruncatedString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE YearAsPaddedString(INT32 minDigits, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::YearAsPaddedString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::YearAsPaddedString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FirstMonthInThisYear(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstMonthInThisYear");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstMonthInThisYear");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LastMonthInThisYear(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastMonthInThisYear");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastMonthInThisYear");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumberOfMonthsInThisYear(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfMonthsInThisYear");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfMonthsInThisYear");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Month(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Month");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Month");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Month(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Month");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Month");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddMonths(INT32 months) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddMonths");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddMonths");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE MonthAsFullString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsFullString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsFullString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE MonthAsString(INT32 idealLength, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE MonthAsFullSoloString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsFullSoloString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsFullSoloString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE MonthAsSoloString(INT32 idealLength, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsSoloString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsSoloString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE MonthAsNumericString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsNumericString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsNumericString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE MonthAsPaddedNumericString(INT32 minDigits, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsPaddedNumericString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MonthAsPaddedNumericString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddWeeks(INT32 weeks) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddWeeks");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddWeeks");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FirstDayInThisMonth(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstDayInThisMonth");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstDayInThisMonth");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LastDayInThisMonth(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastDayInThisMonth");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastDayInThisMonth");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumberOfDaysInThisMonth(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfDaysInThisMonth");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfDaysInThisMonth");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Day(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Day");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Day");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Day(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Day");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Day");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddDays(INT32 days) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddDays");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddDays");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DayAsString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DayAsPaddedString(INT32 minDigits, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayAsPaddedString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayAsPaddedString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_DayOfWeek(ABI::Windows::Globalization::DayOfWeek* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_DayOfWeek");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_DayOfWeek");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DayOfWeekAsFullString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayOfWeekAsFullString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayOfWeekAsFullString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DayOfWeekAsString(INT32 idealLength, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayOfWeekAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayOfWeekAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DayOfWeekAsFullSoloString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayOfWeekAsFullSoloString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayOfWeekAsFullSoloString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DayOfWeekAsSoloString(INT32 idealLength, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayOfWeekAsSoloString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::DayOfWeekAsSoloString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FirstPeriodInThisDay(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstPeriodInThisDay");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstPeriodInThisDay");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LastPeriodInThisDay(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastPeriodInThisDay");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastPeriodInThisDay");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumberOfPeriodsInThisDay(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfPeriodsInThisDay");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfPeriodsInThisDay");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Period(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Period");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Period");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Period(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Period");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Period");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddPeriods(INT32 periods) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddPeriods");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddPeriods");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE PeriodAsFullString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::PeriodAsFullString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::PeriodAsFullString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE PeriodAsString(INT32 idealLength, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::PeriodAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::PeriodAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FirstHourInThisPeriod(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstHourInThisPeriod");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstHourInThisPeriod");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LastHourInThisPeriod(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastHourInThisPeriod");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastHourInThisPeriod");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumberOfHoursInThisPeriod(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfHoursInThisPeriod");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfHoursInThisPeriod");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Hour(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Hour");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Hour");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Hour(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Hour");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Hour");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddHours(INT32 hours) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddHours");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddHours");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE HourAsString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::HourAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::HourAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE HourAsPaddedString(INT32 minDigits, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::HourAsPaddedString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::HourAsPaddedString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Minute(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Minute");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Minute");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Minute(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Minute");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Minute");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddMinutes(INT32 minutes) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddMinutes");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddMinutes");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE MinuteAsString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MinuteAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MinuteAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE MinuteAsPaddedString(INT32 minDigits, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MinuteAsPaddedString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::MinuteAsPaddedString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Second(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Second");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Second");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Second(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Second");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Second");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddSeconds(INT32 seconds) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddSeconds");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddSeconds");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SecondAsString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SecondAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SecondAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SecondAsPaddedString(INT32 minDigits, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SecondAsPaddedString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::SecondAsPaddedString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Nanosecond(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Nanosecond");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_Nanosecond");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_Nanosecond(INT32 value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Nanosecond");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::put_Nanosecond");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE AddNanoseconds(INT32 nanoseconds) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddNanoseconds");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::AddNanoseconds");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE NanosecondAsString(HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::NanosecondAsString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::NanosecondAsString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE NanosecondAsPaddedString(INT32 minDigits, HSTRING* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::NanosecondAsPaddedString");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::NanosecondAsPaddedString");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE Compare(ABI::Windows::Globalization::ICalendar* other, INT32* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::Compare");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::Compare");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CompareDateTime(ABI::Windows::Foundation::DateTime other, INT32* result) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::CompareDateTime");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::CompareDateTime");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CopyTo(ABI::Windows::Globalization::ICalendar* other) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::CopyTo");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::CopyTo");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FirstMinuteInThisHour(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstMinuteInThisHour");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstMinuteInThisHour");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LastMinuteInThisHour(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastMinuteInThisHour");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastMinuteInThisHour");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumberOfMinutesInThisHour(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfMinutesInThisHour");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfMinutesInThisHour");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_FirstSecondInThisMinute(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstSecondInThisMinute");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_FirstSecondInThisMinute");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LastSecondInThisMinute(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastSecondInThisMinute");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_LastSecondInThisMinute");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NumberOfSecondsInThisMinute(INT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfSecondsInThisMinute");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_NumberOfSecondsInThisMinute");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ResolvedLanguage(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_ResolvedLanguage");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_ResolvedLanguage");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsDaylightSavingTime(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_IsDaylightSavingTime");
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendar::get_IsDaylightSavingTime");
     return E_NOTIMPL;
   }
 };

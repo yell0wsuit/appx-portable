@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
-project(ctr2_wine LANGUAGES CXX RC)
+project(appx_portable LANGUAGES CXX RC)
 if(CMAKE_CROSSCOMPILING AND NOT EXISTS "${CMAKE_LINKER}")
-  find_program(CTR2_LLD NAMES lld-link HINTS "/opt/homebrew/opt/lld/bin" REQUIRED)
-  set(CMAKE_LINKER "${CTR2_LLD}")
+  find_program(APPX_LLD NAMES lld-link HINTS "/opt/homebrew/opt/lld/bin" REQUIRED)
+  set(CMAKE_LINKER "${APPX_LLD}")
 endif()
 if(NOT WIN32 OR NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
   message(FATAL_ERROR "Requires x86 Windows MSVC ABI (MSVC or clang-cl + xwin)")
@@ -16,26 +16,29 @@ add_compile_options(/W4 /EHsc /utf-8)
 add_link_options(/DEBUG /INCREMENTAL:NO)
 # Release builds pass their tag; local builds describe the git checkout. The
 # header is refreshed on every build, so it names the commit actually built.
-set(CTR2SHIM_VERSION "" CACHE STRING "Release tag (vYYYY.M.D or vYYYY.M.D-N); empty for local builds")
+set(APPX_PORTABLE_VERSION "" CACHE STRING "Release tag (vYYYY.M.D or vYYYY.M.D-N); empty for local builds")
 find_package(Git QUIET)
-set(CTR2_GENERATED "${CMAKE_BINARY_DIR}/generated")
-add_custom_target(ctr2shim_version
-  COMMAND "${CMAKE_COMMAND}" "-DVERSION=${CTR2SHIM_VERSION}" "-DGIT=${GIT_EXECUTABLE}" "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
-          "-DOUTPUT=${CTR2_GENERATED}/version.h" -P "${CMAKE_SOURCE_DIR}/cmake/version.cmake"
-  BYPRODUCTS "${CTR2_GENERATED}/version.h"
+set(APPX_GENERATED "${CMAKE_BINARY_DIR}/generated")
+add_custom_target(appxportable_version
+  COMMAND "${CMAKE_COMMAND}" "-DVERSION=${APPX_PORTABLE_VERSION}" "-DGIT=${GIT_EXECUTABLE}" "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
+          "-DOUTPUT=${APPX_GENERATED}/version.h" -P "${CMAKE_SOURCE_DIR}/cmake/version.cmake"
+  BYPRODUCTS "${APPX_GENERATED}/version.h"
   VERBATIM)
 add_executable(shimtest tests/shimtest.cpp)
 target_link_libraries(shimtest PRIVATE runtimeobject ole32)
 if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
-  add_library(ctr2shim SHARED shim/registry.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/iat_hook.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/ctr2shim.def shim/version.rc)
-  target_include_directories(ctr2shim PRIVATE shim "${CTR2_GENERATED}")
-  add_dependencies(ctr2shim ctr2shim_version)
-  target_link_libraries(ctr2shim PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi)
-  add_library(d3dcompiler_47 SHARED proxy/d3dcompiler_47/proxy.cpp proxy/d3dcompiler_47/thunks.cpp proxy/d3dcompiler_47/proxy.def shim/version.rc)
-  target_include_directories(d3dcompiler_47 PRIVATE "${CTR2_GENERATED}")
-  target_compile_definitions(d3dcompiler_47 PRIVATE CTR2SHIM_PROXY)
-  add_dependencies(d3dcompiler_47 ctr2shim_version)
-  target_link_libraries(d3dcompiler_47 PRIVATE ctr2shim)
+  add_library(appxportable SHARED shim/registry.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/appxportable.def shim/version.rc)
+  target_include_directories(appxportable PRIVATE shim "${APPX_GENERATED}")
+  add_dependencies(appxportable appxportable_version)
+  target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
+  # One proxy per system DLL a game imports from its folder (see scripts/gen_proxy.py).
+  foreach(proxy d3dcompiler_47 XAudio2_8)
+    add_library(${proxy} SHARED proxy/proxy.cpp proxy/${proxy}/thunks.cpp proxy/${proxy}/proxy.def shim/version.rc)
+    target_include_directories(${proxy} PRIVATE "${APPX_GENERATED}" proxy/${proxy})
+    target_compile_definitions(${proxy} PRIVATE APPX_PORTABLE_PROXY)
+    add_dependencies(${proxy} appxportable_version)
+    target_link_libraries(${proxy} PRIVATE appxportable)
+  endforeach()
 endif()
 add_executable(xamltest tests/xamltest.cpp)
 target_link_libraries(xamltest PRIVATE runtimeobject ole32)
@@ -47,6 +50,10 @@ add_executable(proxytest tests/proxytest.cpp)
 enable_testing()
 add_executable(assettest tests/assettest.cpp shim/host/assets.cpp)
 target_include_directories(assettest PRIVATE shim)
+add_executable(packagetest tests/packagetest.cpp shim/package/package.cpp)
+target_include_directories(packagetest PRIVATE shim)
+target_link_libraries(packagetest PRIVATE xmllite bcrypt shlwapi)
+add_test(NAME packagetest COMMAND packagetest)
 add_test(NAME assettest COMMAND assettest)
 add_executable(videotest tests/videotest.cpp)
 target_include_directories(videotest PRIVATE shim)
@@ -75,7 +82,7 @@ add_test(NAME settings_special_write COMMAND storagetest specialwrite)
 set_tests_properties(settings_special_write PROPERTIES FIXTURES_SETUP settings_special_roundtrip)
 add_test(NAME settings_special_read COMMAND storagetest specialread)
 set_tests_properties(settings_special_read PROPERTIES FIXTURES_REQUIRED settings_special_roundtrip)
-set_tests_properties(storagetest settings_write settings_read settings_atomic settings_burst settings_torn settings_special_write settings_special_read PROPERTIES RESOURCE_LOCK ctr2_settings_store)
+set_tests_properties(storagetest settings_write settings_read settings_atomic settings_burst settings_torn settings_special_write settings_special_read PROPERTIES RESOURCE_LOCK appx_settings_store)
 add_executable(stubtest tests/stubtest.cpp)
 target_include_directories(stubtest PRIVATE shim)
 target_link_libraries(stubtest PRIVATE runtimeobject ole32)
@@ -115,17 +122,17 @@ add_executable(optionstest tests/optionstest.cpp)
 add_test(NAME logging_off COMMAND optionstest)
 add_test(NAME logging_on COMMAND optionstest --log)
 add_test(NAME logging_trace COMMAND optionstest --trace)
-set_tests_properties(logging_off logging_on logging_trace PROPERTIES RESOURCE_LOCK ctr2_log_file)
+set_tests_properties(logging_off logging_on logging_trace PROPERTIES RESOURCE_LOCK appx_log_file)
 # Tests keep saves in the build tree, never in the player's save folder.
-get_property(ctr2_tests DIRECTORY PROPERTY TESTS)
-set_tests_properties(${ctr2_tests} PROPERTIES ENVIRONMENT "CTR2SHIM_DATA=${CMAKE_BINARY_DIR}/test-data;CTR2SHIM_WINDOW_STATE=off")
+get_property(appx_tests DIRECTORY PROPERTY TESTS)
+set_tests_properties(${appx_tests} PROPERTIES ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/test-data;APPX_PORTABLE_WINDOW_STATE=off")
 # Save-location tests resolve the folder themselves, as the game does.
 add_test(NAME storage_location COMMAND storagetest location)
 add_test(NAME storage_location_ini COMMAND storagetest location_ini)
 set_tests_properties(storage_location storage_location_ini PROPERTIES
   ENVIRONMENT "LOCALAPPDATA=${CMAKE_BINARY_DIR}/test-localappdata"
-  ENVIRONMENT_MODIFICATION "CTR2SHIM_DATA=unset:"
-  RESOURCE_LOCK ctr2_save_location)
+  ENVIRONMENT_MODIFICATION "APPX_PORTABLE_DATA=unset:"
+  RESOURCE_LOCK appx_save_location)
 add_executable(windowtest tests/windowtest.cpp)
 target_link_libraries(windowtest PRIVATE runtimeobject ole32 user32)
 foreach(mode normal max full maxfull)
@@ -134,19 +141,19 @@ foreach(mode normal max full maxfull)
   set_tests_properties(window_${mode}_write PROPERTIES FIXTURES_SETUP window_${mode})
   set_tests_properties(window_${mode}_read PROPERTIES FIXTURES_REQUIRED window_${mode})
   set_tests_properties(window_${mode}_write window_${mode}_read PROPERTIES
-    ENVIRONMENT "CTR2SHIM_DATA=${CMAKE_BINARY_DIR}/window-test-data/${mode}"
-    ENVIRONMENT_MODIFICATION "CTR2SHIM_WINDOW_STATE=unset:"
-    RESOURCE_LOCK ctr2_window_${mode} TIMEOUT 15)
+    ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/window-test-data/${mode}"
+    ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:"
+    RESOURCE_LOCK appx_window_${mode} TIMEOUT 15)
 endforeach()
 foreach(mode corrupt offscreen above bottomright oversized negative overflow legacy invalidstate numericstate invalidsize)
   add_test(NAME window_${mode} COMMAND windowtest invalid ${mode})
   set_tests_properties(window_${mode} PROPERTIES
-    ENVIRONMENT "CTR2SHIM_DATA=${CMAKE_BINARY_DIR}/window-test-data/${mode}"
-    ENVIRONMENT_MODIFICATION "CTR2SHIM_WINDOW_STATE=unset:" TIMEOUT 15)
+    ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/window-test-data/${mode}"
+    ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:" TIMEOUT 15)
 endforeach()
 foreach(mode normal max full)
   add_test(NAME window_manual_${mode} COMMAND windowtest manual ${mode})
   set_tests_properties(window_manual_${mode} PROPERTIES
-    ENVIRONMENT "CTR2SHIM_DATA=${CMAKE_BINARY_DIR}/window-test-data/manual-${mode}"
-    ENVIRONMENT_MODIFICATION "CTR2SHIM_WINDOW_STATE=unset:" TIMEOUT 15)
+    ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/window-test-data/manual-${mode}"
+    ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:" TIMEOUT 15)
 endforeach()

@@ -1,7 +1,7 @@
 #pragma once
 #include <windows.ui.core.h>
 #include <wrl.h>
-namespace ctr2 {
+namespace appx {
 using namespace ABI::Windows::UI::Core;
 class ActivationArgs final
     : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::WinRt>,

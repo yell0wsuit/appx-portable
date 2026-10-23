@@ -1,4 +1,4 @@
-LIBRARY ctr2shim
+LIBRARY appxportable
 EXPORTS
   ShimGetFactory=_ShimGetFactory@8
   DllGetActivationFactory=_DllGetActivationFactory@8 PRIVATE

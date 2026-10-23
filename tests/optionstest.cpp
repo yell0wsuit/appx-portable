@@ -1,6 +1,6 @@
 // Logging is off unless Game.exe's command line asks for it. Loading the shim
 // writes an "attached" line, so a log exists exactly when logging is on. Each
-// logging run starts ctr2shim.log afresh and keeps the two before it.
+// logging run starts appx-portable.log afresh and keeps the two before it.
 //   optionstest              expects the seeded logs untouched
 //   optionstest --log        expects a new log with the attach line, no TRACE lines
 //   optionstest --trace      expects a new log with the attach line
@@ -36,13 +36,13 @@ int main(int argc, char** argv) {
     SetCurrentDirectoryW(path);
     const bool log = argc > 1 && (!strcmp(argv[1], "--log") || !strcmp(argv[1], "--trace"));
     const bool trace = argc > 1 && !strcmp(argv[1], "--trace");
-    DeleteFileW(L"ctr2shim.3.log");
-    if (!Write(L"ctr2shim.log", "current\n") || !Write(L"ctr2shim.1.log", "older\n") ||
-        !Write(L"ctr2shim.2.log", "oldest\n"))
+    DeleteFileW(L"appx-portable.3.log");
+    if (!Write(L"appx-portable.log", "current\n") || !Write(L"appx-portable.1.log", "older\n") ||
+        !Write(L"appx-portable.2.log", "oldest\n"))
         return 1;
-    if (!LoadLibraryW(L"ctr2shim.dll")) return 1;
-    const auto current = Read(L"ctr2shim.log"), older = Read(L"ctr2shim.1.log"), oldest = Read(L"ctr2shim.2.log");
-    if (Exists(L"ctr2shim.3.log")) {
+    if (!LoadLibraryW(L"appxportable.dll")) return 1;
+    const auto current = Read(L"appx-portable.log"), older = Read(L"appx-portable.1.log"), oldest = Read(L"appx-portable.2.log");
+    if (Exists(L"appx-portable.3.log")) {
         printf("optionstest: kept more than three logs\n");
         return 2;
     }
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     }
     // The attach line opens the new log and names the build.
     const auto first = current.substr(0, current.find('\n'));
-    if (first.find("ctr2shim attached version=") == std::string::npos || first.find(" commit=") == std::string::npos ||
+    if (first.find("appxportable attached version=") == std::string::npos || first.find(" commit=") == std::string::npos ||
         current.find("current\n") != std::string::npos) {
         printf("optionstest: new log does not start with the attach line\n");
         return 2;

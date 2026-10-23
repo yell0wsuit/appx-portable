@@ -3,6 +3,7 @@
 #include "pointer.h"
 #include "placement.h"
 #include "gpu/dxgi_redirect.h"
+#include "package/package.h"
 #include "log.h"
 #include <atomic>
 #include <mutex>
@@ -11,7 +12,7 @@
 #include <filesystem>
 #include <vector>
 #include <algorithm>
-namespace ctr2 {
+namespace appx {
 void InitializeDiagnostics();
 void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam);
 void XamlHostMessage(UINT message, WPARAM wparam, LPARAM lparam);
@@ -38,7 +39,7 @@ static void ApplyHostCursor() {
     ScreenToClient(window, &point);
     if ((under == window || IsChild(window, under)) && PtInRect(&client, point)) SetCursor(HostCursor());
 }
-static constexpr wchar_t SurfaceClass[] = L"CTR2ShimSurface";
+static constexpr wchar_t SurfaceClass[] = L"AppxPortableSurface";
 // Composition swap chains are independent layers, and the game creates its
 // next one (on resize) before releasing the old. A window holds one flip-model
 // swap chain at a time, so each redirected swap chain gets its own child
@@ -196,19 +197,27 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
     }
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
-// UWP packages supply PNG shell icons rather than executable icon resources.
+// The manifest's small logo, as written or with the resource qualifiers the
+// package build added: targetsize variants first (the nearest at least as
+// large as the icon), then scale variants, then the plain name.
+static std::vector<std::filesystem::path> IconCandidates(int size) {
+    const auto& package = CurrentPackage();
+    if (package.smallLogo.empty()) return {};
+    const auto logo = package.directory / package.smallLogo;
+    const auto stem = logo.stem().wstring(), extension = logo.extension().wstring();
+    std::vector<std::filesystem::path> candidates;
+    for (int target : {16, 24, 32, 48, 256})
+        if (target >= size)
+            candidates.push_back(logo.parent_path() / (stem + L".targetsize-" + std::to_wstring(target) + extension));
+    for (int scale : {200, 180, 140, 100, 80})
+        candidates.push_back(logo.parent_path() / (stem + L".scale-" + std::to_wstring(scale) + extension));
+    candidates.push_back(logo);
+    return candidates;
+}
+// Store packages supply PNG shell icons rather than executable icon resources.
 static HICON LoadGameIcon(int width, int height) {
-    wchar_t executable[32768]{};
-    const DWORD length = GetModuleFileNameW(nullptr, executable, ARRAYSIZE(executable));
-    if (!length || length >= ARRAYSIZE(executable)) return nullptr;
-    const auto assets = std::filesystem::path(executable).parent_path() / L"Assets";
-    const int size = std::max(width, height);
-    const wchar_t* source = size <= 16   ? L"SmallLogo.targetsize-16.png"
-                            : size <= 32 ? L"SmallLogo.targetsize-32.png"
-                            : size <= 48 ? L"SmallLogo.targetsize-48.png"
-                                         : L"SmallLogo.targetsize-256.png";
-    for (const auto* name : {source, L"SmallLogo.targetsize-256.png"}) {
-        HANDLE file = CreateFileW((assets / name).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+    for (const auto& path : IconCandidates(std::max(width, height))) {
+        HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                   FILE_ATTRIBUTE_NORMAL, nullptr);
         if (file == INVALID_HANDLE_VALUE) continue;
         const DWORD sizeBytes = GetFileSize(file, nullptr);
@@ -235,17 +244,18 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     const DWORD length = GetModuleFileNameW(nullptr, executable, ARRAYSIZE(executable));
     if (!length) return HRESULT_FROM_WIN32(GetLastError());
     if (length >= ARRAYSIZE(executable)) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
-    const auto repair = RepairAssetNames(std::filesystem::path(executable).parent_path());
+    unsigned decoded = 0;
+    const auto repair = DecodePackageNames(std::filesystem::path(executable).parent_path(), &decoded);
     if (FAILED(repair)) {
-        Log("FAIL", "cannot repair encoded map filenames hr=%08lx; decode them manually or check folder permissions",
-            repair);
+        Log("FAIL", "cannot decode percent-encoded file names hr=%08lx; run setup or check folder permissions", repair);
         return repair;
     }
+    if (decoded) Log("INFO", "decoded %u percent-encoded package file names", decoded);
     thread = GetCurrentThreadId();
     WNDCLASSW cls{};
     cls.lpfnWndProc = WindowProc;
     cls.hInstance = GetModuleHandleW(nullptr);
-    cls.lpszClassName = L"CTR2ShimWindow";
+    cls.lpszClassName = L"AppxPortableWindow";
     cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     if (!RegisterClassW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
         return HRESULT_FROM_WIN32(GetLastError());
@@ -257,7 +267,8 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         return HRESULT_FROM_WIN32(GetLastError());
     RECT rect{0, 0, 1024, 768};
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
-    window = CreateWindowExW(0, cls.lpszClassName, L"Cut the Rope 2", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+    window = CreateWindowExW(0, cls.lpszClassName, CurrentPackage().displayName.c_str(),
+                             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                              CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr,
                              nullptr, cls.hInstance, nullptr);
     if (!window) return HRESULT_FROM_WIN32(GetLastError());

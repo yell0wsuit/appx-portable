@@ -370,7 +370,7 @@ static void StartTimer() {
 }
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     CHECK(dll);
     if (!dll) return 1;
     get = reinterpret_cast<GetFactory>(GetProcAddress(dll, "ShimGetFactory"));

@@ -3,7 +3,7 @@
 #include <windows.ui.input.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Input;
-namespace ctr2 {
+namespace appx {
 class Visualization final : public RuntimeClass<RuntimeClassFlags<WinRt>, IPointerVisualizationSettings> {
     InspectableClass(L"Windows.UI.Input.PointerVisualizationSettings", BaseTrust);
     boolean contact_ = true, barrel_ = true;

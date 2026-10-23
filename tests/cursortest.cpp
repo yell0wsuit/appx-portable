@@ -28,7 +28,7 @@ static HWND HostWindow() {
         [](HWND window, LPARAM context) -> BOOL {
             wchar_t name[80]{};
             GetClassNameW(window, name, ARRAYSIZE(name));
-            if (wcscmp(name, L"CTR2ShimWindow") != 0) return TRUE;
+            if (wcscmp(name, L"AppxPortableWindow") != 0) return TRUE;
             *reinterpret_cast<HWND*>(context) = window;
             return FALSE;
         },
@@ -43,7 +43,7 @@ static HCURSOR Shown(HWND host) {
 }
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     CHECK(dll);
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));

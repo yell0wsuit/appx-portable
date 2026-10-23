@@ -17,7 +17,7 @@ using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::Foundation;
 using namespace ABI::Windows::Foundation::Collections;
-namespace ctr2 {
+namespace appx {
 namespace {
 using Map = IMap<HSTRING, IInspectable*>;
 using Observable = IObservableMap<HSTRING, IInspectable*>;

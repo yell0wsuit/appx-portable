@@ -9,55 +9,55 @@
 namespace ABI::Windows::Storage {
 struct __declspec(uuid("c3da6fb7-b744-4b45-b0b8-223a0938d0dc")) DefaultIApplicationData : public ABI::Windows::Storage::IApplicationData {
   HRESULT STDMETHODCALLTYPE get_Version(UINT32* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_Version");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_Version");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SetVersionAsync(UINT32 desiredVersion, ABI::Windows::Storage::IApplicationDataSetVersionHandler* handler, ABI::Windows::Foundation::IAsyncAction** setVersionOperation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::SetVersionAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::SetVersionAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE ClearAllAsync(ABI::Windows::Foundation::IAsyncAction** clearOperation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::ClearAllAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::ClearAllAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE ClearAsync(ABI::Windows::Storage::ApplicationDataLocality locality, ABI::Windows::Foundation::IAsyncAction** clearOperation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::ClearAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::ClearAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LocalSettings(ABI::Windows::Storage::IApplicationDataContainer** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_LocalSettings");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_LocalSettings");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_RoamingSettings(ABI::Windows::Storage::IApplicationDataContainer** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_RoamingSettings");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_RoamingSettings");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LocalFolder(ABI::Windows::Storage::IStorageFolder** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_LocalFolder");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_LocalFolder");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_RoamingFolder(ABI::Windows::Storage::IStorageFolder** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_RoamingFolder");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_RoamingFolder");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_TemporaryFolder(ABI::Windows::Storage::IStorageFolder** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_TemporaryFolder");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_TemporaryFolder");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_DataChanged(__FITypedEventHandler_2_Windows__CStorage__CApplicationData_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::add_DataChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::add_DataChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_DataChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::remove_DataChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::remove_DataChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SignalDataChanged(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::SignalDataChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::SignalDataChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_RoamingStorageQuota(UINT64* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_RoamingStorageQuota");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationData::get_RoamingStorageQuota");
     return E_NOTIMPL;
   }
 };
@@ -65,43 +65,43 @@ struct __declspec(uuid("c3da6fb7-b744-4b45-b0b8-223a0938d0dc")) DefaultIApplicat
 namespace ABI::Windows::Storage {
 struct __declspec(uuid("72d1cb78-b3ef-4f75-a80b-6fd9dae2944b")) DefaultIStorageFolder : public ABI::Windows::Storage::IStorageFolder {
   HRESULT STDMETHODCALLTYPE CreateFileAsyncOverloadDefaultOptions(HSTRING desiredName, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::CreateFileAsyncOverloadDefaultOptions");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::CreateFileAsyncOverloadDefaultOptions");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CreateFileAsync(HSTRING desiredName, ABI::Windows::Storage::CreationCollisionOption options, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::CreateFileAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::CreateFileAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CreateFolderAsyncOverloadDefaultOptions(HSTRING desiredName, __FIAsyncOperation_1_Windows__CStorage__CStorageFolder** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::CreateFolderAsyncOverloadDefaultOptions");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::CreateFolderAsyncOverloadDefaultOptions");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CreateFolderAsync(HSTRING desiredName, ABI::Windows::Storage::CreationCollisionOption options, __FIAsyncOperation_1_Windows__CStorage__CStorageFolder** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::CreateFolderAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::CreateFolderAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetFileAsync(HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetFileAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetFileAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetFolderAsync(HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CStorageFolder** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetFolderAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetFolderAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetItemAsync(HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CIStorageItem** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetItemAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetItemAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetFilesAsyncOverloadDefaultOptionsStartAndCount(__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CStorageFile** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetFilesAsyncOverloadDefaultOptionsStartAndCount");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetFilesAsyncOverloadDefaultOptionsStartAndCount");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetFoldersAsyncOverloadDefaultOptionsStartAndCount(__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CStorageFolder** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetFoldersAsyncOverloadDefaultOptionsStartAndCount");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetFoldersAsyncOverloadDefaultOptionsStartAndCount");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetItemsAsyncOverloadDefaultStartAndCount(__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetItemsAsyncOverloadDefaultStartAndCount");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFolder::GetItemsAsyncOverloadDefaultStartAndCount");
     return E_NOTIMPL;
   }
 };
@@ -109,43 +109,43 @@ struct __declspec(uuid("72d1cb78-b3ef-4f75-a80b-6fd9dae2944b")) DefaultIStorageF
 namespace ABI::Windows::Storage {
 struct __declspec(uuid("4207a996-ca2f-42f7-bde8-8b10457a7f30")) DefaultIStorageItem : public ABI::Windows::Storage::IStorageItem {
   HRESULT STDMETHODCALLTYPE RenameAsyncOverloadDefaultOptions(HSTRING desiredName, ABI::Windows::Foundation::IAsyncAction** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::RenameAsyncOverloadDefaultOptions");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::RenameAsyncOverloadDefaultOptions");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE RenameAsync(HSTRING desiredName, ABI::Windows::Storage::NameCollisionOption option, ABI::Windows::Foundation::IAsyncAction** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::RenameAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::RenameAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DeleteAsyncOverloadDefaultOptions(ABI::Windows::Foundation::IAsyncAction** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::DeleteAsyncOverloadDefaultOptions");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::DeleteAsyncOverloadDefaultOptions");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DeleteAsync(ABI::Windows::Storage::StorageDeleteOption option, ABI::Windows::Foundation::IAsyncAction** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::DeleteAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::DeleteAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetBasicPropertiesAsync(__FIAsyncOperation_1_Windows__CStorage__CFileProperties__CBasicProperties** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::GetBasicPropertiesAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::GetBasicPropertiesAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::get_Name");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::get_Name");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Path(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::get_Path");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::get_Path");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Attributes(ABI::Windows::Storage::FileAttributes* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::get_Attributes");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::get_Attributes");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_DateCreated(ABI::Windows::Foundation::DateTime* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::get_DateCreated");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::get_DateCreated");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE IsOfType(ABI::Windows::Storage::StorageItemTypes type, boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::IsOfType");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageItem::IsOfType");
     return E_NOTIMPL;
   }
 };
@@ -153,27 +153,27 @@ struct __declspec(uuid("4207a996-ca2f-42f7-bde8-8b10457a7f30")) DefaultIStorageI
 namespace ABI::Windows::Storage {
 struct __declspec(uuid("c5aefd1e-f467-40ba-8566-ab640a441e1d")) DefaultIApplicationDataContainer : public ABI::Windows::Storage::IApplicationDataContainer {
   HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Name");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Name");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Locality(ABI::Windows::Storage::ApplicationDataLocality* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Locality");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Locality");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Values(ABI::Windows::Foundation::Collections::IPropertySet** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Values");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Values");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Containers(__FIMapView_2_HSTRING_Windows__CStorage__CApplicationDataContainer** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Containers");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Containers");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CreateContainer(HSTRING name, ABI::Windows::Storage::ApplicationDataCreateDisposition disposition, ABI::Windows::Storage::IApplicationDataContainer** container) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::CreateContainer");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::CreateContainer");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE DeleteContainer(HSTRING name) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::DeleteContainer");
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::DeleteContainer");
     return E_NOTIMPL;
   }
 };

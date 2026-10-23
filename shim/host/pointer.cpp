@@ -9,7 +9,7 @@
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI;
 using ABI::Windows::Foundation::Point;
-namespace ctr2 {
+namespace appx {
 class MousePointer final : public RuntimeClass<RuntimeClassFlags<WinRt>, Xaml::Input::IPointer> {
     InspectableClass(L"Windows.UI.Xaml.Input.Pointer", BaseTrust);
     boolean contact_;

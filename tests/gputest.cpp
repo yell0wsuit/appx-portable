@@ -11,10 +11,10 @@ using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::UI::Xaml;
 int main() {
-    DeleteFileW(L"ctr2-frame.bmp");
-    SetEnvironmentVariableW(L"CTR2SHIM_CAPTURE", L"1");
+    DeleteFileW(L"appx-frame.bmp");
+    SetEnvironmentVariableW(L"APPX_PORTABLE_CAPTURE", L"1");
     RoInitialize(RO_INIT_SINGLETHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
     ComPtr<IActivationFactory> factory;
@@ -94,7 +94,7 @@ int main() {
                     if (SUCCEEDED(gpu)) gpu = swap->Present(0, 0);
                     if (SUCCEEDED(gpu)) {
                         FILE* frame{};
-                        fopen_s(&frame, "ctr2-frame.bmp", "rb");
+                        fopen_s(&frame, "appx-frame.bmp", "rb");
                         if (!frame) {
                             gpu = E_FAIL;
                         } else {
@@ -104,7 +104,7 @@ int main() {
                             fclose(frame);
                             if (pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 255) gpu = E_FAIL;
                         }
-                        DeleteFileW(L"ctr2-frame.bmp");
+                        DeleteFileW(L"appx-frame.bmp");
                     }
                 }
                 // On resize the game creates its next swap chain before releasing the

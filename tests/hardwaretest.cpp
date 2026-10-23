@@ -14,7 +14,7 @@ using ABI::Windows::Storage::Streams::IBuffer;
 using Windows::Storage::Streams::IBufferByteAccess;
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
     ComPtr<IActivationFactory> factory;
@@ -60,7 +60,7 @@ int main() {
             memset(bytes, 0, 16); // A consumer's writable buffer must not mutate later tokens.
         }
     }
-    const byte expectedId[16] = {'c', 't', 'r', '2', '-', 'w', 'i', 'n', 'e', '-', 's', 'h', 'i', 'm', 0, 1};
+    const byte expectedId[16] = {'a', 'p', 'p', 'x', '-', 'p', 'o', 'r', 't', 'a', 'b', 'l', 'e', 0, 0, 1};
     if (memcmp(initial[0].data(), expectedId, 16) != 0) return 14;
     puts("hardwaretest: 0 failure(s)");
     return 0;

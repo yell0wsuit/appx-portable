@@ -6,7 +6,7 @@
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Foundation;
 using namespace ABI::Windows::ApplicationModel::Store;
-namespace ctr2 {
+namespace appx {
 namespace {
 using ProductMap = __FIMapView_2_HSTRING_Windows__CApplicationModel__CStore__CProductLicense;
 using ProductPair = __FIKeyValuePair_2_HSTRING_Windows__CApplicationModel__CStore__CProductLicense;

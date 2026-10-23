@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <activation.h>
 extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** factory) noexcept;
-namespace ctr2 {
+namespace appx {
 HRESULT MakeThreadPoolFactory(bool timers, IActivationFactory** factory);
 HRESULT MakeApplicationFactory(IActivationFactory** value);
 HRESULT MakeControlFactory(const wchar_t* name, IActivationFactory** value);
@@ -25,5 +25,8 @@ HRESULT MakeScheduledToastFactory(IActivationFactory** value);
 HRESULT MakeDeviceFactory(bool display, IActivationFactory** value);
 HRESULT MakeCausalityFactory(IActivationFactory** value);
 HRESULT MakeCalendarFactory(IActivationFactory** value);
-void PatchActivationImports() noexcept;
+void InstallActivationHook() noexcept;
+// The OS activation functions, bypassing the hook: for shim code that wraps an OS class.
+HRESULT OsGetActivationFactory(HSTRING name, REFIID iid, void** out) noexcept;
+HRESULT OsActivateInstance(HSTRING name, IInspectable** out) noexcept;
 }

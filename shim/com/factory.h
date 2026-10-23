@@ -3,7 +3,7 @@
 #include <wrl.h>
 #include <winstring.h>
 #include "log.h"
-namespace ctr2 {
+namespace appx {
 template <class... Interfaces>
 class Factory : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::WinRt>,
                                                     IActivationFactory, Interfaces..., Microsoft::WRL::FtmBase> {

@@ -1,60 +1,69 @@
-# ctr2-uwp-shim
+# appx-portable
 
-A DLL shim that lets you run the Windows 8.1 Store version of **Cut the Rope 2** as a desktop game. The shim supplies the Windows Runtime features the game needs through two DLLs placed beside the game's `Game.exe`. The original executable stays unchanged.
+Run Windows 8 and 8.1 Store games as ordinary portable desktop games: extract the `.appx` package into a folder, add two or three DLLs, and start the game's own executable. No installation, Store account, developer mode, or package registration is needed, and the game executable is never modified.
 
-Windows supports gameplay, saves, resizable windows, and borderless fullscreen. Wine support is **experimental** and may have bugs.
+Store apps expect to run inside an installed package, with an app container, a package identity, and the Store's app model around them. appx-portable supplies the Windows Runtime pieces a game needs from that environment, in-process: the app lifecycle and window, input, save folders and settings, the Store license, live tiles, and offline stand-ins for services that no longer exist.
 
-The game and Microsoft runtime files are not included in this repo.
+Neither games nor Microsoft runtime files are included in this repository.
+
+## Games
+
+| Game | Package | Status |
+| --- | --- | --- |
+| Cut the Rope 2 | `ZeptoLabUKLimited.CuttheRope2` 1.0.0.46 (x86) | Plays: gameplay, saves, resizable window, borderless fullscreen |
+| Fruit Ninja | `HalfbrickStudiosPtyLtd.FruitNinja` 1.8.1.66 (x86) | In progress |
+
+Other games built the same way may work, or fail in a way the log explains. Games whose interface is C# XAML (such as Bejeweled LIVE) need a different hosting mode that is not here yet. HTML/JavaScript Store apps cannot be supported.
 
 ## Set up and play
 
-### Windows
+### 1. Extract the game package
 
-You can use the prebuilt DLLs without compiling the shim.
+Obtain the game's x86 package. An `.appxbundle` is a ZIP archive holding one `.appx` per architecture; open it and extract the x86 `.appx`. Then extract that `.appx` (also a ZIP archive) into a folder such as `C:\Games\Source\CutTheRope2`. Rename either archive to `.zip` if your extractor requires it. The folder should contain the game's executable and its `AppxManifest.xml`.
 
-1. Obtain the Windows 8.1 Store package for **Cut the Rope 2**. See the game's [Microsoft Store listing](https://apps.microsoft.com/detail/9nblggh0j0dc).
+### 2. Get the Visual C++ runtime
 
-   Use this package bundle:
+Store games use the Store's own Visual C++ runtime (VCLibs), which a plain desktop has no copy of. The game's `AppxManifest.xml` names the version under `<Dependencies>`:
 
-   - File: `ZeptoLabUKLimited.CuttheRope2_2016.609.1118.0_neutral_~_sq9zxnwrk84pj.appxbundle`
-   - SHA-1: `28c559f34f2ed365f4b0ce3350031c6eb6056104`
+| Dependency | DLLs |
+| --- | --- |
+| `Microsoft.VCLibs.110.00` (Windows 8.0 games) | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll` |
+| `Microsoft.VCLibs.120.00` (Windows 8.1 games) | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll` |
 
-   Open the `.appxbundle` as a ZIP archive and extract `Game_1.0.0.46_Win32.appx`, the **x86** game package inside it. Then open that `.appx` as a ZIP archive and extract its contents into a folder such as `C:\Games\CutTheRope2UWP`. You can rename either archive to `.zip` if your extractor requires it. The resulting game folder should contain `Game.exe` and `Assets`.
+These come from the matching x86 `Microsoft.VCLibs.*.appx` framework package. VCLibs 120 is in Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip). If the framework is installed on your PC (any Store app that uses it installs it), its files are in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`). Either copy the three DLLs beside the game, or pass their folder to setup with `-RuntimeDirectory`.
 
-2. Download [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip) and extract `Microsoft.VCLibs.120.00_12.0.21005.1_x86__8wekyb3d8bbwe.appx`. Then copy these files beside `Game.exe`: `msvcr120_app.dll`, `msvcp120_app.dll`, and `vccorlib120_app.dll`. Keep the game's `Assets` folder and other extracted files together.
+### 3. Build the DLLs
 
-3. Under **Assets** on the [latest release](https://github.com/yell0wsuit/ctr2-uwp-shim/releases/latest), download the shim ZIP, for example `ctr2-uwp-shim-v2026.10.12-x86.zip`. Extract both `ctr2shim.dll` and `d3dcompiler_47.dll` beside `Game.exe`. The source code archives do not contain built DLLs. To build them yourself, see the [building guide](docs/building.md#windows).
+[Build appx-portable](docs/building.md#windows). The build produces `appxportable.dll` and the proxy DLLs (`d3dcompiler_47.dll`, `XAudio2_8.dll`) in `build\windows-x86`. A proxy stands in for a system DLL the game imports from its own folder, loads appx-portable, and forwards every call to the real DLL.
 
-4. Double-click `Game.exe` to play. Close the game before updating the shim, then replace both shim DLLs with the ones from the same release.
+### 4. Stage the game
 
-### Optional: prepare a separate game folder
-
-With a copy of this repository, you can use setup to copy the required game files, decode asset names, and verify that `Game.exe` is unchanged. Run from the repository root, using the extracted game folder with the three runtime DLLs from step 2. Extract both shim DLLs from the release ZIP into a folder such as `downloads`, then run:
+From the repository root, stage the extracted package into a separate folder:
 
 ```powershell
-.\scripts\setup.ps1 -SourceDirectory 'C:\Games\CutTheRope2UWP' -Destination '.\local\game' -BuildDirectory '.\downloads'
+.\scripts\setup.ps1 -SourceDirectory 'C:\Games\Source\CutTheRope2' -Destination 'C:\Games\CutTheRope2'
 ```
 
-If you [build the shim locally](docs/building.md#windows), omit `-BuildDirectory` to use `build\windows-x86`. Double-click `local\game\Game.exe` to play. Close the game and rerun setup after updating the DLLs; existing saves and `ctr2shim.ini` are preserved.
+Add `-RuntimeDirectory <folder>` if the VCLibs DLLs are not beside the game, and `-BuildDirectory <folder>` to use DLLs built elsewhere. Setup copies the package (leaving out its signature and package metadata), adds the runtime and appx-portable DLLs, decodes the percent-encoded file names a raw `.appx` extraction keeps (`%21_Name.xml`, `User%20Controls`), and checks that the game executable is byte-for-byte unchanged. Rerun it after rebuilding; saves and `appx-portable.ini` are kept.
 
-With Python 3 installed, you can also launch from the repository with `python scripts/play.py`. For a different game folder, use `python scripts/play.py --game "C:\Games\CutTheRope2UWP"`.
+### 5. Play
+
+Double-click the game's executable in the staged folder (`Game.exe` for Cut the Rope 2; the manifest's `Executable` in general). With Python 3, `python scripts/play.py --game C:\Games\CutTheRope2` does the same; `scripts\play.bat` and `scripts\run.ps1` are alternatives.
 
 ### macOS / Wine (experimental)
 
-Use the same extracted game and x86 runtime files. From the repository root, extract both shim DLLs from the release ZIP into `downloads`, then prepare and launch the game with Python 3 and Wine installed:
+With the same extracted package and runtime DLLs, [cross-compile](docs/building.md#macos-cross-compilation) and stage with Python 3 installed:
 
 ```sh
-bash scripts/setup.sh '/path/to/CutTheRope2UWP' local/game downloads
+bash scripts/setup.sh '/path/to/extracted-package' local/game build/macos-x86 '/path/to/vclibs-folder'
 python3 scripts/play.py
 ```
 
-Alternatively, [cross-compile the shim](docs/building.md#macos-cross-compilation) and omit the final `downloads` argument to use `build/macos-x86`.
-
-The launcher defaults to Wine Devel in `~/Applications` and stores its Wine prefix in `local/wine-test`. Set `WINE` to your Wine executable and `WINEPREFIX` to use another prefix. Wine launches always enable logging.
+The runtime folder argument is optional when the DLLs are beside the game. The launcher defaults to Wine Devel in `~/Applications` and keeps its Wine prefix in `local/wine-test`; set `WINE` and `WINEPREFIX` to use others. Wine launches always write a log.
 
 ## Saves and window settings
 
-Saves go to `SaveData` beside `Game.exe`. To change the location, create or edit `ctr2shim.ini` beside `Game.exe` and set `SaveLocation` under `[storage]`:
+Saves go to `SaveData` beside the game executable. To change that, edit `appx-portable.ini` in the staged folder:
 
 ```ini
 [storage]
@@ -63,30 +72,29 @@ SaveLocation=game
 
 | Value | Save folder |
 | --- | --- |
-| `game` (default) | `SaveData` beside `Game.exe` |
-| `documents` | `Documents\CutTheRope2UWP_SaveData` |
-| `appdata` | `%LOCALAPPDATA%\ctr2` |
-| A folder path | Your chosen folder; relative paths start beside `Game.exe` |
+| `game` (default) | `SaveData` beside the game executable |
+| `documents` | `Documents\appx-portable\<package>` |
+| `appdata` | `%LOCALAPPDATA%\appx-portable\<package>` |
+| A folder path | That folder; relative paths start beside the game |
 
-If the folder is not writable, the shim tries `documents`, then `appdata`. A new save location imports existing saves from `%LOCALAPPDATA%\ctr2`.
+`<package>` is the identity name from the game's manifest, so games never share saves. If the folder cannot be written, saves go to `documents`, then `appdata`. Changing the location does not move existing saves.
 
-Press **F11** or **Alt+Enter** to toggle borderless fullscreen. Window size, position, and mode are remembered. The game keeps running when it loses focus and pauses when minimized. Resizing briefly reloads the game's graphics.
-
-Window settings are stored in `Local/window.ini` inside your save folder. Close the game before editing it; `Width` and `Height` specify the game area, and `State` accepts `windowed`, `maximized`, or `fullscreen`. Delete the file with the game closed to reset window placement.
+Press **F11** or **Alt+Enter** to toggle borderless fullscreen. Window size, position, and mode are remembered in `Local\window.ini` inside the save folder; delete it with the game closed to reset them. The game keeps running when it loses focus and pauses when minimized.
 
 ## Troubleshooting
 
-- **Windows 8/8.1 says the app can only run in an app container:** use the built-in PowerShell with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\patch_exe.ps1 -Exe "C:\Games\CutTheRope2UWP\Game.exe"` from the repository root. The script targets PowerShell 3.0 or later and needs no Python or Visual Studio. It creates `Game.desktop.exe` beside the original, clearing only the executable's AppContainer flag. It validates the x86 PE headers, preserves `Game.exe`, and refuses to overwrite an existing copy. Launch `Game.desktop.exe --log` from the game folder with the shim DLLs and assets beside it. This addresses the launch requirement; Windows 8/8.1 gameplay remains unverified. After replacing the original game executable, delete the old desktop copy and rerun the script. The existing launch scripts still use `Game.exe`.
-- **Setup reports a missing file:** check that the source folder contains `Game.exe`, `Assets`, and all three x86 runtime DLLs listed above. The folder passed as `-BuildDirectory` must contain both extracted shim DLLs.
-- **The desktop copy fails with `0xC000A200`:** the bundled Visual C++ DLLs also have the AppContainer flag. Use `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\patch_exe.ps1 -Exe "C:\Games\CutTheRope2UWP\Game.exe" -IncludeRuntime`. This creates a new `desktop` subfolder containing patched copies of the executable and the three runtime DLLs, plus the shim and game content. Launch `desktop\Game.desktop.exe --log`. Original files stay unchanged; the destination must not already exist. Existing `SaveData` is copied once and the desktop copy then uses its own saves by default; custom paths in the copied `ctr2shim.ini` still apply. This mode also needs Windows verification and does not establish gameplay compatibility.
-- **The game fails to start or crashes after loading:** the shim automatically repairs the two `%21` map filenames in `Assets\assets\maps`. Make sure the game folder is writable, or use the setup script to decode the filenames in a separate game folder.
-- **Check which shim is installed:** right-click `ctr2shim.dll` beside `Game.exe` and open **Properties → Details**. **Product version** shows the release, such as `v2026.10.12-4`, and the commit it was built from. Both shim DLLs should show the same version.
-- **Need a log:** open PowerShell in the game folder and run `.\Game.exe --log`. The log is written to `ctr2shim.log` beside `Game.exe`; the two previous runs are kept as `ctr2shim.1.log` and `ctr2shim.2.log`. Its first line names the shim version and commit. Use `--trace` for detailed call logging or `--diagnostics` for crash details; both also enable logging. With a copy of the repository and Python 3, you can also run `python scripts/play.py --game "C:\Games\CutTheRope2UWP" --log` from the repository root.
+- **Need a log:** start the game with `--log` (for example `.\Game.exe --log` in PowerShell, from the game folder). The log is `appx-portable.log` beside the executable, and the two previous runs are kept as `appx-portable.1.log` and `appx-portable.2.log`. Its first lines name the appx-portable version and the package it found. `--trace` logs every Windows Runtime class the game activates; `--diagnostics` adds crash details. Both imply `--log`.
+- **Setup reports a missing file:** check that the source folder is a complete package extraction (with `AppxManifest.xml`), and that the VCLibs DLLs the manifest depends on are beside it or in the `-RuntimeDirectory` folder.
+- **The game fails to start or crashes after loading:** check the log. appx-portable decodes percent-encoded file names itself at startup, so the game folder must be writable; staging with setup avoids the problem.
+- **Windows 8/8.1 says the app can only run in an app container:** run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\patch_exe.ps1 -Exe "C:\Games\CutTheRope2\Game.exe"`. It creates `Game.desktop.exe` beside the original with only the executable's AppContainer flag cleared, and never overwrites anything. If the desktop copy then fails with `0xC000A200`, the VCLibs DLLs carry the flag too: add `-IncludeRuntime` to create a `desktop` folder with patched copies of the executable and runtime DLLs. Gameplay on Windows 8/8.1 itself remains unverified.
+- **Check which version is installed:** right-click `appxportable.dll` and open **Properties → Details**. **Product version** names the release and the commit it was built from. All appx-portable DLLs in a game folder should show the same version.
 
-Run `python scripts/play.py --help` for all launcher options.  
+## How it works
+
+The proxy DLLs load `appxportable.dll` while the game starts. It hooks Windows Runtime activation (`RoGetActivationFactory`) and, for calls from the game's own modules, answers with its own classes where Windows cannot serve an unpackaged process: `CoreApplication` and `CoreWindow` hosted on a normal window, the XAML objects games draw their swap chain into, `ApplicationData`, `CurrentApp`, and others. Everything else goes to Windows unchanged. Classes a package registers for itself in its manifest are loaded from their DLLs in the game folder, as an installed package would. Swap chains made for a XAML panel are redirected to a child window of the game's desktop window.
+
 See the [building guide](docs/building.md) for compilation, tests, and code generation.
 
 ## License
 
-The shim is licensed under the [MIT License](LICENSE).
-The game and Microsoft runtime files retain their own licenses.
+appx-portable is licensed under the [MIT License](LICENSE). Games and Microsoft runtime files retain their own licenses.

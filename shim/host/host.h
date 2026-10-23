@@ -1,7 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <functional>
-namespace ctr2 {
+namespace appx {
 HWND HostWindow() noexcept;
 // A child window covering the host's client area, on top of earlier ones,
 // for one redirected swap chain. Closing it (WM_CLOSE) destroys it.

@@ -5,7 +5,7 @@
 #include <wrl.h>
 #include <mutex>
 #include <atomic>
-namespace ctr2 {
+namespace appx {
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Foundation;
 class AsyncAction final : public RuntimeClass<RuntimeClassFlags<WinRt>, IAsyncAction, IAsyncInfo, FtmBase> {

@@ -6,7 +6,7 @@
 #include <vector>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Notifications;
-namespace ctr2 {
+namespace appx {
 namespace {
 // Notifications behave as disabled by the user: nothing is ever displayed, but
 // calls succeed as on Windows. C++/CX turns any failing HRESULT into an
@@ -48,7 +48,7 @@ public:
 };
 class ToastListView final : public RuntimeClass<RuntimeClassFlags<WinRt>, ToastView, ToastIterable, FtmBase> {
     InspectableClass(L"Windows.Foundation.Collections.IVectorView`1", BaseTrust);
-    CTR2_LOG_MISSING_INTERFACES("ToastListView")
+    APPX_LOG_MISSING_INTERFACES("ToastListView")
     ToastList items_;
 
 public:
@@ -100,7 +100,7 @@ ToastList& Schedule() {
 class ScheduledToast final
     : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIScheduledToastNotification, FtmBase> {
     InspectableClass(L"Windows.UI.Notifications.ScheduledToastNotification", BaseTrust);
-    CTR2_LOG_MISSING_INTERFACES("ScheduledToast")
+    APPX_LOG_MISSING_INTERFACES("ScheduledToast")
     ComPtr<ABI::Windows::Data::Xml::Dom::IXmlDocument> content_;
     ABI::Windows::Foundation::DateTime delivery_;
     Wrappers::HString id_;
@@ -135,7 +135,7 @@ public:
 };
 class DisabledNotifier final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIToastNotifier, FtmBase> {
     InspectableClass(L"Windows.UI.Notifications.ToastNotifier", BaseTrust);
-    CTR2_LOG_MISSING_INTERFACES("DisabledNotifier")
+    APPX_LOG_MISSING_INTERFACES("DisabledNotifier")
 public:
     HRESULT STDMETHODCALLTYPE Show(IToastNotification* value) override { return value ? S_OK : E_INVALIDARG; }
     HRESULT STDMETHODCALLTYPE Hide(IToastNotification* value) override { return value ? S_OK : E_INVALIDARG; }

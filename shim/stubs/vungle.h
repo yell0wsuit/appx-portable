@@ -3,7 +3,7 @@
 #include <windows.applicationmodel.store.h>
 // ABI projected from the supplied VungleSDK.winmd's IAdFactoryStatic and
 // IVungleAdClass. Methods retain metadata order, including event accessors.
-namespace ctr2::vungle {
+namespace appx::vungle {
 struct __declspec(uuid("075ae55a-570e-55dc-6d2c-3afec4080034")) IVungleAd : IInspectable {
     virtual HRESULT STDMETHODCALLTYPE add_Diagnostic(IUnknown*, EventRegistrationToken*) = 0;
     virtual HRESULT STDMETHODCALLTYPE add_OnAdEnd(IUnknown*, EventRegistrationToken*) = 0;

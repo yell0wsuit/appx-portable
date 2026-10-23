@@ -56,40 +56,35 @@ int main(int argc, char** argv) {
     RoInitialize(RO_INIT_MULTITHREADED);
     const char* mode = argc > 1 ? argv[1] : "";
     const bool torn = !strcmp(mode, "torn");
-    // Location tests run without CTR2SHIM_DATA and with LOCALAPPDATA pointing
-    // into the build tree; every other mode keeps its saves in CTR2SHIM_DATA.
+    // Location tests run without APPX_PORTABLE_DATA and with LOCALAPPDATA pointing
+    // into the build tree; every other mode keeps its saves in APPX_PORTABLE_DATA.
     const bool location = !strcmp(mode, "location"), locationIni = !strcmp(mode, "location_ini");
     std::filesystem::path root = location      ? ExeDirectory() / L"SaveData"
                                  : locationIni ? ExeDirectory() / L"ini-saves"
-                                               : EnvironmentPath(L"CTR2SHIM_DATA");
+                                               : EnvironmentPath(L"APPX_PORTABLE_DATA");
     if (root.empty()) return 70;
-    const auto ini = ExeDirectory() / L"ctr2shim.ini";
+    const auto ini = ExeDirectory() / L"appx-portable.ini";
     if (location || locationIni) {
         std::error_code error;
         std::filesystem::remove_all(root, error);
         std::filesystem::remove(ini, error);
-        // Saves from the original location are copied into a new one.
-        auto legacy = EnvironmentPath(L"LOCALAPPDATA") / L"ctr2" / L"Local" / L"settings.json";
-        if (!WriteText(legacy, "[\n{\"key\":\"__ctr2shim_test_moved\",\"type\":\"String\",\"value\":\"yes\"}\n]\n",
-                       CREATE_ALWAYS))
-            return 71;
         if (locationIni && !WriteText(ini, "[storage]\r\nSaveLocation = ini-saves\r\n", CREATE_ALWAYS)) return 72;
     }
     // A crash can cut the last journal record short. Loading keeps the
     // complete records before it and drops the partial one.
     if (torn && !WriteText(root / L"Local" / L"settings.json.journal",
-                           "{\"key\":\"__ctr2shim_test_torn\",\"type\":\"String\",\"value\":\"ok\"}\n"
-                           "{\"key\":\"__ctr2shim_te"))
+                           "{\"key\":\"__appxportable_test_torn\",\"type\":\"String\",\"value\":\"ok\"}\n"
+                           "{\"key\":\"__appxportable_te"))
         return 61;
     // The store keeps its journal open after its first change, so the atomic
     // test seeds its key through the journal and locks it before any change.
     if (!strcmp(mode, "atomic")) {
         for (const auto* store : {L"Local", L"Roaming"})
             if (!WriteText(root / store / L"settings.json.journal",
-                           "{\"key\":\"__ctr2shim_test_atomic\",\"type\":\"Boolean\",\"value\":\"true\"}\n"))
+                           "{\"key\":\"__appxportable_test_atomic\",\"type\":\"Boolean\",\"value\":\"true\"}\n"))
                 return 62;
     }
-    auto* dll = LoadLibraryW(L"ctr2shim.dll");
+    auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
     ComPtr<IActivationFactory> factory;
@@ -110,20 +105,15 @@ int main(int argc, char** argv) {
         return 8;
     }
     if (location || locationIni) {
+        // A fresh location starts empty: saves are never imported from elsewhere.
         ComPtr<IApplicationDataContainer> container;
         ComPtr<ABI::Windows::Foundation::Collections::IPropertySet> set;
         ComPtr<ABI::Windows::Foundation::Collections::IMap<HSTRING, IInspectable*>> map;
-        ComPtr<IInspectable> value;
-        ComPtr<ABI::Windows::Foundation::IPropertyValue> property;
-        HString moved;
+        unsigned size = 1;
         if (FAILED(data->get_LocalSettings(&container)) || FAILED(container->get_Values(&set)) ||
-            FAILED(set.As(&map)) || FAILED(map->Lookup(HStringReference(L"__ctr2shim_test_moved").Get(), &value)) ||
-            FAILED(value.As(&property)) || FAILED(property->GetString(moved.GetAddressOf())) ||
-            wcscmp(moved.GetRawBuffer(nullptr), L"yes") != 0)
+            FAILED(set.As(&map)) || FAILED(map->get_Size(&size)) || size != 0)
             return 73;
         std::error_code error;
-        if (!std::filesystem::exists(EnvironmentPath(L"LOCALAPPDATA") / L"ctr2" / L"Local" / L"settings.json", error))
-            return 74; // Copied, not moved.
         std::filesystem::remove(ini, error);
         return 0;
     }
@@ -158,8 +148,8 @@ int main(int argc, char** argv) {
         HString expected;
         expected.Set(payload, 6);
         const wchar_t* keys[] = {
-            L"__ctr2shim_test_string", L"__ctr2shim_test_bool",   L"__ctr2shim_test_i32",
-            L"__ctr2shim_test_i64",    L"__ctr2shim_test_double", L"__ctr2shim_test_bytes",
+            L"__appxportable_test_string", L"__appxportable_test_bool",   L"__appxportable_test_i32",
+            L"__appxportable_test_i64",    L"__appxportable_test_double", L"__appxportable_test_bytes",
         };
         ComPtr<ABI::Windows::Foundation::Collections::IObservableMap<HSTRING, IInspectable*>> observable;
         if (FAILED(set.As(&observable))) return 29;
@@ -189,12 +179,12 @@ int main(int argc, char** argv) {
                 ComPtr<IInspectable> value;
                 ComPtr<ABI::Windows::Foundation::IPropertyValue> property;
                 HString restoredText;
-                if (FAILED(map->Lookup(HStringReference(L"__ctr2shim_test_torn").Get(), &value)) ||
+                if (FAILED(map->Lookup(HStringReference(L"__appxportable_test_torn").Get(), &value)) ||
                     FAILED(value.As(&property)) || FAILED(property->GetString(restoredText.GetAddressOf())) ||
                     wcscmp(restoredText.GetRawBuffer(nullptr), L"ok") != 0)
                     return 63;
                 if (!ReadAll(settingsFile + L".journal").empty()) return 64; // Replayed, then compacted.
-                if (FAILED(map->Remove(HStringReference(L"__ctr2shim_test_torn").Get()))) return 65;
+                if (FAILED(map->Remove(HStringReference(L"__appxportable_test_torn").Get()))) return 65;
             }
             if (FAILED(observable->remove_MapChanged(token))) return 66;
             continue;
@@ -207,7 +197,7 @@ int main(int argc, char** argv) {
             const auto start = GetTickCount64();
             constexpr int count = 300;
             for (int i = 0; i < count; ++i) {
-                std::wstring key = L"__ctr2shim_test_burst_" + std::to_wstring(i);
+                std::wstring key = L"__appxportable_test_burst_" + std::to_wstring(i);
                 ComPtr<IInspectable> value;
                 props->CreateInt64(i, &value);
                 boolean replaced{};
@@ -219,12 +209,12 @@ int main(int argc, char** argv) {
             const auto journal = ReadAll(journalFile);
             if (journal.empty()) return 52;
             // Printable ASCII is stored as itself rather than as \u escapes.
-            if (journal.find("\"__ctr2shim_test_burst_0\"") == std::string::npos) return 56;
+            if (journal.find("\"__appxportable_test_burst_0\"") == std::string::npos) return 56;
             // A save stores every pref again, most of them unchanged. An equal
             // value still replaces and notifies, but adds nothing to the journal.
             const auto eventCount = events;
             for (int i = 0; i < count; ++i) {
-                std::wstring key = L"__ctr2shim_test_burst_" + std::to_wstring(i);
+                std::wstring key = L"__appxportable_test_burst_" + std::to_wstring(i);
                 ComPtr<IInspectable> value;
                 props->CreateInt64(i, &value);
                 boolean replaced{};
@@ -233,7 +223,7 @@ int main(int argc, char** argv) {
             }
             if (ReadAll(journalFile) != journal || events != eventCount + count) return 58;
             // The type is part of the value: Int32 0 differs from Int64 0, both ways.
-            HStringReference first(L"__ctr2shim_test_burst_0");
+            HStringReference first(L"__appxportable_test_burst_0");
             ComPtr<IInspectable> narrow, wide;
             props->CreateInt32(0, &narrow);
             props->CreateInt64(0, &wide);
@@ -245,7 +235,7 @@ int main(int argc, char** argv) {
                 ReadAll(journalFile).size() <= changed.size())
                 return 60;
             for (int i = 0; i < count; ++i) {
-                std::wstring key = L"__ctr2shim_test_burst_" + std::to_wstring(i);
+                std::wstring key = L"__appxportable_test_burst_" + std::to_wstring(i);
                 ComPtr<IInspectable> value;
                 ComPtr<ABI::Windows::Foundation::IPropertyValue> property;
                 INT64 number{};
@@ -258,7 +248,7 @@ int main(int argc, char** argv) {
             continue;
         }
         if (argc > 1 && !strcmp(argv[1], "atomic")) {
-            HStringReference key(L"__ctr2shim_test_atomic"), newKey(L"__ctr2shim_test_atomic_new");
+            HStringReference key(L"__appxportable_test_atomic"), newKey(L"__appxportable_test_atomic_new");
             ComPtr<IInspectable> original, replacement;
             props->CreateBoolean(true, &original);
             props->CreateBoolean(false, &replacement);
@@ -308,7 +298,7 @@ int main(int argc, char** argv) {
             HString key;
             key.Set(keys[i]);
             if (i == 0) {
-                const wchar_t special[] = L"__ctr2shim_test_string\0中";
+                const wchar_t special[] = L"__appxportable_test_string\0中";
                 key.Set(special, static_cast<UINT32>(sizeof(special) / sizeof(wchar_t) - 1));
             }
             if (argc > 1 && !strcmp(argv[1], "write")) {
@@ -405,7 +395,7 @@ int main(int argc, char** argv) {
             0x8000000000000000ULL,
         };
         for (int i = 0; i < 4; ++i) {
-            std::wstring keyText = L"__ctr2shim_test_doublebits" + std::to_wstring(i);
+            std::wstring keyText = L"__appxportable_test_doublebits" + std::to_wstring(i);
             HString key;
             key.Set(keyText.c_str());
             if (argc > 1 && !strcmp(argv[1], "specialwrite")) {

@@ -16,7 +16,7 @@ using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::UI::Xaml::Controls;
 using namespace ABI::Windows::UI::Xaml::Interop;
-namespace ctr2 {
+namespace appx {
 class Panel final : public Element<Panel, DefaultISwapChainPanel, ISwapChainPanelNative> {
     ComPtr<IDXGISwapChain> swapChain_;
     EventSource<ABI::Windows::Foundation::ITypedEventHandler<SwapChainPanel*, IInspectable*>> scaleChanged_;

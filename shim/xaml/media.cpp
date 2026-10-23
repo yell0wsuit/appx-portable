@@ -26,7 +26,7 @@ using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::UI::Xaml::Controls;
 using namespace ABI::Windows::UI::Xaml::Media;
-namespace ctr2 {
+namespace appx {
 namespace {
 struct MediaFoundation {
     decltype(&MFCreateAttributes) createAttributes = nullptr;

@@ -3,34 +3,7 @@
 #include "options.h"
 #include <mutex>
 #include <intrin.h>
-namespace ctr2 {
-static void LogAngleError(EXCEPTION_POINTERS* fault) noexcept {
-    if (!GetOptions().diagnostics || fault->ExceptionRecord->NumberParameters < 2) return;
-    wchar_t message[64]{};
-    SIZE_T read{};
-    ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(fault->ExceptionRecord->ExceptionInformation[1]),
-                      message, sizeof(message) - sizeof(wchar_t), &read);
-    if (wcsncmp(message, L"eglMakeCurrent failed", 21) != 0 && wcsncmp(message, L"eglSwapBuffers failed", 21) != 0)
-        return;
-    auto* image = reinterpret_cast<BYTE*>(GetModuleHandleW(nullptr));
-    wchar_t path[MAX_PATH]{};
-    GetModuleFileNameW(nullptr, path, MAX_PATH);
-    auto* name = wcsrchr(path, L'\\');
-    if (!name || _wcsicmp(name + 1, L"Game.exe") != 0) return;
-    auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(image);
-    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS32*>(image + dos->e_lfanew);
-    // Diagnostic only, for the supported 1.0.0.46 executable's ANGLE TLS key.
-    if (nt->OptionalHeader.SizeOfImage <= 0x5adde4) return;
-    DWORD index = TLS_OUT_OF_INDEXES;
-    if (!ReadProcessMemory(GetCurrentProcess(), image + 0x5adde0, &index, sizeof(index), &read)) return;
-    DWORD previous = GetLastError();
-    auto* storage = TlsGetValue(index);
-    SetLastError(previous);
-    DWORD state[6]{};
-    if (ReadProcessMemory(GetCurrentProcess(), storage, state, sizeof(state), &read))
-        Log("TRACE", "ANGLE error message=%ls key=%lu state=%p words=%08lx,%08lx,%08lx,%08lx,%08lx,%08lx", message,
-            index, storage, state[0], state[1], state[2], state[3], state[4], state[5]);
-}
+namespace appx {
 void LogThreadStorage() noexcept {
     if (!GetOptions().diagnostics) return;
     auto* image = reinterpret_cast<BYTE*>(GetModuleHandleW(nullptr));
@@ -70,10 +43,6 @@ static void DescribeAddress(DWORD address, wchar_t (&module)[64], DWORD& rva) no
     rva = address - reinterpret_cast<DWORD>(handle);
 }
 static LONG CALLBACK LogFault(EXCEPTION_POINTERS* fault) {
-    if (fault->ExceptionRecord->ExceptionCode == 0x4001000a) {
-        LogAngleError(fault);
-        return EXCEPTION_CONTINUE_SEARCH;
-    }
     if (fault->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION) return EXCEPTION_CONTINUE_SEARCH;
     auto* context = fault->ContextRecord;
     LogThreadStorage();
@@ -88,7 +57,7 @@ static LONG CALLBACK LogFault(EXCEPTION_POINTERS* fault) {
         context->Eip, static_cast<DWORD>(fault->ExceptionRecord->ExceptionInformation[1]), context->Eax, context->Ecx,
         context->Edx, context->Esp, context->Ebp);
     // Frame-pointer-omitting game functions hide their callers from the ebp
-    // walk below, so also scan the stack for words inside Game.exe's image.
+    // walk below, so also scan the stack for words inside the game executable's image.
     // Windows relocates the image (ASLR); RVAs match a disassembly at any base.
     auto* image = reinterpret_cast<BYTE*>(GetModuleHandleW(nullptr));
     auto* nt = reinterpret_cast<IMAGE_NT_HEADERS32*>(image + reinterpret_cast<IMAGE_DOS_HEADER*>(image)->e_lfanew);

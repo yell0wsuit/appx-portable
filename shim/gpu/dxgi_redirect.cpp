@@ -12,7 +12,7 @@
 #include <vector>
 #include <cstdio>
 using Microsoft::WRL::ComPtr;
-namespace ctr2 {
+namespace appx {
 using CompositionCall = HRESULT(STDMETHODCALLTYPE*)(IDXGIFactory2*, IUnknown*, const DXGI_SWAP_CHAIN_DESC1*,
                                                     IDXGIOutput*, IDXGISwapChain1**);
 static CompositionCall original;
@@ -83,7 +83,7 @@ static void CaptureFrame(IDXGISwapChain* swap) {
     header.bfOffBits = sizeof(header) + sizeof(info);
     header.bfSize = header.bfOffBits + static_cast<DWORD>(pixels.size());
     FILE* file{};
-    if (fopen_s(&file, "ctr2-frame.bmp", "wb") != 0) return;
+    if (fopen_s(&file, "appx-frame.bmp", "wb") != 0) return;
     fwrite(&header, sizeof(header), 1, file);
     fwrite(&info, sizeof(info), 1, file);
     fwrite(pixels.data(), pixels.size(), 1, file);

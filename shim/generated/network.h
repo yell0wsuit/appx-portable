@@ -9,35 +9,35 @@
 namespace ABI::Windows::Networking::Connectivity {
 struct __declspec(uuid("5074f851-950d-4165-9c15-365619481eea")) DefaultINetworkInformationStatics : public ABI::Windows::Networking::Connectivity::INetworkInformationStatics {
   HRESULT STDMETHODCALLTYPE GetConnectionProfiles(__FIVectorView_1_Windows__CNetworking__CConnectivity__CConnectionProfile** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetConnectionProfiles");
+    appx::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetConnectionProfiles");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetInternetConnectionProfile(ABI::Windows::Networking::Connectivity::IConnectionProfile** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetInternetConnectionProfile");
+    appx::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetInternetConnectionProfile");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetLanIdentifiers(__FIVectorView_1_Windows__CNetworking__CConnectivity__CLanIdentifier** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetLanIdentifiers");
+    appx::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetLanIdentifiers");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetHostNames(__FIVectorView_1_Windows__CNetworking__CHostName** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetHostNames");
+    appx::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetHostNames");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetProxyConfigurationAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, __FIAsyncOperation_1_Windows__CNetworking__CConnectivity__CProxyConfiguration** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetProxyConfigurationAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetProxyConfigurationAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetSortedEndpointPairs(__FIIterable_1_Windows__CNetworking__CEndpointPair* destinationList, ABI::Windows::Networking::HostNameSortOptions sortOptions, __FIVectorView_1_Windows__CNetworking__CEndpointPair** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetSortedEndpointPairs");
+    appx::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::GetSortedEndpointPairs");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_NetworkStatusChanged(ABI::Windows::Networking::Connectivity::INetworkStatusChangedEventHandler* networkStatusHandler, EventRegistrationToken* eventCookie) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::add_NetworkStatusChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::add_NetworkStatusChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_NetworkStatusChanged(EventRegistrationToken eventCookie) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::remove_NetworkStatusChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Networking::Connectivity::INetworkInformationStatics::remove_NetworkStatusChanged");
     return E_NOTIMPL;
   }
 };

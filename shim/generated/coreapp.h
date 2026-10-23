@@ -9,39 +9,39 @@
 namespace ABI::Windows::ApplicationModel::Core {
 struct __declspec(uuid("0aacf7a4-5e1d-49df-8034-fb6a68bc5ed1")) DefaultICoreApplication : public ABI::Windows::ApplicationModel::Core::ICoreApplication {
   HRESULT STDMETHODCALLTYPE get_Id(HSTRING* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::get_Id");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::get_Id");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_Suspending(__FIEventHandler_1_Windows__CApplicationModel__CSuspendingEventArgs* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::add_Suspending");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::add_Suspending");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_Suspending(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::remove_Suspending");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::remove_Suspending");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_Resuming(__FIEventHandler_1_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::add_Resuming");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::add_Resuming");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_Resuming(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::remove_Resuming");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::remove_Resuming");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_Properties(ABI::Windows::Foundation::Collections::IPropertySet** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::get_Properties");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::get_Properties");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetCurrentView(ABI::Windows::ApplicationModel::Core::ICoreApplicationView** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::GetCurrentView");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::GetCurrentView");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE Run(ABI::Windows::ApplicationModel::Core::IFrameworkViewSource* viewSource) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::Run");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::Run");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE RunWithActivationFactories(ABI::Windows::Foundation::IGetActivationFactory* activationFactoryCallback) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::RunWithActivationFactories");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplication::RunWithActivationFactories");
     return E_NOTIMPL;
   }
 };
@@ -49,15 +49,15 @@ struct __declspec(uuid("0aacf7a4-5e1d-49df-8034-fb6a68bc5ed1")) DefaultICoreAppl
 namespace ABI::Windows::ApplicationModel::Core {
 struct __declspec(uuid("cf86461d-261e-4b72-9acd-44ed2ace6a29")) DefaultICoreApplicationExit : public ABI::Windows::ApplicationModel::Core::ICoreApplicationExit {
   HRESULT STDMETHODCALLTYPE Exit(void) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationExit::Exit");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationExit::Exit");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_Exiting(__FIEventHandler_1_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationExit::add_Exiting");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationExit::add_Exiting");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_Exiting(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationExit::remove_Exiting");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationExit::remove_Exiting");
     return E_NOTIMPL;
   }
 };
@@ -65,15 +65,15 @@ struct __declspec(uuid("cf86461d-261e-4b72-9acd-44ed2ace6a29")) DefaultICoreAppl
 namespace ABI::Windows::ApplicationModel::Core {
 struct __declspec(uuid("1ada0e3e-e4a2-4123-b451-dc96bf800419")) DefaultICoreImmersiveApplication : public ABI::Windows::ApplicationModel::Core::ICoreImmersiveApplication {
   HRESULT STDMETHODCALLTYPE get_Views(__FIVectorView_1_Windows__CApplicationModel__CCore__CCoreApplicationView** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreImmersiveApplication::get_Views");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreImmersiveApplication::get_Views");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE CreateNewView(HSTRING runtimeType, HSTRING entryPoint, ABI::Windows::ApplicationModel::Core::ICoreApplicationView** view) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreImmersiveApplication::CreateNewView");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreImmersiveApplication::CreateNewView");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_MainView(ABI::Windows::ApplicationModel::Core::ICoreApplicationView** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreImmersiveApplication::get_MainView");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreImmersiveApplication::get_MainView");
     return E_NOTIMPL;
   }
 };
@@ -81,23 +81,23 @@ struct __declspec(uuid("1ada0e3e-e4a2-4123-b451-dc96bf800419")) DefaultICoreImme
 namespace ABI::Windows::ApplicationModel::Core {
 struct __declspec(uuid("638bb2db-451d-4661-b099-414f34ffb9f1")) DefaultICoreApplicationView : public ABI::Windows::ApplicationModel::Core::ICoreApplicationView {
   HRESULT STDMETHODCALLTYPE get_CoreWindow(ABI::Windows::UI::Core::ICoreWindow** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::get_CoreWindow");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::get_CoreWindow");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_Activated(__FITypedEventHandler_2_Windows__CApplicationModel__CCore__CCoreApplicationView_Windows__CApplicationModel__CActivation__CIActivatedEventArgs* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::add_Activated");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::add_Activated");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_Activated(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::remove_Activated");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::remove_Activated");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsMain(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::get_IsMain");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::get_IsMain");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_IsHosted(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::get_IsHosted");
+    appx::Log("UNIMPL", "ABI::Windows::ApplicationModel::Core::ICoreApplicationView::get_IsHosted");
     return E_NOTIMPL;
   }
 };

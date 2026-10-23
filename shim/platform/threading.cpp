@@ -18,7 +18,7 @@
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Foundation;
 using namespace ABI::Windows::System::Threading;
-namespace ctr2 {
+namespace appx {
 
 class Timer;
 struct TimerState;
@@ -47,7 +47,7 @@ public:
     }
     static TimerScheduler& Instance() {
         // Process-lifetime service: no DLL teardown joins or callbacks under
-        // loader lock. ctr2shim is kept loaded by the compiler proxy.
+        // loader lock. appxportable is kept loaded by the compiler proxy.
         static auto* scheduler = new TimerScheduler();
         return *scheduler;
     }

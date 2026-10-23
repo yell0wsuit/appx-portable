@@ -1,7 +1,7 @@
 // Video placement for each MediaElement Stretch mode.
 #include "xaml/video_layout.h"
 #include <cstdio>
-using namespace ctr2;
+using namespace appx;
 static int failures;
 #define CHECK(x)                                                                                                       \
     do {                                                                                                               \

@@ -9,67 +9,67 @@
 namespace ABI::Windows::Graphics::Display {
 struct __declspec(uuid("bed112ae-adc3-4dc9-ae65-851f4d7d4799")) DefaultIDisplayInformation : public ABI::Windows::Graphics::Display::IDisplayInformation {
   HRESULT STDMETHODCALLTYPE get_CurrentOrientation(ABI::Windows::Graphics::Display::DisplayOrientations* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_CurrentOrientation");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_CurrentOrientation");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NativeOrientation(ABI::Windows::Graphics::Display::DisplayOrientations* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_NativeOrientation");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_NativeOrientation");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_OrientationChanged(__FITypedEventHandler_2_Windows__CGraphics__CDisplay__CDisplayInformation_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::add_OrientationChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::add_OrientationChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_OrientationChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::remove_OrientationChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::remove_OrientationChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ResolutionScale(ABI::Windows::Graphics::Display::ResolutionScale* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_ResolutionScale");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_ResolutionScale");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LogicalDpi(FLOAT* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_LogicalDpi");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_LogicalDpi");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_RawDpiX(FLOAT* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_RawDpiX");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_RawDpiX");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_RawDpiY(FLOAT* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_RawDpiY");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_RawDpiY");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_DpiChanged(__FITypedEventHandler_2_Windows__CGraphics__CDisplay__CDisplayInformation_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::add_DpiChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::add_DpiChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_DpiChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::remove_DpiChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::remove_DpiChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_StereoEnabled(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_StereoEnabled");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::get_StereoEnabled");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_StereoEnabledChanged(__FITypedEventHandler_2_Windows__CGraphics__CDisplay__CDisplayInformation_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::add_StereoEnabledChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::add_StereoEnabledChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_StereoEnabledChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::remove_StereoEnabledChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::remove_StereoEnabledChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetColorProfileAsync(__FIAsyncOperation_1_Windows__CStorage__CStreams__CIRandomAccessStream** asyncInfo) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::GetColorProfileAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::GetColorProfileAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_ColorProfileChanged(__FITypedEventHandler_2_Windows__CGraphics__CDisplay__CDisplayInformation_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::add_ColorProfileChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::add_ColorProfileChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_ColorProfileChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::remove_ColorProfileChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformation::remove_ColorProfileChanged");
     return E_NOTIMPL;
   }
 };
@@ -77,23 +77,23 @@ struct __declspec(uuid("bed112ae-adc3-4dc9-ae65-851f4d7d4799")) DefaultIDisplayI
 namespace ABI::Windows::Graphics::Display {
 struct __declspec(uuid("c6a02a6c-d452-44dc-ba07-96f3c6adf9d1")) DefaultIDisplayInformationStatics : public ABI::Windows::Graphics::Display::IDisplayInformationStatics {
   HRESULT STDMETHODCALLTYPE GetForCurrentView(ABI::Windows::Graphics::Display::IDisplayInformation** current) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::GetForCurrentView");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::GetForCurrentView");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AutoRotationPreferences(ABI::Windows::Graphics::Display::DisplayOrientations* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::get_AutoRotationPreferences");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::get_AutoRotationPreferences");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AutoRotationPreferences(ABI::Windows::Graphics::Display::DisplayOrientations value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::put_AutoRotationPreferences");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::put_AutoRotationPreferences");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_DisplayContentsInvalidated(__FITypedEventHandler_2_Windows__CGraphics__CDisplay__CDisplayInformation_IInspectable* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::add_DisplayContentsInvalidated");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::add_DisplayContentsInvalidated");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_DisplayContentsInvalidated(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::remove_DisplayContentsInvalidated");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayInformationStatics::remove_DisplayContentsInvalidated");
     return E_NOTIMPL;
   }
 };
@@ -101,75 +101,75 @@ struct __declspec(uuid("c6a02a6c-d452-44dc-ba07-96f3c6adf9d1")) DefaultIDisplayI
 namespace ABI::Windows::Graphics::Display {
 struct __declspec(uuid("6937ed8d-30ea-4ded-8271-4553ff02f68a")) DefaultIDisplayPropertiesStatics : public ABI::Windows::Graphics::Display::IDisplayPropertiesStatics {
   HRESULT STDMETHODCALLTYPE get_CurrentOrientation(ABI::Windows::Graphics::Display::DisplayOrientations* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_CurrentOrientation");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_CurrentOrientation");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_NativeOrientation(ABI::Windows::Graphics::Display::DisplayOrientations* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_NativeOrientation");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_NativeOrientation");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_AutoRotationPreferences(ABI::Windows::Graphics::Display::DisplayOrientations* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_AutoRotationPreferences");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_AutoRotationPreferences");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE put_AutoRotationPreferences(ABI::Windows::Graphics::Display::DisplayOrientations value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::put_AutoRotationPreferences");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::put_AutoRotationPreferences");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_OrientationChanged(ABI::Windows::Graphics::Display::IDisplayPropertiesEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_OrientationChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_OrientationChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_OrientationChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_OrientationChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_OrientationChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_ResolutionScale(ABI::Windows::Graphics::Display::ResolutionScale* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_ResolutionScale");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_ResolutionScale");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_LogicalDpi(FLOAT* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_LogicalDpi");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_LogicalDpi");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_LogicalDpiChanged(ABI::Windows::Graphics::Display::IDisplayPropertiesEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_LogicalDpiChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_LogicalDpiChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_LogicalDpiChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_LogicalDpiChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_LogicalDpiChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_StereoEnabled(boolean* value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_StereoEnabled");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::get_StereoEnabled");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_StereoEnabledChanged(ABI::Windows::Graphics::Display::IDisplayPropertiesEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_StereoEnabledChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_StereoEnabledChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_StereoEnabledChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_StereoEnabledChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_StereoEnabledChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetColorProfileAsync(__FIAsyncOperation_1_Windows__CStorage__CStreams__CIRandomAccessStream** asyncInfo) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::GetColorProfileAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::GetColorProfileAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_ColorProfileChanged(ABI::Windows::Graphics::Display::IDisplayPropertiesEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_ColorProfileChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_ColorProfileChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_ColorProfileChanged(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_ColorProfileChanged");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_ColorProfileChanged");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE add_DisplayContentsInvalidated(ABI::Windows::Graphics::Display::IDisplayPropertiesEventHandler* handler, EventRegistrationToken* token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_DisplayContentsInvalidated");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::add_DisplayContentsInvalidated");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE remove_DisplayContentsInvalidated(EventRegistrationToken token) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_DisplayContentsInvalidated");
+    appx::Log("UNIMPL", "ABI::Windows::Graphics::Display::IDisplayPropertiesStatics::remove_DisplayContentsInvalidated");
     return E_NOTIMPL;
   }
 };

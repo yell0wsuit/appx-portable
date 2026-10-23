@@ -9,47 +9,47 @@
 namespace ABI::Windows::Web::Http {
 struct __declspec(uuid("7fda1151-3574-4880-a8ba-e6b1e0061f3d")) DefaultIHttpClient : public ABI::Windows::Web::Http::IHttpClient {
   HRESULT STDMETHODCALLTYPE DeleteAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, __FIAsyncOperationWithProgress_2_Windows__CWeb__CHttp__CHttpResponseMessage_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::DeleteAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::DeleteAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, __FIAsyncOperationWithProgress_2_Windows__CWeb__CHttp__CHttpResponseMessage_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetWithOptionAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, ABI::Windows::Web::Http::HttpCompletionOption completionOption, __FIAsyncOperationWithProgress_2_Windows__CWeb__CHttp__CHttpResponseMessage_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetWithOptionAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetWithOptionAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetBufferAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, __FIAsyncOperationWithProgress_2_Windows__CStorage__CStreams__CIBuffer_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetBufferAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetBufferAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetInputStreamAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, __FIAsyncOperationWithProgress_2_Windows__CStorage__CStreams__CIInputStream_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetInputStreamAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetInputStreamAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE GetStringAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, __FIAsyncOperationWithProgress_2_HSTRING_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetStringAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::GetStringAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE PostAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, ABI::Windows::Web::Http::IHttpContent* content, __FIAsyncOperationWithProgress_2_Windows__CWeb__CHttp__CHttpResponseMessage_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::PostAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::PostAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE PutAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri, ABI::Windows::Web::Http::IHttpContent* content, __FIAsyncOperationWithProgress_2_Windows__CWeb__CHttp__CHttpResponseMessage_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::PutAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::PutAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SendRequestAsync(ABI::Windows::Web::Http::IHttpRequestMessage* request, __FIAsyncOperationWithProgress_2_Windows__CWeb__CHttp__CHttpResponseMessage_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::SendRequestAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::SendRequestAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE SendRequestWithOptionAsync(ABI::Windows::Web::Http::IHttpRequestMessage* request, ABI::Windows::Web::Http::HttpCompletionOption completionOption, __FIAsyncOperationWithProgress_2_Windows__CWeb__CHttp__CHttpResponseMessage_Windows__CWeb__CHttp__CHttpProgress** operation) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::SendRequestWithOptionAsync");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::SendRequestWithOptionAsync");
     return E_NOTIMPL;
   }
   HRESULT STDMETHODCALLTYPE get_DefaultRequestHeaders(ABI::Windows::Web::Http::Headers::IHttpRequestHeaderCollection** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::get_DefaultRequestHeaders");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClient::get_DefaultRequestHeaders");
     return E_NOTIMPL;
   }
 };
@@ -57,7 +57,7 @@ struct __declspec(uuid("7fda1151-3574-4880-a8ba-e6b1e0061f3d")) DefaultIHttpClie
 namespace ABI::Windows::Web::Http {
 struct __declspec(uuid("c30c4eca-e3fa-4f99-afb4-63cc65009462")) DefaultIHttpClientFactory : public ABI::Windows::Web::Http::IHttpClientFactory {
   HRESULT STDMETHODCALLTYPE Create(ABI::Windows::Web::Http::Filters::IHttpFilter* filter, ABI::Windows::Web::Http::IHttpClient** value) override {
-    ctr2::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClientFactory::Create");
+    appx::Log("UNIMPL", "ABI::Windows::Web::Http::IHttpClientFactory::Create");
     return E_NOTIMPL;
   }
 };

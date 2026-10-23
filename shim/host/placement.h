@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <atomic>
 #include <string>
-namespace ctr2 {
+namespace appx {
 // UI-thread window placement; the fullscreen query is also used by WinRT callers.
 class WindowPlacement {
     HWND window_ = nullptr;

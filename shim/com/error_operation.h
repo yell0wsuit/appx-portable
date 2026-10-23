@@ -4,7 +4,7 @@
 #include <wrl.h>
 #include <atomic>
 #include <mutex>
-namespace ctr2 {
+namespace appx {
 template <class T, class TResult = T>
 class ErrorOperation final
     : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::WinRt>,

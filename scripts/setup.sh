@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
+# Stages an extracted Store package as a portable game folder for Wine; the
+# same steps as setup.ps1. Runtime folders hold the x86 VCLibs DLLs when the
+# game folder lacks them (an extracted Microsoft.VCLibs.*.appx).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo 'usage: setup.sh UNPACKED_GAME_DIRECTORY DESTINATION [BUILD_DIRECTORY]' >&2; exit 2
+if [[ $# -lt 2 ]]; then
+  echo 'usage: setup.sh UNPACKED_GAME_DIRECTORY DESTINATION [BUILD_DIRECTORY [RUNTIME_DIRECTORY...]]' >&2; exit 2
 fi
 source_dir=$(cd "$1" && pwd -P)
 python3 - "$source_dir" "$2" <<'CHECK_PATHS'
@@ -13,41 +16,80 @@ if source == destination or source in destination.parents or destination in sour
 if destination.exists() and any(p.is_symlink() for p in destination.rglob('*')):
     sys.exit('Destination contains symbolic links; use a separate clean directory.')
 CHECK_PATHS
-mkdir -p "$2"
-destination=$(cd "$2" && pwd)
 build=${3:-"$root/build/macos-x86"}
-[[ "$source_dir" != "$destination" ]] || { echo 'Use a separate destination; source game files are preserved.' >&2; exit 2; }
-for name in Game.exe msvcr120_app.dll msvcp120_app.dll vccorlib120_app.dll; do
-  [[ -f "$source_dir/$name" ]] || { echo "Missing $source_dir/$name (supply native x86 VCLibs 120 DLLs)" >&2; exit 1; }
-done
-for name in ctr2shim.dll d3dcompiler_47.dll; do
-  [[ -f "$build/$name" ]] || { echo "Build output missing: $build/$name" >&2; exit 1; }
-done
-# Copy only runtime files; never the decompile, keys or certificates.
-for name in Game.exe msvcr120_app.dll msvcp120_app.dll vccorlib120_app.dll App.xbf MainPage.xbf MovieMgrPage.xbf VideoPlayerPage.xbf resources.pri ZF.winmd VungleSDK.winmd; do
-  [[ ! -f "$source_dir/$name" ]] || cp -p "$source_dir/$name" "$destination/"
-done
-[[ -d "$source_dir/Assets" ]] && cp -R "$source_dir/Assets" "$destination/"
-# A raw .appx extraction keeps OPC percent-encoded names (%21_MasterGameDesignDocument.xml).
-# The installer decodes them, and the game opens the decoded names; missing design
-# XML leaves the game without its candy definition and crashes it after loading.
-python3 - "$destination/Assets" <<'DECODE_NAMES'
-import os, sys, urllib.parse
-for parent, directories, files in os.walk(sys.argv[1], topdown=False):
+runtimes=("${@:4}")
+# Validates everything before writing, then stages; prints the executable's name.
+executable=$(python3 - "$source_dir" "$2" "$build" "$root/scripts/appx-portable.ini" ${runtimes[@]+"${runtimes[@]}"} <<'STAGE'
+import os, pathlib, shutil, sys, tempfile, urllib.parse
+import xml.etree.ElementTree as ElementTree
+source, destination, build, ini = map(pathlib.Path, sys.argv[1:5])
+runtimes = [pathlib.Path(p) for p in sys.argv[5:]]
+VCLIBS = {
+    'Microsoft.VCLibs.110.00': ('msvcr110.dll', 'msvcp110.dll', 'vccorlib110.dll'),
+    'Microsoft.VCLibs.120.00': ('msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll'),
+    'Microsoft.VCLibs.140.00': ('vcruntime140_app.dll', 'msvcp140_app.dll', 'vccorlib140_app.dll'),
+}
+PROXIES = ('d3dcompiler_47.dll', 'XAudio2_8.dll')
+EXCLUDED = {'AppxSignature.p7x', 'AppxBlockMap.xml', '[Content_Types].xml', 'AppxMetadata',
+            'microsoft.system.package.metadata', 'SaveData', 'appx-portable.ini', 'appxportable.dll', *PROXIES}
+manifest = source / 'AppxManifest.xml'
+if not manifest.is_file():
+    sys.exit(f'Missing {manifest}. Extract the whole .appx package, not only its files.')
+# Elements by local name: Windows 8, 8.1 and 10 manifests use different namespaces.
+tree = ElementTree.parse(manifest)
+local = lambda element: element.tag.rsplit('}', 1)[-1]
+application = next((e for e in tree.iter() if local(e) == 'Application'), None)
+executable = application.get('Executable', '') if application is not None else ''
+if not executable or os.path.isabs(executable) or '..' in pathlib.PureWindowsPath(executable).parts:
+    sys.exit(f'{manifest} has an unusable Executable: {executable!r}')
+executable = pathlib.PureWindowsPath(executable).as_posix()
+if not (source / executable).is_file():
+    sys.exit(f'Missing {source / executable}')
+runtime_files = {}
+for dependency in (e.get('Name') for e in tree.iter() if local(e) == 'PackageDependency'):
+    for name in VCLIBS.get(dependency, ()):
+        found = next((folder / name for folder in [source, *runtimes] if (folder / name).is_file()), None)
+        if found is None:
+            sys.exit(f'Missing {name} ({dependency}). Copy the x86 DLLs from the {dependency} package '
+                     'beside the game, or pass its folder as a runtime directory.')
+        runtime_files[name] = found
+for name in ('appxportable.dll', *PROXIES):
+    if not (build / name).is_file():
+        sys.exit(f'Build output missing: {build / name}')
+destination.mkdir(parents=True, exist_ok=True)
+destination = destination.resolve()
+for item in source.iterdir():
+    if item.name in EXCLUDED or (item.name.startswith('appx-portable') and item.name.endswith('.log')):
+        continue
+    target = destination / item.name
+    if item.is_dir():
+        shutil.copytree(item, target, dirs_exist_ok=True)
+    else:
+        shutil.copy2(item, target)
+for name, path in runtime_files.items():
+    shutil.copy2(path, destination / name)
+# A raw .appx extraction keeps OPC percent-encoded names (%21_Name.xml,
+# User%20Controls); games open the decoded names. Saves are left alone.
+for parent, directories, files in os.walk(destination, topdown=False):
+    if pathlib.Path(parent) == destination:
+        directories = [d for d in directories if d != 'SaveData']
+    elif (destination / 'SaveData') in pathlib.Path(parent).parents or pathlib.Path(parent) == destination / 'SaveData':
+        continue
     for name in files + directories:
         decoded = urllib.parse.unquote(name)
         if decoded == name:
             continue
         if '/' in decoded or '\0' in decoded:
-            sys.exit(f'Cannot decode asset name: {os.path.join(parent, name)}')
-        os.replace(os.path.join(parent, name), os.path.join(parent, decoded))
-DECODE_NAMES
+            sys.exit(f'Cannot decode package name: {os.path.join(parent, name)}')
+        target = os.path.join(parent, decoded)
+        if os.path.isdir(target) and not os.path.islink(target):
+            shutil.rmtree(target)
+        os.replace(os.path.join(parent, name), target)
 # Settings template, copied once so later edits survive re-staging.
-[[ -f "$destination/ctr2shim.ini" ]] || cp "$root/scripts/ctr2shim.ini" "$destination/"
-python3 - "$build" "$destination" <<'COPY_SHIMS'
-import os, pathlib, shutil, sys, tempfile
-build, destination = map(pathlib.Path, sys.argv[1:])
-for name in ('ctr2shim.dll', 'd3dcompiler_47.dll'):
+if not (destination / 'appx-portable.ini').exists():
+    shutil.copy(ini, destination / 'appx-portable.ini')
+# Replace DLLs by rename, never in place: a running game maps the old file.
+for name in ('appxportable.dll', *PROXIES):
     fd, temporary = tempfile.mkstemp(prefix=name + '.', dir=destination)
     os.close(fd)
     try:
@@ -56,7 +98,10 @@ for name in ('ctr2shim.dll', 'd3dcompiler_47.dll'):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
-COPY_SHIMS
-cmp -s "$source_dir/Game.exe" "$destination/Game.exe"
-shasum -a 256 "$source_dir/Game.exe" "$destination/Game.exe"
+print(executable)
+STAGE
+)
+destination=$(cd "$2" && pwd)
+cmp -s "$source_dir/$executable" "$destination/$executable"
+shasum -a 256 "$source_dir/$executable" "$destination/$executable"
 printf 'Prepared %s\n' "$destination"

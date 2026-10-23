@@ -7,7 +7,7 @@
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Web::Http;
 using namespace ABI::Windows::Web::Http::Filters;
-namespace ctr2 {
+namespace appx {
 class Cache final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIHttpCacheControl, FtmBase> {
     InspectableClass(L"Windows.Web.Http.Filters.HttpCacheControl", BaseTrust);
     HttpCacheReadBehavior read_ = HttpCacheReadBehavior_Default;
