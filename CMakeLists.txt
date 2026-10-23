@@ -32,7 +32,7 @@ add_custom_target(appxportable_version
 add_executable(shimtest tests/shimtest.cpp)
 target_link_libraries(shimtest PRIVATE runtimeobject ole32)
 if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
-  add_library(appxportable SHARED shim/registry.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/appxportable.def shim/version.rc)
+  add_library(appxportable SHARED shim/registry.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/mode.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/appxportable.def shim/version.rc)
   target_include_directories(appxportable PRIVATE shim "${APPX_GENERATED}")
   add_dependencies(appxportable appxportable_version)
   target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
@@ -108,6 +108,14 @@ add_test(NAME readertest COMMAND readertest)
 add_executable(toasttest tests/toasttest.cpp)
 target_link_libraries(toasttest PRIVATE runtimeobject ole32)
 add_test(NAME toasttest COMMAND toasttest)
+if(WIN32)
+  add_test(NAME islands_toasttest COMMAND "${CMAKE_COMMAND}"
+    "-DTOAST=$<TARGET_FILE:toasttest>"
+    "-DSHIM=$<TARGET_FILE:appxportable>"
+    "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe"
+    "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-toast-fixture"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_toast.cmake")
+endif()
 add_executable(storetest tests/storetest.cpp)
 target_link_libraries(storetest PRIVATE runtimeobject ole32)
 add_test(NAME storetest COMMAND storetest)
@@ -172,3 +180,24 @@ foreach(mode normal max full)
     ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/window-test-data/manual-${mode}"
     ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:" TIMEOUT 15)
 endforeach()
+
+# Desktop CLR host carries the XAML Islands compatibility manifest.
+if(NOT CMAKE_CROSSCOMPILING)
+  set(APPX_CSC "$ENV{WINDIR}/Microsoft.NET/Framework/v4.0.30319/csc.exe")
+  file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}/host/managed.cs" APPX_HOST_SOURCE)
+  add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/appx-host.exe"
+    COMMAND "${APPX_CSC}" /nologo /platform:x86 /target:winexe
+      /win32manifest:${CMAKE_SOURCE_DIR}/host/managed.manifest
+      /r:System.Windows.Forms.dll /out:${CMAKE_BINARY_DIR}/appx-host.exe
+      "${APPX_HOST_SOURCE}"
+    DEPENDS host/managed.cs host/managed.manifest VERBATIM)
+  add_custom_target(appx_managed_host ALL DEPENDS "${CMAKE_BINARY_DIR}/appx-host.exe")
+endif()
+
+add_test(NAME containers_write COMMAND storagetest containers_write)
+add_test(NAME containers_read COMMAND storagetest containers_read)
+set_tests_properties(containers_write PROPERTIES FIXTURES_SETUP container_roundtrip)
+set_tests_properties(containers_read PROPERTIES FIXTURES_REQUIRED container_roundtrip)
+set_tests_properties(containers_write containers_read PROPERTIES
+  ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/container-test-data;APPX_PORTABLE_WINDOW_STATE=off"
+  RESOURCE_LOCK appx_container_store)

@@ -1,4 +1,5 @@
 #include "registry.h"
+#include "islands/islands.h"
 #include "log.h"
 #include "version.h"
 #include <winstring.h>
@@ -9,6 +10,19 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
     *factory = nullptr;
     const wchar_t* text = WindowsGetStringRawBuffer(name, nullptr);
     try {
+        if (appx::IslandsMode()) {
+            auto hr = appx::MakeIslandFactory(text, factory);
+            if (hr != CLASS_E_CLASSNOTAVAILABLE) return hr;
+            if (wcscmp(text, L"Windows.Storage.StorageFile") == 0) return appx::MakeStorageFileFactory(factory);
+            if (wcscmp(text, L"Windows.Storage.ApplicationData") != 0 &&
+                wcscmp(text, L"Windows.ApplicationModel.Package") != 0 &&
+                wcscmp(text, L"Windows.ApplicationModel.Store.CurrentApp") != 0 &&
+                wcscmp(text, L"Windows.UI.Notifications.TileUpdateManager") != 0 &&
+                wcscmp(text, L"Windows.UI.Notifications.ToastNotificationManager") != 0 &&
+                wcscmp(text, L"Windows.UI.Notifications.ScheduledToastNotification") != 0 &&
+                wcsncmp(text, L"Microsoft.Xbox.", 15) != 0)
+                return CLASS_E_CLASSNOTAVAILABLE;
+        }
         if (wcscmp(text, L"Windows.Globalization.Calendar") == 0) return appx::MakeCalendarFactory(factory);
         if (wcscmp(text, L"Windows.Foundation.Diagnostics.AsyncCausalityTracer") == 0)
             return appx::MakeCausalityFactory(factory);

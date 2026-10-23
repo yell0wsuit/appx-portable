@@ -5,6 +5,7 @@
 #include "xbox/xbox_abi.h"
 #include <windows.applicationmodel.h>
 #include <windows.ui.core.h>
+#include <windows.storage.streams.h>
 #include <roapi.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
@@ -40,14 +41,16 @@ struct Handler {
     }
     static ULONG STDMETHODCALLTYPE AddRef(Handler* self) { return ++self->refs; }
     static ULONG STDMETHODCALLTYPE Release(Handler* self) { return --self->refs; }
-    static HRESULT STDMETHODCALLTYPE Invoke(Handler* self, IInspectable*, ABI::Windows::Foundation::AsyncStatus status) {
+    static HRESULT STDMETHODCALLTYPE Invoke(Handler* self, IInspectable*,
+                                            ABI::Windows::Foundation::AsyncStatus status) {
         self->status = status;
         ++self->calls;
         return S_OK;
     }
 };
-static void* handlerTable[] = {reinterpret_cast<void*>(&Handler::QueryInterface), reinterpret_cast<void*>(&Handler::AddRef),
-                               reinterpret_cast<void*>(&Handler::Release), reinterpret_cast<void*>(&Handler::Invoke)};
+static void* handlerTable[] = {reinterpret_cast<void*>(&Handler::QueryInterface),
+                               reinterpret_cast<void*>(&Handler::AddRef), reinterpret_cast<void*>(&Handler::Release),
+                               reinterpret_cast<void*>(&Handler::Invoke)};
 struct OperationAbi : IInspectable {
     virtual HRESULT STDMETHODCALLTYPE put_Completed(IUnknown* handler) = 0;
     virtual HRESULT STDMETHODCALLTYPE get_Completed(IUnknown** handler) = 0;
@@ -60,7 +63,8 @@ int main() {
     // instances from midl's output for Microsoft.Xbox.winmd.
     auto iid = appx::ParameterizedIid("pinterface({9fc2b0bb-e446-44e2-aa61-9cab8f636af2};i4)");
     CHECK(appx::GuidSignature(iid) == "{968b9665-06ed-5774-8f53-8edeabd5f7b5}");
-    iid = appx::ParameterizedIid(appx::AsyncOperationOfClass("Microsoft.Xbox.UserProfile", appx::xbox::defaults::UserProfile));
+    iid = appx::ParameterizedIid(
+        appx::AsyncOperationOfClass("Microsoft.Xbox.UserProfile", appx::xbox::defaults::UserProfile));
     CHECK(appx::GuidSignature(iid) == "{31961233-ebde-54d4-841a-6d8a0eb239bf}");
     const auto identityOperation = appx::ParameterizedIid(
         appx::AsyncOperationOfClass("Microsoft.Xbox.Foundation.UserIdentity", appx::xbox::defaults::UserIdentity));
@@ -97,7 +101,7 @@ int main() {
         ComPtr<IInspectable> client;
         CHECK(SUCCEEDED(live->get_ServiceClient(&client)) && client);
     }
-    ComPtr<appx::xbox::IUser10> user;  // no Microsoft.Xbox.dll beside the test: the SDK 1.0 layout
+    ComPtr<appx::xbox::IUser10> user; // no Microsoft.Xbox.dll beside the test: the SDK 1.0 layout
     CHECK(SUCCEEDED(Factory(L"Microsoft.Xbox.User", factory)));
     if (factory) {
         ComPtr<IInspectable> instance;
@@ -127,9 +131,44 @@ int main() {
         if (response) {
             using Success = HRESULT(STDMETHODCALLTYPE*)(IInspectable*, boolean*);
             boolean success = true;
-            CHECK(SUCCEEDED(reinterpret_cast<Success>((*reinterpret_cast<void***>(response.Get()))[6])(response.Get(), &success)) &&
+            CHECK(SUCCEEDED(reinterpret_cast<Success>((*reinterpret_cast<void***>(response.Get()))[6])(response.Get(),
+                                                                                                       &success)) &&
                   !success);
         }
+    }
+
+    // SDK 1.2 TitleStorage preserves x86 GUID-by-value slots and typed async IIDs.
+    ComPtr<appx::xbox::ITitleStorageFileStatics> files;
+    CHECK(SUCCEEDED(Factory(L"Microsoft.Xbox.TitleStorage.TitleStorageFile", factory)) &&
+          SUCCEEDED(factory.As(&files)));
+    ComPtr<IInspectable> descriptor;
+    const GUID group = {0x12345678, 0x1234, 0x5678, {1, 2, 3, 4, 5, 6, 7, 8}};
+    CHECK(files &&
+          SUCCEEDED(files->GetUserFileFromPath(123456789, group, HStringReference(L"save.dat").Get(), &descriptor)));
+    ComPtr<appx::xbox::ITitleStorageFile> file;
+    CHECK(descriptor && SUCCEEDED(descriptor.As(&file)));
+    if (file) {
+        UINT64 xuid{};
+        GUID restored{};
+        HString path;
+        CHECK(SUCCEEDED(file->get_Xuid(&xuid)) && xuid == 123456789);
+        CHECK(SUCCEEDED(file->get_TitleGroupId(&restored)) && restored == group);
+        CHECK(SUCCEEDED(file->get_Filename(path.GetAddressOf())) &&
+              wcscmp(path.GetRawBuffer(nullptr), L"save.dat") == 0);
+    }
+    ComPtr<appx::xbox::ITitleStorageServiceStatics> storage;
+    CHECK(SUCCEEDED(Factory(L"Microsoft.Xbox.TitleStorage.TitleStorageService", factory)) &&
+          SUCCEEDED(factory.As(&storage)));
+    if (storage) {
+        ComPtr<IInspectable> op;
+        CHECK(SUCCEEDED(storage->ReadToStreamAsync(descriptor.Get(), 0, nullptr, &op)) && op);
+        ComPtr<ABI::Windows::Foundation::IAsyncOperation<ABI::Windows::Storage::Streams::IRandomAccessStream*>> typed;
+        CHECK(op && SUCCEEDED(op.As(&typed)));
+        ComPtr<ABI::Windows::Storage::Streams::IRandomAccessStream> stream;
+        CHECK(typed && typed->GetResults(&stream) == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE) && !stream);
+        ComPtr<ABI::Windows::Foundation::IAsyncAction> action;
+        CHECK(SUCCEEDED(storage->WriteFromStreamAsync(descriptor.Get(), nullptr, 0, 0, &action)));
+        CHECK(action && action->GetResults() == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
     }
 
     // Package.Current answers without package identity.

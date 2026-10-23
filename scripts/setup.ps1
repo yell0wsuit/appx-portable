@@ -76,6 +76,17 @@ function Assert-X86PE([string]$Path) {
         }
     } finally { $reader.Dispose() }
 }
+function Test-ManagedPE([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    $reader = New-Object IO.BinaryReader($stream)
+    try {
+        $stream.Position = 0x3c
+        $offset = $reader.ReadUInt32()
+        if ($offset -gt $stream.Length - 248) { return $false }
+        $stream.Position = $offset + 232
+        return $reader.ReadUInt32() -ne 0
+    } finally { $reader.Dispose() }
+}
 function Copy-AtomicDll([string]$Source, [string]$Target) {
     $temporary = "$Target.$([Guid]::NewGuid().ToString('N')).tmp"
     try {
@@ -175,7 +186,9 @@ foreach ($dependency in $package.Dependencies) {
         $runtimeFiles[$name] = $found[0]
     }
 }
-foreach ($name in @('appxportable.dll') + $Proxies) { Assert-X86PE (Join-Path $build $name) }
+$shimFiles = @('appxportable.dll') + $Proxies
+if (Test-ManagedPE $executable) { $shimFiles += 'appx-host.exe' }
+foreach ($name in $shimFiles) { Assert-X86PE (Join-Path $build $name) }
 $originalHash = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
 
 [IO.Directory]::CreateDirectory($destinationPath) | Out-Null
@@ -207,7 +220,7 @@ foreach ($item in $encoded | Sort-Object { $_.FullName.Length } -Descending) {
 # Settings template, copied once so later edits survive re-staging.
 $settings = Join-Path $destinationPath 'appx-portable.ini'
 if (-not (Test-Path -LiteralPath $settings)) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'appx-portable.ini') -Destination $settings }
-foreach ($name in @('appxportable.dll') + $Proxies) {
+foreach ($name in $shimFiles) {
     Copy-AtomicDll (Join-Path $build $name) (Join-Path $destinationPath $name)
 }
 $stagedHash = (Get-FileHash -LiteralPath (Join-Path $destinationPath $package.Executable) -Algorithm SHA256).Hash

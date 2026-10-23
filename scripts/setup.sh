@@ -20,7 +20,7 @@ build=${3:-"$root/build/macos-x86"}
 runtimes=("${@:4}")
 # Validates everything before writing, then stages; prints the executable's name.
 executable=$(python3 - "$source_dir" "$2" "$build" "$root/scripts/appx-portable.ini" ${runtimes[@]+"${runtimes[@]}"} <<'STAGE'
-import atexit, os, pathlib, shutil, sys, tempfile, urllib.parse, zipfile
+import atexit, os, pathlib, shutil, struct, sys, tempfile, urllib.parse, zipfile
 import xml.etree.ElementTree as ElementTree
 source, destination, build, ini = map(pathlib.Path, sys.argv[1:5])
 runtimes = [pathlib.Path(p) for p in sys.argv[5:]]
@@ -70,7 +70,16 @@ for dependency in (e.get('Name') for e in tree.iter() if local(e) == 'PackageDep
             sys.exit(f'Missing {name} ({dependency}). Pass the x86 {dependency} .appx, or a folder with its DLLs, '
                      "as a runtime. 'Get the Visual C++ runtime' in README.md says where to download it.")
         runtime_files[name] = found
-for name in ('appxportable.dll', *PROXIES):
+shim_files = ['appxportable.dll', *PROXIES]
+with (source / executable).open('rb') as pe:
+    pe.seek(0x3c)
+    offset = pe.read(4)
+    if len(offset) == 4:
+        pe.seek(struct.unpack('<I', offset)[0] + 232)
+        clr = pe.read(4)
+        if len(clr) == 4 and struct.unpack('<I', clr)[0]:
+            shim_files.append('appx-host.exe')
+for name in shim_files:
     if not (build / name).is_file():
         sys.exit(f'Build output missing: {build / name}')
 destination.mkdir(parents=True, exist_ok=True)
@@ -106,7 +115,7 @@ for parent, directories, files in os.walk(destination, topdown=False):
 if not (destination / 'appx-portable.ini').exists():
     shutil.copy(ini, destination / 'appx-portable.ini')
 # Replace DLLs by rename, never in place: a running game maps the old file.
-for name in ('appxportable.dll', *PROXIES):
+for name in shim_files:
     fd, temporary = tempfile.mkstemp(prefix=name + '.', dir=destination)
     os.close(fd)
     try:

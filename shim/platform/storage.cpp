@@ -1,11 +1,13 @@
 #include "generated/storage.h"
 #include "registry.h"
 #include "settings.h"
+#include <map>
 #include "storage.h"
 #include "com/factory.h"
 #include "package/package.h"
 #include <roapi.h>
 #include <shlobj.h>
+#include <shlwapi.h>
 #include <filesystem>
 #include <mutex>
 #include <vector>
@@ -52,7 +54,7 @@ std::filesystem::path KnownFolder(REFKNOWNFOLDERID id) {
 std::wstring PackageFolderName() {
     const auto& package = CurrentPackage();
     if (!package.identityName.empty()) return package.identityName;
-    return GameDirectory().filename().wstring();  // no manifest: the game folder's name
+    return GameDirectory().filename().wstring(); // no manifest: the game folder's name
 }
 std::filesystem::path AppDataRoot() {
     // The environment variable first, so tests can point it elsewhere.
@@ -157,12 +159,13 @@ static HRESULT OsStorageFolder(const std::wstring& path, IStorageFolder** value)
     Event done(CreateEventW(nullptr, TRUE, FALSE, nullptr));
     if (!done.IsValid()) return HRESULT_FROM_WIN32(GetLastError());
     HANDLE signal = done.Get();
-    auto handler = Callback<Implements<RuntimeClassFlags<ClassicCom>,
-                                       __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFolder, FtmBase>>(
-        [signal](__FIAsyncOperation_1_Windows__CStorage__CStorageFolder*, ABI::Windows::Foundation::AsyncStatus) {
-            SetEvent(signal);
-            return S_OK;
-        });
+    auto handler =
+        Callback<Implements<RuntimeClassFlags<ClassicCom>,
+                            __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFolder, FtmBase>>(
+            [signal](__FIAsyncOperation_1_Windows__CStorage__CStorageFolder*, ABI::Windows::Foundation::AsyncStatus) {
+                SetEvent(signal);
+                return S_OK;
+            });
     if (!handler) return E_OUTOFMEMORY;
     hr = operation->put_Completed(handler.Get());
     if (FAILED(hr)) return hr;
@@ -188,19 +191,129 @@ HRESULT MakeStorageFolder(const std::wstring& path, IStorageFolder** value) {
     auto folder = Make<Folder>(path);
     return folder ? folder.CopyTo(value) : E_OUTOFMEMORY;
 }
+using ContainerView = __FIMapView_2_HSTRING_Windows__CStorage__CApplicationDataContainer;
+class ContainerMap final : public RuntimeClass<RuntimeClassFlags<WinRt>, ContainerView> {
+    InspectableClass(L"Windows.Foundation.Collections.IMapView`2", BaseTrust);
+
+public:
+    std::map<std::wstring, ComPtr<IApplicationDataContainer>> items;
+    std::recursive_mutex mutex;
+    HRESULT STDMETHODCALLTYPE Lookup(HSTRING key, IApplicationDataContainer** v) override {
+        if (!v) return E_POINTER;
+        *v = nullptr;
+        std::lock_guard<std::recursive_mutex> lock(mutex);
+        auto it = items.find(WindowsGetStringRawBuffer(key, nullptr));
+        if (it == items.end()) return E_BOUNDS;
+        return it->second.CopyTo(v);
+    }
+    HRESULT STDMETHODCALLTYPE get_Size(UINT32* v) override {
+        if (!v) return E_POINTER;
+        std::lock_guard<std::recursive_mutex> lock(mutex);
+        *v = static_cast<UINT32>(items.size());
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE HasKey(HSTRING key, boolean* v) override {
+        if (!v) return E_POINTER;
+        std::lock_guard<std::recursive_mutex> lock(mutex);
+        *v = items.count(WindowsGetStringRawBuffer(key, nullptr)) != 0;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE Split(ContainerView** a, ContainerView** b) override {
+        if (!a || !b) return E_POINTER;
+        *a = *b = nullptr;
+        return S_OK;
+    }
+};
 class Container final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIApplicationDataContainer, FtmBase> {
     InspectableClass(L"Windows.Storage.ApplicationDataContainer", BaseTrust);
     ApplicationDataLocality locality_;
+    std::wstring name_, path_;
+    ComPtr<ContainerMap> children_ = Make<ContainerMap>();
     ComPtr<ABI::Windows::Foundation::Collections::IPropertySet> values_;
     std::shared_ptr<SettingsPersistence> persistence_;
 
 public:
     explicit Container(ApplicationDataLocality locality) : locality_(locality) {}
-    HRESULT Initialize(const std::wstring& path) { return CreatePersistentSettings(path, values_, persistence_); }
-    HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override {
+    HRESULT Initialize(const std::wstring& path) {
+        path_ = path;
+        auto hr = CreatePersistentSettings(path, values_, persistence_);
+        if (FAILED(hr)) return hr;
+        const auto directory = std::filesystem::path(path).parent_path() / L"containers";
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(directory, ec)) {
+            if (!entry.is_directory()) continue;
+            const auto encoded = entry.path().filename().wstring();
+            if (encoded.size() % 4) continue;
+            std::wstring name;
+            bool valid = true;
+            for (size_t i = 0; i < encoded.size(); i += 4) {
+                wchar_t* end = nullptr;
+                auto chunk = encoded.substr(i, 4);
+                auto ch = wcstoul(chunk.c_str(), &end, 16);
+                if (*end) {
+                    valid = false;
+                    break;
+                }
+                name += static_cast<wchar_t>(ch);
+            }
+            if (!valid) continue;
+            auto child = Make<Container>(locality_);
+            child->name_ = name;
+            hr = child->Initialize((entry.path() / L"settings.json").wstring());
+            if (FAILED(hr)) return hr;
+            children_->items[name] = child;
+        }
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Containers(ContainerView** value) override {
+        if (!value) return E_POINTER;
+        return children_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE CreateContainer(HSTRING name, ApplicationDataCreateDisposition disposition,
+                                              IApplicationDataContainer** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
+        std::wstring key(WindowsGetStringRawBuffer(name, nullptr), WindowsGetStringLen(name));
+        if (key.empty() || key.size() > 64 ||
+            (disposition != ApplicationDataCreateDisposition_Always &&
+             disposition != ApplicationDataCreateDisposition_Existing))
+            return E_INVALIDARG;
+        std::lock_guard<std::recursive_mutex> lock(children_->mutex);
+        auto it = children_->items.find(key);
+        if (it != children_->items.end()) return it->second.CopyTo(value);
+        if (disposition == ApplicationDataCreateDisposition_Existing) return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        std::wstring encoded;
+        for (wchar_t ch : key) {
+            wchar_t hex[5];
+            swprintf_s(hex, L"%04x", static_cast<unsigned short>(ch));
+            encoded += hex;
+        }
+        auto child = Make<Container>(locality_);
+        if (!child) return E_OUTOFMEMORY;
+        child->name_ = key;
+        auto path = std::filesystem::path(path_).parent_path() / L"containers" / encoded;
+        std::error_code ec;
+        std::filesystem::create_directories(path, ec);
+        if (ec) return HRESULT_FROM_WIN32(ec.value());
+        auto hr = child->Initialize((path / L"settings.json").wstring());
+        if (FAILED(hr)) return hr;
+        children_->items[key] = child;
+        return child.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE DeleteContainer(HSTRING name) override {
+        std::lock_guard<std::recursive_mutex> lock(children_->mutex);
+        auto it = children_->items.find(WindowsGetStringRawBuffer(name, nullptr));
+        if (it == children_->items.end()) return S_OK;
+        auto child = static_cast<Container*>(it->second.Get());
+        std::error_code ec;
+        std::filesystem::remove_all(std::filesystem::path(child->path_).parent_path(), ec);
+        if (ec) return HRESULT_FROM_WIN32(ec.value());
+        children_->items.erase(it);
         return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override {
+        if (!value) return E_POINTER;
+        return WindowsCreateString(name_.c_str(), static_cast<UINT32>(name_.size()), value);
     }
     HRESULT STDMETHODCALLTYPE get_Locality(ApplicationDataLocality* value) override {
         if (!value) return E_POINTER;
@@ -261,7 +374,9 @@ public:
         return FolderOf(local_, value);
     }
     HRESULT STDMETHODCALLTYPE get_RoamingFolder(IStorageFolder** value) override { return FolderOf(roaming_, value); }
-    HRESULT STDMETHODCALLTYPE get_TemporaryFolder(IStorageFolder** value) override { return FolderOf(temporary_, value); }
+    HRESULT STDMETHODCALLTYPE get_TemporaryFolder(IStorageFolder** value) override {
+        return FolderOf(temporary_, value);
+    }
     HRESULT STDMETHODCALLTYPE get_LocalSettings(IApplicationDataContainer** value) override {
         if (!value) return E_POINTER;
         Log("TRACE", "ApplicationData.LocalSettings");
@@ -286,6 +401,95 @@ public:
     }
     HRESULT STDMETHODCALLTYPE SignalDataChanged() override { return changed_.InvokeAll(this, nullptr); }
 };
+class StorageFileFactory final : public Factory<IStorageFileStatics> {
+    ComPtr<IStorageFileStatics> real_;
+
+public:
+    StorageFileFactory() : Factory(L"Windows.Storage.StorageFile") {
+        OsGetActivationFactory(HStringReference(L"Windows.Storage.StorageFile").Get(), IID_PPV_ARGS(&real_));
+    }
+    HRESULT STDMETHODCALLTYPE
+    GetFileFromPathAsync(HSTRING path, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        return real_ ? real_->GetFileFromPathAsync(path, operation) : E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE
+    GetFileFromApplicationUriAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri,
+                                   __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        if (!uri || !operation) return E_POINTER;
+        *operation = nullptr;
+        HString absolute;
+        auto hr = uri->get_AbsoluteUri(absolute.GetAddressOf());
+        if (FAILED(hr)) return hr;
+        std::wstring text(absolute.GetRawBuffer(nullptr));
+        std::filesystem::path root;
+        std::wstring relative;
+        if (text.compare(0, 11, L"ms-appx:///") == 0) {
+            root = CurrentPackage().directory;
+            relative = text.substr(11);
+        } else if (text.compare(0, 14, L"ms-appdata:///") == 0) {
+            hr = ResolveDataRoot(root);
+            if (FAILED(hr)) return hr;
+            relative = text.substr(14);
+            if (relative.compare(0, 6, L"local/") == 0)
+                relative = L"Local/" + relative.substr(6);
+            else if (relative.compare(0, 8, L"roaming/") == 0)
+                relative = L"Roaming/" + relative.substr(8);
+            else if (relative.compare(0, 5, L"temp/") == 0)
+                relative = L"Temp/" + relative.substr(5);
+            else
+                return E_INVALIDARG;
+        } else {
+            return real_ ? real_->GetFileFromApplicationUriAsync(uri, operation) : E_NOTIMPL;
+        }
+        DWORD length = static_cast<DWORD>(relative.size() + 1);
+        std::wstring decoded(length, L'\0');
+        hr = UrlUnescapeW(relative.data(), decoded.data(), &length, 0);
+        if (FAILED(hr)) return hr;
+        decoded.resize(length);
+        // Reject URI components that could become a rooted or escaping path.
+        if (decoded.find_first_of(L":?#") != std::wstring::npos || decoded.find(L'\0') != std::wstring::npos)
+            return E_INVALIDARG;
+        const std::filesystem::path part(decoded);
+        if (part.is_absolute() || part.has_root_path()) return E_INVALIDARG;
+        for (const auto& segment : part)
+            if (segment == L"..") return E_INVALIDARG;
+        const auto path = (root / part).lexically_normal().wstring();
+        return GetFileFromPathAsync(HStringReference(path.c_str()).Get(), operation);
+    }
+    HRESULT STDMETHODCALLTYPE CreateStreamedFileAsync(
+        HSTRING displayNameWithExtension, ABI::Windows::Storage::IStreamedFileDataRequestedHandler* dataRequested,
+        ABI::Windows::Storage::Streams::IRandomAccessStreamReference* thumbnail,
+        __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        return real_ ? real_->CreateStreamedFileAsync(displayNameWithExtension, dataRequested, thumbnail, operation)
+                     : E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE
+    ReplaceWithStreamedFileAsync(ABI::Windows::Storage::IStorageFile* fileToReplace,
+                                 ABI::Windows::Storage::IStreamedFileDataRequestedHandler* dataRequested,
+                                 ABI::Windows::Storage::Streams::IRandomAccessStreamReference* thumbnail,
+                                 __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        return real_ ? real_->ReplaceWithStreamedFileAsync(fileToReplace, dataRequested, thumbnail, operation)
+                     : E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE
+    CreateStreamedFileFromUriAsync(HSTRING displayNameWithExtension, ABI::Windows::Foundation::IUriRuntimeClass* uri,
+                                   ABI::Windows::Storage::Streams::IRandomAccessStreamReference* thumbnail,
+                                   __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        return real_ ? real_->CreateStreamedFileFromUriAsync(displayNameWithExtension, uri, thumbnail, operation)
+                     : E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE ReplaceWithStreamedFileFromUriAsync(
+        ABI::Windows::Storage::IStorageFile* fileToReplace, ABI::Windows::Foundation::IUriRuntimeClass* uri,
+        ABI::Windows::Storage::Streams::IRandomAccessStreamReference* thumbnail,
+        __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        return real_ ? real_->ReplaceWithStreamedFileFromUriAsync(fileToReplace, uri, thumbnail, operation) : E_NOTIMPL;
+    }
+};
+HRESULT MakeStorageFileFactory(IActivationFactory** value) {
+    if (!value) return E_POINTER;
+    static auto factory = Make<StorageFileFactory>();
+    return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
+}
 class StorageFactory final : public Factory<IApplicationDataStatics> {
     ComPtr<AppData> data_;
     HRESULT initialized_ = E_UNEXPECTED;

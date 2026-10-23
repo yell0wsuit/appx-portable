@@ -1,4 +1,5 @@
 #include "registry.h"
+#include "islands/islands.h"
 #include "log.h"
 #include "package/package.h"
 #include <roapi.h>
@@ -66,8 +67,9 @@ static bool FromGame(void* returnAddress) noexcept {
     bool game = module == self;
     wchar_t path[MAX_PATH]{}, exe[MAX_PATH]{};
     if (!game && GetModuleFileNameW(module, path, MAX_PATH) && GetModuleFileNameW(nullptr, exe, MAX_PATH)) {
+        if (IslandsMode() && _wcsicmp(std::filesystem::path(path).filename().c_str(), L"clr.dll") == 0) game = true;
         const size_t prefix = wcsrchr(exe, L'\\') - exe;
-        game = _wcsnicmp(path, exe, prefix) == 0 && path[prefix] == L'\\';
+        game = game || _wcsnicmp(path, exe, prefix) == 0 && path[prefix] == L'\\';
     }
     try {
         known.emplace_back(module, game);

@@ -1,4 +1,5 @@
 #include "host.h"
+#include "islands/islands.h"
 #include "assets.h"
 #include "pointer.h"
 #include "placement.h"
@@ -113,7 +114,10 @@ static void UpdateActivation(WPARAM activation) {
     const WPARAM state = active ? (activation == WA_CLICKACTIVE ? WA_CLICKACTIVE : WA_ACTIVE) : WA_INACTIVE;
     Log("TRACE", "view activation %s", active ? "active" : "deactivated");
     CoreHostMessage(WM_ACTIVATE, state, 0);
-    XamlHostMessage(WM_ACTIVATE, state, 0);
+    if (IslandsMode())
+        IslandHostMessage(WM_ACTIVATE, state, 0);
+    else
+        XamlHostMessage(WM_ACTIVATE, state, 0);
 }
 // XAML notifications belong to the UI queue. Delivering inside ShowWindow
 // reenters OnLaunched before startup has finished.
@@ -121,7 +125,10 @@ static void ForwardWindowMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     PostHostWork(0, [message, wparam, lparam] {
         if (message != WM_ACTIVATE) {
             CoreHostMessage(message, wparam, lparam);
-            XamlHostMessage(message, wparam, lparam);
+            if (IslandsMode())
+                IslandHostMessage(message, wparam, lparam);
+            else
+                XamlHostMessage(message, wparam, lparam);
         }
         UpdateActivation(message == WM_ACTIVATE ? LOWORD(wparam) : WA_ACTIVE);
     });
@@ -147,10 +154,16 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
         return TRUE;
     }
     if (message == WM_SIZE && wparam != SIZE_MINIMIZED) {
-        // Surfaces fill the client area; DXGI stretches each buffer to its window.
-        for (HWND child = GetWindow(hwnd, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
-            SetWindowPos(child, nullptr, 0, 0, LOWORD(lparam), HIWORD(lparam),
-                         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        if (IslandsMode()) {
+            // Only resize our island. XAML also creates a token CoreWindow
+            // child; stretching it over the island intercepts real input.
+            ResizeIslandView(LOWORD(lparam), HIWORD(lparam));
+        } else {
+            // Surfaces fill the client area; DXGI stretches each buffer to its window.
+            for (HWND child = GetWindow(hwnd, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
+                SetWindowPos(child, nullptr, 0, 0, LOWORD(lparam), HIWORD(lparam),
+                             SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
     }
     if (message == WM_ACTIVATE) {
         DWORD process = 0;
@@ -275,22 +288,22 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     RECT rect{0, 0, 1024, 768};
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
     window = CreateWindowExW(0, cls.lpszClassName, CurrentPackage().displayName.c_str(),
-                             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                             CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr,
-                             nullptr, cls.hInstance, nullptr);
+                             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
+                             rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, cls.hInstance, nullptr);
     if (!window) return HRESULT_FROM_WIN32(GetLastError());
     HICON smallIcon = LoadGameIcon(GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
     HICON largeIcon = LoadGameIcon(GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON));
     if (smallIcon) SendMessageW(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
     if (largeIcon) SendMessageW(window, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(largeIcon));
     placement.Initialize(window);
-    HRESULT hr = InitializeGraphicsRedirect();
+    HRESULT hr = IslandsMode() ? S_OK : InitializeGraphicsRedirect();
     if (FAILED(hr)) Log("FAIL", "DXGI redirect initialization hr=%08lx", hr);
     if (SUCCEEDED(hr)) hr = initialize();
     if (SUCCEEDED(hr)) {
         MSG msg{};
         BOOL result;
         while ((result = GetMessageW(&msg, nullptr, 0, 0)) > 0) {
+            if (IslandsMode() && IslandPreTranslate(&msg)) continue;
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }

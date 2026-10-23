@@ -18,16 +18,12 @@ export MVK_CONFIG_LOG_LEVEL=${MVK_CONFIG_LOG_LEVEL:-0}
 export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
 wine=${WINE:-"$HOME/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine"}
 [[ -x "$wine" ]] || { echo 'Set WINE to your Wine executable.' >&2; exit 1; }
-# The executable AppxManifest.xml names; Game.exe without a manifest.
+# Share managed/native executable selection with the Windows Python launcher.
 exe=$(python3 -c '
-import pathlib, sys, xml.etree.ElementTree as ET
-manifest = pathlib.Path(sys.argv[1]) / "AppxManifest.xml"
-exe = "Game.exe"
-if manifest.is_file():
-    for element in ET.parse(manifest).iter():
-        if element.tag.rsplit("}", 1)[-1] == "Application" and element.get("Executable"):
-            exe = element.get("Executable"); break
-print(exe)' "$game")
+import pathlib, sys
+sys.path.insert(0, sys.argv[1])
+from play import launch_executable
+print(launch_executable(pathlib.Path(sys.argv[2])))' "$root/scripts" "$game")
 [[ -f "$game/$exe" && -f "$game/appxportable.dll" ]] || { echo 'Run setup.sh first.' >&2; exit 1; }
 # A crash otherwise opens Wine's crash dialog, which keeps the process alive
 # until closed and stalls the relaunch below; print the backtrace and exit.
