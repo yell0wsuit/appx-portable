@@ -13,6 +13,11 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
 add_compile_definitions(UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0603)
 add_compile_options(/W4 /EHsc /utf-8)
+# MSBuild compiles a target's files one at a time without /MP; Ninja already
+# runs them in parallel.
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
+  add_compile_options(/MP)
+endif()
 add_link_options(/DEBUG /INCREMENTAL:NO)
 # Release builds pass their tag; local builds describe the git checkout. The
 # header is refreshed on every build, so it names the commit actually built.
