@@ -16,7 +16,7 @@ SWITCHES = {
     'log': 'write failures and notes to appx-portable.log beside the game',
     'trace': 'log every traced call as well (implies --log)',
     'capture': 'save the back buffer to appx-frame.bmp on the first and every 120th frame',
-    'diagnostics': 'log access violations with stack details (implies --log)',
+    'diagnostics': 'log crashes with stack details and check the heap for damage (implies --log)',
     'passthrough': "activate the operating system's classes and only log",
 }
 

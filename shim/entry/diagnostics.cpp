@@ -1,6 +1,7 @@
 #include <windows.h>
 #include "log.h"
 #include "options.h"
+#include <atomic>
 #include <mutex>
 #include <intrin.h>
 namespace appx {
@@ -43,7 +44,10 @@ static void DescribeAddress(DWORD address, wchar_t (&module)[64], DWORD& rva) no
     rva = address - reinterpret_cast<DWORD>(handle);
 }
 static LONG CALLBACK LogFault(EXCEPTION_POINTERS* fault) {
-    if (fault->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION) return EXCEPTION_CONTINUE_SEARCH;
+    const DWORD code = fault->ExceptionRecord->ExceptionCode;
+    // Access violations, and the heap's corruption report (raised from the
+    // heap call that found the damage, so its stack names the freeing code).
+    if (code != EXCEPTION_ACCESS_VIOLATION && code != STATUS_HEAP_CORRUPTION) return EXCEPTION_CONTINUE_SEARCH;
     auto* context = fault->ContextRecord;
     LogThreadStorage();
     HMODULE module{};
@@ -53,9 +57,12 @@ static LONG CALLBACK LogFault(EXCEPTION_POINTERS* fault) {
         GetModuleFileNameW(module, path, MAX_PATH);
         Log("FAIL", "fault module=%ls rva=%08lx", path, context->Eip - reinterpret_cast<DWORD>(module));
     }
-    Log("FAIL", "access violation ip=%08lx address=%08lx eax=%08lx ecx=%08lx edx=%08lx esp=%08lx ebp=%08lx",
-        context->Eip, static_cast<DWORD>(fault->ExceptionRecord->ExceptionInformation[1]), context->Eax, context->Ecx,
-        context->Edx, context->Esp, context->Ebp);
+    if (code == STATUS_HEAP_CORRUPTION)
+        Log("FAIL", "heap corruption ip=%08lx esp=%08lx ebp=%08lx", context->Eip, context->Esp, context->Ebp);
+    else
+        Log("FAIL", "access violation ip=%08lx address=%08lx eax=%08lx ecx=%08lx edx=%08lx esp=%08lx ebp=%08lx",
+            context->Eip, static_cast<DWORD>(fault->ExceptionRecord->ExceptionInformation[1]), context->Eax,
+            context->Ecx, context->Edx, context->Esp, context->Ebp);
     // Frame-pointer-omitting game functions hide their callers from the ebp
     // walk below, so also scan the stack for words inside the game executable's image.
     // Windows relocates the image (ASLR); RVAs match a disassembly at any base.
@@ -95,6 +102,22 @@ static LONG CALLBACK LogFault(EXCEPTION_POINTERS* fault) {
         frame = words[0];
     }
     return EXCEPTION_CONTINUE_SEARCH;
+}
+// With --diagnostics, heap damage is looked for at each Windows Runtime
+// activation and periodically while the game runs, so the log names what
+// happened just before it rather than the free that finally trips over it.
+void CheckHeaps(const char* after) noexcept {
+    if (!GetOptions().diagnostics) return;
+    static std::atomic<bool> reported{false};
+    if (reported) return;
+    HANDLE heaps[64];
+    const DWORD count = GetProcessHeaps(64, heaps);
+    for (DWORD i = 0; i < count && i < 64; ++i) {
+        if (HeapValidate(heaps[i], 0, nullptr)) continue;
+        if (reported.exchange(true)) return;
+        Log("FAIL", "heap %p is damaged; first seen after %s", heaps[i], after);
+        return;
+    }
 }
 void InitializeDiagnostics() {
     if (!GetOptions().diagnostics) return;

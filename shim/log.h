@@ -7,6 +7,8 @@ void LogActivation(HSTRING name, REFIID iid, HRESULT result) noexcept;
 bool TraceMode() noexcept;
 void LogThreadStorage() noexcept;
 void LogMissingInterface(const char* type, REFIID iid) noexcept;
+// With --diagnostics: logs, once, the first damaged process heap found now.
+void CheckHeaps(const char* after) noexcept;
 }
 // For WRL RuntimeClasses using InspectableClass, which calls this hook before
 // its own QueryInterface: logs interfaces callers asked for but we lack.

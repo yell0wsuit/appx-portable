@@ -17,6 +17,47 @@ HRESULT CurrentApplication(IApplication** value) {
     if (!value) return E_POINTER;
     return current.CopyTo(value);
 }
+// The launch splash screen. Windows dismisses its splash once the view has
+// activated; games wait for Dismissed (or subscribe unconditionally), so it
+// must exist and must fire.
+using DismissedHandler = __FITypedEventHandler_2_Windows__CApplicationModel__CActivation__CSplashScreen_IInspectable;
+class Splash final : public RuntimeClass<RuntimeClassFlags<WinRt>, ISplashScreen, FtmBase> {
+    InspectableClass(L"Windows.ApplicationModel.Activation.SplashScreen", BaseTrust);
+    EventSource<DismissedHandler> dismissed_;
+    std::atomic<bool> fired_{false};
+
+public:
+    HRESULT STDMETHODCALLTYPE get_ImageLocation(ABI::Windows::Foundation::Rect* value) override {
+        if (!value) return E_POINTER;
+        // The 620x300 Windows 8 splash image, centered in the window, in DIPs.
+        RECT client{0, 0, 1024, 768};
+        if (HostWindow()) GetClientRect(HostWindow(), &client);
+        const float width = 620, height = 300;
+        *value = {(client.right - width) / 2, (client.bottom - height) / 2, width, height};
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE add_Dismissed(DismissedHandler* handler, EventRegistrationToken* token) override {
+        return dismissed_.Add(handler, token);
+    }
+    HRESULT STDMETHODCALLTYPE remove_Dismissed(EventRegistrationToken token) override {
+        return dismissed_.Remove(token);
+    }
+    void Dismiss() {
+        if (fired_.exchange(true)) return;
+        Log("TRACE", "SplashScreen.Dismissed");
+        dismissed_.InvokeAll(this, nullptr);
+    }
+};
+static ComPtr<Splash> SharedSplash() {
+    static auto splash = Make<Splash>();
+    return splash;
+}
+// Queued behind the activation, so handlers run after the view is up.
+void DismissSplashScreen() {
+    PostHostWork(0, [] {
+        if (auto splash = SharedSplash()) splash->Dismiss();
+    });
+}
 class LaunchArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, ILaunchActivatedEventArgs, IActivatedEventArgs> {
     InspectableClass(L"Windows.ApplicationModel.Activation.LaunchActivatedEventArgs", BaseTrust);
 
@@ -44,12 +85,15 @@ public:
     HRESULT STDMETHODCALLTYPE get_SplashScreen(ISplashScreen** v) override {
         if (!v) return E_POINTER;
         *v = nullptr;
-        return S_OK;
+        auto splash = SharedSplash();
+        return splash ? splash.CopyTo(v) : E_OUTOFMEMORY;
     }
 };
 class InitParams final : public RuntimeClass<RuntimeClassFlags<WinRt>, IApplicationInitializationCallbackParams> {
     InspectableClass(L"Windows.UI.Xaml.ApplicationInitializationCallbackParams", BaseTrust);
 };
+class Application;
+static Application* live = nullptr;  // the game's Application, for Suspending
 class Application final : public Composable<Application, DefaultIApplication, DefaultIApplicationOverrides> {
     EventSource<ISuspendingEventHandler> suspending_;
     EventSource<ABI::Windows::Foundation::IEventHandler<IInspectable*>> resuming_;
@@ -59,7 +103,13 @@ class Application final : public Composable<Application, DefaultIApplication, De
 
 public:
     static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Application";
-    explicit Application(IInspectable* outer) : Composable(outer) {}
+    explicit Application(IInspectable* outer) : Composable(outer) { live = this; }
+    ~Application() {
+        if (live == this) live = nullptr;
+    }
+    HRESULT RaiseSuspending(IInspectable* sender, ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
+        return suspending_.InvokeAll(sender, args);
+    }
     HRESULT STDMETHODCALLTYPE get_Resources(IResourceDictionary** value) override {
         if (!value) return E_POINTER;
         return resources_.CopyTo(value);
@@ -173,6 +223,7 @@ public:
                         if (!args) return E_OUTOFMEMORY;
                         result = overrides->OnLaunched(args.Get());
                         Log("TRACE", "OnLaunched hr=%08lx", result);
+                        if (SUCCEEDED(result)) DismissSplashScreen();
                         return result;
                     });
                 } catch (const std::bad_alloc&) {
@@ -196,5 +247,14 @@ public:
 HRESULT MakeApplicationFactory(IActivationFactory** value) {
     auto factory = Make<ApplicationFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
+}
+// Application.Suspending, which XAML games save in.
+void RaiseApplicationSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
+    if (live) live->RaiseSuspending(current.Get(), args);
+}
+HRESULT MakeLaunchArgs(IActivatedEventArgs** value) {
+    if (!value) return E_POINTER;
+    auto args = Make<LaunchArgs>();
+    return args ? args.CopyTo(value) : E_OUTOFMEMORY;
 }
 }

@@ -16,6 +16,8 @@ namespace appx {
 void InitializeDiagnostics();
 void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam);
 void XamlHostMessage(UINT message, WPARAM wparam, LPARAM lparam);
+void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam);
+bool ExitLikeStoreApp();
 static HWND window;
 static DWORD thread;
 static std::mutex queueMutex;
@@ -93,6 +95,7 @@ void ActivateHostWindow() {
     if (window) SendMessageW(window, ActivateMessage, 0, 0);
 }
 bool IsHostFullscreen() noexcept { return placement.IsFullscreen(); }
+void SaveHostPlacement() noexcept { placement.SaveNow(); }
 HRESULT SetHostFullscreen(bool value) {
     return window ? static_cast<HRESULT>(SendMessageW(window, FullscreenMessage, value, 0)) : RO_E_CLOSED;
 }
@@ -125,6 +128,7 @@ static void ForwardWindowMessage(UINT message, WPARAM wparam, LPARAM lparam) {
 }
 static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
     PointerHostMessage(message, wparam, lparam);
+    CoreInputMessage(message, wparam, lparam);
     placement.OnMessage(message, wparam);
     if (message == FullscreenMessage) return placement.SetFullscreen(wparam != 0);
     if (message == ActivateMessage) {
@@ -191,6 +195,9 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
         if (work) work();
         return 0;
     }
+    // A Store game is suspended and ended, as Windows ends one (never returns);
+    // without a package, the window is destroyed normally.
+    if (message == WM_CLOSE && ExitLikeStoreApp()) return 0;
     if (message == WM_DESTROY) {
         PostQuitMessage(0);
         return 0;

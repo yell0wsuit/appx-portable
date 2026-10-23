@@ -2,6 +2,7 @@
 #include "host.h"
 #include "log.h"
 #include <atomic>
+#include <cstdio>
 #include "com/async_action.h"
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Core;
@@ -27,6 +28,12 @@ public:
     }
     HRESULT STDMETHODCALLTYPE ProcessEvents(CoreProcessEventsOption options) override {
         if (HostThread() != GetCurrentThreadId()) return RPC_E_WRONG_THREAD;
+        static unsigned calls = 0;
+        if (++calls % 30 == 0) {
+            char after[48];
+            snprintf(after, sizeof(after), "CoreDispatcher.ProcessEvents call %u", calls);
+            CheckHeaps(after);
+        }
         MSG message{};
         if (options == CoreProcessEventsOption_ProcessUntilQuit) {
             while (GetMessageW(&message, nullptr, 0, 0) > 0) {

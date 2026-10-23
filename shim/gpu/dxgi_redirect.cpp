@@ -15,7 +15,10 @@ using Microsoft::WRL::ComPtr;
 namespace appx {
 using CompositionCall = HRESULT(STDMETHODCALLTYPE*)(IDXGIFactory2*, IUnknown*, const DXGI_SWAP_CHAIN_DESC1*,
                                                     IDXGIOutput*, IDXGISwapChain1**);
+using CoreWindowCall = HRESULT(STDMETHODCALLTYPE*)(IDXGIFactory2*, IUnknown*, IUnknown*, const DXGI_SWAP_CHAIN_DESC1*,
+                                                   IDXGIOutput*, IDXGISwapChain1**);
 static CompositionCall original;
+static CoreWindowCall originalCoreWindow;
 using PresentCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain*, UINT, UINT);
 using Present1Call = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain1*, UINT, UINT, const DXGI_PRESENT_PARAMETERS*);
 using SetMatrixCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain2*, const DXGI_MATRIX_3X2_F*);
@@ -237,8 +240,18 @@ static HRESULT STDMETHODCALLTYPE CreateForHost(IDXGIFactory2* factory, IUnknown*
         }
     }
     if (surface) PostMessageW(surface, WM_CLOSE, 0, 0);
-    Log(FAILED(hr) ? "FAIL" : "TRACE", "DXGI composition -> HWND %ux%u hr=%08lx", adjusted.Width, adjusted.Height, hr);
+    Log(FAILED(hr) ? "FAIL" : "TRACE", "DXGI swap chain -> HWND %ux%u hr=%08lx", adjusted.Width, adjusted.Height, hr);
     return hr;
+}
+// CoreWindow games (no XAML) make their swap chain for the CoreWindow; the
+// shim's CoreWindow has no real window behind it, so it goes to the host the
+// same way. Zero sizes mean the window's size for both kinds.
+static HRESULT STDMETHODCALLTYPE CreateForCoreWindow(IDXGIFactory2* factory, IUnknown* device, IUnknown* window,
+                                                     const DXGI_SWAP_CHAIN_DESC1* desc, IDXGIOutput* restrictTo,
+                                                     IDXGISwapChain1** value) {
+    if (!HostWindow()) return originalCoreWindow(factory, device, window, desc, restrictTo, value);
+    Log("TRACE", "DXGI CreateSwapChainForCoreWindow redirected to the host window");
+    return CreateForHost(factory, device, desc, restrictTo, value);
 }
 HRESULT InitializeGraphicsRedirect() {
     static std::once_flag once;
@@ -251,16 +264,19 @@ HRESULT InitializeGraphicsRedirect() {
         Log(FAILED(result) ? "FAIL" : "INFO", "CreateDXGIFactory1 hr=%08lx", result);
         if (FAILED(result)) return;
         auto* table = *reinterpret_cast<void***>(factory.Get());
-        // IDXGIFactory2 slot 24, copied from dxgi1_2.h's SDK ABI layout.
+        // IDXGIFactory2 slots 16 (CreateSwapChainForCoreWindow) through 24
+        // (CreateSwapChainForComposition), from dxgi1_2.h's SDK ABI layout.
         DWORD protection;
-        if (!VirtualProtect(static_cast<void*>(&table[24]), sizeof(void*), PAGE_READWRITE, &protection)) {
+        if (!VirtualProtect(static_cast<void*>(&table[16]), 9 * sizeof(void*), PAGE_READWRITE, &protection)) {
             result = HRESULT_FROM_WIN32(GetLastError());
             return;
         }
+        originalCoreWindow = reinterpret_cast<CoreWindowCall>(table[16]);
         original = reinterpret_cast<CompositionCall>(table[24]);
+        InterlockedExchangePointer(&table[16], reinterpret_cast<void*>(&CreateForCoreWindow));
         InterlockedExchangePointer(&table[24], reinterpret_cast<void*>(&CreateForHost));
         DWORD ignored;
-        VirtualProtect(static_cast<void*>(&table[24]), sizeof(void*), protection, &ignored);
+        VirtualProtect(static_cast<void*>(&table[16]), 9 * sizeof(void*), protection, &ignored);
         result = S_OK;
     });
     return result;

@@ -83,6 +83,13 @@
       "ABI::Windows::UI::Notifications::IScheduledToastNotificationFactory"
     ]
   },
+  "package.h": {
+    "header": "windows.applicationmodel.h",
+    "interfaces": [
+      "ABI::Windows::ApplicationModel::IPackage",
+      "ABI::Windows::ApplicationModel::IPackageId"
+    ]
+  },
   "pointer.h": {
     "header": "windows.ui.input.h",
     "interfaces": [
@@ -94,6 +101,20 @@
     "header": "windows.ui.xaml.input.h",
     "interfaces": [
       "ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs"
+    ]
+  },
+  "settings_pane.h": {
+    "header": "windows.ui.applicationsettings.h",
+    "interfaces": [
+      "ABI::Windows::UI::ApplicationSettings::ISettingsPane",
+      "ABI::Windows::UI::ApplicationSettings::ISettingsPaneStatics"
+    ]
+  },
+  "share.h": {
+    "header": "windows.applicationmodel.datatransfer.h",
+    "interfaces": [
+      "ABI::Windows::ApplicationModel::DataTransfer::IDataTransferManager",
+      "ABI::Windows::ApplicationModel::DataTransfer::IDataTransferManagerStatics"
     ]
   },
   "storage.h": {
@@ -117,6 +138,13 @@
     "header": "windows.storage.streams.h",
     "interfaces": [
       "ABI::Windows::Storage::Streams::IDataReader"
+    ]
+  },
+  "tiles.h": {
+    "header": "windows.ui.notifications.h",
+    "interfaces": [
+      "ABI::Windows::UI::Notifications::ITileUpdater",
+      "ABI::Windows::UI::Notifications::ITileUpdateManagerStatics"
     ]
   },
   "uicore.h": {

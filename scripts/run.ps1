@@ -3,7 +3,7 @@
 #   -Log          failures and notes in appx-portable.log beside the game
 #   -Trace        every traced call as well (implies -Log)
 #   -Capture      back buffer to appx-frame.bmp on the first and every 120th frame
-#   -Diagnostics  access violations with stack details (implies -Log)
+#   -Diagnostics  crashes with stack details, and heap checks (implies -Log)
 #   -Passthrough  activate the operating system's classes and only log
 [CmdletBinding()]
 param(

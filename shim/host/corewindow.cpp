@@ -6,6 +6,9 @@
 #include <wrl/event.h>
 #include "host/dispatcher.h"
 #include "platform/cursor.h"
+#include "com/factory.h"
+#include "host/pointer.h"
+#include <windowsx.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Core;
 namespace appx {
@@ -70,6 +73,65 @@ public:
             Log("TRACE", "CoreWindow VisibilityChanged deliver visible=%u", static_cast<unsigned>(wparam));
             auto args = Make<VisibilityArgs>(wparam != 0);
             if (args) eventVisibilityChanged_.InvokeAll(this, args.Get());
+        }
+    }
+    // Mouse and keyboard, raised while the message is dispatched, as a real
+    // CoreWindow raises them inside ProcessEvents.
+    void OnInput(UINT message, WPARAM wparam, LPARAM lparam) {
+        using ABI::Windows::System::VirtualKeyModifiers;
+        auto modifiers = [] {
+            int keys = 0;
+            if (::GetKeyState(VK_CONTROL) & 0x8000) keys |= ABI::Windows::System::VirtualKeyModifiers_Control;
+            if (::GetKeyState(VK_MENU) & 0x8000) keys |= ABI::Windows::System::VirtualKeyModifiers_Menu;
+            if (::GetKeyState(VK_SHIFT) & 0x8000) keys |= ABI::Windows::System::VirtualKeyModifiers_Shift;
+            if ((::GetKeyState(VK_LWIN) | ::GetKeyState(VK_RWIN)) & 0x8000)
+                keys |= ABI::Windows::System::VirtualKeyModifiers_Windows;
+            return static_cast<VirtualKeyModifiers>(keys);
+        };
+        switch (message) {
+        case WM_LBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONUP:
+        case WM_MOUSEMOVE:
+        case WM_MOUSEWHEEL: {
+            POINT position{static_cast<short>(LOWORD(lparam)), static_cast<short>(HIWORD(lparam))};
+            if (message == WM_MOUSEWHEEL) ScreenToClient(HostWindow(), &position);
+            const bool pressed = message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN;
+            const bool released = message == WM_LBUTTONUP || message == WM_RBUTTONUP || message == WM_MBUTTONUP;
+            // A drag keeps reporting outside the window, as with a captured pointer.
+            if (pressed) SetCapture(HostWindow());
+            if (released && !(wparam & (MK_LBUTTON | MK_RBUTTON | MK_MBUTTON))) ReleaseCapture();
+            ComPtr<ABI::Windows::UI::Input::IPointerPoint> point;
+            if (FAILED(MakeMousePoint(position, message == WM_MOUSEWHEEL ? GET_KEYSTATE_WPARAM(wparam) : wparam, message,
+                                      &point)))
+                return;
+            auto args = Make<CorePointerArgs>(point.Get(), modifiers());
+            if (!args) return;
+            if (pressed) eventPointerPressed_.InvokeAll(this, args.Get());
+            else if (released) eventPointerReleased_.InvokeAll(this, args.Get());
+            else if (message == WM_MOUSEMOVE) eventPointerMoved_.InvokeAll(this, args.Get());
+            else eventPointerWheelChanged_.InvokeAll(this, args.Get());
+            return;
+        }
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+        case WM_KEYUP:
+        case WM_SYSKEYUP: {
+            const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
+            auto args = Make<KeyArgs>(static_cast<ABI::Windows::System::VirtualKey>(wparam), KeyStatus(lparam, up));
+            if (!args) return;
+            if (up) eventKeyUp_.InvokeAll(this, args.Get());
+            else eventKeyDown_.InvokeAll(this, args.Get());
+            return;
+        }
+        case WM_CHAR: {
+            auto args = Make<CharacterArgs>(static_cast<UINT32>(wparam), KeyStatus(lparam, false));
+            if (args) eventCharacterReceived_.InvokeAll(this, args.Get());
+            return;
+        }
         }
     }
     HRESULT STDMETHODCALLTYPE get_Dispatcher(ABI::Windows::UI::Core::ICoreDispatcher** value) override {
@@ -309,5 +371,28 @@ HRESULT MakeCoreWindow(ICoreWindow** value) {
 }
 void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (coreWindow) coreWindow->OnMessage(message, wparam, lparam);
+}
+// Only CoreWindow games get input through CoreWindow events; XAML games get
+// it through their elements (see pointer.cpp), never both.
+static bool coreInput = false;
+void EnableCoreWindowInput() noexcept { coreInput = true; }
+void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (coreInput && coreWindow) coreWindow->OnInput(message, wparam, lparam);
+}
+// CoreWindow.GetForCurrentThread: the game's window on the UI thread, as on
+// Windows, and none on any other thread.
+class CoreWindowFactory final : public Factory<ICoreWindowStatic> {
+public:
+    CoreWindowFactory() : Factory(L"Windows.UI.Core.CoreWindow") {}
+    HRESULT STDMETHODCALLTYPE GetForCurrentThread(ICoreWindow** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        if (!HostThread() || GetCurrentThreadId() != HostThread()) return S_OK;
+        return MakeCoreWindow(value);
+    }
+};
+HRESULT MakeCoreWindowFactory(IActivationFactory** value) {
+    static auto factory = Make<CoreWindowFactory>();
+    return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
 }

@@ -1,11 +1,13 @@
 #include "generated/storage.h"
 #include "registry.h"
 #include "settings.h"
+#include "storage.h"
 #include "com/factory.h"
 #include "package/package.h"
 #include <roapi.h>
 #include <shlobj.h>
 #include <filesystem>
+#include <mutex>
 #include <vector>
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
@@ -142,6 +144,50 @@ public:
         return S_OK;
     }
 };
+// Windows' StorageFolder for a path, waited for on its thread-pool completion.
+static HRESULT OsStorageFolder(const std::wstring& path, IStorageFolder** value) {
+    ComPtr<IStorageFolderStatics> statics;
+    HRESULT hr = OsGetActivationFactory(HStringReference(RuntimeClass_Windows_Storage_StorageFolder).Get(),
+                                        IID_PPV_ARGS(&statics));
+    ComPtr<__FIAsyncOperation_1_Windows__CStorage__CStorageFolder> operation;
+    if (SUCCEEDED(hr))
+        hr = statics->GetFolderFromPathAsync(HStringReference(path.c_str(), static_cast<unsigned>(path.size())).Get(),
+                                             &operation);
+    if (FAILED(hr)) return hr;
+    Event done(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (!done.IsValid()) return HRESULT_FROM_WIN32(GetLastError());
+    HANDLE signal = done.Get();
+    auto handler = Callback<Implements<RuntimeClassFlags<ClassicCom>,
+                                       __FIAsyncOperationCompletedHandler_1_Windows__CStorage__CStorageFolder, FtmBase>>(
+        [signal](__FIAsyncOperation_1_Windows__CStorage__CStorageFolder*, ABI::Windows::Foundation::AsyncStatus) {
+            SetEvent(signal);
+            return S_OK;
+        });
+    if (!handler) return E_OUTOFMEMORY;
+    hr = operation->put_Completed(handler.Get());
+    if (FAILED(hr)) return hr;
+    // A plain wait: the lookup completes on the thread pool, and pumping here
+    // (CoWaitForMultipleHandles) would run queued game work inside a game call.
+    const DWORD waited = WaitForSingleObject(signal, 10000);
+    if (waited != WAIT_OBJECT_0) {
+        ComPtr<ABI::Windows::Foundation::IAsyncInfo> info;
+        if (SUCCEEDED(operation.As(&info))) info->Cancel();
+        return waited == WAIT_TIMEOUT ? HRESULT_FROM_WIN32(ERROR_TIMEOUT) : HRESULT_FROM_WIN32(GetLastError());
+    }
+    return operation->GetResults(value);
+}
+HRESULT MakeStorageFolder(const std::wstring& path, IStorageFolder** value) {
+    if (!value) return E_POINTER;
+    *value = nullptr;
+    // Windows' folder supports everything games do with it (create, open,
+    // enumerate); the shim's own covers only the path, for Wine, whose
+    // Windows.Storage is incomplete.
+    const HRESULT hr = OsStorageFolder(path, value);
+    if (SUCCEEDED(hr) && *value) return hr;
+    Log("TRACE", "StorageFolder %ls from Windows failed hr=%08lx; using the path-only folder", path.c_str(), hr);
+    auto folder = Make<Folder>(path);
+    return folder ? folder.CopyTo(value) : E_OUTOFMEMORY;
+}
 class Container final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIApplicationDataContainer, FtmBase> {
     InspectableClass(L"Windows.Storage.ApplicationDataContainer", BaseTrust);
     ApplicationDataLocality locality_;
@@ -168,9 +214,23 @@ public:
 };
 class AppData final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIApplicationData, FtmBase> {
     InspectableClass(L"Windows.Storage.ApplicationData", BaseTrust);
-    ComPtr<Folder> local_, roaming_, temporary_;
+    // Folders are made on first use: Windows' StorageFolder is asynchronous.
+    struct LazyFolder {
+        std::wstring path;
+        ComPtr<IStorageFolder> folder;
+    } local_, roaming_, temporary_;
+    std::mutex folders_;
     ComPtr<Container> localSettings_, roamingSettings_;
     EventSource<__FITypedEventHandler_2_Windows__CStorage__CApplicationData_IInspectable> changed_;
+    HRESULT FolderOf(LazyFolder& lazy, IStorageFolder** value) {
+        if (!value) return E_POINTER;
+        std::lock_guard<std::mutex> lock(folders_);
+        if (!lazy.folder) {
+            const HRESULT hr = MakeStorageFolder(lazy.path, &lazy.folder);
+            if (FAILED(hr)) return hr;
+        }
+        return lazy.folder.CopyTo(value);
+    }
 
 public:
     HRESULT Initialize() {
@@ -179,15 +239,15 @@ public:
         try {
             hr = ResolveDataRoot(root);
             if (FAILED(hr)) return hr;
-            local_ = Make<Folder>((root / L"Local").wstring());
-            roaming_ = Make<Folder>((root / L"Roaming").wstring());
-            temporary_ = Make<Folder>((root / L"Temp").wstring());
+            local_.path = (root / L"Local").wstring();
+            roaming_.path = (root / L"Roaming").wstring();
+            temporary_.path = (root / L"Temp").wstring();
         } catch (...) {
             return E_FAIL;
         }
         localSettings_ = Make<Container>(ApplicationDataLocality_Local);
         roamingSettings_ = Make<Container>(ApplicationDataLocality_Roaming);
-        if (!local_ || !roaming_ || !temporary_ || !localSettings_ || !roamingSettings_) return E_OUTOFMEMORY;
+        if (!localSettings_ || !roamingSettings_) return E_OUTOFMEMORY;
         hr = localSettings_->Initialize((root / L"Local" / L"settings.json").wstring());
         return FAILED(hr) ? hr : roamingSettings_->Initialize((root / L"Roaming" / L"settings.json").wstring());
     }
@@ -197,18 +257,11 @@ public:
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_LocalFolder(IStorageFolder** value) override {
-        if (!value) return E_POINTER;
         Log("TRACE", "ApplicationData.LocalFolder");
-        return local_.CopyTo(value);
+        return FolderOf(local_, value);
     }
-    HRESULT STDMETHODCALLTYPE get_RoamingFolder(IStorageFolder** value) override {
-        if (!value) return E_POINTER;
-        return roaming_.CopyTo(value);
-    }
-    HRESULT STDMETHODCALLTYPE get_TemporaryFolder(IStorageFolder** value) override {
-        if (!value) return E_POINTER;
-        return temporary_.CopyTo(value);
-    }
+    HRESULT STDMETHODCALLTYPE get_RoamingFolder(IStorageFolder** value) override { return FolderOf(roaming_, value); }
+    HRESULT STDMETHODCALLTYPE get_TemporaryFolder(IStorageFolder** value) override { return FolderOf(temporary_, value); }
     HRESULT STDMETHODCALLTYPE get_LocalSettings(IApplicationDataContainer** value) override {
         if (!value) return E_POINTER;
         Log("TRACE", "ApplicationData.LocalSettings");

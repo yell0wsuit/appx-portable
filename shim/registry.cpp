@@ -47,6 +47,15 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
         if (wcscmp(text, L"Windows.UI.Xaml.Application") == 0) return appx::MakeApplicationFactory(factory);
         if (wcscmp(text, L"Windows.UI.Xaml.DispatcherTimer") == 0) return appx::MakeDispatcherTimerFactory(factory);
         if (wcscmp(text, L"Windows.UI.Core.CoreCursor") == 0) return appx::MakeCursorFactory(factory);
+        if (wcscmp(text, L"Windows.UI.Core.CoreWindow") == 0) return appx::MakeCoreWindowFactory(factory);
+        if (wcscmp(text, L"Windows.ApplicationModel.Package") == 0) return appx::MakePackageFactory(factory);
+        if (wcscmp(text, L"Windows.ApplicationModel.DataTransfer.DataTransferManager") == 0)
+            return appx::MakeShareFactory(factory);
+        if (wcscmp(text, L"Windows.UI.ApplicationSettings.SettingsPane") == 0)
+            return appx::MakeSettingsPaneFactory(factory);
+        if (wcscmp(text, L"Windows.UI.Notifications.TileUpdateManager") == 0) return appx::MakeTileFactory(factory);
+        if (wcsncmp(text, L"Microsoft.Xbox.", 15) == 0) return appx::MakeXboxFactory(text, factory);
+        if (wcsncmp(text, L"HttpClientCSharp.", 17) == 0) return appx::MakeHttpClientCSharpFactory(text, factory);
         if (wcscmp(text, L"Windows.System.Threading.ThreadPoolTimer") == 0)
             return appx::MakeThreadPoolFactory(true, factory);
         if (wcscmp(text, L"Windows.System.Threading.ThreadPool") == 0)

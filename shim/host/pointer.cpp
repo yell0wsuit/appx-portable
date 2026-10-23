@@ -141,6 +141,12 @@ public:
         return properties_.CopyTo(value);
     }
 };
+HRESULT MakeMousePoint(POINT position, WPARAM buttons, UINT message, Input::IPointerPoint** value) {
+    if (!value) return E_POINTER;
+    *value = nullptr;
+    auto point = Make<MousePoint>(Point{static_cast<float>(position.x), static_cast<float>(position.y)}, buttons, message);
+    return point ? point.CopyTo(value) : E_OUTOFMEMORY;
+}
 class MouseArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, Xaml::Input::DefaultIPointerRoutedEventArgs,
                                             Xaml::IRoutedEventArgs> {
     InspectableClass(L"Windows.UI.Xaml.Input.PointerRoutedEventArgs", BaseTrust);

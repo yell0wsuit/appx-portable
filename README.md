@@ -11,7 +11,9 @@ Neither games nor Microsoft runtime files are included in this repository.
 | Game | Package | Status |
 | --- | --- | --- |
 | Cut the Rope 2 | `ZeptoLabUKLimited.CuttheRope2` 1.0.0.46 (x86) | Plays: gameplay, saves, resizable window, borderless fullscreen |
-| Fruit Ninja | `HalfbrickStudiosPtyLtd.FruitNinja` 1.8.1.66 (x86) | In progress |
+| Fruit Ninja | `HalfbrickStudiosPtyLtd.FruitNinja` 1.8.1.66 (x86) | Plays: menus, slicing with the mouse, saves, resizable window. Xbox LIVE shows as disconnected |
+
+Online services are offline: Xbox LIVE for Windows 8 and other game services have shut down, so sign-in, leaderboards and similar features report no connection, and nothing is sent. There is no Store license, so a game with a trial mode runs as it would without a purchase.
 
 Other games built the same way may work, or fail in a way the log explains. Games whose interface is C# XAML (such as Bejeweled LIVE) need a different hosting mode that is not here yet. HTML/JavaScript Store apps cannot be supported.
 
@@ -79,11 +81,11 @@ SaveLocation=game
 
 `<package>` is the identity name from the game's manifest, so games never share saves. If the folder cannot be written, saves go to `documents`, then `appdata`. Changing the location does not move existing saves.
 
-Press **F11** or **Alt+Enter** to toggle borderless fullscreen. Window size, position, and mode are remembered in `Local\window.ini` inside the save folder; delete it with the game closed to reset them. The game keeps running when it loses focus and pauses when minimized.
+Press **F11** or **Alt+Enter** to toggle borderless fullscreen. Window size, position, and mode are remembered in `Local\window.ini` inside the save folder; delete it with the game closed to reset them. The game keeps running when it loses focus and pauses when minimized. Closing the window suspends the game, which saves, and then ends it.
 
 ## Troubleshooting
 
-- **Need a log:** start the game with `--log` (for example `.\Game.exe --log` in PowerShell, from the game folder). The log is `appx-portable.log` beside the executable, and the two previous runs are kept as `appx-portable.1.log` and `appx-portable.2.log`. Its first lines name the appx-portable version and the package it found. `--trace` logs every Windows Runtime class the game activates; `--diagnostics` adds crash details. Both imply `--log`.
+- **Need a log:** start the game with `--log` (for example `.\Game.exe --log` in PowerShell, from the game folder). The log is `appx-portable.log` beside the executable, and the two previous runs are kept as `appx-portable.1.log` and `appx-portable.2.log`. Its first lines name the appx-portable version and the package it found. `--trace` logs every Windows Runtime class the game activates; `--diagnostics` adds crash details and checks the heap for damage as the game runs (slower). Both imply `--log`.
 - **Setup reports a missing file:** check that the source folder is a complete package extraction (with `AppxManifest.xml`), and that the VCLibs DLLs the manifest depends on are beside it or in the `-RuntimeDirectory` folder.
 - **The game fails to start or crashes after loading:** check the log. appx-portable decodes percent-encoded file names itself at startup, so the game folder must be writable; staging with setup avoids the problem.
 - **Windows 8/8.1 says the app can only run in an app container:** run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\patch_exe.ps1 -Exe "C:\Games\CutTheRope2\Game.exe"`. It creates `Game.desktop.exe` beside the original with only the executable's AppContainer flag cleared, and never overwrites anything. If the desktop copy then fails with `0xC000A200`, the VCLibs DLLs carry the flag too: add `-IncludeRuntime` to create a `desktop` folder with patched copies of the executable and runtime DLLs. Gameplay on Windows 8/8.1 itself remains unverified.
@@ -91,7 +93,9 @@ Press **F11** or **Alt+Enter** to toggle borderless fullscreen. Window size, pos
 
 ## How it works
 
-The proxy DLLs load `appxportable.dll` while the game starts. It hooks Windows Runtime activation (`RoGetActivationFactory`) and, for calls from the game's own modules, answers with its own classes where Windows cannot serve an unpackaged process: `CoreApplication` and `CoreWindow` hosted on a normal window, the XAML objects games draw their swap chain into, `ApplicationData`, `CurrentApp`, and others. Everything else goes to Windows unchanged. Classes a package registers for itself in its manifest are loaded from their DLLs in the game folder, as an installed package would. Swap chains made for a XAML panel are redirected to a child window of the game's desktop window.
+The proxy DLLs load `appxportable.dll` while the game starts. It hooks Windows Runtime activation (`RoGetActivationFactory`) and, for calls from the game's own modules, answers with its own classes where Windows cannot serve an unpackaged process: the app lifecycle (`CoreApplication`, both for XAML games and for games that run their own `IFrameworkView` loop), a `CoreWindow` hosted on a normal window with its mouse and keyboard events, the XAML objects games draw their swap chain into, `ApplicationData`, `Package`, `CurrentApp`, the Share and Settings charms, live tiles, and offline stand-ins for the Xbox LIVE SDK and similar service libraries. Everything else goes to Windows unchanged. Classes a package registers for itself in its manifest are loaded from their DLLs in the game folder, as an installed package would. Swap chains made for a XAML panel or a `CoreWindow` are redirected to a child window of the game's desktop window.
+
+Closing the window ends a game the way Windows 8 ends a Store app: the game is suspended, so it saves, and the process then ends. Store games never ran their own teardown on Windows, and some (Fruit Ninja, Cut the Rope 2) crash in it.
 
 See the [building guide](docs/building.md) for compilation, tests, and code generation.
 

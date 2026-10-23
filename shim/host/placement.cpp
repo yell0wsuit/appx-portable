@@ -212,6 +212,11 @@ void WindowPlacement::Save() {
     if (!WritePrivateProfileStringW(L"window", L"State", state, path_.c_str()))
         Log("FAIL", "saving window state error=%lu", GetLastError());
 }
+void WindowPlacement::SaveNow() {
+    if (!window_) return;
+    KillTimer(window_, SaveTimer);
+    Save();
+}
 void WindowPlacement::OnMessage(UINT message, WPARAM wparam) {
     if (!window_) return;
     if (message == WM_TIMER && wparam == SaveTimer) {

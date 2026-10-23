@@ -21,5 +21,7 @@ public:
     bool IsFullscreen() const noexcept { return fullscreen_; }
     HRESULT SetFullscreen(bool value);
     void OnMessage(UINT message, WPARAM wparam);
+    // What WM_DESTROY does, for exits that never destroy the window.
+    void SaveNow();
 };
 }

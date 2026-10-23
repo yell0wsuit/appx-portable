@@ -75,6 +75,13 @@ void LogMissingInterface(const char* type, REFIID iid) noexcept {
 void LogActivation(HSTRING name, REFIID iid, HRESULT result) noexcept {
     LogThreadStorage();
     const wchar_t* text = WindowsGetStringRawBuffer(name, nullptr);
+    if (GetOptions().diagnostics) {
+        static wchar_t previous[128] = L"startup";
+        char after[300];
+        snprintf(after, sizeof(after), "activation of %ls (the previous one: %ls)", text, previous);
+        CheckHeaps(after);
+        wcsncpy_s(previous, text, _TRUNCATE);
+    }
     Log(FAILED(result) ? "FAIL" : "TRACE",
         "activation %ls iid=%08lx-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x hr=%08lx", text, iid.Data1, iid.Data2,
         iid.Data3, iid.Data4[0], iid.Data4[1], iid.Data4[2], iid.Data4[3], iid.Data4[4], iid.Data4[5], iid.Data4[6],
