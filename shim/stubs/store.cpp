@@ -2,6 +2,8 @@
 #include "registry.h"
 #include "com/factory.h"
 #include "com/error_operation.h"
+#include "options.h"
+#include "log.h"
 #include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Foundation;
@@ -79,7 +81,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE get_IsActive(boolean* value) override {
         if (!value) return E_POINTER;
-        *value = false;
+        *value = GetOptions().unlockTrial;
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_IsTrial(boolean* value) override {
@@ -112,9 +114,12 @@ public:
     HRESULT STDMETHODCALLTYPE get_LicenseInformation(ILicenseInformation** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
-        // No entitlement provenance has been established. Keep the base app
-        // inactive and all products absent; failed purchases cannot change it.
-        static auto license = Make<OfflineLicense>();
+        // The override only changes the base-app license. Products and purchase
+        // operations still behave as offline; this does not create receipts.
+        static auto license = [] {
+            if (GetOptions().unlockTrial) Log("info", "Store: trial override enabled (base app only)");
+            return Make<OfflineLicense>();
+        }();
         return license ? license.CopyTo(value) : E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE RequestAppPurchaseAsync(boolean, IAsyncOperation<HSTRING>** value) override {

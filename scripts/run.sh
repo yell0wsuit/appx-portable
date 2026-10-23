@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Usage: run.sh [GAME_DIRECTORY] [--trace] [--capture] [--diagnostics] [--passthrough]
+# Usage: run.sh [GAME_DIRECTORY] [--trace] [--capture] [--diagnostics] [--passthrough] [--unlock-trial]
 root=$(cd "$(dirname "$0")/.." && pwd)
 game="$root/local/game"
 # --log always: the relaunch check below reads the log.

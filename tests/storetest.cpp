@@ -10,6 +10,7 @@
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
+#include <cstring>
 #include <atomic>
 #include <thread>
 using namespace Microsoft::WRL;
@@ -58,7 +59,8 @@ public:
     }
     HRESULT STDMETHODCALLTYPE Invoke(IAsyncOperation<HSTRING>*, AsyncStatus) override { return S_OK; }
 };
-int main() {
+int main(int argc, char** argv) {
+    const boolean unlocked = argc > 1 && strcmp(argv[1], "--expect-unlocked") == 0;
     RoInitialize(RO_INIT_MULTITHREADED);
     auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
@@ -76,7 +78,11 @@ int main() {
     if (app->get_LicenseInformation(nullptr) != E_POINTER || FAILED(app->get_LicenseInformation(&license)) || !license)
         return 4;
     boolean active = true, trial = true;
-    if (FAILED(license->get_IsActive(&active)) || active || FAILED(license->get_IsTrial(&trial)) || trial) return 5;
+    if (FAILED(license->get_IsActive(&active)) || active != unlocked || FAILED(license->get_IsTrial(&trial)) || trial)
+        return 5;
+    if (license->get_IsActive(nullptr) != E_POINTER || license->get_IsTrial(nullptr) != E_POINTER ||
+        license->get_ExpirationDate(nullptr) != E_POINTER)
+        return 32;
     DateTime expiration{1};
     if (FAILED(license->get_ExpirationDate(&expiration)) || expiration.UniversalTime != 0) return 6;
     EventRegistrationToken event{};
@@ -147,7 +153,8 @@ int main() {
         return 22;
     FulfillmentResult fulfilled{};
     if (SUCCEEDED(fulfillment->GetResults(&fulfilled))) return 23;
-    if (FAILED(license->get_IsActive(&active)) || active || FAILED(products->get_Size(&size)) || size) return 24;
+    if (FAILED(license->get_IsActive(&active)) || active != unlocked || FAILED(products->get_Size(&size)) || size)
+        return 24;
     ComPtr<IAsyncOperation<HSTRING>> selfClosing;
     if (FAILED(app->RequestAppPurchaseAsync(false, &selfClosing))) return 30;
     ComPtr<SelfClosingCompletion> owner;

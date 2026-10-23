@@ -5,6 +5,7 @@
 #   -Capture      back buffer to appx-frame.bmp on the first and every 120th frame
 #   -Diagnostics  crashes with stack details, and heap checks (implies -Log)
 #   -Passthrough  activate the operating system's classes and only log
+#   -UnlockTrial  report an active, full base-app license
 [CmdletBinding()]
 param(
     [string]$GameDirectory = (Join-Path $PSScriptRoot '../local/game'),
@@ -12,7 +13,8 @@ param(
     [switch]$Trace,
     [switch]$Capture,
     [switch]$Diagnostics,
-    [switch]$Passthrough
+    [switch]$Passthrough,
+    [switch]$UnlockTrial
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -27,6 +29,7 @@ if ($Trace) { $arguments += '--trace' }
 if ($Capture) { $arguments += '--capture' }
 if ($Diagnostics) { $arguments += '--diagnostics' }
 if ($Passthrough) { $arguments += '--passthrough' }
+if ($UnlockTrial) { $arguments += '--unlock-trial' }
 $start = @{ FilePath = (Join-Path $game $exe); WorkingDirectory = $game; PassThru = $true; Wait = $true }
 if ($arguments) { $start.ArgumentList = $arguments }
 $process = Start-Process @start

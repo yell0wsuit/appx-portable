@@ -18,6 +18,7 @@ SWITCHES = {
     'capture': 'save the back buffer to appx-frame.bmp on the first and every 120th frame',
     'diagnostics': 'log crashes with stack details and check the heap for damage (implies --log)',
     'passthrough': "activate the operating system's classes and only log",
+    'unlock-trial': 'report an active, full base-app license for offline trial compatibility',
 }
 
 
@@ -41,7 +42,7 @@ def main():
         parser.add_argument(f'--{name}', action='store_true', help=text)
     args = parser.parse_args()
     game = args.game.resolve()
-    flags = [f'--{name}' for name in SWITCHES if getattr(args, name)]
+    flags = [f'--{name}' for name in SWITCHES if getattr(args, name.replace('-', '_'))]
     if sys.platform == 'win32':
         exe = game / game_executable(game)
         if not (exe.is_file() and (game / 'appxportable.dll').is_file()):
