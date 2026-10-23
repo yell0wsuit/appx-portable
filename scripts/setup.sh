@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Stages an extracted Store package as a portable game folder for Wine; the
-# same steps as setup.ps1. Runtime folders hold the x86 VCLibs DLLs when the
-# game folder lacks them (an extracted Microsoft.VCLibs.*.appx).
+# same steps as setup.ps1. Runtimes hold the x86 VCLibs DLLs when the game
+# folder lacks them: a Microsoft.VCLibs.*.appx, or its extracted folder.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 if [[ $# -lt 2 ]]; then
-  echo 'usage: setup.sh UNPACKED_GAME_DIRECTORY DESTINATION [BUILD_DIRECTORY [RUNTIME_DIRECTORY...]]' >&2; exit 2
+  echo 'usage: setup.sh UNPACKED_GAME_DIRECTORY DESTINATION [BUILD_DIRECTORY [RUNTIME_APPX_OR_DIRECTORY...]]' >&2; exit 2
 fi
 source_dir=$(cd "$1" && pwd -P)
 python3 - "$source_dir" "$2" <<'CHECK_PATHS'
@@ -20,7 +20,7 @@ build=${3:-"$root/build/macos-x86"}
 runtimes=("${@:4}")
 # Validates everything before writing, then stages; prints the executable's name.
 executable=$(python3 - "$source_dir" "$2" "$build" "$root/scripts/appx-portable.ini" ${runtimes[@]+"${runtimes[@]}"} <<'STAGE'
-import os, pathlib, shutil, sys, tempfile, urllib.parse
+import atexit, os, pathlib, shutil, sys, tempfile, urllib.parse, zipfile
 import xml.etree.ElementTree as ElementTree
 source, destination, build, ini = map(pathlib.Path, sys.argv[1:5])
 runtimes = [pathlib.Path(p) for p in sys.argv[5:]]
@@ -45,13 +45,30 @@ if not executable or os.path.isabs(executable) or '..' in pathlib.PureWindowsPat
 executable = pathlib.PureWindowsPath(executable).as_posix()
 if not (source / executable).is_file():
     sys.exit(f'Missing {source / executable}')
+# An .appx is a zip with the VCLibs DLLs at its root. Only those names are
+# extracted, so entry paths never reach the file system.
+def expand_runtime(package):
+    if package.suffix.lower() != '.appx':
+        sys.exit(f'Not a folder or an .appx package: {package}')
+    names = {name.lower(): name for names in VCLIBS.values() for name in names}
+    folder = pathlib.Path(tempfile.mkdtemp(prefix='appx-vclibs.'))
+    atexit.register(shutil.rmtree, folder, True)
+    try:
+        with zipfile.ZipFile(package) as archive:
+            for entry in archive.namelist():
+                if entry.lower() in names:
+                    (folder / names[entry.lower()]).write_bytes(archive.read(entry))
+    except zipfile.BadZipFile:
+        sys.exit(f'Cannot read {package} as an .appx package.')
+    return folder
+runtimes = [expand_runtime(path) if path.is_file() else path for path in runtimes]
 runtime_files = {}
 for dependency in (e.get('Name') for e in tree.iter() if local(e) == 'PackageDependency'):
     for name in VCLIBS.get(dependency, ()):
         found = next((folder / name for folder in [source, *runtimes] if (folder / name).is_file()), None)
         if found is None:
-            sys.exit(f'Missing {name} ({dependency}). Copy the x86 DLLs from the {dependency} package '
-                     'beside the game, or pass its folder as a runtime directory.')
+            sys.exit(f'Missing {name} ({dependency}). Pass the x86 {dependency} .appx, or a folder with its DLLs, '
+                     "as a runtime. 'Get the Visual C++ runtime' in README.md says where to download it.")
         runtime_files[name] = found
 for name in ('appxportable.dll', *PROXIES):
     if not (build / name).is_file():

@@ -10,8 +10,8 @@ param(
     [Parameter(Mandatory = $true)][string]$SourceDirectory,
     [Parameter(Mandatory = $true)][string]$Destination,
     [string]$BuildDirectory = (Join-Path $PSScriptRoot '../build/windows-x86'),
-    # Folders holding the x86 VCLibs DLLs, if the game folder lacks them: an
-    # extracted Microsoft.VCLibs.*.appx, or its installed WindowsApps folder.
+    # Where the x86 VCLibs DLLs are, if the game folder lacks them: a
+    # Microsoft.VCLibs.*.appx, its extracted or installed WindowsApps folder.
     [string[]]$RuntimeDirectory = @()
 )
 $ErrorActionPreference = 'Stop'
@@ -90,6 +90,21 @@ function Copy-AtomicDll([string]$Source, [string]$Target) {
         if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
     }
 }
+# An .appx is a zip with the VCLibs DLLs at its root. Only those names are
+# extracted, so entry paths never reach the file system.
+function Expand-RuntimePackage([string]$Package, [string]$Target) {
+    if ([IO.Path]::GetExtension($Package) -ne '.appx') { throw "Not a folder or an .appx package: $Package" }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $names = @($VCLibs.Values | ForEach-Object { $_ })
+    [IO.Directory]::CreateDirectory($Target) | Out-Null
+    try { $zip = [IO.Compression.ZipFile]::OpenRead($Package) } catch { throw "Cannot read $Package as an .appx package." }
+    try {
+        foreach ($entry in $zip.Entries) {
+            $name = $names | Where-Object { $_ -eq $entry.FullName } | Select-Object -First 1
+            if ($name) { [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $Target $name), $true) }
+        }
+    } finally { $zip.Dispose() }
+}
 # The manifest's executable and framework dependencies. Elements are matched by
 # local name: Windows 8, 8.1 and 10 manifests use different namespaces.
 function Read-PackageManifest([string]$Directory) {
@@ -133,6 +148,19 @@ $package = Read-PackageManifest $source
 $executable = Join-Path $source $package.Executable
 Assert-X86PE $executable
 
+# A runtime .appx is read through a temporary folder, removed however setup ends.
+$extracted = $null
+trap { if ($extracted) { Remove-Item -LiteralPath $extracted -Recurse -Force -ErrorAction SilentlyContinue }; break }
+$runtimeFolders = @(for ($index = 0; $index -lt $runtimeFolders.Count; $index++) {
+    $path = $runtimeFolders[$index]
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        if (-not $extracted) { $extracted = Join-Path ([IO.Path]::GetTempPath()) "appx-vclibs-$([Guid]::NewGuid().ToString('N'))" }
+        Expand-RuntimePackage $path (Join-Path $extracted $index)
+        Join-Path $extracted $index
+    } else {
+        $path
+    }
+})
 # Each VCLibs DLL comes from the game folder or a runtime folder, in that order.
 $runtimeFiles = @{}
 foreach ($dependency in $package.Dependencies) {
@@ -141,7 +169,7 @@ foreach ($dependency in $package.Dependencies) {
         $found = @(@($source) + $runtimeFolders | ForEach-Object { Join-Path $_ $name } |
             Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1)
         if (-not $found) {
-            throw "Missing $name ($dependency). Copy the x86 DLLs from the $dependency package beside the game, or pass its folder with -RuntimeDirectory."
+            throw "Missing $name ($dependency). Pass the x86 $dependency .appx, or a folder with its DLLs, with -RuntimeDirectory. 'Get the Visual C++ runtime' in README.md says where to download it."
         }
         Assert-X86PE $found[0]
         $runtimeFiles[$name] = $found[0]
@@ -158,6 +186,7 @@ foreach ($item in Get-ChildItem -LiteralPath $source -Force) {
 foreach ($name in $runtimeFiles.Keys) {
     Copy-Item -LiteralPath $runtimeFiles[$name] -Destination (Join-Path $destinationPath $name) -Force
 }
+if ($extracted) { Remove-Item -LiteralPath $extracted -Recurse -Force; $extracted = $null }
 # A raw .appx extraction keeps OPC percent-encoded names (%21_Name.xml,
 # User%20Controls); installed packages have them decoded, and games open the
 # decoded names. Saves are left alone. Deepest paths first, so renaming a

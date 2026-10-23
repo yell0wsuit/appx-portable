@@ -25,14 +25,24 @@ Obtain the game's x86 package. An `.appxbundle` is a ZIP archive holding one `.a
 
 ### 2. Get the Visual C++ runtime
 
-Store games use the Store's own Visual C++ runtime (VCLibs), which a plain desktop has no copy of. The game's `AppxManifest.xml` names the version under `<Dependencies>`:
+Store games use the Store's own Visual C++ runtime (VCLibs), which a plain desktop has no copy of. The game's `AppxManifest.xml` names the version it needs. Setup reads it and reports a missing runtime, or check before you start:
 
-| Dependency | DLLs |
-| --- | --- |
-| `Microsoft.VCLibs.110.00` (Windows 8.0 games) | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll` |
-| `Microsoft.VCLibs.120.00` (Windows 8.1 games) | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll` |
+```powershell
+Select-String -Path 'C:\Games\Source\CutTheRope2\AppxManifest.xml' -Pattern 'Microsoft\.VCLibs\.\d+\.00' | ForEach-Object { $_.Matches.Value }
+```
 
-These come from the matching x86 `Microsoft.VCLibs.*.appx` framework package. VCLibs 120 is in Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip). If the framework is installed on your PC (any Store app that uses it installs it), its files are in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`). Either copy the three DLLs beside the game, or pass their folder to setup with `-RuntimeDirectory`.
+| Dependency | DLLs | x86 package |
+| --- | --- | --- |
+| `Microsoft.VCLibs.110.00` (Windows 8.0 games) | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll` | [Internet Archive copy](https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx) |
+| `Microsoft.VCLibs.120.00` (Windows 8.1 games) | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll` | In Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip) |
+
+Microsoft has no standalone download of VCLibs 110. The Internet Archive copy, `Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx`, has SHA-256 `22d49fa295486e0955a305bea65cfa4ff5d154d296878a1c577ec5507b602c9c`. For a package from anywhere other than Microsoft, check that Microsoft signed it; `Status` should be `Valid` and the signer `CN=Microsoft Corporation, …`:
+
+```powershell
+Get-AuthenticodeSignature .\Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx | Format-List Status, SignerCertificate
+```
+
+If the framework is installed on your PC (any Store app that uses it installs it), its DLLs are also in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`). Pass setup the `.appx` itself or a folder with the three DLLs, with `-RuntimeDirectory`, or copy the DLLs beside the game.
 
 ### 3. Build the DLLs
 
@@ -46,7 +56,7 @@ From the repository root, stage the extracted package into a separate folder:
 .\scripts\setup.ps1 -SourceDirectory 'C:\Games\Source\CutTheRope2' -Destination 'C:\Games\CutTheRope2'
 ```
 
-Add `-RuntimeDirectory <folder>` if the VCLibs DLLs are not beside the game, and `-BuildDirectory <folder>` to use DLLs built elsewhere. Setup copies the package (leaving out its signature and package metadata), adds the runtime and appx-portable DLLs, decodes the percent-encoded file names a raw `.appx` extraction keeps (`%21_Name.xml`, `User%20Controls`), and checks that the game executable is byte-for-byte unchanged. Rerun it after rebuilding; saves and `appx-portable.ini` are kept.
+Add `-RuntimeDirectory <.appx or folder>` if the VCLibs DLLs are not beside the game, and `-BuildDirectory <folder>` to use DLLs built elsewhere. Setup copies the package (leaving out its signature and package metadata), adds the runtime and appx-portable DLLs, decodes the percent-encoded file names a raw `.appx` extraction keeps (`%21_Name.xml`, `User%20Controls`), and checks that the game executable is byte-for-byte unchanged. Rerun it after rebuilding; saves and `appx-portable.ini` are kept.
 
 ### 5. Play
 
@@ -57,11 +67,11 @@ Double-click the game's executable in the staged folder (`Game.exe` for Cut the 
 With the same extracted package and runtime DLLs, [cross-compile](docs/building.md#macos-cross-compilation) and stage with Python 3 installed:
 
 ```sh
-bash scripts/setup.sh '/path/to/extracted-package' local/game build/macos-x86 '/path/to/vclibs-folder'
+bash scripts/setup.sh '/path/to/extracted-package' local/game build/macos-x86 '/path/to/Microsoft.VCLibs.appx'
 python3 scripts/play.py
 ```
 
-The runtime folder argument is optional when the DLLs are beside the game. The launcher defaults to Wine Devel in `~/Applications` and keeps its Wine prefix in `local/wine-test`; set `WINE` and `WINEPREFIX` to use others. Wine launches always write a log.
+The runtime argument, an `.appx` or a folder with its DLLs, is optional when the DLLs are beside the game. The launcher defaults to Wine Devel in `~/Applications` and keeps its Wine prefix in `local/wine-test`; set `WINE` and `WINEPREFIX` to use others. Wine launches always write a log.
 
 ## Saves and window settings
 
@@ -86,7 +96,7 @@ Press **F11** or **Alt+Enter** to toggle borderless fullscreen. Window size, pos
 ## Troubleshooting
 
 - **Need a log:** start the game with `--log` (for example `.\Game.exe --log` in PowerShell, from the game folder). The log is `appx-portable.log` beside the executable, and the two previous runs are kept as `appx-portable.1.log` and `appx-portable.2.log`. Its first lines name the appx-portable version and the package it found. `--trace` logs every Windows Runtime class the game activates; `--diagnostics` adds crash details and checks the heap for damage as the game runs (slower). Both imply `--log`.
-- **Setup reports a missing file:** check that the source folder is a complete package extraction (with `AppxManifest.xml`), and that the VCLibs DLLs the manifest depends on are beside it or in the `-RuntimeDirectory` folder.
+- **Setup reports a missing file:** check that the source folder is a complete package extraction (with `AppxManifest.xml`), and that the VCLibs DLLs the manifest depends on are beside it or in the `-RuntimeDirectory` package or folder.
 - **The game fails to start or crashes after loading:** check the log. appx-portable decodes percent-encoded file names itself at startup, so the game folder must be writable; staging with setup avoids the problem.
 - **Windows 8/8.1 says the app can only run in an app container:** run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\patch_exe.ps1 -Exe "C:\Games\CutTheRope2\Game.exe"`. It creates `Game.desktop.exe` beside the original with only the executable's AppContainer flag cleared, and never overwrites anything. If the desktop copy then fails with `0xC000A200`, the VCLibs DLLs carry the flag too: add `-IncludeRuntime` to create a `desktop` folder with patched copies of the executable and runtime DLLs. Gameplay on Windows 8/8.1 itself remains unverified.
 - **Check which version is installed:** right-click `appxportable.dll` and open **Properties → Details**. **Product version** names the release and the commit it was built from. All appx-portable DLLs in a game folder should show the same version.

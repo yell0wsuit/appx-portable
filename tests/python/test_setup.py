@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 # A minimal x86 PE header: setup.ps1 checks MZ, the PE signature, and I386.
 X86_PE = b'MZ' + bytes(0x3a) + struct.pack('<I', 0x40) + b'PE' + bytes(2) + struct.pack('<H', 0x14c) + bytes(2)
@@ -39,6 +40,17 @@ def stage_inputs(base, executable='Game.exe', vclibs='120', runtime_beside_game=
     (maps/'%21_MasterGameDesignDocument.xml').write_bytes(b'design')
     (source/'User%20Controls').mkdir(); (source/'User%20Controls'/'How%20To.xaml').write_bytes(b'control')
     return source, build, dest
+
+
+def vclibs_appx(path, vclibs):
+    """A framework package as Microsoft ships it: the DLLs at the root, plus
+    entries setup must never extract."""
+    with zipfile.ZipFile(path, 'w') as appx:
+        for name in VCLIBS[vclibs]:
+            appx.writestr(name, X86_PE + b'appx')
+        appx.writestr('AppxManifest.xml', b'<Package />')
+        appx.writestr('../escape.dll', X86_PE)
+    return path
 
 
 @unittest.skipUnless(shutil.which('pwsh'), 'needs PowerShell 7')
@@ -88,12 +100,25 @@ class PowerShellSetupTests(unittest.TestCase):
             for name in VCLIBS['110']:
                 self.assertEqual((dest/name).read_bytes(), X86_PE + b'vclibs')
 
+    def test_vclibs_110_from_appx(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = pathlib.Path(temp)
+            source, build, dest = stage_inputs(base, 'Game_Win8.exe', '110', runtime_beside_game=False)
+            appx = vclibs_appx(base/'Microsoft.VCLibs.110.00_x86.appx', '110')
+            result = self.run_setup(source, dest, build, '-RuntimeDirectory', str(appx))
+            self.assertEqual(result.returncode, 0, result.stderr.decode(errors='replace'))
+            for name in VCLIBS['110']:
+                self.assertEqual((dest/name).read_bytes(), X86_PE + b'appx')
+            self.assertFalse((dest/'escape.dll').exists())
+
     def test_missing_runtime_fails_before_writing(self):
         with tempfile.TemporaryDirectory() as temp:
             source, build, dest = stage_inputs(pathlib.Path(temp), vclibs='110', runtime_beside_game=False)
             result = self.run_setup(source, dest, build)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn('msvcr110.dll', ' '.join(result.stderr.decode(errors='replace').split()))
+            message = ' '.join(result.stderr.decode(errors='replace').split())
+            self.assertIn('msvcr110.dll', message)
+            self.assertIn('README.md', message)
             self.assertFalse(dest.exists(), 'validation must run before any write')
 
 
@@ -127,11 +152,23 @@ class SetupTests(unittest.TestCase):
             for name in VCLIBS['110']:
                 self.assertEqual((dest/name).read_bytes(), b'vclibs')
 
+    def test_vclibs_110_from_appx(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = pathlib.Path(temp)
+            source, build, dest = stage_inputs(base, 'Game_Win8.exe', '110', runtime_beside_game=False)
+            appx = vclibs_appx(base/'Microsoft.VCLibs.110.00_x86.appx', '110')
+            result = self.run_setup(source, dest, build, appx)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            for name in VCLIBS['110']:
+                self.assertEqual((dest/name).read_bytes(), X86_PE + b'appx')
+            self.assertFalse((base/'escape.dll').exists())
+
     def test_missing_runtime_fails_before_writing(self):
         with tempfile.TemporaryDirectory() as temp:
             source, build, dest = stage_inputs(pathlib.Path(temp), vclibs='110', runtime_beside_game=False)
             result = self.run_setup(source, dest, build)
             self.assertNotEqual(result.returncode, 0)
+            self.assertIn('README.md', result.stderr.decode())
             self.assertFalse(dest.exists(), 'validation must run before any write')
 
     def test_rejects_destination_inside_source_before_writing(self):
