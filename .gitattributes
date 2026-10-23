@@ -1,0 +1,2 @@
+# LF line endings everywhere, whatever core.autocrlf says; Git detects binaries.
+* text=auto eol=lf
