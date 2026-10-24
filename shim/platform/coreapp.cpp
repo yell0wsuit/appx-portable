@@ -1,3 +1,4 @@
+#include "islands/islands.h"
 #include "generated/coreapp.h"
 #include "com/factory.h"
 #include "host/host.h"
@@ -258,8 +259,10 @@ HRESULT MakeCoreApplicationFactory(IActivationFactory** value) {
 bool ExitLikeStoreApp() {
     if (!CurrentPackage().loaded) return false;
     SaveHostPlacement();  // termination skips WM_DESTROY, where it would be saved
+    if (IslandsMode()) IslandHostMessage(WM_SHOWWINDOW, FALSE, 0);
     CoreHostMessage(WM_SHOWWINDOW, FALSE, 0);  // VisibilityChanged(false), now
     if (auto factory = SharedFactory()) factory->Suspend(5000);
+    if (IslandsMode()) CloseIslandView();
     Log("INFO", "ending the process after suspension");
     TerminateProcess(GetCurrentProcess(), 0);
     return true;

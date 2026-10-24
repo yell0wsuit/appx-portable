@@ -104,6 +104,63 @@ int main(int argc, char** argv) {
         printf("LocalFolder %ls, expected %ls\n", text.c_str(), (root / L"Local").c_str());
         return 8;
     }
+    if (!strcmp(mode, "containers_write") || !strcmp(mode, "containers_read")) {
+        const bool write = !strcmp(mode, "containers_write");
+        ComPtr<IApplicationDataContainer> parent, child;
+        if (FAILED(data->get_LocalSettings(&parent))) return 80;
+        auto name = HStringReference(L"__container_test_../unicode_\x4e2d");
+        if (write && FAILED(parent->DeleteContainer(name.Get()))) return 81;
+        if (FAILED(parent->CreateContainer(
+                name.Get(), write ? ApplicationDataCreateDisposition_Always : ApplicationDataCreateDisposition_Existing,
+                &child)))
+            return 82;
+        ComPtr<__FIMapView_2_HSTRING_Windows__CStorage__CApplicationDataContainer> children;
+        boolean exists = false;
+        if (FAILED(parent->get_Containers(&children)) || FAILED(children->HasKey(name.Get(), &exists)) || !exists)
+            return 83;
+        HString restoredName;
+        if (FAILED(child->get_Name(restoredName.GetAddressOf())) ||
+            wcscmp(restoredName.GetRawBuffer(nullptr), name.GetRawBuffer(nullptr)))
+            return 84;
+        ComPtr<ABI::Windows::Foundation::Collections::IPropertySet> set;
+        ComPtr<ABI::Windows::Foundation::Collections::IMap<HSTRING, IInspectable*>> map;
+        if (FAILED(child->get_Values(&set)) || FAILED(set.As(&map))) return 85;
+        if (write) {
+            ComPtr<ABI::Windows::Foundation::IPropertyValueStatics> props;
+            if (FAILED(RoGetActivationFactory(HStringReference(L"Windows.Foundation.PropertyValue").Get(),
+                                              IID_PPV_ARGS(&props))))
+                return 86;
+            ComPtr<IInspectable> value;
+            boolean replaced = false;
+            if (FAILED(props->CreateInt32(12345, &value)) ||
+                FAILED(map->Insert(HStringReference(L"score").Get(), value.Get(), &replaced)))
+                return 87;
+            if (FAILED(props->CreateBoolean(false, &value)) ||
+                FAILED(map->Insert(HStringReference(L"enabled").Get(), value.Get(), &replaced)))
+                return 91;
+            if (FAILED(props->CreateDouble(42.0, &value)) ||
+                FAILED(map->Insert(HStringReference(L"volume").Get(), value.Get(), &replaced)))
+                return 92;
+        } else {
+            ComPtr<IInspectable> value;
+            ComPtr<ABI::Windows::Foundation::IPropertyValue> property;
+            INT32 score = 0;
+            if (FAILED(map->Lookup(HStringReference(L"score").Get(), &value)) || FAILED(value.As(&property)) ||
+                FAILED(property->GetInt32(&score)) || score != 12345)
+                return 88;
+            boolean enabled = true;
+            double volume = 0;
+            if (FAILED(map->Lookup(HStringReference(L"enabled").Get(), &value)) || FAILED(value.As(&property)) ||
+                FAILED(property->GetBoolean(&enabled)) || enabled)
+                return 93;
+            if (FAILED(map->Lookup(HStringReference(L"volume").Get(), &value)) || FAILED(value.As(&property)) ||
+                FAILED(property->GetDouble(&volume)) || volume != 42.0)
+                return 94;
+            if (FAILED(parent->DeleteContainer(name.Get()))) return 89;
+            if (FAILED(children->HasKey(name.Get(), &exists)) || exists) return 90;
+        }
+        return 0;
+    }
     if (location || locationIni) {
         // A fresh location starts empty: saves are never imported from elsewhere.
         ComPtr<IApplicationDataContainer> container;

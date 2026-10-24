@@ -15,4 +15,25 @@ if (Test-Path -LiteralPath $manifest -PathType Leaf) {
     $application = $xml.SelectSingleNode("//*[local-name()='Application']")
     if ($application -and $application.GetAttribute('Executable')) { $exe = $application.GetAttribute('Executable') }
 }
+$path = Join-Path $GameDirectory $exe
+if (Test-Path -LiteralPath $path -PathType Leaf) {
+    $stream = [IO.File]::OpenRead($path)
+    $reader = New-Object IO.BinaryReader($stream)
+    try {
+        if ($stream.Length -ge 64 -and $reader.ReadUInt16() -eq 0x5A4D) {
+            $stream.Position = 0x3c
+            $offset = $reader.ReadUInt32()
+            if ($offset -le $stream.Length - 248) {
+                $stream.Position = $offset
+                if ($reader.ReadUInt32() -eq 0x4550) {
+                    $stream.Position = $offset + 24
+                    if ($reader.ReadUInt16() -eq 0x10b) {
+                        $stream.Position = $offset + 232
+                        if ($reader.ReadUInt32() -ne 0) { $exe = 'appx-host.exe' }
+                    }
+                }
+            }
+        }
+    } finally { $reader.Dispose() }
+}
 Write-Output $exe

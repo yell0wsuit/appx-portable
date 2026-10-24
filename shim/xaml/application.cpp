@@ -3,6 +3,7 @@
 #include "com/composable.h"
 #include "host/host.h"
 #include "registry.h"
+#include "islands/islands.h"
 #include <windows.applicationmodel.activation.h>
 #include <windows.ui.xaml.markup.h>
 #include <wrl/event.h>
@@ -250,7 +251,8 @@ HRESULT MakeApplicationFactory(IActivationFactory** value) {
 }
 // Application.Suspending, which XAML games save in.
 void RaiseApplicationSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
-    if (live) live->RaiseSuspending(current.Get(), args);
+    if (IslandsMode()) RaiseIslandSuspending(args);
+    else if (live) live->RaiseSuspending(current.Get(), args);
 }
 HRESULT MakeLaunchArgs(IActivatedEventArgs** value) {
     if (!value) return E_POINTER;

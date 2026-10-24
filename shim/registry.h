@@ -21,6 +21,7 @@ HRESULT MakeXboxFactory(const wchar_t* name, IActivationFactory** value);
 // Halfbrick's C# HTTP component, stood in offline.
 HRESULT MakeHttpClientCSharpFactory(const wchar_t* name, IActivationFactory** value);
 HRESULT MakeVisualizationFactory(IActivationFactory** value);
+HRESULT MakeStorageFileFactory(IActivationFactory** value);
 HRESULT MakeStorageFactory(IActivationFactory** value);
 HRESULT MakeAdFactory(IActivationFactory** value);
 HRESULT MakeHttpFactory(bool filter, IActivationFactory** value);

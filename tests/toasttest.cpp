@@ -5,10 +5,12 @@
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
+#include <cstring>
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::UI::Notifications;
-int main() {
+int main(int argc, char** argv) {
+    const bool islands = argc > 1 && strcmp(argv[1], "--islands") == 0;
     RoInitialize(RO_INIT_MULTITHREADED);
     auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
@@ -75,6 +77,21 @@ int main() {
     if (!wcsstr(xml.GetRawBuffer(nullptr), L"<text id=\"1\">Om Nom misses you</text>")) {
         printf("xml=%ls\n", xml.GetRawBuffer(nullptr));
         return 18;
+    }
+    if (islands) {
+        // Exercise the managed-mode route and the OS XML -> OS toast boundary.
+        // Creating an unpackaged system notifier would fail with 0x80070490.
+        ComPtr<IToastNotificationFactory> toastFactory;
+        auto result = RoGetActivationFactory(HStringReference(L"Windows.UI.Notifications.ToastNotification").Get(),
+                                             IID_PPV_ARGS(&toastFactory));
+        ComPtr<IToastNotification> toast;
+        if (SUCCEEDED(result)) result = toastFactory->CreateToastNotification(document.Get(), &toast);
+        if (SUCCEEDED(result)) result = notifier->Show(toast.Get());
+        if (SUCCEEDED(result)) result = notifier->Hide(toast.Get());
+        if (FAILED(result)) {
+            printf("FAIL Islands toast hr=%08lx\n", result);
+            return 31;
+        }
     }
     if (FAILED(get(HStringReference(L"Windows.UI.Notifications.ScheduledToastNotification").Get(), &factory)))
         return 19;

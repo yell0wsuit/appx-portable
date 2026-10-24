@@ -11,6 +11,8 @@
 #include "log.h"
 #include <wrl.h>
 #include <filesystem>
+#include <wrl/wrappers/corewrappers.h>
+#include <windows.storage.streams.h>
 #include <map>
 #include <mutex>
 #pragma comment(lib, "version.lib")
@@ -100,7 +102,9 @@ public:
     HRESULT STDMETHODCALLTYPE add_SignedOut(IUnknown* handler, EventRegistrationToken* token) override {
         return signedOut_.Add(handler, token);
     }
-    HRESULT STDMETHODCALLTYPE remove_SignedOut(EventRegistrationToken token) override { return signedOut_.Remove(token); }
+    HRESULT STDMETHODCALLTYPE remove_SignedOut(EventRegistrationToken token) override {
+        return signedOut_.Remove(token);
+    }
     HRESULT STDMETHODCALLTYPE get_SignedInUserIdentity(IInspectable** identity) override { return Nobody(identity); }
     HRESULT STDMETHODCALLTYPE get_Token(HSTRING* token) override {
         if (!token) return E_POINTER;
@@ -119,53 +123,53 @@ public:
     HRESULT STDMETHODCALLTYPE get_Identity(IInspectable** identity) override { return Nobody(identity); }              \
     HRESULT STDMETHODCALLTYPE get_Status(IInspectable** status) override { return Nobody(status); }                    \
     HRESULT STDMETHODCALLTYPE GetProfileAsync(IInspectable** op) override {                                            \
-        return FailedClass("User.GetProfileAsync", "Microsoft.Xbox.UserProfile", defaults::UserProfile, op);          \
+        return FailedClass("User.GetProfileAsync", "Microsoft.Xbox.UserProfile", defaults::UserProfile, op);           \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE GetFriendsAsync(IInspectable** op) override {                                            \
-        return FailedClass("User.GetFriendsAsync", "Microsoft.Xbox.UserCollection", defaults::UserCollection, op);    \
+        return FailedClass("User.GetFriendsAsync", "Microsoft.Xbox.UserCollection", defaults::UserCollection, op);     \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE GetAchievementsAsync(UINT32, UINT32, boolean, IInspectable*, IInspectable** op)          \
         override {                                                                                                     \
-        return FailedClass("User.GetAchievementsAsync", "Microsoft.Xbox.AchievementCollection",                       \
+        return FailedClass("User.GetAchievementsAsync", "Microsoft.Xbox.AchievementCollection",                        \
                            defaults::AchievementCollection, op);                                                       \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE UnlockAchievementAsync(UINT32, IAsyncAction** action) override {                         \
         return FailedAction("User.UnlockAchievementAsync", action);                                                    \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE GetAvatarManifestAsync(IInspectable** op) override {                                     \
-        return FailedClass("User.GetAvatarManifestAsync", "Microsoft.Xbox.AvatarManifest", defaults::AvatarManifest,  \
+        return FailedClass("User.GetAvatarManifestAsync", "Microsoft.Xbox.AvatarManifest", defaults::AvatarManifest,   \
                            op);                                                                                        \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE PostUserMessageAsync(IInspectable*, IAsyncAction** action) override {                    \
         return FailedAction("User.PostUserMessageAsync", action);                                                      \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE GetUserMessagesAsync(UINT32, UINT32, IInspectable*, IInspectable** op) override {        \
-        return FailedClass("User.GetUserMessagesAsync", "Microsoft.Xbox.UserMessageCollection",                       \
+        return FailedClass("User.GetUserMessagesAsync", "Microsoft.Xbox.UserMessageCollection",                        \
                            defaults::UserMessageCollection, op);                                                       \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE GetUserMessagesForTitleAsync(UINT32, UINT32, UINT32, IInspectable*, IInspectable** op)   \
         override {                                                                                                     \
-        return FailedClass("User.GetUserMessagesForTitleAsync", "Microsoft.Xbox.UserMessageCollection",               \
+        return FailedClass("User.GetUserMessagesForTitleAsync", "Microsoft.Xbox.UserMessageCollection",                \
                            defaults::UserMessageCollection, op);                                                       \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE DeleteUserMessageAsync(HSTRING, IAsyncAction** action) override {                        \
         return FailedAction("User.DeleteUserMessageAsync", action);                                                    \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE CreateMultiplayerSessionAsync(IInspectable*, INT32, IInspectable** op) override {        \
-        return FailedClass("User.CreateMultiplayerSessionAsync", "Microsoft.Xbox.Multiplayer.MultiplayerSession",     \
+        return FailedClass("User.CreateMultiplayerSessionAsync", "Microsoft.Xbox.Multiplayer.MultiplayerSession",      \
                            defaults::MultiplayerSession, op);                                                          \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE JoinMultiplayerSessionAsync(HSTRING, INT32, IInspectable*, IInspectable** op) override { \
-        return FailedClass("User.JoinMultiplayerSessionAsync", "Microsoft.Xbox.Multiplayer.MultiplayerSession",       \
+        return FailedClass("User.JoinMultiplayerSessionAsync", "Microsoft.Xbox.Multiplayer.MultiplayerSession",        \
                            defaults::MultiplayerSession, op);                                                          \
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE GetMultiplayerSessionSummariesAsync(UINT32, GUID, INT32, INT32, INT32,                   \
-                                                                  IInspectable** op) override {                       \
-        return FailedClass("User.GetMultiplayerSessionSummariesAsync",                                                \
-                           "Microsoft.Xbox.Multiplayer.MultiplayerSessionSummaryCollection",                          \
+                                                                  IInspectable** op) override {                        \
+        return FailedClass("User.GetMultiplayerSessionSummariesAsync",                                                 \
+                           "Microsoft.Xbox.Multiplayer.MultiplayerSessionSummaryCollection",                           \
                            defaults::MultiplayerSessionSummaryCollection, op);                                         \
     }                                                                                                                  \
-    HRESULT STDMETHODCALLTYPE CanPerformActionAsync(HSTRING, UINT64, IInspectable** op) override {                    \
+    HRESULT STDMETHODCALLTYPE CanPerformActionAsync(HSTRING, UINT64, IInspectable** op) override {                     \
         return FailedInt32("User.CanPerformActionAsync", op);                                                          \
     }
 
@@ -185,8 +189,8 @@ public:
     APPX_XBOX_USER_COMMON
     HRESULT STDMETHODCALLTYPE JoinMultiplayerSessionWithBufferAsync(HSTRING, INT32, IInspectable*,
                                                                     IInspectable** op) override {
-        return FailedClass("User.JoinMultiplayerSessionWithBufferAsync", "Microsoft.Xbox.Multiplayer.MultiplayerSession",
-                           defaults::MultiplayerSession, op);
+        return FailedClass("User.JoinMultiplayerSessionWithBufferAsync",
+                           "Microsoft.Xbox.Multiplayer.MultiplayerSession", defaults::MultiplayerSession, op);
     }
 };
 #undef APPX_XBOX_USER_COMMON
@@ -241,7 +245,9 @@ public:
     HRESULT STDMETHODCALLTYPE add_SignedOut(IUnknown* handler, EventRegistrationToken* token) override {
         return signedOut_.Add(handler, token);
     }
-    HRESULT STDMETHODCALLTYPE remove_SignedOut(EventRegistrationToken token) override { return signedOut_.Remove(token); }
+    HRESULT STDMETHODCALLTYPE remove_SignedOut(EventRegistrationToken token) override {
+        return signedOut_.Remove(token);
+    }
     HRESULT STDMETHODCALLTYPE get_SignedInUserIdentity(IInspectable** identity) override { return Nobody(identity); }
     HRESULT STDMETHODCALLTYPE get_ServiceClient(IInspectable** client) override {
         if (!client) return E_POINTER;
@@ -278,6 +284,107 @@ public:
         return WindowsCreateString(L"Xbox LIVE", 9, value);
     }
 };
+class TitleStorageFile final : public RuntimeClass<RuntimeClassFlags<WinRt>, ITitleStorageFile, FtmBase> {
+    InspectableClass(L"Microsoft.Xbox.TitleStorage.TitleStorageFile", BaseTrust);
+    UINT64 xuid_;
+    GUID group_;
+    Wrappers::HString filename_, etag_, display_;
+    ABI::Windows::Foundation::DateTime time_{};
+
+public:
+    TitleStorageFile(UINT64 xuid, GUID group, HSTRING path) : xuid_(xuid), group_(group) { filename_.Set(path); }
+    HRESULT STDMETHODCALLTYPE get_TitleGroupId(GUID* v) override {
+        if (!v) return E_POINTER;
+        *v = group_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Xuid(UINT64* v) override {
+        if (!v) return E_POINTER;
+        *v = xuid_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Filename(HSTRING* v) override { return filename_.CopyTo(v); }
+    HRESULT STDMETHODCALLTYPE get_Size(UINT64* v) override {
+        if (!v) return E_POINTER;
+        *v = 0;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Etag(HSTRING* v) override { return etag_.CopyTo(v); }
+    HRESULT STDMETHODCALLTYPE put_Etag(HSTRING v) override { return etag_.Set(v); }
+    HRESULT STDMETHODCALLTYPE get_ClientFileTime(ABI::Windows::Foundation::DateTime* v) override {
+        if (!v) return E_POINTER;
+        *v = time_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_ClientFileTime(ABI::Windows::Foundation::DateTime v) override {
+        time_ = v;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_DisplayName(HSTRING* v) override { return display_.CopyTo(v); }
+    HRESULT STDMETHODCALLTYPE put_DisplayName(HSTRING v) override { return display_.Set(v); }
+    HRESULT STDMETHODCALLTYPE get_SmartBlobType(HSTRING* v) override {
+        if (!v) return E_POINTER;
+        *v = nullptr;
+        return S_OK;
+    }
+};
+class TitleFileFactory final : public Factory<ITitleStorageFileStatics> {
+public:
+    TitleFileFactory() : Factory(L"Microsoft.Xbox.TitleStorage.TitleStorageFile") {}
+    HRESULT STDMETHODCALLTYPE GetUserFileFromPath(UINT64 xuid, GUID group, HSTRING path, IInspectable** v) override {
+        if (!v) return E_POINTER;
+        return Make<TitleStorageFile>(xuid, group, path).CopyTo(v);
+    }
+    HRESULT STDMETHODCALLTYPE GetGlobalFileFromPath(GUID group, HSTRING path, IInspectable** v) override {
+        return GetUserFileFromPath(0, group, path, v);
+    }
+};
+class TitleStorageFactory final : public Factory<ITitleStorageServiceStatics> {
+    HRESULT Files(IInspectable** op) {
+        const GUID iid = {0x7828ef7d, 0x938c, 0x4fc1, {0x83, 0xa4, 0x0d, 0x20, 0xa2, 0xbe, 0xf7, 0xa8}};
+        return FailedClass("TitleStorage.GetFilesAsync", "Microsoft.Xbox.TitleStorage.TitleStorageFileCollection", iid,
+                           op);
+    }
+
+public:
+    TitleStorageFactory() : Factory(L"Microsoft.Xbox.TitleStorage.TitleStorageService") {}
+    HRESULT STDMETHODCALLTYPE GetUserQuotaAsync(UINT64, GUID, IInspectable** op) override {
+        const GUID iid = {0xe185f19d, 0x8a6d, 0x4c4f, {0xa0, 0xe4, 0x92, 0x58, 0x7c, 0xc8, 0x10, 0x65}};
+        return FailedClass("TitleStorage.GetUserQuotaAsync", "Microsoft.Xbox.TitleStorage.UserTitleStorageQuota", iid,
+                           op);
+    }
+    HRESULT STDMETHODCALLTYPE GetUserFilesAsync(UINT32, UINT32, UINT64, GUID, HSTRING, IInspectable*,
+                                                IInspectable** op) override {
+        return Files(op);
+    }
+    HRESULT STDMETHODCALLTYPE GetGlobalFilesAsync(UINT32, UINT32, GUID, HSTRING, IInspectable*,
+                                                  IInspectable** op) override {
+        return Files(op);
+    }
+    HRESULT STDMETHODCALLTYPE ReadToStreamAsync(IInspectable*, INT32, HSTRING, IInspectable** op) override {
+        return MakeFailedOperation(
+            ParameterizedIid(
+                "pinterface({9fc2b0bb-e446-44e2-aa61-9cab8f636af2};{905a0fe1-bc53-11df-8c49-001e4fc686da})"),
+            Offline, sizeof(void*), op);
+    }
+    HRESULT STDMETHODCALLTYPE WriteFromStreamAsync(IInspectable*, IInspectable*, INT32, UINT32,
+                                                   IAsyncAction** op) override {
+        return FailedAction("TitleStorage.WriteFromStreamAsync", op);
+    }
+    HRESULT STDMETHODCALLTYPE ReadToBufferAsync(IInspectable*, INT32, HSTRING, IInspectable** op) override {
+        return MakeFailedOperation(
+            ParameterizedIid(
+                "pinterface({9fc2b0bb-e446-44e2-aa61-9cab8f636af2};{905a0fe0-bc53-11df-8c49-001e4fc686da})"),
+            Offline, sizeof(void*), op);
+    }
+    HRESULT STDMETHODCALLTYPE WriteFromBufferAsync(IInspectable*, IInspectable*, INT32, UINT32,
+                                                   IAsyncAction** op) override {
+        return FailedAction("TitleStorage.WriteFromBufferAsync", op);
+    }
+    HRESULT STDMETHODCALLTYPE DeleteAsync(IInspectable*, INT32, IAsyncAction** op) override {
+        return FailedAction("TitleStorage.DeleteAsync", op);
+    }
+};
 template <class T> HRESULT Shared(IActivationFactory** value) {
     static auto factory = Make<T>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
@@ -286,12 +393,15 @@ template <class T> HRESULT Shared(IActivationFactory** value) {
 HRESULT MakeXboxFactory(const wchar_t* name, IActivationFactory** value) {
     if (!value) return E_POINTER;
     *value = nullptr;
-    SdkVersion();  // logs the stand-in once
+    SdkVersion(); // logs the stand-in once
+    if (wcscmp(name, L"Microsoft.Xbox.TitleStorage.TitleStorageService") == 0)
+        return Shared<TitleStorageFactory>(value);
+    if (wcscmp(name, L"Microsoft.Xbox.TitleStorage.TitleStorageFile") == 0) return Shared<TitleFileFactory>(value);
     if (wcscmp(name, L"Microsoft.Xbox.XboxLIVEService") == 0) return Shared<LiveFactory>(value);
     if (wcscmp(name, L"Microsoft.Xbox.User") == 0) return Shared<UserFactory>(value);
     if (wcscmp(name, L"Microsoft.Xbox.Leaderboards.LeaderboardService") == 0) return Shared<LeaderboardFactory>(value);
     if (wcscmp(name, L"Microsoft.Xbox.ResourceLoader") == 0) return Shared<ResourceLoaderFactory>(value);
     Log("TRACE", "Xbox LIVE offline: %ls not provided", name);
-    return REGDB_E_CLASSNOTREG;  // never the real Microsoft.Xbox.dll
+    return REGDB_E_CLASSNOTREG; // never the real Microsoft.Xbox.dll
 }
 }

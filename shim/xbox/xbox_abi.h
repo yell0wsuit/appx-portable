@@ -122,6 +122,41 @@ IResourceLoaderStatics : public IInspectable {  // statics of Microsoft.Xbox.Res
     virtual HRESULT STDMETHODCALLTYPE GetStringById(INT32 id, HSTRING* value) = 0;
 };
 
+// Xbox LIVE SDK 1.2 TitleStorage ABI. Enum values occupy INT32 slots.
+MIDL_INTERFACE("7857B12B-9CB2-4212-A819-FD53F8700C78")
+ITitleStorageFileStatics : public IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE GetUserFileFromPath(UINT64, GUID, HSTRING, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetGlobalFileFromPath(GUID, HSTRING, IInspectable**) = 0;
+};
+MIDL_INTERFACE("92E76AC8-A27D-4894-93FE-CF23B56F7A03")
+ITitleStorageServiceStatics : public IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE GetUserQuotaAsync(UINT64, GUID, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetUserFilesAsync(UINT32, UINT32, UINT64, GUID, HSTRING, IInspectable*,
+                                                        IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetGlobalFilesAsync(UINT32, UINT32, GUID, HSTRING, IInspectable*,
+                                                          IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE ReadToStreamAsync(IInspectable*, INT32, HSTRING, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE WriteFromStreamAsync(IInspectable*, IInspectable*, INT32, UINT32,
+                                                           IAsyncAction**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE ReadToBufferAsync(IInspectable*, INT32, HSTRING, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE WriteFromBufferAsync(IInspectable*, IInspectable*, INT32, UINT32,
+                                                           IAsyncAction**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE DeleteAsync(IInspectable*, INT32, IAsyncAction**) = 0;
+};
+MIDL_INTERFACE("C7FA6F9C-52E2-4A85-9C53-556F902BB453")
+ITitleStorageFile : public IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE get_TitleGroupId(GUID*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Xuid(UINT64*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Filename(HSTRING*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Size(UINT64*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Etag(HSTRING*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE put_Etag(HSTRING) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_ClientFileTime(ABI::Windows::Foundation::DateTime*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE put_ClientFileTime(ABI::Windows::Foundation::DateTime) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_DisplayName(HSTRING*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE put_DisplayName(HSTRING) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_SmartBlobType(HSTRING*) = 0;
+};
 // Default interfaces of the runtime classes the async methods produce; their
 // IIDs name the IAsyncOperation<T> instances.
 namespace defaults {

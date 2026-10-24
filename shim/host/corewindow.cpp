@@ -1,3 +1,4 @@
+#include "islands/islands.h"
 #include "generated/uicore.h"
 #include "host.h"
 #include "log.h"
@@ -75,6 +76,19 @@ public:
             if (args) eventVisibilityChanged_.InvokeAll(this, args.Get());
         }
     }
+    void IslandPointer(UINT message, ABI::Windows::UI::Input::IPointerPoint* point,
+                       ABI::Windows::System::VirtualKeyModifiers modifiers) {
+        auto args = Make<CorePointerArgs>(point, modifiers);
+        if (!args) return;
+        if (message == WM_LBUTTONDOWN)
+            eventPointerPressed_.InvokeAll(this, args.Get());
+        else if (message == WM_LBUTTONUP)
+            eventPointerReleased_.InvokeAll(this, args.Get());
+        else if (message == WM_MOUSEWHEEL)
+            eventPointerWheelChanged_.InvokeAll(this, args.Get());
+        else
+            eventPointerMoved_.InvokeAll(this, args.Get());
+    }
     // Mouse and keyboard, raised while the message is dispatched, as a real
     // CoreWindow raises them inside ProcessEvents.
     void OnInput(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -105,15 +119,19 @@ public:
             if (pressed) SetCapture(HostWindow());
             if (released && !(wparam & (MK_LBUTTON | MK_RBUTTON | MK_MBUTTON))) ReleaseCapture();
             ComPtr<ABI::Windows::UI::Input::IPointerPoint> point;
-            if (FAILED(MakeMousePoint(position, message == WM_MOUSEWHEEL ? GET_KEYSTATE_WPARAM(wparam) : wparam, message,
-                                      &point)))
+            if (FAILED(MakeMousePoint(position, message == WM_MOUSEWHEEL ? GET_KEYSTATE_WPARAM(wparam) : wparam,
+                                      message, &point)))
                 return;
             auto args = Make<CorePointerArgs>(point.Get(), modifiers());
             if (!args) return;
-            if (pressed) eventPointerPressed_.InvokeAll(this, args.Get());
-            else if (released) eventPointerReleased_.InvokeAll(this, args.Get());
-            else if (message == WM_MOUSEMOVE) eventPointerMoved_.InvokeAll(this, args.Get());
-            else eventPointerWheelChanged_.InvokeAll(this, args.Get());
+            if (pressed)
+                eventPointerPressed_.InvokeAll(this, args.Get());
+            else if (released)
+                eventPointerReleased_.InvokeAll(this, args.Get());
+            else if (message == WM_MOUSEMOVE)
+                eventPointerMoved_.InvokeAll(this, args.Get());
+            else
+                eventPointerWheelChanged_.InvokeAll(this, args.Get());
             return;
         }
         case WM_KEYDOWN:
@@ -123,8 +141,10 @@ public:
             const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
             auto args = Make<KeyArgs>(static_cast<ABI::Windows::System::VirtualKey>(wparam), KeyStatus(lparam, up));
             if (!args) return;
-            if (up) eventKeyUp_.InvokeAll(this, args.Get());
-            else eventKeyDown_.InvokeAll(this, args.Get());
+            if (up)
+                eventKeyUp_.InvokeAll(this, args.Get());
+            else
+                eventKeyDown_.InvokeAll(this, args.Get());
             return;
         }
         case WM_CHAR: {
@@ -135,7 +155,7 @@ public:
         }
     }
     HRESULT STDMETHODCALLTYPE get_Dispatcher(ABI::Windows::UI::Core::ICoreDispatcher** value) override {
-        return MakeDispatcher(value);
+        return IslandsMode() ? IslandDispatcher(value) : MakeDispatcher(value);
     }
     HRESULT STDMETHODCALLTYPE add_Activated(
         __FITypedEventHandler_2_Windows__CUI__CCore__CCoreWindow_Windows__CUI__CCore__CWindowActivatedEventArgs*
@@ -368,6 +388,13 @@ HRESULT MakeCoreWindow(ICoreWindow** value) {
     if (!value) return E_POINTER;
     if (!coreWindow) coreWindow = Make<CoreWindow>();
     return coreWindow ? coreWindow.CopyTo(value) : E_OUTOFMEMORY;
+}
+void IslandPointerEvent(UINT message, ABI::Windows::UI::Input::IPointerPoint* point,
+                        ABI::Windows::System::VirtualKeyModifiers modifiers) {
+    if (coreWindow) coreWindow->IslandPointer(message, point, modifiers);
+}
+void IslandInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (coreWindow) coreWindow->OnInput(message, wparam, lparam);
 }
 void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (coreWindow) coreWindow->OnMessage(message, wparam, lparam);

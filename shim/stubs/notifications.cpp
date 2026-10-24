@@ -1,6 +1,7 @@
 #include "generated/notifications.h"
 #include "com/factory.h"
 #include "registry.h"
+#include "islands/islands.h"
 #include "xml.h"
 #include <mutex>
 #include <vector>
@@ -187,6 +188,15 @@ public:
     }
     HRESULT STDMETHODCALLTYPE GetTemplateContent(ToastTemplateType type,
                                                  ABI::Windows::Data::Xml::Dom::IXmlDocument** value) override {
+        if (IslandsMode()) {
+            // The OS ToastNotification constructor expects an OS XML document.
+            // Template retrieval works unpackaged; notifier creation does not.
+            ComPtr<IToastNotificationManagerStatics> real;
+            auto hr = OsGetActivationFactory(
+                Wrappers::HStringReference(L"Windows.UI.Notifications.ToastNotificationManager").Get(),
+                IID_PPV_ARGS(&real));
+            return SUCCEEDED(hr) ? real->GetTemplateContent(type, value) : hr;
+        }
         return MakeToastTemplate(type, value);
     }
 };

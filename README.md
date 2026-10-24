@@ -1,10 +1,12 @@
 # appx-portable
 
-Run Windows 8 and 8.1 Store games as ordinary portable desktop games: extract the `.appx` package into a folder, add two or three DLLs, and start the game's own executable. No installation, Store account, developer mode, or package registration is needed, and the game executable is never modified.
+Run Windows 8 and 8.1 Store games as ordinary portable desktop games: extract the `.appx` package into a folder, add the appx-portable runtime, and launch the game. No installation, Store account, developer mode, or package registration is needed, and the game executable is never modified.
 
 Store apps expect to run inside an installed package, with an app container, a package identity, and the Store's app model around them. appx-portable supplies the Windows Runtime pieces a game needs from that environment, in-process: the app lifecycle and window, input, save folders and settings, the Store license, live tiles, and offline stand-ins for services that no longer exist.
 
 Neither games nor Microsoft runtime files are included in this repository.
+
+Managed XAML games such as **Bejeweled LIVE** use `appx-host.exe`, which setup copies beside the original executable. The launch scripts select it automatically. This hosting mode requires Windows 10 version 1903 or later and the desktop .NET Framework 4.x runtime; Wine support is unverified. The original game executable stays unchanged. See [managed game hosting](docs/islands.md) for status and diagnostics.
 
 ## Games
 
@@ -46,7 +48,7 @@ If the framework is installed on your PC (any Store app that uses it installs it
 
 ### 3. Build the DLLs
 
-[Build appx-portable](docs/building.md#windows). The build produces `appxportable.dll` and the proxy DLLs (`d3dcompiler_47.dll`, `XAudio2_8.dll`) in `build\windows-x86`. A proxy stands in for a system DLL the game imports from its own folder, loads appx-portable, and forwards every call to the real DLL.
+[Build appx-portable](docs/building.md#windows). The build produces `appx-host.exe`, `appxportable.dll` and the proxy DLLs (`d3dcompiler_47.dll`, `XAudio2_8.dll`) in `build\windows-x86`. A proxy stands in for a system DLL the game imports from its own folder, loads appx-portable, and forwards every call to the real DLL.
 
 ### 4. Stage the game
 

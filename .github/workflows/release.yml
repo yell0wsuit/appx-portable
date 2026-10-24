@@ -95,6 +95,7 @@ jobs:
                   RELEASE_TAG: ${{ steps.version.outputs.tag }}
               run: |
                   $assets = @(
+                    'build/release/appx-host.exe'
                     'build/release/RelWithDebInfo/appxportable.dll'
                     'build/release/RelWithDebInfo/d3dcompiler_47.dll'
                     'build/release/RelWithDebInfo/XAudio2_8.dll'
