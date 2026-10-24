@@ -14,10 +14,11 @@ Managed XAML games such as **Bejeweled LIVE** use `appx-host.exe`, which setup c
 | --- | --- | --- |
 | Cut the Rope 2 | `ZeptoLabUKLimited.CuttheRope2` 1.0.0.46 (x86) | Plays: gameplay, saves, resizable window, borderless fullscreen |
 | Fruit Ninja | `HalfbrickStudiosPtyLtd.FruitNinja` 1.8.1.66 (x86) | Plays: menus, slicing with the mouse, saves, resizable window. Xbox LIVE shows as disconnected |
+| Gravity Guy | `MiniclipSA.GravityGuy` 1.0.1.2 (x86) | Reaches Story gameplay with mouse input through `appx-host.exe`; Xbox LIVE remains offline. Other modes and save restoration unverified |
 
 Online services are offline: Xbox LIVE for Windows 8 and other game services have shut down, so sign-in, leaderboards and similar features report no connection, and nothing is sent. By default there is no Store license, so a game with a trial mode runs as it would without a purchase. An opt-in [trial override](docs/trial-mode.md) reports a full base-app license for games using the Windows 8/8.1 `CurrentApp` API.
 
-Other games built the same way may work, or fail in a way the log explains. Games whose interface is C# XAML (such as Bejeweled LIVE) need a different hosting mode that is not here yet. HTML/JavaScript Store apps cannot be supported.
+Other games built the same way may work, or fail in a way the log explains. Managed C# games use `appx-host.exe`, with CoreWindow or XAML Islands hosting selected automatically. HTML/JavaScript Store apps cannot be supported.
 
 ## Set up and play
 

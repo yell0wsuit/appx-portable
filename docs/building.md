@@ -26,6 +26,19 @@ python -m unittest discover -s tests/python
 
 Native tests keep saves in the build folder and need no game files. PowerShell setup tests require PowerShell 7 (`pwsh`); shell setup tests are skipped on Windows.
 
+### Managed launcher lint
+
+On Windows with a .NET SDK and .NET Framework 4.8 targeting pack, check the managed launcher using the C# EditorConfig conventions shared with contrejour-dx:
+
+```powershell
+dotnet format host/managed.csproj --verify-no-changes
+dotnet build host/managed.csproj --no-restore -warnaserror
+```
+
+Omit `--verify-no-changes` to apply formatting fixes. This project is for tooling; CMake still builds `appx-host.exe` with the Windows .NET Framework compiler. The tooling project keeps C# 5 compatibility with that compiler.
+
+Open `appx-portable.slnx` for C# editing so the editor uses the launcher's `net48` target and C# 5 language version. Modern .NET suggestions such as replacing `DllImport` with `LibraryImport` do not apply to this Framework launcher.
+
 ## macOS cross-compilation
 
 Install CMake, Ninja, LLVM, LLD, and xwin. With Homebrew:

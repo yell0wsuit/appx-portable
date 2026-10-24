@@ -2,3 +2,15 @@ root = true
 
 [*]
 end_of_line = lf
+
+# C# conventions shared with contrejour-dx.
+[*.cs]
+charset = utf-8
+indent_size = 4
+indent_style = space
+tab_width = 4
+insert_final_newline = true
+dotnet_separate_import_directive_groups = true
+dotnet_sort_system_directives_first = true
+dotnet_analyzer_diagnostic.category-Style.severity = warning
+dotnet_code_quality.CA1051.exclude_structs = true

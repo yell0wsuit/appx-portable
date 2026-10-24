@@ -4,3 +4,4 @@ EXPORTS
   DllGetActivationFactory=_DllGetActivationFactory@8 PRIVATE
   DllCanUnloadNow=_DllCanUnloadNow@0 PRIVATE
   ShimBootstrap
+  ShimSetManagedCoreWindowMode

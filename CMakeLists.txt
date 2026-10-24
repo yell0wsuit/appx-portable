@@ -203,6 +203,15 @@ if(NOT CMAKE_CROSSCOMPILING)
       "${APPX_HOST_SOURCE}"
     DEPENDS host/managed.cs host/managed.manifest VERBATIM)
   add_custom_target(appx_managed_host ALL DEPENDS "${CMAKE_BINARY_DIR}/appx-host.exe")
+  foreach(mode COREWINDOW XAML)
+    add_test(NAME managed_host_${mode} COMMAND "${CMAKE_COMMAND}"
+      "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
+      "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_host.cs"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-host-${mode}"
+      -P "${CMAKE_SOURCE_DIR}/tests/managed_host.cmake")
+    set_tests_properties(managed_host_${mode} PROPERTIES TIMEOUT 25)
+  endforeach()
 endif()
 
 add_test(NAME containers_write COMMAND storagetest containers_write)

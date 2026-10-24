@@ -8,6 +8,9 @@
 #include "generated/tiles.h"
 #include "com/factory.h"
 #include "registry.h"
+#include "host/host.h"
+#include <windows.ui.popups.h>
+#include <shobjidl.h>
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
 using namespace Microsoft::WRL;
@@ -16,12 +19,43 @@ namespace {
 namespace Share = ABI::Windows::ApplicationModel::DataTransfer;
 namespace Settings = ABI::Windows::UI::ApplicationSettings;
 namespace Tiles = ABI::Windows::UI::Notifications;
+// The system dialog works on desktop when explicitly associated with an HWND.
+class MessageDialogFactory final : public Factory<ABI::Windows::UI::Popups::IMessageDialogFactory> {
+    HRESULT MakeDialog(HSTRING content, HSTRING title, bool withTitle,
+                       ABI::Windows::UI::Popups::IMessageDialog** value) {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        ComPtr<ABI::Windows::UI::Popups::IMessageDialogFactory> factory;
+        HRESULT hr = OsGetActivationFactory(Wrappers::HStringReference(L"Windows.UI.Popups.MessageDialog").Get(),
+                                            IID_PPV_ARGS(&factory));
+        ComPtr<ABI::Windows::UI::Popups::IMessageDialog> dialog;
+        if (SUCCEEDED(hr))
+            hr = withTitle ? factory->CreateWithTitle(content, title, &dialog) : factory->Create(content, &dialog);
+        ComPtr<IInitializeWithWindow> owner;
+        if (SUCCEEDED(hr)) hr = dialog.As(&owner);
+        if (SUCCEEDED(hr)) hr = owner->Initialize(HostWindow());
+        return SUCCEEDED(hr) ? dialog.CopyTo(value) : hr;
+    }
 
-class DataTransferManager final : public RuntimeClass<RuntimeClassFlags<WinRt>, Share::DefaultIDataTransferManager, FtmBase> {
+public:
+    MessageDialogFactory() : Factory(L"Windows.UI.Popups.MessageDialog") {}
+    HRESULT STDMETHODCALLTYPE Create(HSTRING content, ABI::Windows::UI::Popups::IMessageDialog** value) override {
+        return MakeDialog(content, nullptr, false, value);
+    }
+    HRESULT STDMETHODCALLTYPE CreateWithTitle(HSTRING content, HSTRING title,
+                                              ABI::Windows::UI::Popups::IMessageDialog** value) override {
+        return MakeDialog(content, title, true, value);
+    }
+};
+
+class DataTransferManager final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, Share::DefaultIDataTransferManager, FtmBase> {
     InspectableClass(L"Windows.ApplicationModel.DataTransfer.DataTransferManager", BaseTrust);
-    EventSource<__FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CDataRequestedEventArgs>
+    EventSource<
+        __FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CDataRequestedEventArgs>
         requested_;
-    EventSource<__FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CTargetApplicationChosenEventArgs>
+    EventSource<
+        __FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CTargetApplicationChosenEventArgs>
         chosen_;
 
 public:
@@ -31,7 +65,9 @@ public:
         EventRegistrationToken* token) override {
         return requested_.Add(handler, token);
     }
-    HRESULT STDMETHODCALLTYPE remove_DataRequested(EventRegistrationToken token) override { return requested_.Remove(token); }
+    HRESULT STDMETHODCALLTYPE remove_DataRequested(EventRegistrationToken token) override {
+        return requested_.Remove(token);
+    }
     HRESULT STDMETHODCALLTYPE add_TargetApplicationChosen(
         __FITypedEventHandler_2_Windows__CApplicationModel__CDataTransfer__CDataTransferManager_Windows__CApplicationModel__CDataTransfer__CTargetApplicationChosenEventArgs*
             handler,
@@ -58,7 +94,8 @@ public:
 
 class SettingsPane final : public RuntimeClass<RuntimeClassFlags<WinRt>, Settings::DefaultISettingsPane, FtmBase> {
     InspectableClass(L"Windows.UI.ApplicationSettings.SettingsPane", BaseTrust);
-    EventSource<__FITypedEventHandler_2_Windows__CUI__CApplicationSettings__CSettingsPane_Windows__CUI__CApplicationSettings__CSettingsPaneCommandsRequestedEventArgs>
+    EventSource<
+        __FITypedEventHandler_2_Windows__CUI__CApplicationSettings__CSettingsPane_Windows__CUI__CApplicationSettings__CSettingsPaneCommandsRequestedEventArgs>
         requested_;
 
 public:
@@ -164,4 +201,5 @@ template <class T> HRESULT Shared(IActivationFactory** value) {
 HRESULT MakeShareFactory(IActivationFactory** value) { return Shared<ShareFactory>(value); }
 HRESULT MakeSettingsPaneFactory(IActivationFactory** value) { return Shared<SettingsFactory>(value); }
 HRESULT MakeTileFactory(IActivationFactory** value) { return Shared<TileFactory>(value); }
+HRESULT MakeMessageDialogFactory(IActivationFactory** value) { return Shared<MessageDialogFactory>(value); }
 }
