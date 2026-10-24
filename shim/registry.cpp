@@ -67,6 +67,7 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
             return appx::MakeShareFactory(factory);
         if (wcscmp(text, L"Windows.UI.ApplicationSettings.SettingsPane") == 0)
             return appx::MakeSettingsPaneFactory(factory);
+        if (wcscmp(text, L"Windows.UI.Popups.MessageDialog") == 0) return appx::MakeMessageDialogFactory(factory);
         if (wcscmp(text, L"Windows.UI.Notifications.TileUpdateManager") == 0) return appx::MakeTileFactory(factory);
         if (wcsncmp(text, L"Microsoft.Xbox.", 15) == 0) return appx::MakeXboxFactory(text, factory);
         if (wcsncmp(text, L"HttpClientCSharp.", 17) == 0) return appx::MakeHttpClientCSharpFactory(text, factory);

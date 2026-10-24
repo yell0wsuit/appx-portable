@@ -1,8 +1,13 @@
 #include "islands.h"
 #include "package/package.h"
 #include <fstream>
+#include <atomic>
+static std::atomic<bool> managedCoreWindow{false};
+// The managed launcher selects this before invoking an MTA game entry point.
+// Keep CLR detection separate: CoreWindow games still need activation hooks.
+extern "C" void __cdecl ShimSetManagedCoreWindowMode() noexcept { managedCoreWindow = true; }
 namespace appx {
-bool IslandsMode() noexcept {
+bool ManagedMode() noexcept {
     static const bool managed = [] {
         try {
             const auto& package = CurrentPackage();
@@ -25,4 +30,5 @@ bool IslandsMode() noexcept {
     }();
     return managed;
 }
+bool IslandsMode() noexcept { return ManagedMode() && !managedCoreWindow.load(); }
 }

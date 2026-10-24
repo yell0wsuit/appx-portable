@@ -6,6 +6,7 @@
 namespace appx {
 HRESULT IslandDispatcher(ABI::Windows::UI::Core::ICoreDispatcher** value);
 bool IslandsMode() noexcept;
+bool ManagedMode() noexcept;
 void IslandHostMessage(UINT message, WPARAM wparam, LPARAM lparam);
 void CloseIslandView();
 void ResizeIslandView(int width, int height);

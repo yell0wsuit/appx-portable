@@ -2,6 +2,12 @@
 
 Setup detects the CLR header in the manifest executable and stages `appx-host.exe` for managed games. Use `scripts/play.py --game <folder>`, `scripts/run.ps1`, or the staged host itself. Build on Windows with the normal x86 preset; the managed launcher is compiled with the .NET Framework compiler shipped with Windows.
 
+The launcher reads the executable's entry-point apartment attribute. An `MTAThread` entry point selects managed CoreWindow hosting, using the shim's `IFrameworkView` lifecycle and graphics redirection. Other managed entry points use the STA XAML Islands path. CLR activation interception remains enabled for both paths. System message dialogs in CoreWindow mode receive the desktop game window as their owner.
+
+Gravity Guy 1.0.1.2 (x86, Cocos2D/SharpDX) uses the managed CoreWindow path. Startup, offline Xbox sign-in error handling, and entry into Story gameplay were checked with real mouse input. Longer sessions, other modes, and save restoration remain unverified.
+
+Maximized startup delivers visibility before activation, including when Windows omits `WM_SHOWWINDOW`; Gravity Guy needs that notification to start updating and drawing. Its Xbox SDK 1.1 uses the same `User` interface layout as SDK 1.0. Opening achievements now creates the offline user object instead of failing with class-not-registered; achievement queries still fail offline and no online achievement data is supplied.
+
 The launcher must remain beside the game because system XAML resolves `ms-appx:///` against the process executable. Its manifest enables XAML Islands. A UI synchronization context keeps managed continuations on the island thread.
 
 Managed mode uses real Windows XAML, a desktop window, and a composed `SwapChainPanel` for Windows 8 `SwapChainBackgroundPanel` subclasses. The shim supplies package identity, persistent settings (including named containers), URI file mapping, disconnected Xbox LIVE SDK 1.2 services, splash dismissal, popup XAML roots, and window lifecycle events. The host bridges XAML routed pointer events to CoreWindow subscribers for native game boards, using XAML pointer capture for drags. Keyboard messages are forwarded from the desktop queue. Only the island window is resized; XAML internal windows retain their own bounds. Native games continue using the existing hosting path.

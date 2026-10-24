@@ -25,6 +25,7 @@ static int failures = 0;
     } while (0)
 static std::vector<int> states; // 1 = active, 0 = deactivated, for CoreWindow
 static std::vector<int> xamlStates;
+static std::vector<int> visibility;
 static std::vector<std::pair<float, float>> sizes; // CoreWindow SizeChanged
 static ComPtr<ICoreDispatcher> dispatcher;
 static HWND host;
@@ -37,7 +38,7 @@ static void Then(const std::function<void()>& step) {
     ComPtr<ABI::Windows::Foundation::IAsyncAction> action;
     CHECK(SUCCEEDED(dispatcher->RunAsync(CoreDispatcherPriority_Normal, work.Get(), &action)));
 }
-int main() {
+int main(int argc, char**) {
     RoInitialize(RO_INIT_MULTITHREADED);
     auto* dll = LoadLibraryW(L"appxportable.dll");
     CHECK(dll);
@@ -71,6 +72,16 @@ int main() {
                 return S_OK;
             });
         CHECK(SUCCEEDED(core->add_Activated(activated.Get(), &token)));
+        auto visible = Callback<ABI::Windows::Foundation::ITypedEventHandler<CoreWindow*, VisibilityChangedEventArgs*>>(
+            [](ICoreWindow* core, IVisibilityChangedEventArgs* args) -> HRESULT {
+                boolean value{}, current{};
+                args->get_Visible(&value);
+                core->get_Visible(&current);
+                CHECK(value == current);
+                visibility.push_back(value ? 1 : 0);
+                return S_OK;
+            });
+        CHECK(SUCCEEDED(core->add_VisibilityChanged(visible.Get(), &token)));
         auto resized = Callback<ABI::Windows::Foundation::ITypedEventHandler<CoreWindow*, WindowSizeChangedEventArgs*>>(
             [](ICoreWindow*, IWindowSizeChangedEventArgs* args) -> HRESULT {
                 ABI::Windows::Foundation::Size size{};
@@ -98,9 +109,11 @@ int main() {
             },
             0);
         CHECK(host != nullptr);
+        if (argc > 1) ShowWindow(host, SW_SHOWMAXIMIZED);
         CHECK(SUCCEEDED(window->Activate())); // Shows the window.
         Then([] {
             CHECK((states == std::vector<int>{1}));
+            CHECK((visibility == std::vector<int>{1}));
             // Focus moves to another window; this one stays visible.
             SendMessageW(host, WM_ACTIVATE, WA_INACTIVE, 0);
             Then([] {
@@ -109,9 +122,11 @@ int main() {
                 ShowWindow(host, SW_MINIMIZE);
                 Then([] {
                     CHECK((states == std::vector<int>{1, 0}));
+                    CHECK((visibility == std::vector<int>{1, 0}));
                     ShowWindow(host, SW_RESTORE);
                     Then([] {
                         CHECK((states == std::vector<int>{1, 0, 1}));
+                        CHECK((visibility == std::vector<int>{1, 0, 1}));
                         CHECK(xamlStates == states);
                         // Dragging the frame: the game rebuilds its renderer (and shows
                         // Loading) on every size change, so it hears only the final size.

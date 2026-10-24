@@ -14,6 +14,7 @@ HRESULT MakeCursorFactory(IActivationFactory** value);
 HRESULT MakeCoreWindowFactory(IActivationFactory** value);
 HRESULT MakePackageFactory(IActivationFactory** value);
 HRESULT MakeShareFactory(IActivationFactory** value);
+HRESULT MakeMessageDialogFactory(IActivationFactory** value);
 HRESULT MakeSettingsPaneFactory(IActivationFactory** value);
 HRESULT MakeTileFactory(IActivationFactory** value);
 // The offline Xbox LIVE stand-in; REGDB_E_CLASSNOTREG for Xbox classes it lacks.

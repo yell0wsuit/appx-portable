@@ -34,6 +34,8 @@
 # Project files
 .DS_Store
 /build/
+/host/bin/
+/host/obj/
 /.tools/
 /.sdk/
 /local/
