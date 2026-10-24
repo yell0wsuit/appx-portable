@@ -111,6 +111,13 @@ static void UpdateActivation(WPARAM activation) {
     const bool active = window && IsWindowVisible(window) && !IsIconic(window);
     if (active == reportedActive) return;
     reportedActive = active;
+    // ShowWindow(SW_SHOWMAXIMIZED) and minimize/restore need not send
+    // WM_SHOWWINDOW. Derive WinRT visibility from the settled window state.
+    CoreHostMessage(WM_SHOWWINDOW, active, 0);
+    if (IslandsMode())
+        IslandHostMessage(WM_SHOWWINDOW, active, 0);
+    else
+        XamlHostMessage(WM_SHOWWINDOW, active, 0);
     const WPARAM state = active ? (activation == WA_CLICKACTIVE ? WA_CLICKACTIVE : WA_ACTIVE) : WA_INACTIVE;
     Log("TRACE", "view activation %s", active ? "active" : "deactivated");
     CoreHostMessage(WM_ACTIVATE, state, 0);
@@ -123,7 +130,7 @@ static void UpdateActivation(WPARAM activation) {
 // reenters OnLaunched before startup has finished.
 static void ForwardWindowMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     PostHostWork(0, [message, wparam, lparam] {
-        if (message != WM_ACTIVATE) {
+        if (message != WM_ACTIVATE && message != WM_SHOWWINDOW) {
             CoreHostMessage(message, wparam, lparam);
             if (IslandsMode())
                 IslandHostMessage(message, wparam, lparam);
@@ -260,6 +267,7 @@ static HICON LoadGameIcon(int width, int height) {
 HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     InitializeDiagnostics();
     if (window) return E_ILLEGAL_METHOD_CALL;
+    reportedActive = false;
     wchar_t executable[32768]{};
     const DWORD length = GetModuleFileNameW(nullptr, executable, ARRAYSIZE(executable));
     if (!length) return HRESULT_FROM_WIN32(GetLastError());

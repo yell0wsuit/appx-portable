@@ -350,7 +350,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE get_Visible(boolean* value) override {
         if (!value) return E_POINTER;
-        *value = IsWindowVisible(HostWindow()) != FALSE;
+        *value = IsWindowVisible(HostWindow()) && !IsIconic(HostWindow());
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE Activate() override {

@@ -152,6 +152,7 @@ add_test(NAME cursortest COMMAND cursortest)
 add_executable(focustest tests/focustest.cpp)
 target_link_libraries(focustest PRIVATE runtimeobject ole32 user32)
 add_test(NAME focustest COMMAND focustest)
+add_test(NAME focus_maximized COMMAND focustest maximized)
 add_executable(optionstest tests/optionstest.cpp)
 add_test(NAME logging_off COMMAND optionstest)
 add_test(NAME logging_on COMMAND optionstest --log)
@@ -203,6 +204,11 @@ if(NOT CMAKE_CROSSCOMPILING)
       "${APPX_HOST_SOURCE}"
     DEPENDS host/managed.cs host/managed.manifest VERBATIM)
   add_custom_target(appx_managed_host ALL DEPENDS "${CMAKE_BINARY_DIR}/appx-host.exe")
+  add_test(NAME xbox11_standins COMMAND "${CMAKE_COMMAND}"
+    "-DCSC=${APPX_CSC}" "-DTEST_EXE=$<TARGET_FILE:standintest>"
+    "-DSHIM=$<TARGET_FILE:appxportable>" "-DFIXTURE=${CMAKE_BINARY_DIR}/xbox11-fixture"
+    -P "${CMAKE_SOURCE_DIR}/tests/xbox11_runtime.cmake")
+  set_tests_properties(xbox11_standins PROPERTIES TIMEOUT 25)
   foreach(mode COREWINDOW XAML)
     add_test(NAME managed_host_${mode} COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"

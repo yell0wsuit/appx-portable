@@ -34,7 +34,7 @@ IServiceClient : public IInspectable {  // Microsoft.Xbox.Foundation.ServiceClie
     virtual HRESULT STDMETHODCALLTYPE get_TitleId(UINT32* titleId) = 0;
 };
 
-// Microsoft.Xbox.User, SDK 1.0 layout.
+// Microsoft.Xbox.User, SDK 1.0/1.1 layout.
 MIDL_INTERFACE("D7FBA214-E744-4093-9FEE-AB68795B70A0")
 IUser10 : public IInspectable {
     virtual HRESULT STDMETHODCALLTYPE get_Identity(IInspectable** identity) = 0;

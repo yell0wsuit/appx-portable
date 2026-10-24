@@ -108,6 +108,18 @@ int main() {
         CHECK(SUCCEEDED(factory->ActivateInstance(&instance)) && SUCCEEDED(instance.As(&user)));
         ComPtr<IInspectable> friends;
         CHECK(user && SUCCEEDED(user->GetFriendsAsync(&friends)) && friends);
+        // SDK 1.0 and 1.1 keep GetAchievementsAsync after SetProfileAsync.
+        // Exercise the slot and projected async IID used by Gravity Guy.
+        ComPtr<IInspectable> achievements;
+        CHECK(user && SUCCEEDED(user->GetAchievementsAsync(0, 100, false, nullptr, &achievements)) && achievements);
+        ComPtr<IUnknown> typed;
+        const auto achievementOperation = appx::ParameterizedIid(appx::AsyncOperationOfClass(
+            "Microsoft.Xbox.AchievementCollection", appx::xbox::defaults::AchievementCollection));
+        CHECK(achievements && SUCCEEDED(achievements->QueryInterface(achievementOperation, &typed)));
+        ComPtr<ABI::Windows::Foundation::IAsyncInfo> info;
+        CHECK(achievements && SUCCEEDED(achievements.As(&info)));
+        HRESULT error{};
+        CHECK(info && SUCCEEDED(info->get_ErrorCode(&error)) && error == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
     }
     // Xbox classes without a stand-in are "not registered", never the real DLL.
     factory.Reset();
