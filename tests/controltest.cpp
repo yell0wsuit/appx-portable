@@ -3,7 +3,9 @@
 #include <roapi.h>
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.xaml.media.dxinterop.h>
+#include <windows.ui.xaml.media.h>
 #include <wrl.h>
+#include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
 using namespace Microsoft::WRL;
@@ -60,6 +62,17 @@ int main() {
     if (!scale) return 1;
     float x = 0;
     CHECK(SUCCEEDED(scale->get_CompositionScaleX(&x)) && x == 1);
+    ComPtr<IInspectable> background, sameBackground;
+    CHECK(SUCCEEDED(element->FindName(HStringReference(L"SwapChainPanel").Get(), &background)) && background);
+    CHECK(SUCCEEDED(element->FindName(HStringReference(L"SwapChainPanel").Get(), &sameBackground)) &&
+          sameBackground.Get() == background.Get());
+    ComPtr<ISwapChainBackgroundPanel> backgroundType;
+    CHECK(background && SUCCEEDED(background.As(&backgroundType)));
+    ComPtr<ISwapChainBackgroundPanelNative> backgroundNative;
+    CHECK(background && SUCCEEDED(background.As(&backgroundNative)));
+    CHECK(backgroundNative && SUCCEEDED(backgroundNative->SetSwapChain(nullptr)));
+    ComPtr<IPanel> backgroundPanel;
+    CHECK(background && SUCCEEDED(background.As(&backgroundPanel)));
     // MainPage.InitializeComponent safe_casts this name to Grid^.
     ComPtr<IInspectable> grid, sameGrid;
     CHECK(SUCCEEDED(element->FindName(HStringReference(L"gridForTextBlocks").Get(), &grid)) && grid);
@@ -101,6 +114,43 @@ int main() {
     CHECK(SUCCEEDED(user->put_Content(nullptr)));
     userContent.Reset();
     CHECK(SUCCEEDED(user->get_Content(&userContent)) && !userContent);
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Media.CompositionTarget").Get(), &factory)));
+    ComPtr<ABI::Windows::UI::Xaml::Media::ICompositionTargetStatics> composition;
+    CHECK(SUCCEEDED(factory.As(&composition)));
+    if (!composition) return 1;
+    unsigned frames = 0;
+    INT64 previousTime = 0;
+    const DWORD renderThread = GetCurrentThreadId();
+    auto handler = Callback<ABI::Windows::Foundation::IEventHandler<IInspectable*>>(
+        [&](IInspectable*, IInspectable* args) -> HRESULT {
+            CHECK(GetCurrentThreadId() == renderThread);
+            ComPtr<ABI::Windows::UI::Xaml::Media::IRenderingEventArgs> rendering;
+            CHECK(args && SUCCEEDED(args->QueryInterface(IID_PPV_ARGS(&rendering))));
+            ABI::Windows::Foundation::TimeSpan time{};
+            CHECK(rendering && SUCCEEDED(rendering->get_RenderingTime(&time)) && time.Duration > previousTime);
+            previousTime = time.Duration;
+            ++frames;
+            return S_OK;
+        });
+    EventRegistrationToken renderingToken{};
+    CHECK(SUCCEEDED(composition->add_Rendering(handler.Get(), &renderingToken)));
+    auto pump = [](DWORD duration) {
+        const ULONGLONG until = GetTickCount64() + duration;
+        while (GetTickCount64() < until) {
+            MSG message{};
+            while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&message);
+            MsgWaitForMultipleObjects(0, nullptr, FALSE, 10, QS_ALLINPUT);
+        }
+    };
+    pump(150);
+    CHECK(frames >= 2);
+    // Static events may be removed using a separately requested factory.
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Media.CompositionTarget").Get(), &factory)));
+    CHECK(SUCCEEDED(factory.As(&composition)));
+    CHECK(SUCCEEDED(composition->remove_Rendering(renderingToken)));
+    const unsigned stopped = frames;
+    pump(65);
+    CHECK(frames == stopped);
     printf("controltest: %d failure(s)\n", failures);
     return failures ? 1 : 0;
 }

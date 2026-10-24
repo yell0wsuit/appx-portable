@@ -5,6 +5,8 @@
 #include "com/composable.h"
 #include "com/factory.h"
 #include "registry.h"
+#include "host/host.h"
+#include <windows.ui.xaml.media.h>
 #include <wrl/event.h>
 #include <map>
 using namespace Microsoft::WRL;
@@ -119,6 +121,80 @@ public:
 }
 HRESULT MakeDispatcherTimerFactory(IActivationFactory** value) {
     auto factory = Make<DispatcherTimerFactory>();
+    return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
+}
+namespace {
+using RenderHandler = ABI::Windows::Foundation::IEventHandler<IInspectable*>;
+class RenderingArgs final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, ABI::Windows::UI::Xaml::Media::IRenderingEventArgs> {
+    InspectableClass(L"Windows.UI.Xaml.Media.RenderingEventArgs", BaseTrust);
+    ABI::Windows::Foundation::TimeSpan time_{static_cast<INT64>(GetTickCount64()) * 10000};
+
+public:
+    HRESULT STDMETHODCALLTYPE get_RenderingTime(ABI::Windows::Foundation::TimeSpan* value) override {
+        if (!value) return E_POINTER;
+        *value = time_;
+        return S_OK;
+    }
+};
+// The OS CompositionTarget has no XAML compositor in the desktop host. Deliver
+// its rendering events from the subscribing UI thread's message loop instead.
+class CompositionTargetFactory final : public Factory<ABI::Windows::UI::Xaml::Media::ICompositionTargetStatics> {
+    EventSource<RenderHandler> rendering_, lost_;
+    UINT_PTR timer_ = 0;
+    const DWORD thread_ = GetCurrentThreadId();
+    static std::map<UINT_PTR, CompositionTargetFactory*>& Timers() {
+        static thread_local std::map<UINT_PTR, CompositionTargetFactory*> timers;
+        return timers;
+    }
+    static void CALLBACK Tick(HWND, UINT, UINT_PTR id, DWORD) {
+        auto found = Timers().find(id);
+        if (found == Timers().end() || (HostWindow() && IsIconic(HostWindow()))) return;
+        ComPtr<CompositionTargetFactory> keepAlive(found->second);
+        auto args = Make<RenderingArgs>();
+        if (!args) return;
+        auto hr = keepAlive->rendering_.InvokeAll(nullptr, args.Get());
+        if (FAILED(hr)) Log("FAIL", "CompositionTarget Rendering handler hr=%08lx", hr);
+    }
+
+public:
+    CompositionTargetFactory() : Factory(L"Windows.UI.Xaml.Media.CompositionTarget") {}
+    HRESULT STDMETHODCALLTYPE add_Rendering(RenderHandler* handler, EventRegistrationToken* token) override {
+        if (GetCurrentThreadId() != thread_) return RPC_E_WRONG_THREAD;
+        auto hr = rendering_.Add(handler, token);
+        if (FAILED(hr) || timer_) return hr;
+        timer_ = SetTimer(nullptr, 0, 16, Tick);
+        if (!timer_) {
+            hr = HRESULT_FROM_WIN32(GetLastError());
+            rendering_.Remove(*token);
+            return hr;
+        }
+        Timers()[timer_] = this;
+        // The timer owns a reference until the last rendering handler leaves.
+        AddRef();
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE remove_Rendering(EventRegistrationToken token) override {
+        if (GetCurrentThreadId() != thread_) return RPC_E_WRONG_THREAD;
+        auto hr = rendering_.Remove(token);
+        if (timer_ && !rendering_.GetSize()) {
+            KillTimer(nullptr, timer_);
+            Timers().erase(timer_);
+            timer_ = 0;
+            Release();
+        }
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE add_SurfaceContentsLost(RenderHandler* handler, EventRegistrationToken* token) override {
+        return lost_.Add(handler, token);
+    }
+    HRESULT STDMETHODCALLTYPE remove_SurfaceContentsLost(EventRegistrationToken token) override {
+        return lost_.Remove(token);
+    }
+};
+}
+HRESULT MakeCompositionTargetFactory(IActivationFactory** value) {
+    static thread_local auto factory = Make<CompositionTargetFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
 }

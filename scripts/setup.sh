@@ -29,7 +29,7 @@ VCLIBS = {
     'Microsoft.VCLibs.120.00': ('msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll'),
     'Microsoft.VCLibs.140.00': ('vcruntime140_app.dll', 'msvcp140_app.dll', 'vccorlib140_app.dll'),
 }
-PROXIES = ('d3dcompiler_47.dll', 'XAudio2_8.dll')
+PROXIES = ('d3dcompiler_47.dll', 'XAudio2_8.dll', 'DWrite.dll')
 EXCLUDED = {'AppxSignature.p7x', 'AppxBlockMap.xml', '[Content_Types].xml', 'AppxMetadata',
             'microsoft.system.package.metadata', 'SaveData', 'appx-portable.ini', 'appxportable.dll', *PROXIES}
 manifest = source / 'AppxManifest.xml'

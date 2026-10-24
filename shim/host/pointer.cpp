@@ -144,7 +144,8 @@ public:
 HRESULT MakeMousePoint(POINT position, WPARAM buttons, UINT message, Input::IPointerPoint** value) {
     if (!value) return E_POINTER;
     *value = nullptr;
-    auto point = Make<MousePoint>(Point{static_cast<float>(position.x), static_cast<float>(position.y)}, buttons, message);
+    auto point =
+        Make<MousePoint>(Point{static_cast<float>(position.x), static_cast<float>(position.y)}, buttons, message);
     return point ? point.CopyTo(value) : E_OUTOFMEMORY;
 }
 class MouseArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, Xaml::Input::DefaultIPointerRoutedEventArgs,
@@ -197,6 +198,11 @@ static IInspectable* captureOwner;
 static IInspectable* activeTarget;
 IInspectable* CurrentPointerTarget() noexcept { return activeTarget; }
 void SetPointerTarget(IInspectable* target) {
+    ComPtr<IPointerTargetProvider> provider;
+    ComPtr<IInspectable> child;
+    if (target && SUCCEEDED(target->QueryInterface(IID_PPV_ARGS(&provider))) &&
+        SUCCEEDED(provider->GetPointerTarget(&child)) && child)
+        target = child.Get();
     ComPtr<Xaml::IFrameworkElement> element;
     activeTarget = target && SUCCEEDED(target->QueryInterface(IID_PPV_ARGS(&element))) ? element.Get() : nullptr;
 }

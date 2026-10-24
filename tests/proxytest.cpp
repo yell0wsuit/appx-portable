@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <d3dcompiler.h>
+#include <dwrite.h>
 #include <cstdio>
 #include <cstring>
 int main() {
@@ -53,5 +54,29 @@ int main() {
     }
     engine->Release();
     puts("proxytest: XAudio2Create by ordinal passed");
+
+    auto* write = LoadLibraryW(L"DWrite.dll");
+    if (!write) return 10;
+    GetModuleFileNameW(write, path, MAX_PATH);
+    if (_wcsnicmp(path, system, wcslen(system)) == 0) {
+        printf("FAIL loaded the system DWrite.dll, not the proxy: %ls\n", path);
+        return 11;
+    }
+    using WriteCall = HRESULT(WINAPI*)(DWRITE_FACTORY_TYPE, REFIID, IUnknown**);
+    auto factory = reinterpret_cast<WriteCall>(GetProcAddress(write, "DWriteCreateFactory"));
+    if (!factory || factory != reinterpret_cast<WriteCall>(GetProcAddress(write, MAKEINTRESOURCEA(1)))) return 12;
+    IDWriteFactory* textFactory = nullptr;
+    hr = factory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&textFactory));
+    if (FAILED(hr) || !textFactory) {
+        printf("FAIL DWriteCreateFactory %08lx\n", hr);
+        return 13;
+    }
+    IDWriteTextFormat* format = nullptr;
+    hr = textFactory->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                       DWRITE_FONT_STRETCH_NORMAL, 14.0f, L"en-US", &format);
+    textFactory->Release();
+    if (FAILED(hr) || !format) return 14;
+    format->Release();
+    puts("proxytest: DWriteCreateFactory and text format passed");
     return 0;
 }

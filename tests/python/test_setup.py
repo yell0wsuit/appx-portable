@@ -9,7 +9,7 @@ import zipfile
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 # A minimal x86 PE header: setup.ps1 checks MZ, the PE signature, and I386.
 X86_PE = b'MZ' + bytes(0x3a) + struct.pack('<I', 0x40) + b'PE' + bytes(2) + struct.pack('<H', 0x14c) + bytes(2)
-SHIM_DLLS = ['appxportable.dll', 'd3dcompiler_47.dll', 'XAudio2_8.dll']
+SHIM_DLLS = ['appxportable.dll', 'd3dcompiler_47.dll', 'XAudio2_8.dll', 'DWrite.dll']
 VCLIBS = {'110': ['msvcr110.dll', 'msvcp110.dll', 'vccorlib110.dll'],
           '120': ['msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll']}
 

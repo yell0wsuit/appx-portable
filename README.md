@@ -15,6 +15,7 @@ Managed XAML games such as **Bejeweled LIVE** use `appx-host.exe`, which setup c
 | Cut the Rope 2 | `ZeptoLabUKLimited.CuttheRope2` 1.0.0.46 (x86) | Plays: gameplay, saves, resizable window, borderless fullscreen |
 | Fruit Ninja | `HalfbrickStudiosPtyLtd.FruitNinja` 1.8.1.66 (x86) | Plays: menus, slicing with the mouse, saves, resizable window. Xbox LIVE shows as disconnected |
 | Gravity Guy | `MiniclipSA.GravityGuy` 1.0.1.2 (x86) | Reaches Story gameplay with mouse input through `appx-host.exe`; Xbox LIVE remains offline. Other modes and save restoration unverified |
+| Where's My Water? | `Disney.WheresMyWater` 1.13.1.3 (x86) | Plays: menu clicks and mouse dragging; first level completed with three ducks. Save restoration unverified |
 
 Online services are offline: Xbox LIVE for Windows 8 and other game services have shut down, so sign-in, leaderboards and similar features report no connection, and nothing is sent. By default there is no Store license, so a game with a trial mode runs as it would without a purchase. An opt-in [trial override](docs/trial-mode.md) reports a full base-app license for games using the Windows 8/8.1 `CurrentApp` API.
 
@@ -49,7 +50,7 @@ If the framework is installed on your PC (any Store app that uses it installs it
 
 ### 3. Build the DLLs
 
-[Build appx-portable](docs/building.md#windows). The build produces `appx-host.exe`, `appxportable.dll` and the proxy DLLs (`d3dcompiler_47.dll`, `XAudio2_8.dll`) in `build\windows-x86`. A proxy stands in for a system DLL the game imports from its own folder, loads appx-portable, and forwards every call to the real DLL.
+[Build appx-portable](docs/building.md#windows). The build produces `appx-host.exe`, `appxportable.dll` and the proxy DLLs (`d3dcompiler_47.dll`, `XAudio2_8.dll`, `DWrite.dll`) in `build\windows-x86`. A proxy stands in for a system DLL the game imports from its own folder, loads appx-portable, and forwards every call to the real DLL.
 
 ### 4. Stage the game
 

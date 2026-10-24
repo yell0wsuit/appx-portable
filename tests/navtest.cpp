@@ -8,6 +8,7 @@
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.xaml.markup.h>
 #include <windows.ui.xaml.navigation.h>
+#include <windows.ui.xaml.media.dxinterop.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <atomic>
@@ -101,12 +102,19 @@ public:
     HRESULT STDMETHODCALLTYPE OnNavigatingFrom(INavigatingCancelEventArgs*) override { return S_OK; }
     HRESULT STDMETHODCALLTYPE Connect(INT32 id, IInspectable* target) override {
         CHECK(id == 1 && target);
-        ComPtr<IMediaElement> media;
-        CHECK(SUCCEEDED(target->QueryInterface(IID_PPV_ARGS(&media))));
+        const bool directX = name_ == "DirectXPage";
+        if (directX) {
+            ComPtr<ISwapChainBackgroundPanelNative> panel;
+            CHECK(SUCCEEDED(target->QueryInterface(IID_PPV_ARGS(&panel))));
+        } else {
+            ComPtr<IMediaElement> media;
+            CHECK(SUCCEEDED(target->QueryInterface(IID_PPV_ARGS(&media))));
+        }
         ComPtr<IFrameworkElement> element;
         CHECK(SUCCEEDED(inner.As(&element)));
         ComPtr<IInspectable> named;
-        CHECK(SUCCEEDED(element->FindName(HStringReference(L"mediaElement").Get(), &named)));
+        CHECK(SUCCEEDED(
+            element->FindName(HStringReference(directX ? L"SwapChainPanel" : L"mediaElement").Get(), &named)));
         CHECK(named.Get() == target);
         ++connections;
         return S_OK;
@@ -292,6 +300,15 @@ static void TestMediaElement() {
     CHECK(outer->connections == 1);
     movie.Reset();
     outer->Release();
+    auto* directXOuter = new PageOuter("DirectXPage");
+    ComPtr<IPage> directXPage;
+    CHECK(SUCCEEDED(
+        pageFactory->CreateInstance(static_cast<IPageOverrides*>(directXOuter), &directXOuter->inner, &directXPage)));
+    CHECK(SUCCEEDED(componentUris->CreateUri(HStringReference(L"ms-appx:///DirectXPage.xaml").Get(), &componentUri)));
+    CHECK(SUCCEEDED(appStatics->LoadComponent(directXPage.Get(), componentUri.Get())));
+    CHECK(directXOuter->connections == 1);
+    directXPage.Reset();
+    directXOuter->Release();
     ComPtr<IMediaElement> media;
     ComPtr<IMediaElement2> media2;
     if (!object || FAILED(object.As(&media)) || FAILED(object.As(&media2))) {

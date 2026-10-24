@@ -10,6 +10,7 @@ HRESULT MakeDisplayFactory(IActivationFactory** v);
 HRESULT MakeCoreApplicationFactory(IActivationFactory** value);
 HRESULT MakeWindowFactory(IActivationFactory** value);
 HRESULT MakeDispatcherTimerFactory(IActivationFactory** value);
+HRESULT MakeCompositionTargetFactory(IActivationFactory** value);
 HRESULT MakeCursorFactory(IActivationFactory** value);
 HRESULT MakeCoreWindowFactory(IActivationFactory** value);
 HRESULT MakePackageFactory(IActivationFactory** value);

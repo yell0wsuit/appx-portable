@@ -37,7 +37,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
   add_dependencies(appxportable appxportable_version)
   target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
   # One proxy per system DLL a game imports from its folder (see scripts/gen_proxy.py).
-  foreach(proxy d3dcompiler_47 XAudio2_8)
+  foreach(proxy d3dcompiler_47 XAudio2_8 DWrite)
     add_library(${proxy} SHARED proxy/proxy.cpp proxy/${proxy}/thunks.cpp proxy/${proxy}/proxy.def shim/version.rc)
     target_include_directories(${proxy} PRIVATE "${APPX_GENERATED}" proxy/${proxy})
     target_compile_definitions(${proxy} PRIVATE APPX_PORTABLE_PROXY)

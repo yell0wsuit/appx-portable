@@ -62,6 +62,33 @@ HRESULT MakePanel(IInspectable** value) {
     panel->Release();
     return hr;
 }
+class BackgroundPanel final
+    : public Element<BackgroundPanel, ISwapChainBackgroundPanel, DefaultIPanel, ISwapChainBackgroundPanelNative> {
+    ComPtr<IDXGISwapChain> swapChain_;
+
+public:
+    static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Controls.SwapChainBackgroundPanel";
+    explicit BackgroundPanel(IInspectable* outer) : Element(outer) {}
+    HRESULT STDMETHODCALLTYPE SetSwapChain(IDXGISwapChain* value) override {
+        swapChain_ = value;
+        if (value)
+            SetPointerTarget(static_cast<IFrameworkElement*>(this));
+        else
+            ClearPointerTarget(static_cast<IFrameworkElement*>(this));
+        Log("TRACE", "ISwapChainBackgroundPanelNative::SetSwapChain");
+        return S_OK;
+    }
+};
+HRESULT MakeBackgroundPanel(IInspectable** value) {
+    if (!value) return E_POINTER;
+    *value = nullptr;
+    ISwapChainBackgroundPanel* panel = nullptr;
+    auto hr = Compose<BackgroundPanel>(nullptr, nullptr, &panel);
+    if (FAILED(hr)) return hr;
+    hr = panel->QueryInterface(IID_PPV_ARGS(value));
+    panel->Release();
+    return hr;
+}
 // MainPage's root Grid. InitializeComponent safe_casts FindName's result to
 // Grid^, so a null or non-Grid object breaks the generated field binding.
 class Grid final : public Element<Grid, DefaultIGrid, DefaultIPanel> {

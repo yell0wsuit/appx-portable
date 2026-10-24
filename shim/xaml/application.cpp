@@ -94,7 +94,7 @@ class InitParams final : public RuntimeClass<RuntimeClassFlags<WinRt>, IApplicat
     InspectableClass(L"Windows.UI.Xaml.ApplicationInitializationCallbackParams", BaseTrust);
 };
 class Application;
-static Application* live = nullptr;  // the game's Application, for Suspending
+static Application* live = nullptr; // the game's Application, for Suspending
 class Application final : public Composable<Application, DefaultIApplication, DefaultIApplicationOverrides> {
     EventSource<ISuspendingEventHandler> suspending_;
     EventSource<ABI::Windows::Foundation::IEventHandler<IInspectable*>> resuming_;
@@ -174,20 +174,22 @@ public:
         uri->get_AbsoluteUri(&text);
         Log("TRACE", "Application::LoadComponent %ls", WindowsGetStringRawBuffer(text, nullptr));
         const bool movie = wcscmp(WindowsGetStringRawBuffer(text, nullptr), L"ms-appx:///MovieMgrPage.xaml") == 0;
+        const bool directX = wcscmp(WindowsGetStringRawBuffer(text, nullptr), L"ms-appx:///DirectXPage.xaml") == 0;
         WindowsDeleteString(text);
-        if (movie && component) {
-            // The compiled XAML's connection 1 installs MediaOpened/Ended/Failed
-            // and PointerPressed handlers. FindName alone only binds the field.
+        if ((movie || directX) && component) {
+            // Connection 1 installs the movie events or the DirectX panel's
+            // pointer handlers. FindName alone only binds the generated field.
             ComPtr<ABI::Windows::UI::Xaml::Markup::IComponentConnector> connector;
             auto hr = component->QueryInterface(IID_PPV_ARGS(&connector));
             if (FAILED(hr)) return hr;
             ComPtr<IFrameworkElement> element;
             hr = component->QueryInterface(IID_PPV_ARGS(&element));
             if (FAILED(hr)) return hr;
-            ComPtr<IInspectable> media;
-            hr = element->FindName(Wrappers::HStringReference(L"mediaElement").Get(), &media);
+            ComPtr<IInspectable> target;
+            hr = element->FindName(Wrappers::HStringReference(movie ? L"mediaElement" : L"SwapChainPanel").Get(),
+                                   &target);
             if (FAILED(hr)) return hr;
-            return connector->Connect(1, media.Get());
+            return connector->Connect(1, target.Get());
         }
         return S_OK;
     }
@@ -251,8 +253,10 @@ HRESULT MakeApplicationFactory(IActivationFactory** value) {
 }
 // Application.Suspending, which XAML games save in.
 void RaiseApplicationSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
-    if (IslandsMode()) RaiseIslandSuspending(args);
-    else if (live) live->RaiseSuspending(current.Get(), args);
+    if (IslandsMode())
+        RaiseIslandSuspending(args);
+    else if (live)
+        live->RaiseSuspending(current.Get(), args);
 }
 HRESULT MakeLaunchArgs(IActivatedEventArgs** value) {
     if (!value) return E_POINTER;

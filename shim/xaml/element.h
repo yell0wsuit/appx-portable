@@ -10,6 +10,7 @@
 #include <functional>
 namespace appx {
 HRESULT MakePanel(IInspectable** value);
+HRESULT MakeBackgroundPanel(IInspectable** value);
 HRESULT MakeGrid(IInspectable** value);
 HRESULT MakeMediaElement(IInspectable** value);
 HRESULT QueueElementLoaded(IInspectable* value);
@@ -63,15 +64,16 @@ public:
     }
 };
 template <class Derived, class Primary, class... Interfaces>
-class Element : public Composable<Derived, Primary, ABI::Windows::UI::Xaml::DefaultIFrameworkElement,
-                                  ABI::Windows::UI::Xaml::DefaultIUIElement,
-                                  ABI::Windows::UI::Xaml::DefaultIDependencyObject, Interfaces...> {
+class Element
+    : public Composable<Derived, Primary, ABI::Windows::UI::Xaml::DefaultIFrameworkElement,
+                        ABI::Windows::UI::Xaml::DefaultIUIElement, ABI::Windows::UI::Xaml::DefaultIDependencyObject,
+                        IPointerTargetProvider, Interfaces...> {
     using Base = Composable<Derived, Primary, ABI::Windows::UI::Xaml::DefaultIFrameworkElement,
                             ABI::Windows::UI::Xaml::DefaultIUIElement, ABI::Windows::UI::Xaml::DefaultIDependencyObject,
-                            Interfaces...>;
+                            IPointerTargetProvider, Interfaces...>;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::IRoutedEventHandler> loaded_;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::ISizeChangedEventHandler> resized_;
-    Microsoft::WRL::ComPtr<IInspectable> panel_, grid_, media_;
+    Microsoft::WRL::ComPtr<IInspectable> panel_, backgroundPanel_, grid_, media_;
     Microsoft::WRL::Wrappers::HString name_;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerPressed_;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerMoved_;
@@ -126,11 +128,20 @@ private:
                 hr = DeliverElementLoaded(grid_.Get());
                 if (FAILED(hr)) return hr;
             }
+            if (backgroundPanel_) {
+                hr = DeliverElementLoaded(backgroundPanel_.Get());
+                if (FAILED(hr)) return hr;
+            }
             return panel_ ? DeliverElementLoaded(panel_.Get()) : S_OK;
         };
     }
 
 public:
+    HRESULT STDMETHODCALLTYPE GetPointerTarget(IInspectable** value) override {
+        if (!value) return E_POINTER;
+        if (backgroundPanel_) return backgroundPanel_.CopyTo(value);
+        return panel_.CopyTo(value);
+    }
     // NOLINTNEXTLINE(bugprone-exception-escape): the constructor built both maps; erase() does not throw.
     ~Element() {
         UnregisterPointerTarget(static_cast<ABI::Windows::UI::Xaml::IFrameworkElement*>(this));
@@ -139,6 +150,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE add_PointerPressed(ABI::Windows::UI::Xaml::Input::IPointerEventHandler* handler,
                                                  EventRegistrationToken* token) override {
+        Log("TRACE", "%ls PointerPressed subscribed", Derived::Name);
         return eventPointerPressed_.Add(handler, token);
     }
     HRESULT STDMETHODCALLTYPE remove_PointerPressed(EventRegistrationToken token) override {
@@ -146,6 +158,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE add_PointerMoved(ABI::Windows::UI::Xaml::Input::IPointerEventHandler* handler,
                                                EventRegistrationToken* token) override {
+        Log("TRACE", "%ls PointerMoved subscribed", Derived::Name);
         return eventPointerMoved_.Add(handler, token);
     }
     HRESULT STDMETHODCALLTYPE remove_PointerMoved(EventRegistrationToken token) override {
@@ -153,6 +166,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE add_PointerReleased(ABI::Windows::UI::Xaml::Input::IPointerEventHandler* handler,
                                                   EventRegistrationToken* token) override {
+        Log("TRACE", "%ls PointerReleased subscribed", Derived::Name);
         return eventPointerReleased_.Add(handler, token);
     }
     HRESULT STDMETHODCALLTYPE remove_PointerReleased(EventRegistrationToken token) override {
@@ -267,6 +281,14 @@ public:
         *value = nullptr;
         const wchar_t* text = WindowsGetStringRawBuffer(name, nullptr);
         Log("TRACE", "FindName(%ls)", text);
+        // Windows 8 DirectX pages use a SwapChainBackgroundPanel under this name.
+        if (wcscmp(text, L"SwapChainPanel") == 0) {
+            if (!backgroundPanel_) {
+                auto hr = MakeBackgroundPanel(&backgroundPanel_);
+                if (FAILED(hr)) return hr;
+            }
+            return backgroundPanel_.CopyTo(value);
+        }
         if (wcscmp(text, L"swapChainPanel") == 0) {
             if (!panel_) {
                 auto hr = MakePanel(&panel_);
