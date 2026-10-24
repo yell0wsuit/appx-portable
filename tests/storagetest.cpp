@@ -135,6 +135,12 @@ int main(int argc, char** argv) {
             if (FAILED(props->CreateInt32(12345, &value)) ||
                 FAILED(map->Insert(HStringReference(L"score").Get(), value.Get(), &replaced)))
                 return 87;
+            if (FAILED(props->CreateBoolean(false, &value)) ||
+                FAILED(map->Insert(HStringReference(L"enabled").Get(), value.Get(), &replaced)))
+                return 91;
+            if (FAILED(props->CreateDouble(42.0, &value)) ||
+                FAILED(map->Insert(HStringReference(L"volume").Get(), value.Get(), &replaced)))
+                return 92;
         } else {
             ComPtr<IInspectable> value;
             ComPtr<ABI::Windows::Foundation::IPropertyValue> property;
@@ -142,6 +148,14 @@ int main(int argc, char** argv) {
             if (FAILED(map->Lookup(HStringReference(L"score").Get(), &value)) || FAILED(value.As(&property)) ||
                 FAILED(property->GetInt32(&score)) || score != 12345)
                 return 88;
+            boolean enabled = true;
+            double volume = 0;
+            if (FAILED(map->Lookup(HStringReference(L"enabled").Get(), &value)) || FAILED(value.As(&property)) ||
+                FAILED(property->GetBoolean(&enabled)) || enabled)
+                return 93;
+            if (FAILED(map->Lookup(HStringReference(L"volume").Get(), &value)) || FAILED(value.As(&property)) ||
+                FAILED(property->GetDouble(&volume)) || volume != 42.0)
+                return 94;
             if (FAILED(parent->DeleteContainer(name.Get()))) return 89;
             if (FAILED(children->HasKey(name.Get(), &exists)) || exists) return 90;
         }

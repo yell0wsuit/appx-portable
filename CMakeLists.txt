@@ -108,13 +108,24 @@ add_test(NAME readertest COMMAND readertest)
 add_executable(toasttest tests/toasttest.cpp)
 target_link_libraries(toasttest PRIVATE runtimeobject ole32)
 add_test(NAME toasttest COMMAND toasttest)
+add_executable(xamlsettingstest tests/xamlsettingstest.cpp host/managed.manifest)
+target_link_libraries(xamlsettingstest PRIVATE runtimeobject ole32 user32)
+add_test(NAME xaml_settings_contract COMMAND xamlsettingstest)
+add_test(NAME islands_settings_contract COMMAND "${CMAKE_COMMAND}"
+  "-DTEST_EXE=$<TARGET_FILE:xamlsettingstest>"
+  "-DSHIM=$<TARGET_FILE:appxportable>"
+  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe"
+  "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-settings-fixture"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
+set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 25)
+
 if(WIN32)
   add_test(NAME islands_toasttest COMMAND "${CMAKE_COMMAND}"
-    "-DTOAST=$<TARGET_FILE:toasttest>"
+    "-DTEST_EXE=$<TARGET_FILE:toasttest>"
     "-DSHIM=$<TARGET_FILE:appxportable>"
     "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe"
     "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-toast-fixture"
-    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_toast.cmake")
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 endif()
 add_executable(storetest tests/storetest.cpp)
 target_link_libraries(storetest PRIVATE runtimeobject ole32)
