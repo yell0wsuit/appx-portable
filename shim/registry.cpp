@@ -46,6 +46,7 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
         if (wcscmp(text, L"Windows.Web.Http.HttpClient") == 0) return appx::MakeHttpFactory(false, factory);
         if (wcscmp(text, L"VungleSDK.AdFactory") == 0) return appx::MakeAdFactory(factory);
         if (wcscmp(text, L"Windows.Storage.ApplicationData") == 0) return appx::MakeStorageFactory(factory);
+        if (wcscmp(text, L"Windows.Storage.StorageFile") == 0) return appx::MakeStorageFileFactory(factory);
         if (wcscmp(text, L"Windows.UI.Input.PointerVisualizationSettings") == 0)
             return appx::MakeVisualizationFactory(factory);
         if (wcscmp(text, L"Windows.UI.Xaml.Window") == 0) return appx::MakeWindowFactory(factory);
