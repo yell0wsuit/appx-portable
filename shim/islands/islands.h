@@ -14,6 +14,7 @@ void RaiseIslandSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs*
 bool IslandPreTranslate(MSG* message);
 HRESULT MakeIslandFactory(const wchar_t* name, IActivationFactory** out);
 HRESULT MakeIslandPanelFactory(IActivationFactory** out);
+HRESULT MakeIslandSwapChainPanelFactory(IActivationFactory** out);
 HRESULT MakeLaunchArgs(ABI::Windows::ApplicationModel::Activation::IActivatedEventArgs** out);
 void DismissSplashScreen();
 }

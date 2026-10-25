@@ -19,6 +19,8 @@ HRESULT MakeShareFactory(IActivationFactory** value);
 HRESULT MakeMessageDialogFactory(IActivationFactory** value);
 HRESULT MakeSettingsPaneFactory(IActivationFactory** value);
 HRESULT MakeTileFactory(IActivationFactory** value);
+HRESULT MakeBadgeFactory(IActivationFactory** value);
+HRESULT MakeSecondaryTileFactory(IActivationFactory** value);
 // The offline Xbox LIVE stand-in; REGDB_E_CLASSNOTREG for Xbox classes it lacks.
 HRESULT MakeXboxFactory(const wchar_t* name, IActivationFactory** value);
 // Halfbrick's C# HTTP component, stood in offline.

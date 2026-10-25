@@ -24,7 +24,7 @@ internal sealed class UiContext : SynchronizationContext
     private void Run(SendOrPostCallback d, object state)
     {
         try { d(state); }
-        catch (Exception ex) { File.AppendAllText(log, "[posted continuation threw] " + ex + "\n"); }
+        catch (Exception ex) { Host.AppendLog(log, "[posted continuation threw] " + ex + "\n"); }
     }
     public override void Post(SendOrPostCallback d, object state)
     {
@@ -46,6 +46,28 @@ internal sealed class UiContext : SynchronizationContext
 
 internal static class Host
 {
+    private static readonly object logLock = new object();
+    [ThreadStatic]
+    private static bool writingLog;
+
+    internal static void AppendLog(string path, string text)
+    {
+        // First-chance events can arrive concurrently. A sharing violation in
+        // the exception observer itself can terminate the CLR. Logging must
+        // never throw or recursively log its own failures.
+        if (writingLog)
+        {
+            return;
+        }
+        writingLog = true;
+        try
+        {
+            lock (logLock) { File.AppendAllText(path, text); }
+        }
+        catch (Exception) { }
+        finally { writingLog = false; }
+    }
+
     [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern void ShimBootstrap();
     [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl)]
@@ -58,11 +80,11 @@ internal static class Host
         string log = Path.Combine(dir, "managed.log");
         File.WriteAllText(log, "");
         AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
-            File.AppendAllText(log, string.Format("[first-chance] {0} 0x{1:X8}: {2}\n{3}\n",
+            AppendLog(log, string.Format("[first-chance] {0} 0x{1:X8}: {2}\n{3}\n",
                 e.Exception.GetType().FullName, e.Exception.HResult, e.Exception.Message,
                 new System.Diagnostics.StackTrace(1, false)));
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
-            File.AppendAllText(log, "[unhandled] " + e.ExceptionObject + "\n");
+            AppendLog(log, "[unhandled] " + e.ExceptionObject + "\n");
         ShimBootstrap();
         try
         {
@@ -86,7 +108,7 @@ internal static class Host
 
             Assembly assembly = Assembly.LoadFrom(target);
             bool coreWindow = assembly.EntryPoint.IsDefined(typeof(MTAThreadAttribute), false);
-            File.AppendAllText(log, coreWindow ? "[host] managed CoreWindow (MTA)\n" : "[host] managed XAML Islands (STA)\n");
+            AppendLog(log, coreWindow ? "[host] managed CoreWindow (MTA)\n" : "[host] managed XAML Islands (STA)\n");
             if (coreWindow)
             {
                 ShimSetManagedCoreWindowMode();
@@ -103,7 +125,7 @@ internal static class Host
                 }
                 catch (Exception ex)
                 {
-                    File.AppendAllText(log, "[escaped Main] " + ex + "\n");
+                    AppendLog(log, "[escaped Main] " + ex + "\n");
                 }
             });
             ui.SetApartmentState(ApartmentState.STA);
@@ -113,7 +135,7 @@ internal static class Host
         }
         catch (Exception ex)
         {
-            File.AppendAllText(log, "[escaped Main] " + ex + "\n");
+            AppendLog(log, "[escaped Main] " + ex + "\n");
             return 1;
         }
     }

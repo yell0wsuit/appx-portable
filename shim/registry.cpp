@@ -13,11 +13,16 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
         if (appx::IslandsMode()) {
             auto hr = appx::MakeIslandFactory(text, factory);
             if (hr != CLASS_E_CLASSNOTAVAILABLE) return hr;
+            if (wcscmp(text, L"Windows.ApplicationModel.Core.CoreApplication") == 0)
+                return appx::MakeCoreApplicationFactory(factory);
             if (wcscmp(text, L"Windows.Storage.StorageFile") == 0) return appx::MakeStorageFileFactory(factory);
             if (wcscmp(text, L"Windows.Storage.ApplicationData") != 0 &&
                 wcscmp(text, L"Windows.ApplicationModel.Package") != 0 &&
                 wcscmp(text, L"Windows.ApplicationModel.Store.CurrentApp") != 0 &&
+                wcscmp(text, L"Windows.UI.ApplicationSettings.SettingsPane") != 0 &&
                 wcscmp(text, L"Windows.UI.Notifications.TileUpdateManager") != 0 &&
+                wcscmp(text, L"Windows.UI.Notifications.BadgeUpdateManager") != 0 &&
+                wcscmp(text, L"Windows.UI.StartScreen.SecondaryTile") != 0 &&
                 wcscmp(text, L"Windows.UI.Notifications.ToastNotificationManager") != 0 &&
                 wcscmp(text, L"Windows.UI.Notifications.ScheduledToastNotification") != 0 &&
                 wcsncmp(text, L"Microsoft.Xbox.", 15) != 0)
@@ -74,6 +79,8 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
             return appx::MakeSettingsPaneFactory(factory);
         if (wcscmp(text, L"Windows.UI.Popups.MessageDialog") == 0) return appx::MakeMessageDialogFactory(factory);
         if (wcscmp(text, L"Windows.UI.Notifications.TileUpdateManager") == 0) return appx::MakeTileFactory(factory);
+        if (wcscmp(text, L"Windows.UI.Notifications.BadgeUpdateManager") == 0) return appx::MakeBadgeFactory(factory);
+        if (wcscmp(text, L"Windows.UI.StartScreen.SecondaryTile") == 0) return appx::MakeSecondaryTileFactory(factory);
         if (wcsncmp(text, L"Microsoft.Xbox.", 15) == 0) return appx::MakeXboxFactory(text, factory);
         if (wcsncmp(text, L"HttpClientCSharp.", 17) == 0) return appx::MakeHttpClientCSharpFactory(text, factory);
         if (wcscmp(text, L"Windows.System.Threading.ThreadPoolTimer") == 0)

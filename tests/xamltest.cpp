@@ -76,6 +76,10 @@ int main() {
     ComPtr<IApplication> app;
     CHECK(SUCCEEDED(compose->CreateInstance(outer, &outer->inner, &app)));
     if (!app) return 1;
+    ApplicationTheme theme;
+    CHECK(SUCCEEDED(app->get_RequestedTheme(&theme)) && theme == ApplicationTheme_Dark);
+    CHECK(SUCCEEDED(app->put_RequestedTheme(ApplicationTheme_Light)));
+    CHECK(SUCCEEDED(app->get_RequestedTheme(&theme)) && theme == ApplicationTheme_Light);
     ComPtr<IUnknown> identity, innerIdentity;
     CHECK(SUCCEEDED(app.As(&identity)));
     CHECK(identity.Get() == static_cast<IInspectable*>(outer));

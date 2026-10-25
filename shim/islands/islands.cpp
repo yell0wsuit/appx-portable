@@ -13,6 +13,8 @@
 #include <windows.ui.xaml.hosting.desktopwindowxamlsource.h>
 #include <windows.applicationmodel.activation.h>
 #include <windows.ui.core.h>
+#include <shlwapi.h>
+#include <xmllite.h>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -30,6 +32,7 @@ using ABI::Windows::Foundation::Rect;
 #include "host/host.h"
 #include "host/event_args.h"
 #include "islands.h"
+#include "package/package.h"
 namespace appx {
 HRESULT MakeCoreWindow(ABI::Windows::UI::Core::ICoreWindow** value);
 static std::string Narrow(HSTRING s) {
@@ -49,26 +52,92 @@ static ComPtr<Hosting::IWindowsXamlManager> xamlManager;
 static ComPtr<Hosting::IDesktopWindowXamlSource> xamlSource;
 static ComPtr<IDesktopWindowXamlSourceNative2> xamlNative;
 static ComPtr<IInspectable> appInstance;
+HRESULT ConnectIslandScrolling(IInspectable* root);
+HRESULT MakeIslandGridFactory(IActivationFactory** value);
 static ComPtr<IUIElement> pendingContent;
+static ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> islandDispatcher;
+using RequestedThemeCall = HRESULT(STDMETHODCALLTYPE*)(IApplication*, ApplicationTheme);
+static RequestedThemeCall realRequestedTheme;
+static ApplicationTheme requestedTheme = ApplicationTheme_Dark;
+static bool themeApplied;
+static void ReadApplicationTheme() {
+    // The native parser sets Application properties internally, bypassing COM
+    // setters. Read an authored theme with the SDK XML reader before startup;
+    // subsequent constructor requests can still override it.
+    const auto path = CurrentPackage().directory / L"App.xaml";
+    ComPtr<IStream> stream;
+    ComPtr<IXmlReader> reader;
+    if (FAILED(SHCreateStreamOnFileEx(path.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE, 0, FALSE, nullptr, &stream)) ||
+        FAILED(CreateXmlReader(IID_PPV_ARGS(&reader), nullptr)) ||
+        FAILED(reader->SetProperty(XmlReaderProperty_DtdProcessing, DtdProcessing_Prohibit)) ||
+        FAILED(reader->SetInput(stream.Get())))
+        return;
+    XmlNodeType type;
+    while (reader->Read(&type) == S_OK) {
+        if (type != XmlNodeType_Element) continue;
+        const wchar_t* name = nullptr;
+        reader->GetLocalName(&name, nullptr);
+        if (name && !wcscmp(name, L"Application") &&
+            reader->MoveToAttributeByName(L"RequestedTheme", nullptr) == S_OK) {
+            const wchar_t* value = nullptr;
+            reader->GetValue(&value, nullptr);
+            if (value && !wcscmp(value, L"Light")) requestedTheme = ApplicationTheme_Light;
+            if (value && !wcscmp(value, L"Dark")) requestedTheme = ApplicationTheme_Dark;
+        }
+        break;
+    }
+}
+// Windows 8 defaulted to dark. Modern islands inherit the desktop preference.
+// Apply the compatibility default to each visual root without replacing an
+// element's explicit theme or changing the system Application after resources load.
+static HRESULT ApplyRootTheme(IInspectable* element) {
+    if (!element) return S_OK;
+    ComPtr<IFrameworkElement2> root;
+    auto hr = element->QueryInterface(IID_PPV_ARGS(&root));
+    if (hr == E_NOINTERFACE) return S_OK;
+    if (FAILED(hr)) return hr;
+    ElementTheme theme;
+    hr = root->get_RequestedTheme(&theme);
+    if (SUCCEEDED(hr) && theme == ElementTheme_Default)
+        hr = root->put_RequestedTheme(requestedTheme == ApplicationTheme_Dark ? ElementTheme_Dark : ElementTheme_Light);
+    return hr;
+}
+static bool initializingXaml;
 static HRESULT InitXaml(const char* where) {
-    if (xamlManager) return S_OK;
+    if (xamlManager || initializingXaml) return S_OK;
     appx::Log("TRACE", "-> InitializeForCurrentThread (%s)", where);
     ComPtr<Hosting::IWindowsXamlManagerStatics> statics;
     HRESULT hr = GetReal(L"Windows.UI.Xaml.Hosting.WindowsXamlManager", IID_PPV_ARGS(&statics));
-    if (SUCCEEDED(hr)) hr = statics->InitializeForCurrentThread(&xamlManager);
+    if (SUCCEEDED(hr)) {
+        // XAML can request managed metadata while initializing; those requests
+        // may activate further XAML factories through the CLR hook.
+        initializingXaml = true;
+        hr = statics->InitializeForCurrentThread(&xamlManager);
+        initializingXaml = false;
+        if (SUCCEEDED(hr) && !islandDispatcher) {
+            ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> dispatcher;
+            hr = IslandDispatcher(&dispatcher);
+        }
+    }
     appx::Log("TRACE", "STAGE islands: WindowsXamlManager.InitializeForCurrentThread (%s) hr=0x%08lX", where, hr);
     return hr;
 }
 
 HRESULT IslandDispatcher(ABI::Windows::UI::Core::ICoreDispatcher** value) {
     if (!value) return E_POINTER;
+    // CoreWindow can be retained by worker threads. Its Dispatcher belongs to
+    // the island's UI thread, not whichever thread calls this getter later.
+    if (islandDispatcher) return islandDispatcher.CopyTo(value);
     *value = nullptr;
     ComPtr<ABI::Windows::UI::Core::ICoreWindowStatic> statics;
     ComPtr<ABI::Windows::UI::Core::ICoreWindow> core;
     auto hr = GetReal(L"Windows.UI.Core.CoreWindow", IID_PPV_ARGS(&statics));
     if (SUCCEEDED(hr)) hr = statics->GetForCurrentThread(&core);
     if (FAILED(hr)) return hr;
-    return core ? core->get_Dispatcher(value) : E_UNEXPECTED;
+    if (!core) return E_UNEXPECTED;
+    hr = core->get_Dispatcher(value);
+    if (SUCCEEDED(hr) && GetCurrentThreadId() == HostThread()) islandDispatcher = *value;
+    return hr;
 }
 static ComPtr<ILaunchActivatedEventArgs> IslandLaunchArgs() {
     ComPtr<IActivatedEventArgs> args;
@@ -120,7 +189,13 @@ public:
         // XAML runs OnLaunched inside InitializeForCurrentThread, before the
         // island exists; hold the content until it is attached.
         content_ = v;
-        HRESULT hr = S_OK;
+        HRESULT hr = ConnectIslandScrolling(v);
+        if (FAILED(hr)) return hr;
+        if (v) {
+            hr = ApplyRootTheme(v);
+            if (FAILED(hr)) return hr;
+            themeApplied = true;
+        }
         if (xamlSource)
             hr = xamlSource->put_Content(v);
         else
@@ -137,18 +212,7 @@ public:
         return MakeCoreWindow(v);
     }
     HRESULT STDMETHODCALLTYPE get_Dispatcher(ABI::Windows::UI::Core::ICoreDispatcher** v) override {
-        *v = nullptr;
-        ComPtr<ABI::Windows::UI::Core::ICoreWindow> core;
-        ComPtr<ABI::Windows::UI::Core::ICoreWindowStatic> statics;
-        if (SUCCEEDED(GetReal(L"Windows.UI.Core.CoreWindow", IID_PPV_ARGS(&statics))) &&
-            SUCCEEDED(statics->GetForCurrentThread(&core)) && core)
-            return core->get_Dispatcher(v);
-        ComPtr<IUIElement> content;
-        ComPtr<IDependencyObject> dep;
-        if (xamlSource && SUCCEEDED(xamlSource->get_Content(&content)) && content && SUCCEEDED(content.As(&dep)))
-            return dep->get_Dispatcher(v);
-        appx::Log("TRACE", "Window.Dispatcher -> none");
-        return E_FAIL;
+        return IslandDispatcher(v);
     }
     HRESULT STDMETHODCALLTYPE add_Activated(IWindowActivatedEventHandler* h, EventRegistrationToken* t) override {
         return activated_.Add(h, t);
@@ -208,7 +272,21 @@ public:
 // app's IApplicationOverrides::OnLaunched slot to pass our args instead.
 using OnLaunchedCall = HRESULT(STDMETHODCALLTYPE*)(IApplicationOverrides*, ILaunchActivatedEventArgs*);
 static OnLaunchedCall realOnLaunched;
+static bool applicationConstructed;
+static bool launchPending;
 static HRESULT STDMETHODCALLTYPE HookOnLaunched(IApplicationOverrides* self, ILaunchActivatedEventArgs* args) {
+    // Initialization can invoke OnLaunched synchronously. Capture the real UI
+    // dispatcher before application code starts any background continuations.
+    ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> dispatcher;
+    auto hr = IslandDispatcher(&dispatcher);
+    if (FAILED(hr)) return hr;
+    // Initializing XAML for controls in derived Application constructors can
+    // launch the app synchronously.
+    // Let the managed startup callback finish before entering game code.
+    if (!applicationConstructed) {
+        launchPending = true;
+        return S_OK;
+    }
     appx::Log("TRACE", "STAGE launched: OnLaunched intercepted (system args %p), passing portable launch args", args);
     auto argsOverride = IslandLaunchArgs();
     return argsOverride ? realOnLaunched(self, argsOverride.Get()) : E_OUTOFMEMORY;
@@ -270,6 +348,10 @@ using PopupOpenCall = HRESULT(STDMETHODCALLTYPE*)(Controls::Primitives::IPopup*,
 static PopupOpenCall originalPopupOpen;
 static HRESULT STDMETHODCALLTYPE OpenPopup(Controls::Primitives::IPopup* popup, boolean open) {
     if (open && xamlSource) {
+        ComPtr<IUIElement> child;
+        auto themeHr = popup->get_Child(&child);
+        if (SUCCEEDED(themeHr)) themeHr = ApplyRootTheme(child.Get());
+        if (FAILED(themeHr)) return themeHr;
         ComPtr<IUIElement> content;
         ComPtr<IUIElement10> rootElement, popupElement;
         ComPtr<IXamlRoot> root;
@@ -300,8 +382,129 @@ static HRESULT InitializePopups() {
     VirtualProtect(slot, sizeof(void*), protection, &ignored);
     return S_OK;
 }
+// Keep the real SettingsFlyout control and its template, but host it in a
+// standard island Popup: its Windows 8 Show implementation uses CoreWindow's
+// token 1x1 window for placement even when the control has an island XamlRoot.
+using SettingsFlyoutHideCall = HRESULT(STDMETHODCALLTYPE*)(Controls::ISettingsFlyout*);
+static SettingsFlyoutHideCall originalSettingsFlyoutHide;
+static ComPtr<Controls::Primitives::IPopup> settingsPopup;
+static ComPtr<Controls::ISettingsFlyout> settingsFlyout;
+static EventRegistrationToken settingsBackToken;
+HRESULT ConnectSettingsAppearance(IInspectable* flyout, IInspectable* page, IInspectable* popup);
+void DisconnectSettingsAppearance();
+static void CloseSettingsFlyout() {
+    DisconnectSettingsAppearance();
+    auto popup = std::move(settingsPopup);
+    auto flyout = std::move(settingsFlyout);
+    if (flyout) flyout->remove_BackClick(settingsBackToken);
+    if (popup) {
+        popup->put_IsOpen(false);
+        popup->put_Child(nullptr);
+    }
+}
+static HRESULT SizeSettingsFlyout(double width, double height) {
+    if (!settingsPopup || !settingsFlyout) return S_OK;
+    ComPtr<IFrameworkElement> element;
+    auto hr = settingsFlyout.As(&element);
+    double requested = 320;
+    if (SUCCEEDED(hr)) hr = element->get_Width(&requested);
+    if (!(requested > 0)) requested = 320;
+    const double actual = (std::min)(requested, width);
+    if (SUCCEEDED(hr)) hr = element->put_Width(actual);
+    if (SUCCEEDED(hr)) hr = element->put_Height(height);
+    if (SUCCEEDED(hr)) hr = settingsPopup->put_HorizontalOffset(width - actual);
+    return hr;
+}
+static HRESULT OpenSettingsFlyout(Controls::ISettingsFlyout* flyout, bool independent) {
+    CloseSettingsFlyout();
+    if (!xamlSource) return E_UNEXPECTED;
+    ComPtr<IUIElement> content, child;
+    ComPtr<IUIElement10> contentElement, popupElement;
+    ComPtr<IXamlRoot> root;
+    auto hr = xamlSource->get_Content(&content);
+    if (SUCCEEDED(hr) && !content) return E_UNEXPECTED;
+    if (SUCCEEDED(hr)) hr = content.As(&contentElement);
+    if (SUCCEEDED(hr)) hr = contentElement->get_XamlRoot(&root);
+    if (SUCCEEDED(hr)) hr = flyout->QueryInterface(IID_PPV_ARGS(&child));
+    ComPtr<IInspectable> instance;
+    ComPtr<Controls::Primitives::IPopup> popup;
+    if (SUCCEEDED(hr))
+        hr = OsActivateInstance(Wrappers::HStringReference(L"Windows.UI.Xaml.Controls.Primitives.Popup").Get(),
+                                &instance);
+    if (SUCCEEDED(hr)) hr = instance.As(&popup);
+    if (SUCCEEDED(hr)) hr = instance.As(&popupElement);
+    if (SUCCEEDED(hr)) hr = popupElement->put_XamlRoot(root.Get());
+    if (SUCCEEDED(hr)) hr = ConnectSettingsAppearance(flyout, content.Get(), popup.Get());
+    if (SUCCEEDED(hr)) hr = popup->put_Child(child.Get());
+    if (SUCCEEDED(hr)) hr = popup->put_IsLightDismissEnabled(true);
+    if (FAILED(hr)) {
+        DisconnectSettingsAppearance();
+        return hr;
+    }
+    settingsPopup = popup;
+    settingsFlyout = flyout;
+    ABI::Windows::Foundation::Size size{};
+    hr = root->get_Size(&size);
+    if (SUCCEEDED(hr)) hr = SizeSettingsFlyout(size.Width, size.Height);
+    auto back = Callback<Controls::IBackClickEventHandler>(
+        [independent](IInspectable*, Controls::IBackClickEventArgs* args) -> HRESULT {
+            boolean handled = false;
+            auto result = args->get_Handled(&handled);
+            if (FAILED(result) || handled) return result;
+            args->put_Handled(true);
+            CloseSettingsFlyout();
+            return independent ? S_OK : ShowGameSettings();
+        });
+    if (SUCCEEDED(hr)) hr = flyout->add_BackClick(back.Get(), &settingsBackToken);
+    auto closed = Callback<__FIEventHandler_1_IInspectable>([](IInspectable* sender, IInspectable*) -> HRESULT {
+        ComPtr<Controls::Primitives::IPopup> popup;
+        if (SUCCEEDED(sender->QueryInterface(IID_PPV_ARGS(&popup))) && popup == settingsPopup) CloseSettingsFlyout();
+        return S_OK;
+    });
+    EventRegistrationToken closedToken{};
+    if (SUCCEEDED(hr)) hr = popup->add_Closed(closed.Get(), &closedToken);
+    if (SUCCEEDED(hr)) hr = originalPopupOpen(popup.Get(), true);
+    if (FAILED(hr)) CloseSettingsFlyout();
+    return hr;
+}
+static HRESULT STDMETHODCALLTYPE ShowSettingsFlyout(Controls::ISettingsFlyout* flyout) {
+    return OpenSettingsFlyout(flyout, false);
+}
+static HRESULT STDMETHODCALLTYPE ShowIndependentSettingsFlyout(Controls::ISettingsFlyout* flyout) {
+    return OpenSettingsFlyout(flyout, true);
+}
+static HRESULT STDMETHODCALLTYPE HideSettingsFlyout(Controls::ISettingsFlyout* flyout) {
+    if (settingsFlyout.Get() == flyout) {
+        CloseSettingsFlyout();
+        return S_OK;
+    }
+    return originalSettingsFlyoutHide(flyout);
+}
+static HRESULT InitializeSettingsFlyouts() {
+    ComPtr<Controls::ISettingsFlyoutFactory> factory;
+    ComPtr<Controls::ISettingsFlyout> flyout;
+    ComPtr<IInspectable> inner;
+    auto hr = GetReal(L"Windows.UI.Xaml.Controls.SettingsFlyout", IID_PPV_ARGS(&factory));
+    if (SUCCEEDED(hr)) hr = factory->CreateInstance(nullptr, &inner, &flyout);
+    if (FAILED(hr)) return hr;
+    void** table = *reinterpret_cast<void***>(flyout.Get());
+    DWORD protection;
+    if (!VirtualProtect(table + 17, 3 * sizeof(void*), PAGE_READWRITE, &protection))
+        return HRESULT_FROM_WIN32(GetLastError());
+    if (!originalSettingsFlyoutHide) {
+        originalSettingsFlyoutHide = reinterpret_cast<SettingsFlyoutHideCall>(table[19]);
+        InterlockedExchangePointer(table + 17, reinterpret_cast<void*>(&ShowSettingsFlyout));
+        InterlockedExchangePointer(table + 18, reinterpret_cast<void*>(&ShowIndependentSettingsFlyout));
+        InterlockedExchangePointer(table + 19, reinterpret_cast<void*>(&HideSettingsFlyout));
+    }
+    DWORD ignored;
+    VirtualProtect(table + 17, 3 * sizeof(void*), protection, &ignored);
+    return S_OK;
+}
 void ResizeIslandView(int width, int height) {
     if (islandWindow) SetWindowPos(islandWindow, HWND_TOP, 0, 0, width, height, SWP_NOACTIVATE);
+    const double scale = GetDpiForWindow(HostWindow()) / 96.0;
+    SizeSettingsFlyout(width / scale, height / scale);
 }
 void IslandInputMessage(UINT message, WPARAM wparam, LPARAM lparam);
 bool IslandPreTranslate(MSG* message) {
@@ -320,10 +523,16 @@ static HRESULT RunIsland(IApplicationInitializationCallback* callback) {
     return RunHost([&]() -> HRESULT {
         HRESULT hr = callback->Invoke(nullptr);
         if (FAILED(hr)) return hr;
-        hr = PatchOnLaunched();
-        if (FAILED(hr)) return hr;
+        applicationConstructed = true;
         hr = InitXaml("after application callback");
         if (FAILED(hr)) return hr;
+        if (launchPending) {
+            launchPending = false;
+            ComPtr<IApplicationOverrides> overrides;
+            hr = appInstance.As(&overrides);
+            if (SUCCEEDED(hr)) hr = HookOnLaunched(overrides.Get(), nullptr);
+            if (FAILED(hr)) return hr;
+        }
         ComPtr<IInspectable> source;
         hr = OsActivateInstance(Wrappers::HStringReference(L"Windows.UI.Xaml.Hosting.DesktopWindowXamlSource").Get(),
                                 &source);
@@ -343,6 +552,8 @@ static HRESULT RunIsland(IApplicationInitializationCallback* callback) {
             if (FAILED(hr)) return hr;
         }
         hr = InitializePopups();
+        if (FAILED(hr)) return hr;
+        hr = InitializeSettingsFlyouts();
         if (FAILED(hr)) return hr;
         ActivateHostWindow();
         DismissSplashScreen();
@@ -365,18 +576,38 @@ static HRESULT STDMETHODCALLTYPE AddSuspending(IApplication*, ISuspendingEventHa
 static HRESULT STDMETHODCALLTYPE RemoveSuspending(IApplication*, EventRegistrationToken token) {
     return suspending.Remove(token);
 }
+static HRESULT STDMETHODCALLTYPE RequestTheme(IApplication* application, ApplicationTheme theme) {
+    if (theme != ApplicationTheme_Dark && theme != ApplicationTheme_Light) return E_INVALIDARG;
+    if (!themeApplied) {
+        requestedTheme = theme;
+        return S_OK;
+    }
+    auto hr = realRequestedTheme(application, theme);
+    if (SUCCEEDED(hr)) requestedTheme = theme;
+    return hr;
+}
+static HRESULT STDMETHODCALLTYPE GetRequestedTheme(IApplication*, ApplicationTheme* theme) {
+    if (!theme) return E_POINTER;
+    *theme = requestedTheme;
+    return S_OK;
+}
 void RaiseIslandSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
     suspending.InvokeAll(appInstance.Get(), args);
 }
 static HRESULT CaptureSuspending(IApplication* application) {
     void** table = *reinterpret_cast<void***>(application);
     DWORD protection;
-    if (!VirtualProtect(table + 13, 2 * sizeof(void*), PAGE_READWRITE, &protection))
+    if (!VirtualProtect(table + 9, 6 * sizeof(void*), PAGE_READWRITE, &protection))
         return HRESULT_FROM_WIN32(GetLastError());
+    if (!realRequestedTheme) {
+        realRequestedTheme = reinterpret_cast<RequestedThemeCall>(table[10]);
+        InterlockedExchangePointer(table + 10, reinterpret_cast<void*>(&RequestTheme));
+        InterlockedExchangePointer(table + 9, reinterpret_cast<void*>(&GetRequestedTheme));
+    }
     InterlockedExchangePointer(table + 13, reinterpret_cast<void*>(&AddSuspending));
     InterlockedExchangePointer(table + 14, reinterpret_cast<void*>(&RemoveSuspending));
     DWORD ignored;
-    VirtualProtect(table + 13, 2 * sizeof(void*), protection, &ignored);
+    VirtualProtect(table + 9, 6 * sizeof(void*), protection, &ignored);
     return S_OK;
 }
 // ---- Application factory wrapper ----------------------------------------------
@@ -395,7 +626,9 @@ public:
         appx::Log("TRACE", "STAGE app: real Application composed (outer=%p) hr=0x%08lX", outer, hr);
         if (SUCCEEDED(hr)) {
             appInstance = outer ? outer : *v;
+            ReadApplicationTheme();
             hr = CaptureSuspending(*v);
+            if (SUCCEEDED(hr)) hr = PatchOnLaunched();
         }
         return hr;
     }
@@ -413,7 +646,8 @@ public:
         if (uri) uri->get_AbsoluteUri(&text);
         appx::Log("TRACE", "-> LoadComponent %s", text ? Narrow(text).c_str() : "?");
         ComPtr<IApplicationStatics> s;
-        HRESULT hr = real_.As(&s);
+        HRESULT hr = InitXaml("LoadComponent");
+        if (SUCCEEDED(hr)) hr = real_.As(&s);
         if (SUCCEEDED(hr)) hr = s->LoadComponent(component, uri);
         appx::Log("TRACE", "<- LoadComponent %s hr=0x%08lX", text ? Narrow(text).c_str() : "?", hr);
         WindowsDeleteString(text);
@@ -426,7 +660,8 @@ public:
         if (uri) uri->get_AbsoluteUri(&text);
         appx::Log("TRACE", "-> LoadComponent %s (location %d)", text ? Narrow(text).c_str() : "?", location);
         ComPtr<IApplicationStatics> s;
-        HRESULT hr = real_.As(&s);
+        HRESULT hr = InitXaml("LoadComponentWithResourceLocation");
+        if (SUCCEEDED(hr)) hr = real_.As(&s);
         if (SUCCEEDED(hr)) hr = s->LoadComponentWithResourceLocation(component, uri, location);
         appx::Log("TRACE", "<- LoadComponent %s hr=0x%08lX", text ? Narrow(text).c_str() : "?", hr);
         WindowsDeleteString(text);
@@ -440,8 +675,18 @@ HRESULT MakeIslandFactory(const wchar_t* name, IActivationFactory** out) {
         HRESULT hr = GetReal(name, IID_PPV_ARGS(&real));
         return SUCCEEDED(hr) ? Make<AppFactory>(real.Get()).CopyTo(out) : hr;
     }
+    // Wait until the base Application constructor has returned to the CLR:
+    // initializing inside CreateInstance reenters an incomplete managed RCW.
+    // Controls requested by the derived constructor need XAML immediately.
+    if (appInstance && wcsncmp(name, L"Windows.UI.Xaml.", 16) == 0) {
+        auto hr = InitXaml("XAML factory");
+        if (FAILED(hr)) return hr;
+    }
     if (wcscmp(name, L"Windows.UI.Xaml.Window") == 0) return Make<IslandWindowFactory>().CopyTo(out);
+    if (wcscmp(name, L"Windows.UI.Xaml.Controls.GridView") == 0) return MakeIslandGridFactory(out);
+    if (wcscmp(name, L"Windows.UI.Core.CoreWindow") == 0) return MakeCoreWindowFactory(out);
     if (wcscmp(name, L"Windows.UI.Xaml.Controls.SwapChainBackgroundPanel") == 0) return MakeIslandPanelFactory(out);
+    if (wcscmp(name, L"Windows.UI.Xaml.Controls.SwapChainPanel") == 0) return MakeIslandSwapChainPanelFactory(out);
     return CLASS_E_CLASSNOTAVAILABLE;
 }
 }
