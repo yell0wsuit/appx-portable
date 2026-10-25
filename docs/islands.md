@@ -19,7 +19,9 @@ title-bar menu (**Alt+Space**, or right-click the title bar). The host requests
 the game's own `SettingsPane` commands and invokes the selected command on its
 UI thread. Sudoku exposes **About**, **Game options**, and **How to play**.
 Its original `SettingsFlyout` controls are hosted in an island popup, positioned
-at the right edge and resized with the game window. Back returns to the command
+at the right edge and resized with the game window. A flyout narrowed by a small
+window returns to its own width when the window widens, and its size is
+restored on closing. Back returns to the command
 list; independent flyouts return to the game. Clicking outside dismisses a flyout.
 
 Flyout appearance follows the game's actual content instead of a fixed light
@@ -49,9 +51,14 @@ composed GridViews, horizontal panning, and vertical-grid preservation.
 ## Bejeweled LIVE
 
 Windows 8 defaulted to dark; modern islands inherit the desktop theme. The host
-applies the legacy default to the main visual root and detached popup children,
-retaining explicit element themes and constructor theme requests. This fixes
-Sudoku's black titles and captions. Bejeweled also captures foreground brushes
+uses the package's platform default (dark for Windows 8.x, the system theme for
+Windows 10 packages), replaced by the game's own theme: a constructor request or
+the `RequestedTheme` its application XAML sets. The authored theme is read back
+from system XAML after the game loads that XAML, so compiled XBF works too. When
+it matches the current Windows mode, only text XAML can tell it apart from no
+theme; compiled XAML then keeps the platform default. The host applies the
+result to the main visual root and detached popup children, retaining explicit
+element themes. This fixes Sudoku's black titles and captions. Bejeweled also captures foreground brushes
 in application-wide static styles before those roots exist: apply the optional
 [dark theme patch](../patch/bejeweled/README.md) to declare `RequestedTheme="Dark"`
 in its `App.xaml` before resources load. Live checks confirmed white settings

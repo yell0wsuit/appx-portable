@@ -16,9 +16,11 @@
 #include <shlwapi.h>
 #include <xmllite.h>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <map>
+#include <optional>
 #pragma comment(lib, "runtimeobject.lib")
 #pragma comment(lib, "user32.lib")
 using namespace Microsoft::WRL;
@@ -52,46 +54,89 @@ static ComPtr<Hosting::IWindowsXamlManager> xamlManager;
 static ComPtr<Hosting::IDesktopWindowXamlSource> xamlSource;
 static ComPtr<IDesktopWindowXamlSourceNative2> xamlNative;
 static ComPtr<IInspectable> appInstance;
+// The system Application itself: its managed outer may still be constructing.
+static ComPtr<IApplication> systemApplication;
 HRESULT ConnectIslandScrolling(IInspectable* root);
 HRESULT MakeIslandGridFactory(IActivationFactory** value);
 static ComPtr<IUIElement> pendingContent;
 static ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> islandDispatcher;
 using RequestedThemeCall = HRESULT(STDMETHODCALLTYPE*)(IApplication*, ApplicationTheme);
+using RequestedThemeGetCall = HRESULT(STDMETHODCALLTYPE*)(IApplication*, ApplicationTheme*);
 static RequestedThemeCall realRequestedTheme;
-static ApplicationTheme requestedTheme = ApplicationTheme_Dark;
-static bool themeApplied;
-static void ReadApplicationTheme() {
-    // The native parser sets Application properties internally, bypassing COM
-    // setters. Read an authored theme with the SDK XML reader before startup;
-    // subsequent constructor requests can still override it.
-    const auto path = CurrentPackage().directory / L"App.xaml";
+static RequestedThemeGetCall realGetRequestedTheme;
+// The application's theme: its own request or authored theme, otherwise its
+// platform's default. Windows 8 apps defaulted to dark; Windows 10 apps follow
+// the system, as modern islands already do, so they start with none.
+static std::optional<ApplicationTheme> requestedTheme;
+static bool xamlRunning, applicationThemeSet, themeApplied;
+// Give the system Application the theme as soon as XAML runs, so resources
+// the app loads later resolve against it. XAML refuses this once the app has
+// begun loading its own XAML, which is how generated App constructors start.
+static void ApplyApplicationTheme() {
+    if (xamlRunning || !systemApplication) return;
+    xamlRunning = true;
+    if (!requestedTheme) return;
+    auto hr = realRequestedTheme(systemApplication.Get(), *requestedTheme);
+    applicationThemeSet = SUCCEEDED(hr);
+    appx::Log("TRACE", "application theme %d hr=0x%08lX", *requestedTheme, hr);
+}
+// The theme in the application's text XAML, from the URI it loads.
+static std::optional<ApplicationTheme> AuthoredTheme(ABI::Windows::Foundation::IUriRuntimeClass* uri) {
+    Wrappers::HString scheme, path;
+    if (FAILED(uri->get_SchemeName(scheme.GetAddressOf())) || FAILED(uri->get_Path(path.GetAddressOf())) ||
+        _wcsicmp(scheme.GetRawBuffer(nullptr), L"ms-appx") != 0)
+        return {};
+    const auto relative = std::filesystem::path(path.GetRawBuffer(nullptr)).relative_path().lexically_normal();
+    if (relative.empty() || *relative.begin() == L"..") return {};
+    const auto file = CurrentPackage().directory / relative;
     ComPtr<IStream> stream;
     ComPtr<IXmlReader> reader;
-    if (FAILED(SHCreateStreamOnFileEx(path.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE, 0, FALSE, nullptr, &stream)) ||
+    if (FAILED(SHCreateStreamOnFileEx(file.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE, 0, FALSE, nullptr, &stream)) ||
         FAILED(CreateXmlReader(IID_PPV_ARGS(&reader), nullptr)) ||
         FAILED(reader->SetProperty(XmlReaderProperty_DtdProcessing, DtdProcessing_Prohibit)) ||
         FAILED(reader->SetInput(stream.Get())))
-        return;
+        return {};
     XmlNodeType type;
     while (reader->Read(&type) == S_OK) {
         if (type != XmlNodeType_Element) continue;
-        const wchar_t* name = nullptr;
-        reader->GetLocalName(&name, nullptr);
-        if (name && !wcscmp(name, L"Application") &&
-            reader->MoveToAttributeByName(L"RequestedTheme", nullptr) == S_OK) {
-            const wchar_t* value = nullptr;
-            reader->GetValue(&value, nullptr);
-            if (value && !wcscmp(value, L"Light")) requestedTheme = ApplicationTheme_Light;
-            if (value && !wcscmp(value, L"Dark")) requestedTheme = ApplicationTheme_Dark;
-        }
-        break;
+        const wchar_t *name = nullptr, *value = nullptr;
+        if (FAILED(reader->GetLocalName(&name, nullptr)) || !name || wcscmp(name, L"Application") != 0 ||
+            reader->MoveToAttributeByName(L"RequestedTheme", nullptr) != S_OK ||
+            FAILED(reader->GetValue(&value, nullptr)) || !value)
+            return {};
+        if (!wcscmp(value, L"Light")) return ApplicationTheme_Light;
+        if (!wcscmp(value, L"Dark")) return ApplicationTheme_Dark;
+        return {};
     }
+    return {};
 }
-// Windows 8 defaulted to dark. Modern islands inherit the desktop preference.
-// Apply the compatibility default to each visual root without replacing an
-// element's explicit theme or changing the system Application after resources load.
+// The parser sets an authored Application theme internally, bypassing COM
+// setters, in text XAML and compiled XBF alike. A changed system theme shows
+// it; with our theme refused, an unchanged one may be the Windows mode itself,
+// so the application's text XAML decides between that and the default.
+template <typename Load>
+static HRESULT LoadApplicationTheme(IInspectable* component, ABI::Windows::Foundation::IUriRuntimeClass* uri,
+                                    Load load) {
+    ComPtr<IUnknown> identity, application;
+    ApplicationTheme before, after;
+    if (!systemApplication || !component || !uri || FAILED(component->QueryInterface(IID_PPV_ARGS(&identity))) ||
+        FAILED(appInstance.As(&application)) || identity != application ||
+        FAILED(realGetRequestedTheme(systemApplication.Get(), &before)))
+        return load();
+    auto hr = load();
+    if (FAILED(hr) || FAILED(realGetRequestedTheme(systemApplication.Get(), &after))) return hr;
+    if (after != before || applicationThemeSet)
+        requestedTheme = after;
+    else if (auto authored = AuthoredTheme(uri))
+        requestedTheme = authored;
+    appx::Log("TRACE", "application XAML theme %d (system %d)", requestedTheme ? *requestedTheme : -1, after);
+    return hr;
+}
+// Islands inherit the desktop preference wherever the Application theme did
+// not reach. Apply the application's theme to each visual root without
+// replacing an element's explicit theme.
 static HRESULT ApplyRootTheme(IInspectable* element) {
-    if (!element) return S_OK;
+    if (!element || !requestedTheme) return S_OK;
     ComPtr<IFrameworkElement2> root;
     auto hr = element->QueryInterface(IID_PPV_ARGS(&root));
     if (hr == E_NOINTERFACE) return S_OK;
@@ -99,7 +144,8 @@ static HRESULT ApplyRootTheme(IInspectable* element) {
     ElementTheme theme;
     hr = root->get_RequestedTheme(&theme);
     if (SUCCEEDED(hr) && theme == ElementTheme_Default)
-        hr = root->put_RequestedTheme(requestedTheme == ApplicationTheme_Dark ? ElementTheme_Dark : ElementTheme_Light);
+        hr =
+            root->put_RequestedTheme(*requestedTheme == ApplicationTheme_Dark ? ElementTheme_Dark : ElementTheme_Light);
     return hr;
 }
 static bool initializingXaml;
@@ -114,6 +160,7 @@ static HRESULT InitXaml(const char* where) {
         initializingXaml = true;
         hr = statics->InitializeForCurrentThread(&xamlManager);
         initializingXaml = false;
+        if (SUCCEEDED(hr)) ApplyApplicationTheme();
         if (SUCCEEDED(hr) && !islandDispatcher) {
             ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> dispatcher;
             hr = IslandDispatcher(&dispatcher);
@@ -280,6 +327,8 @@ static HRESULT STDMETHODCALLTYPE HookOnLaunched(IApplicationOverrides* self, ILa
     ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> dispatcher;
     auto hr = IslandDispatcher(&dispatcher);
     if (FAILED(hr)) return hr;
+    // XAML is running, possibly still inside InitializeForCurrentThread.
+    ApplyApplicationTheme();
     // Initializing XAML for controls in derived Application constructors can
     // launch the app synchronously.
     // Let the managed startup callback finish before entering game code.
@@ -390,6 +439,51 @@ static SettingsFlyoutHideCall originalSettingsFlyoutHide;
 static ComPtr<Controls::Primitives::IPopup> settingsPopup;
 static ComPtr<Controls::ISettingsFlyout> settingsFlyout;
 static EventRegistrationToken settingsBackToken;
+// The popup sizes the flyout to the island. Keep the flyout's own Width and
+// Height (local values or UnsetValue) to clamp against and restore on closing.
+struct SettingsSize {
+    ComPtr<IDependencyProperty> property;
+    ComPtr<IInspectable> local;
+};
+static SettingsSize settingsSizes[2];
+static double settingsWidth;
+static HRESULT SaveSettingsSize(Controls::ISettingsFlyout* flyout) {
+    ComPtr<IFrameworkElementStatics> statics;
+    ComPtr<IDependencyObject> object;
+    ComPtr<IFrameworkElement> element;
+    auto hr = GetReal(L"Windows.UI.Xaml.FrameworkElement", IID_PPV_ARGS(&statics));
+    if (SUCCEEDED(hr)) hr = statics->get_WidthProperty(&settingsSizes[0].property);
+    if (SUCCEEDED(hr)) hr = statics->get_HeightProperty(&settingsSizes[1].property);
+    if (SUCCEEDED(hr)) hr = flyout->QueryInterface(IID_PPV_ARGS(&object));
+    for (auto& size : settingsSizes)
+        if (SUCCEEDED(hr)) hr = object->ReadLocalValue(size.property.Get(), &size.local);
+    if (SUCCEEDED(hr)) hr = flyout->QueryInterface(IID_PPV_ARGS(&element));
+    double width = 0;
+    if (SUCCEEDED(hr)) hr = element->get_Width(&width);
+    settingsWidth = width > 0 ? width : 320;
+    if (FAILED(hr))
+        for (auto& size : settingsSizes) size = {};
+    return hr;
+}
+static void RestoreSettingsSize(Controls::ISettingsFlyout* flyout) {
+    ComPtr<IDependencyPropertyStatics> statics;
+    ComPtr<IDependencyObject> object;
+    ComPtr<IInspectable> unset;
+    ComPtr<IUnknown> unsetIdentity;
+    if (flyout && SUCCEEDED(GetReal(L"Windows.UI.Xaml.DependencyProperty", IID_PPV_ARGS(&statics))) &&
+        SUCCEEDED(statics->get_UnsetValue(&unset)) && SUCCEEDED(unset.As(&unsetIdentity)) &&
+        SUCCEEDED(flyout->QueryInterface(IID_PPV_ARGS(&object)))) {
+        for (auto& size : settingsSizes) {
+            if (!size.property || !size.local) continue;
+            ComPtr<IUnknown> identity;
+            if (SUCCEEDED(size.local.As(&identity)) && identity == unsetIdentity)
+                object->ClearValue(size.property.Get());
+            else
+                object->SetValue(size.property.Get(), size.local.Get());
+        }
+    }
+    for (auto& size : settingsSizes) size = {};
+}
 HRESULT ConnectSettingsAppearance(IInspectable* flyout, IInspectable* page, IInspectable* popup);
 void DisconnectSettingsAppearance();
 static void CloseSettingsFlyout() {
@@ -401,15 +495,13 @@ static void CloseSettingsFlyout() {
         popup->put_IsOpen(false);
         popup->put_Child(nullptr);
     }
+    RestoreSettingsSize(flyout.Get());
 }
 static HRESULT SizeSettingsFlyout(double width, double height) {
     if (!settingsPopup || !settingsFlyout) return S_OK;
     ComPtr<IFrameworkElement> element;
     auto hr = settingsFlyout.As(&element);
-    double requested = 320;
-    if (SUCCEEDED(hr)) hr = element->get_Width(&requested);
-    if (!(requested > 0)) requested = 320;
-    const double actual = (std::min)(requested, width);
+    const double actual = (std::min)(settingsWidth, width);
     if (SUCCEEDED(hr)) hr = element->put_Width(actual);
     if (SUCCEEDED(hr)) hr = element->put_Height(height);
     if (SUCCEEDED(hr)) hr = settingsPopup->put_HorizontalOffset(width - actual);
@@ -444,7 +536,8 @@ static HRESULT OpenSettingsFlyout(Controls::ISettingsFlyout* flyout, bool indepe
     settingsPopup = popup;
     settingsFlyout = flyout;
     ABI::Windows::Foundation::Size size{};
-    hr = root->get_Size(&size);
+    hr = SaveSettingsSize(flyout);
+    if (SUCCEEDED(hr)) hr = root->get_Size(&size);
     if (SUCCEEDED(hr)) hr = SizeSettingsFlyout(size.Width, size.Height);
     auto back = Callback<Controls::IBackClickEventHandler>(
         [independent](IInspectable*, Controls::IBackClickEventArgs* args) -> HRESULT {
@@ -578,17 +671,20 @@ static HRESULT STDMETHODCALLTYPE RemoveSuspending(IApplication*, EventRegistrati
 }
 static HRESULT STDMETHODCALLTYPE RequestTheme(IApplication* application, ApplicationTheme theme) {
     if (theme != ApplicationTheme_Dark && theme != ApplicationTheme_Light) return E_INVALIDARG;
-    if (!themeApplied) {
+    // Constructor requests before XAML runs are applied when it starts.
+    if (!xamlRunning) {
         requestedTheme = theme;
         return S_OK;
     }
     auto hr = realRequestedTheme(application, theme);
-    if (SUCCEEDED(hr)) requestedTheme = theme;
-    return hr;
+    // Before content exists, visual roots still carry a refused request.
+    if (SUCCEEDED(hr) || !themeApplied) requestedTheme = theme;
+    return themeApplied ? hr : S_OK;
 }
-static HRESULT STDMETHODCALLTYPE GetRequestedTheme(IApplication*, ApplicationTheme* theme) {
+static HRESULT STDMETHODCALLTYPE GetRequestedTheme(IApplication* application, ApplicationTheme* theme) {
     if (!theme) return E_POINTER;
-    *theme = requestedTheme;
+    if (!requestedTheme) return realGetRequestedTheme(application, theme);
+    *theme = *requestedTheme;
     return S_OK;
 }
 void RaiseIslandSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
@@ -601,6 +697,7 @@ static HRESULT CaptureSuspending(IApplication* application) {
         return HRESULT_FROM_WIN32(GetLastError());
     if (!realRequestedTheme) {
         realRequestedTheme = reinterpret_cast<RequestedThemeCall>(table[10]);
+        realGetRequestedTheme = reinterpret_cast<RequestedThemeGetCall>(table[9]);
         InterlockedExchangePointer(table + 10, reinterpret_cast<void*>(&RequestTheme));
         InterlockedExchangePointer(table + 9, reinterpret_cast<void*>(&GetRequestedTheme));
     }
@@ -626,7 +723,8 @@ public:
         appx::Log("TRACE", "STAGE app: real Application composed (outer=%p) hr=0x%08lX", outer, hr);
         if (SUCCEEDED(hr)) {
             appInstance = outer ? outer : *v;
-            ReadApplicationTheme();
+            systemApplication = *v;
+            if (!CurrentPackage().universal) requestedTheme = ApplicationTheme_Dark;
             hr = CaptureSuspending(*v);
             if (SUCCEEDED(hr)) hr = PatchOnLaunched();
         }
@@ -648,7 +746,7 @@ public:
         ComPtr<IApplicationStatics> s;
         HRESULT hr = InitXaml("LoadComponent");
         if (SUCCEEDED(hr)) hr = real_.As(&s);
-        if (SUCCEEDED(hr)) hr = s->LoadComponent(component, uri);
+        if (SUCCEEDED(hr)) hr = LoadApplicationTheme(component, uri, [&] { return s->LoadComponent(component, uri); });
         appx::Log("TRACE", "<- LoadComponent %s hr=0x%08lX", text ? Narrow(text).c_str() : "?", hr);
         WindowsDeleteString(text);
         return hr;
@@ -662,7 +760,9 @@ public:
         ComPtr<IApplicationStatics> s;
         HRESULT hr = InitXaml("LoadComponentWithResourceLocation");
         if (SUCCEEDED(hr)) hr = real_.As(&s);
-        if (SUCCEEDED(hr)) hr = s->LoadComponentWithResourceLocation(component, uri, location);
+        if (SUCCEEDED(hr))
+            hr = LoadApplicationTheme(component, uri,
+                                      [&] { return s->LoadComponentWithResourceLocation(component, uri, location); });
         appx::Log("TRACE", "<- LoadComponent %s hr=0x%08lX", text ? Narrow(text).c_str() : "?", hr);
         WindowsDeleteString(text);
         return hr;
