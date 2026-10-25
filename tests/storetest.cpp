@@ -89,6 +89,20 @@ int main(int argc, char** argv) {
             level != ABI::Windows::Networking::Connectivity::NetworkConnectivityLevel_InternetAccess ||
             profile->GetNetworkConnectivityLevel(nullptr) != E_POINTER)
             return 42;
+        // Cut the Rope 2 queries the Windows 8.1 profile while initializing.
+        ComPtr<ABI::Windows::Networking::Connectivity::IConnectionProfile2> profile2;
+        boolean wireless = true;
+        if (FAILED(profile.As(&profile2)) || FAILED(profile2->get_IsWwanConnectionProfile(&wireless)) || wireless ||
+            FAILED(profile2->get_IsWlanConnectionProfile(&wireless)) || wireless ||
+            profile2->get_IsWlanConnectionProfile(nullptr) != E_POINTER)
+            return 62;
+        ComPtr<ABI::Windows::Networking::Connectivity::IWlanConnectionProfileDetails> wlan;
+        ComPtr<ABI::Windows::Networking::Connectivity::IWwanConnectionProfileDetails> wwan;
+        ComPtr<__FIReference_1_byte> bars;
+        if (FAILED(profile2->get_WlanConnectionProfileDetails(&wlan)) || wlan ||
+            FAILED(profile2->get_WwanConnectionProfileDetails(&wwan)) || wwan ||
+            FAILED(profile2->GetSignalBars(&bars)) || bars || profile2->GetSignalBars(nullptr) != E_POINTER)
+            return 63;
     }
     ComPtr<ICurrentApp> app;
     ComPtr<ICurrentAppWithConsumables> consumables;

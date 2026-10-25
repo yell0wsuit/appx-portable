@@ -118,7 +118,8 @@ public:
 // Allows games' connectivity preflight to reach the local Store stub.
 // HTTP clients remain offline; this profile does not create a connection.
 using namespace ABI::Windows::Networking::Connectivity;
-class StubConnectionProfile final : public RuntimeClass<RuntimeClassFlags<WinRt>, IConnectionProfile, FtmBase> {
+class StubConnectionProfile final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, IConnectionProfile, IConnectionProfile2, FtmBase> {
     InspectableClass(L"Windows.Networking.Connectivity.ConnectionProfile", BaseTrust);
     template <class T> static HRESULT Unavailable(T** value) {
         if (!value) return E_POINTER;
@@ -126,7 +127,47 @@ class StubConnectionProfile final : public RuntimeClass<RuntimeClassFlags<WinRt>
         return E_NOTIMPL;
     }
 
+    template <class T> static HRESULT Absent(T** value) {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return S_OK;
+    }
+
 public:
+    // Model a wired connection: no WLAN/WWAN details or radio signal.
+    HRESULT STDMETHODCALLTYPE get_IsWwanConnectionProfile(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_IsWlanConnectionProfile(boolean* value) override {
+        return get_IsWwanConnectionProfile(value);
+    }
+    HRESULT STDMETHODCALLTYPE get_WwanConnectionProfileDetails(IWwanConnectionProfileDetails** value) override {
+        return Absent(value);
+    }
+    HRESULT STDMETHODCALLTYPE get_WlanConnectionProfileDetails(IWlanConnectionProfileDetails** value) override {
+        return Absent(value);
+    }
+    HRESULT STDMETHODCALLTYPE get_ServiceProviderGuid(__FIReference_1_GUID** value) override { return Absent(value); }
+    HRESULT STDMETHODCALLTYPE GetSignalBars(__FIReference_1_byte** value) override { return Absent(value); }
+    HRESULT STDMETHODCALLTYPE GetDomainConnectivityLevel(DomainConnectivityLevel* value) override {
+        if (!value) return E_POINTER;
+        *value = DomainConnectivityLevel_None;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetNetworkUsageAsync(
+        ABI::Windows::Foundation::DateTime, ABI::Windows::Foundation::DateTime, DataUsageGranularity,
+        NetworkUsageStates,
+        __FIAsyncOperation_1___FIVectorView_1_Windows__CNetworking__CConnectivity__CNetworkUsage** value) override {
+        return Unavailable(value);
+    }
+    HRESULT STDMETHODCALLTYPE GetConnectivityIntervalsAsync(
+        ABI::Windows::Foundation::DateTime, ABI::Windows::Foundation::DateTime, NetworkUsageStates,
+        __FIAsyncOperation_1___FIVectorView_1_Windows__CNetworking__CConnectivity__CConnectivityInterval** value)
+        override {
+        return Unavailable(value);
+    }
     HRESULT STDMETHODCALLTYPE get_ProfileName(HSTRING* value) override {
         if (!value) return E_POINTER;
         return WindowsCreateString(L"Offline stub IAP", 16, value);

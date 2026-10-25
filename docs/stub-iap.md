@@ -15,8 +15,8 @@ With this option:
 - Both product purchase APIs complete with `AsyncStatus.Completed`; callbacks are queued on the game dispatcher so purchase progress dialogs can close normally. The Windows 8 API returns an empty string unless `includeReceipt` is requested, in which case it returns unsigned XML marked `appxportable:Stub="true"`; Windows 8.1 purchase results report `Succeeded` and a fresh transaction ID.
 - Product licenses are inactive initially and become active after a successful stub purchase in the current process.
 - Consumable fulfillment completes with `Succeeded`.
-- Store listings succeed. Product IDs come from `Assets/in-app-purchase.xml` beside the game, if present. Product names use their IDs and prices are placeholders (`0.00`), not Store prices. Packages without this catalog receive an empty listing.
-- `NetworkInformation.GetInternetConnectionProfile` returns a synthetic profile reporting `InternetAccess`, allowing games' connectivity preflight checks to reach the purchase stub. The shim's HTTP clients remain offline.
+- Store listings succeed. The shim discovers bundled XML catalogs by their `CurrentApp/ListingInformation/Product` structure, regardless of filename or location inside the package, and caches their product IDs for the run. License entries are ignored. Product names use their IDs and prices are placeholders (`0.00`), not Store prices. Packages without a catalog receive an empty listing.
+- `NetworkInformation.GetInternetConnectionProfile` returns a synthetic profile reporting `InternetAccess`, allowing games' connectivity preflight checks to reach the purchase stub. It supports the Windows 8.1 profile interface and reports a wired connection, with no WLAN/WWAN details. The shim's HTTP clients remain offline.
 
 Base-app licensing is controlled separately by [`--unlock-trial`](trial-mode.md). App purchases and the separate receipt retrieval APIs still fail offline. Product entitlements reset when the process exits; the game must save its own granted content. The runtime does not persist entitlements or fabricate signed receipts, download missing content, or restore remote services.
 
@@ -28,6 +28,7 @@ Tested on staged copies of the supplied packages:
 
 | Game | Purchase verified |
 | --- | --- |
+| Cut the Rope 2 1.0.0.46 | Store / Candy Coins / 250 coins; balance increased from 57 to 307 and consumable fulfillment succeeded. Requires the Windows 8.1 connection profile and catalog discovery support. |
 | Where's My Mickey? 1.1.0.30 | Goofy / Shipwrecked and Glass Half Empty / Menace of Venice episodes; show the thank-you dialog. The staged EXE requires the separate AMPS Python patch. |
 | Where's My Water? 1.13.1.3 | Allie's Story; Try/Buy changes to Play. |
 | Fruit Ninja 1.8.1.66 | Dojo ? Gutsu?s Cart ? Starfruit ? Buy; user verified Item Purchased after the receipt fix. Requires `--unlock-trial --stub-iap`. |
