@@ -24,7 +24,7 @@ add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/W4;/EHsc;/utf-8>")
 # MSBuild compiles a target's files one at a time without /MP; Ninja already
 # runs them in parallel.
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
-  add_compile_options(/MP)
+  add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/MP>")
 endif()
 add_link_options(/DEBUG /INCREMENTAL:NO)
 # Release builds pass their tag; local builds describe the git checkout. The
@@ -128,7 +128,7 @@ add_test(NAME xaml_settings_contract COMMAND xamlsettingstest)
 add_test(NAME islands_settings_contract COMMAND "${CMAKE_COMMAND}"
   "-DTEST_EXE=$<TARGET_FILE:xamlsettingstest>"
   "-DSHIM=$<TARGET_FILE:appxportable>"
-  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe"
+  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
   "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-settings-fixture"
   -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 25)
@@ -137,7 +137,7 @@ if(WIN32)
   add_test(NAME islands_toasttest COMMAND "${CMAKE_COMMAND}"
     "-DTEST_EXE=$<TARGET_FILE:toasttest>"
     "-DSHIM=$<TARGET_FILE:appxportable>"
-    "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe"
+    "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
     "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-toast-fixture"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 endif()
@@ -249,10 +249,10 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME managed_host_${mode} COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
       "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_host.cs"
-      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-host-${mode}"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_host.cmake")
-    set_tests_properties(managed_host_${mode} PROPERTIES TIMEOUT 25)
+    set_tests_properties(managed_host_${mode} PROPERTIES TIMEOUT 25 LABELS managed-clr)
   endforeach()
   find_file(APPX_WINDOWS_METADATA Windows.winmd
     PATHS "$ENV{WindowsSdkDir}/UnionMetadata/$ENV{WindowsSDKVersion}" NO_DEFAULT_PATH)
@@ -262,27 +262,27 @@ if(NOT CMAKE_CROSSCOMPILING)
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SETTINGS"
       "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
       "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_settings.cs"
-      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-settings"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-    set_tests_properties(managed_settings PROPERTIES TIMEOUT 25)
+    set_tests_properties(managed_settings PROPERTIES TIMEOUT 25 LABELS managed-clr)
     add_test(NAME managed_scroll COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SCROLL"
       "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
       "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_scroll.cs"
-      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-scroll"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-    set_tests_properties(managed_scroll PROPERTIES TIMEOUT 25)
+    set_tests_properties(managed_scroll PROPERTIES TIMEOUT 25 LABELS managed-clr)
     foreach(mode CONSTRUCTOR_CONTROLS LAUNCH_CONTROLS LIGHT_THEME ROOT_LIGHT_THEME XAML_LIGHT_THEME)
       add_test(NAME managed_xaml_startup_${mode} COMMAND "${CMAKE_COMMAND}"
         "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
         "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
         "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cs"
-        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
         "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-xaml-startup-${mode}"
         -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-      set_tests_properties(managed_xaml_startup_${mode} PROPERTIES TIMEOUT 25)
+      set_tests_properties(managed_xaml_startup_${mode} PROPERTIES TIMEOUT 25 LABELS managed-clr)
     endforeach()
   else()
     message(STATUS "Managed XAML startup tests need Windows SDK metadata and .NET Framework 4.8 reference assemblies")
