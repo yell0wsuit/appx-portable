@@ -11,11 +11,12 @@ std::wstring PublisherId(const std::wstring& publisher) {
     BYTE hash[32]{};
     BCRYPT_ALG_HANDLE algorithm = nullptr;
     BCRYPT_HASH_HANDLE handle = nullptr;
-    bool hashed = BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0)) &&
-                  BCRYPT_SUCCESS(BCryptCreateHash(algorithm, &handle, nullptr, 0, nullptr, 0, 0)) &&
-                  BCRYPT_SUCCESS(BCryptHashData(handle, reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(publisher.data())),
-                                                static_cast<ULONG>(publisher.size() * sizeof(wchar_t)), 0)) &&
-                  BCRYPT_SUCCESS(BCryptFinishHash(handle, hash, sizeof(hash), 0));
+    bool hashed =
+        BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0)) &&
+        BCRYPT_SUCCESS(BCryptCreateHash(algorithm, &handle, nullptr, 0, nullptr, 0, 0)) &&
+        BCRYPT_SUCCESS(BCryptHashData(handle, reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(publisher.data())),
+                                      static_cast<ULONG>(publisher.size() * sizeof(wchar_t)), 0)) &&
+        BCRYPT_SUCCESS(BCryptFinishHash(handle, hash, sizeof(hash), 0));
     if (handle) BCryptDestroyHash(handle);
     if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
     if (!hashed) return {};
@@ -55,8 +56,8 @@ PackageInfo ReadPackage(const std::filesystem::path& directory) {
     ComPtr<IStream> stream;
     ComPtr<IXmlReader> reader;
     const auto manifest = directory / L"AppxManifest.xml";
-    if (FAILED(SHCreateStreamOnFileEx(manifest.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE, 0, FALSE, nullptr,
-                                      &stream)) ||
+    if (FAILED(
+            SHCreateStreamOnFileEx(manifest.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE, 0, FALSE, nullptr, &stream)) ||
         FAILED(CreateXmlReader(IID_PPV_ARGS(&reader), nullptr)) ||
         FAILED(reader->SetProperty(XmlReaderProperty_DtdProcessing, DtdProcessing_Prohibit)) ||
         FAILED(reader->SetInput(stream.Get())))
@@ -83,6 +84,8 @@ PackageInfo ReadPackage(const std::filesystem::path& directory) {
             info.version = Attribute(reader.Get(), L"Version");
             info.architecture = Attribute(reader.Get(), L"ProcessorArchitecture");
             if (info.architecture.empty()) info.architecture = L"neutral";
+        } else if (!wcscmp(name, L"TargetDeviceFamily")) {
+            info.universal = true;
         } else if (!wcscmp(name, L"Properties")) {
             inProperties = !reader->IsEmptyElement();
         } else if (inProperties && !wcscmp(name, L"DisplayName")) {

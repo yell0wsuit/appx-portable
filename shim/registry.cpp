@@ -2,6 +2,7 @@
 #include "islands/islands.h"
 #include "log.h"
 #include "version.h"
+#include "compat/win10/xaml.h"
 #include <winstring.h>
 #include <new>
 
@@ -28,6 +29,8 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
                 wcsncmp(text, L"Microsoft.Xbox.", 15) != 0)
                 return CLASS_E_CLASSNOTAVAILABLE;
         }
+        if (wcscmp(text, L"Windows.System.MemoryManager") == 0) return appx::MakeMemoryManagerFactory(factory);
+        if (wcscmp(text, L"Windows.UI.Xaml.Controls.Grid") == 0) return appx::MakeWin10GridFactory(factory);
         if (wcscmp(text, L"Windows.Globalization.Calendar") == 0) return appx::MakeCalendarFactory(factory);
         if (wcscmp(text, L"Windows.Foundation.Diagnostics.AsyncCausalityTracer") == 0)
             return appx::MakeCausalityFactory(factory);

@@ -18,6 +18,34 @@
       "ABI::Windows::UI::Xaml::Controls::IMediaElement2"
     ]
   },
+  "win10_controls.h": {
+    "header": "windows.ui.xaml.controls.h",
+    "interfaces": [
+      "ABI::Windows::UI::Xaml::Controls::IGridStatics",
+      "ABI::Windows::UI::Xaml::Controls::ISymbolIcon",
+      "ABI::Windows::UI::Xaml::Controls::IIconElement"
+    ]
+  },
+  "win10_primitives.h": {
+    "header": "windows.ui.xaml.controls.primitives.h",
+    "interfaces": ["ABI::Windows::UI::Xaml::Controls::Primitives::IButtonBase"]
+  },
+  "win10_shapes.h": {
+    "header": "windows.ui.xaml.shapes.h",
+    "interfaces": ["ABI::Windows::UI::Xaml::Shapes::IRectangle", "ABI::Windows::UI::Xaml::Shapes::IShape"]
+  },
+  "win10_memory.h": {
+    "header": "windows.system.h",
+    "interfaces": ["ABI::Windows::System::IMemoryManagerStatics"]
+  },
+  "win10_input.h": {
+    "header": "windows.ui.core.h",
+    "interfaces": ["ABI::Windows::UI::Core::ICoreInputSourceBase", "ABI::Windows::UI::Core::ICorePointerInputSource"]
+  },
+  "pointer_device.h": {
+    "header": "windows.devices.input.h",
+    "interfaces": ["ABI::Windows::Devices::Input::IPointerDevice"]
+  },
   "coreapp.h": {
     "header": "windows.applicationmodel.core.h",
     "interfaces": [

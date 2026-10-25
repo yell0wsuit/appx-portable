@@ -40,6 +40,7 @@ HRESULT MakeScheduledToastFactory(IActivationFactory** value);
 HRESULT MakeDeviceFactory(bool display, IActivationFactory** value);
 HRESULT MakeCausalityFactory(IActivationFactory** value);
 HRESULT MakeCalendarFactory(IActivationFactory** value);
+HRESULT MakeMemoryManagerFactory(IActivationFactory** value);
 void InstallActivationHook() noexcept;
 // The OS activation functions, bypassing the hook: for shim code that wraps an OS class.
 HRESULT OsGetActivationFactory(HSTRING name, REFIID iid, void** out) noexcept;

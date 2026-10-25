@@ -5,6 +5,7 @@
 #pragma warning(disable : 4996)
 #endif
 #include "element.h"
+#include "compat/win10/input.h"
 #include "generated/controls.h"
 #include "com/factory.h"
 #include "registry.h"
@@ -69,6 +70,11 @@ class Panel final : public Element<Panel, DefaultISwapChainPanel, ISwapChainPane
 public:
     static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Controls.SwapChainPanel";
     explicit Panel(IInspectable* outer) : Element(outer) {}
+    HRESULT STDMETHODCALLTYPE
+    CreateCoreIndependentInputSource(ABI::Windows::UI::Core::CoreInputDeviceTypes devices,
+                                     ABI::Windows::UI::Core::ICoreInputSourceBase** value) override {
+        return MakeIndependentInputSource(devices, value);
+    }
     HRESULT STDMETHODCALLTYPE get_CompositionScaleX(FLOAT* value) override {
         if (!value) return E_POINTER;
         *value = 1;
@@ -212,8 +218,8 @@ public:
         return S_OK;
     }
 };
-class Page final
-    : public Element<Page, DefaultIPage, DefaultIContentControl, DefaultIControl, DefaultIPageOverrides, IHostedPage> {
+class Page final : public Element<Page, DefaultIPage, DefaultIContentControl, DefaultIUserControl, DefaultIControl,
+                                  DefaultIPageOverrides, IHostedPage> {
     ComPtr<IInspectable> content_;
     ABI::Windows::UI::Xaml::Navigation::NavigationCacheMode cache_ =
         ABI::Windows::UI::Xaml::Navigation::NavigationCacheMode_Disabled;
@@ -245,6 +251,15 @@ public:
         return content_.CopyTo(value);
     }
     HRESULT STDMETHODCALLTYPE put_Content(IInspectable* value) override {
+        content_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Content(IUIElement** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return content_ ? content_.CopyTo(value) : S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_Content(IUIElement* value) override {
         content_ = value;
         return S_OK;
     }

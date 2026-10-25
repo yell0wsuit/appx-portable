@@ -21,4 +21,6 @@ HRESULT ReleaseElementPointer(IInspectable* target);
 void PointerHostMessage(UINT message, WPARAM wparam, LPARAM lparam);
 // The mouse as a PointerPoint at a client position, for CoreWindow events.
 HRESULT MakeMousePoint(POINT position, WPARAM buttons, UINT message, ABI::Windows::UI::Input::IPointerPoint** value);
+HRESULT MakePointerHistory(ABI::Windows::UI::Input::IPointerPoint* point,
+                           __FIVector_1_Windows__CUI__CInput__CPointerPoint** value);
 }

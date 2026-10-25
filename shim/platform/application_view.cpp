@@ -9,6 +9,8 @@
 #include "host/host.h"
 #include "registry.h"
 #include <atomic>
+#include <cmath>
+#include <mutex>
 #include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::ViewManagement;
@@ -122,12 +124,42 @@ public:
     }
     HRESULT STDMETHODCALLTYPE ExitFullScreenMode() override { return HostWindow() ? SetHostFullscreen(false) : S_OK; }
 };
-class ViewFactory final : public Factory<DefaultIApplicationViewStatics, DefaultIApplicationViewStatics2> {
+class ViewFactory final
+    : public Factory<DefaultIApplicationViewStatics, DefaultIApplicationViewStatics2, IApplicationViewStatics3> {
     ComPtr<View> view_ = Make<View>();
     std::atomic<boolean> terminate_{true};
+    std::mutex preferencesMutex_;
+    ApplicationViewWindowingMode launchMode_{ApplicationViewWindowingMode_Auto};
+    ABI::Windows::Foundation::Size launchSize_{};
 
 public:
     ViewFactory() : Factory(L"Windows.UI.ViewManagement.ApplicationView") {}
+    HRESULT STDMETHODCALLTYPE get_PreferredLaunchWindowingMode(ApplicationViewWindowingMode* value) override {
+        if (!value) return E_POINTER;
+        std::lock_guard<std::mutex> lock(preferencesMutex_);
+        *value = launchMode_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_PreferredLaunchWindowingMode(ApplicationViewWindowingMode value) override {
+        if (value < ApplicationViewWindowingMode_Auto || value > ApplicationViewWindowingMode_CompactOverlay)
+            return E_INVALIDARG;
+        std::lock_guard<std::mutex> lock(preferencesMutex_);
+        launchMode_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_PreferredLaunchViewSize(ABI::Windows::Foundation::Size* value) override {
+        if (!value) return E_POINTER;
+        std::lock_guard<std::mutex> lock(preferencesMutex_);
+        *value = launchSize_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_PreferredLaunchViewSize(ABI::Windows::Foundation::Size value) override {
+        if (!std::isfinite(value.Width) || !std::isfinite(value.Height) || value.Width < 0 || value.Height < 0)
+            return E_INVALIDARG;
+        std::lock_guard<std::mutex> lock(preferencesMutex_);
+        launchSize_ = value;
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE GetForCurrentView(IApplicationView** v) override {
         if (!v) return E_POINTER;
         *v = nullptr;

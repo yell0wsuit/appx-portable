@@ -55,6 +55,16 @@ int main() {
     engine->Release();
     puts("proxytest: XAudio2Create by ordinal passed");
 
+    auto* audio9 = LoadLibraryW(L"XAudio2_9.dll");
+    if (!audio9) return 15;
+    auto create9 = reinterpret_cast<CreateCall>(GetProcAddress(audio9, MAKEINTRESOURCEA(1)));
+    if (!create9 || create9 != reinterpret_cast<CreateCall>(GetProcAddress(audio9, "XAudio2Create"))) return 16;
+    engine = nullptr;
+    hr = create9(&engine, 0, 1);
+    if (FAILED(hr) || !engine) return 17;
+    engine->Release();
+    puts("proxytest: XAudio2_9 ordinal and engine creation passed");
+
     auto* write = LoadLibraryW(L"DWrite.dll");
     if (!write) return 10;
     GetModuleFileNameW(write, path, MAX_PATH);

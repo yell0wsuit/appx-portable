@@ -1,3 +1,4 @@
+#include "compat/win10/titlebar.h"
 #include "islands/islands.h"
 #include "generated/coreapp.h"
 #include "com/factory.h"
@@ -20,13 +21,38 @@ void DismissSplashScreen();
 void RaiseApplicationSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs* args);
 void EnableCoreWindowInput() noexcept;
 void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam);
-class CoreView final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultICoreApplicationView, FtmBase> {
+class CoreView final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultICoreApplicationView, ICoreApplicationView3, FtmBase> {
+    APPX_LOG_MISSING_INTERFACES("CoreApplicationView")
     InspectableClass(L"Windows.ApplicationModel.Core.CoreApplicationView", BaseTrust);
     EventSource<
         __FITypedEventHandler_2_Windows__CApplicationModel__CCore__CCoreApplicationView_Windows__CApplicationModel__CActivation__CIActivatedEventArgs>
         activated_;
+    ComPtr<ICoreApplicationViewTitleBar> titleBar_;
+    EventSource<ABI::Windows::Foundation::ITypedEventHandler<CoreApplicationView*, HostedViewClosingEventArgs*>>
+        closing_;
 
 public:
+    HRESULT STDMETHODCALLTYPE get_IsComponent(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_TitleBar(ICoreApplicationViewTitleBar** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        if (!titleBar_) {
+            auto hr = MakeWin10TitleBar(&titleBar_);
+            if (FAILED(hr)) return hr;
+        }
+        return titleBar_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE add_HostedViewClosing(
+        ABI::Windows::Foundation::ITypedEventHandler<CoreApplicationView*, HostedViewClosingEventArgs*>* h,
+        EventRegistrationToken* t) override {
+        return closing_.Add(h, t);
+    }
+    HRESULT STDMETHODCALLTYPE remove_HostedViewClosing(EventRegistrationToken t) override { return closing_.Remove(t); }
     HRESULT RaiseActivated(IActivatedEventArgs* args) { return activated_.InvokeAll(this, args); }
     HRESULT STDMETHODCALLTYPE get_CoreWindow(ABI::Windows::UI::Core::ICoreWindow** value) override {
         return MakeCoreWindow(value);
@@ -96,7 +122,8 @@ class SuspendingArgs final
 
 public:
     explicit SuspendingArgs(ComPtr<SuspendingOperation> operation) : operation_(std::move(operation)) {}
-    HRESULT STDMETHODCALLTYPE get_SuspendingOperation(ABI::Windows::ApplicationModel::ISuspendingOperation** value) override {
+    HRESULT STDMETHODCALLTYPE
+    get_SuspendingOperation(ABI::Windows::ApplicationModel::ISuspendingOperation** value) override {
         if (!value) return E_POINTER;
         return operation_.CopyTo(value);
     }
@@ -114,7 +141,7 @@ static HRESULT RunFrameworkView(IFrameworkViewSource* source) {
     ComPtr<IFrameworkView> view;
     HRESULT hr = source->CreateView(&view);
     if (FAILED(hr) || !view) return FAILED(hr) ? hr : E_UNEXPECTED;
-    EnableCoreWindowInput();  // no XAML: input arrives as CoreWindow events
+    EnableCoreWindowInput(); // no XAML: input arrives as CoreWindow events
     auto core = MainView();
     if (!core) return E_OUTOFMEMORY;
     hr = view->Initialize(core.Get());
@@ -139,7 +166,7 @@ static HRESULT RunFrameworkView(IFrameworkViewSource* source) {
     hr = view->Run();
     Log("TRACE", "IFrameworkView.Run returned hr=%08lx", hr);
     view->Uninitialize();
-    PostQuitMessage(0);  // the view's loop is over; end the host's
+    PostQuitMessage(0); // the view's loop is over; end the host's
     return hr;
 }
 class CoreAppFactory final
@@ -216,7 +243,7 @@ public:
         if (!args) return;
         Log("INFO", "suspending before exit, as Windows does when a Store app closes");
         suspending_.InvokeAll(nullptr, args.Get());
-        RaiseApplicationSuspending(args.Get());  // XAML games save in Application.Suspending
+        RaiseApplicationSuspending(args.Get()); // XAML games save in Application.Suspending
         const ULONGLONG deadline = GetTickCount64() + milliseconds;
         while (*pending > 0 && GetTickCount64() < deadline) {
             MSG message{};
@@ -258,9 +285,9 @@ HRESULT MakeCoreApplicationFactory(IActivationFactory** value) {
 // host shuts down normally.
 bool ExitLikeStoreApp() {
     if (!CurrentPackage().loaded) return false;
-    SaveHostPlacement();  // termination skips WM_DESTROY, where it would be saved
+    SaveHostPlacement(); // termination skips WM_DESTROY, where it would be saved
     if (IslandsMode()) IslandHostMessage(WM_SHOWWINDOW, FALSE, 0);
-    CoreHostMessage(WM_SHOWWINDOW, FALSE, 0);  // VisibilityChanged(false), now
+    CoreHostMessage(WM_SHOWWINDOW, FALSE, 0); // VisibilityChanged(false), now
     if (auto factory = SharedFactory()) factory->Suspend(5000);
     if (IslandsMode()) CloseIslandView();
     Log("INFO", "ending the process after suspension");

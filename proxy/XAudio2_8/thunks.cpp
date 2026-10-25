@@ -2,6 +2,7 @@
 #include <windows.h>
 extern "C" void* appx_targets[7];
 extern "C" void __cdecl appx_resolve(unsigned index);
+#ifndef _WIN64
 extern "C" __declspec(naked) void proxy_XAudio2Create() {
   __asm {
     pushfd
@@ -86,6 +87,7 @@ extern "C" __declspec(naked) void proxy_XAudio2CreateWithVersionInfo() {
     jmp dword ptr [appx_targets + 24]
   }
 }
+#endif
 extern "C" const char* appx_export_names[] = {
   "XAudio2Create",
   "CreateAudioReverb",

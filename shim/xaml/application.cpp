@@ -6,6 +6,7 @@
 #include "islands/islands.h"
 #include "package/package.h"
 #include "element.h"
+#include "compat/win10/xaml.h"
 #include <shlwapi.h>
 #include <xmllite.h>
 #include <windows.applicationmodel.activation.h>
@@ -36,9 +37,7 @@ static HRESULT ConnectSourceXaml(ABI::Windows::UI::Xaml::Markup::IComponentConne
         if (type != XmlNodeType_Element) continue;
         const wchar_t* tag = nullptr;
         reader->GetLocalName(&tag, nullptr);
-        if (!tag || (wcscmp(tag, L"SwapChainBackgroundPanel") && wcscmp(tag, L"SwapChainPanel") &&
-                     wcscmp(tag, L"MediaElement")))
-            continue;
+        if (!tag) continue;
         const std::wstring elementType = tag;
         std::wstring name, connection, visibility;
         if (reader->MoveToAttributeByName(L"Name", L"http://schemas.microsoft.com/winfx/2006/xaml") == S_OK) {
@@ -53,7 +52,7 @@ static HRESULT ConnectSourceXaml(ABI::Windows::UI::Xaml::Markup::IComponentConne
             if (value) connection = value;
             reader->MoveToElement();
         }
-        if (name.empty() || connection.empty()) continue;
+        if (connection.empty()) continue;
         if (reader->MoveToAttributeByName(L"Visibility", nullptr) == S_OK) {
             const wchar_t* value = nullptr;
             reader->GetValue(&value, nullptr);
@@ -67,12 +66,22 @@ static HRESULT ConnectSourceXaml(ABI::Windows::UI::Xaml::Markup::IComponentConne
         const wchar_t* canonical = elementType == L"MediaElement"               ? L"mediaElement"
                                    : elementType == L"SwapChainBackgroundPanel" ? L"SwapChainPanel"
                                                                                 : L"swapChainPanel";
-        hr = element->FindName(Wrappers::HStringReference(canonical).Get(), &target);
+        if (elementType == L"UserControl") {
+            hr = element->QueryInterface(IID_PPV_ARGS(&target));
+        } else if (elementType == L"MediaElement" || elementType == L"SwapChainBackgroundPanel" ||
+                   elementType == L"SwapChainPanel") {
+            hr = element->FindName(Wrappers::HStringReference(canonical).Get(), &target);
+        } else if (CurrentPackage().universal) {
+            hr = MakeWin10XamlElement(elementType.c_str(), &target);
+        } else {
+            continue;
+        }
         if (FAILED(hr)) return hr;
         if (!target) continue;
         ComPtr<INamedElementRegistry> names;
         hr = element->QueryInterface(IID_PPV_ARGS(&names));
-        if (SUCCEEDED(hr)) hr = names->RegisterName(Wrappers::HStringReference(name.c_str()).Get(), target.Get());
+        if (SUCCEEDED(hr) && !name.empty())
+            hr = names->RegisterName(Wrappers::HStringReference(name.c_str()).Get(), target.Get());
         if (FAILED(hr)) return hr;
         if (visibility == L"Collapsed") {
             ComPtr<IUIElement> ui;
@@ -253,6 +262,25 @@ public:
         Log("TRACE", "Application::LoadComponent %ls", WindowsGetStringRawBuffer(text, nullptr));
         const bool movie = wcscmp(WindowsGetStringRawBuffer(text, nullptr), L"ms-appx:///MovieMgrPage.xaml") == 0;
         const bool directX = wcscmp(WindowsGetStringRawBuffer(text, nullptr), L"ms-appx:///DirectXPage.xaml") == 0;
+        if (component && CurrentPackage().universal) {
+            ComPtr<ABI::Windows::UI::Xaml::Markup::IComponentConnector> connector;
+            if (SUCCEEDED(component->QueryInterface(IID_PPV_ARGS(&connector)))) {
+                ComPtr<IFrameworkElement> element;
+                auto hr = component->QueryInterface(IID_PPV_ARGS(&element));
+                std::wstring path = WindowsGetStringRawBuffer(text, nullptr);
+                const std::wstring prefix = L"ms-appx:///";
+                if (SUCCEEDED(hr) && path.rfind(prefix, 0) == 0) {
+                    path.erase(0, prefix.size());
+                    if (!path.empty() && path.find_first_of(L"\\/:") == std::wstring::npos) {
+                        hr = ConnectSourceXaml(connector.Get(), element.Get(), path.c_str());
+                        if (hr != S_FALSE) {
+                            WindowsDeleteString(text);
+                            return hr;
+                        }
+                    }
+                }
+            }
+        }
         WindowsDeleteString(text);
         if ((movie || directX) && component) {
             // Connection 1 installs the movie events or the DirectX panel's

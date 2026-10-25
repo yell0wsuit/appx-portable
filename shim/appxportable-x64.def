@@ -1,0 +1,7 @@
+LIBRARY appxportable
+EXPORTS
+  ShimGetFactory
+  DllGetActivationFactory PRIVATE
+  DllCanUnloadNow PRIVATE
+  ShimBootstrap
+  ShimSetManagedCoreWindowMode

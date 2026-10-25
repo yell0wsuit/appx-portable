@@ -16,7 +16,9 @@ using FactoryCall = HRESULT(WINAPI*)(HSTRING, REFIID, void**);
 using ActivateCall = HRESULT(WINAPI*)(HSTRING, IInspectable**);
 static FactoryCall originalFactory = &RoGetActivationFactory;
 static ActivateCall originalActivate = &RoActivateInstance;
-HRESULT OsGetActivationFactory(HSTRING name, REFIID iid, void** out) noexcept { return originalFactory(name, iid, out); }
+HRESULT OsGetActivationFactory(HSTRING name, REFIID iid, void** out) noexcept {
+    return originalFactory(name, iid, out);
+}
 HRESULT OsActivateInstance(HSTRING name, IInspectable** out) noexcept { return originalActivate(name, out); }
 
 // Classes the package registers in its own manifest are unknown to Windows
@@ -57,7 +59,7 @@ static bool FromGame(void* returnAddress) noexcept {
     HMODULE module = nullptr;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                             static_cast<LPCWSTR>(returnAddress), &module))
-        return true;  // code outside any module (thunks, JIT): treat as the game's
+        return true; // code outside any module (thunks, JIT): treat as the game's
     std::lock_guard<std::mutex> lock(mutex);
     for (const auto& [handle, game] : known)
         if (handle == module) return game;
@@ -73,8 +75,7 @@ static bool FromGame(void* returnAddress) noexcept {
     }
     try {
         known.emplace_back(module, game);
-    } catch (...) {
-    }
+    } catch (...) {}
     return game;
 }
 static HRESULT GetFactoryFor(HSTRING name, REFIID iid, void** out, bool game) noexcept {
@@ -130,19 +131,27 @@ static HRESULT WINAPI Activate(HSTRING name, IInspectable** out) noexcept {
 // with `mov edi, edi` after five padding bytes; jump from the padding and
 // call the original past the two-byte prologue.
 static void* Hotpatch(HMODULE module, const char* name, void* hook) noexcept {
+#ifdef _WIN64
+    // The x86 hotpatch layout and rel32 range do not apply to x64.
+    (void)module;
+    (void)name;
+    (void)hook;
+    return nullptr;
+#else
     auto* entry = module ? reinterpret_cast<BYTE*>(GetProcAddress(module, name)) : nullptr;
     if (!entry || entry[0] != 0x8B || entry[1] != 0xFF) return nullptr;
     for (int i = 1; i <= 5; ++i)
         if (entry[-i] != 0xCC && entry[-i] != 0x90) return nullptr;
     DWORD old;
     if (!VirtualProtect(entry - 5, 7, PAGE_EXECUTE_READWRITE, &old)) return nullptr;
-    entry[-5] = 0xE9;  // jmp rel32 to the hook
+    entry[-5] = 0xE9; // jmp rel32 to the hook
     *reinterpret_cast<INT32*>(entry - 4) = static_cast<INT32>(static_cast<BYTE*>(hook) - entry);
-    InterlockedExchange16(reinterpret_cast<SHORT*>(entry), static_cast<SHORT>(0xF9EB));  // jmp short -7
+    InterlockedExchange16(reinterpret_cast<SHORT*>(entry), static_cast<SHORT>(0xF9EB)); // jmp short -7
     DWORD ignored;
     VirtualProtect(entry - 5, 7, old, &ignored);
     FlushInstructionCache(GetCurrentProcess(), entry - 5, 7);
     return entry + 2;
+#endif
 }
 
 // Fallback (Wine builds without hotpatch prologues): redirect the imports of
@@ -152,17 +161,17 @@ static void PatchModule(HMODULE module) noexcept {
     auto* base = reinterpret_cast<BYTE*>(module);
     auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
     if (dos->e_magic != IMAGE_DOS_SIGNATURE) return;
-    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS32*>(base + dos->e_lfanew);
-    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) return;
+    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR_MAGIC) return;
     auto dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
     if (!dir.VirtualAddress) return;
     auto* imports = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + dir.VirtualAddress);
     for (; imports->Name; ++imports) {
         if (!imports->OriginalFirstThunk) continue;
-        auto* names = reinterpret_cast<IMAGE_THUNK_DATA32*>(base + imports->OriginalFirstThunk);
-        auto* slots = reinterpret_cast<IMAGE_THUNK_DATA32*>(base + imports->FirstThunk);
+        auto* names = reinterpret_cast<IMAGE_THUNK_DATA*>(base + imports->OriginalFirstThunk);
+        auto* slots = reinterpret_cast<IMAGE_THUNK_DATA*>(base + imports->FirstThunk);
         for (; names->u1.AddressOfData; ++names, ++slots) {
-            if (IMAGE_SNAP_BY_ORDINAL32(names->u1.Ordinal)) continue;
+            if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;
             auto* symbol = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(base + names->u1.AddressOfData);
             void* hook = nullptr;
             if (strcmp(reinterpret_cast<char*>(symbol->Name), "RoGetActivationFactory") == 0)
@@ -171,10 +180,10 @@ static void PatchModule(HMODULE module) noexcept {
                 hook = reinterpret_cast<void*>(&Activate);
             if (!hook) continue;
             DWORD old;
-            if (!VirtualProtect(&slots->u1.Function, sizeof(DWORD), PAGE_READWRITE, &old)) continue;
-            InterlockedExchange(reinterpret_cast<LONG*>(&slots->u1.Function), reinterpret_cast<LONG>(hook));
+            if (!VirtualProtect(&slots->u1.Function, sizeof(void*), PAGE_READWRITE, &old)) continue;
+            InterlockedExchangePointer(reinterpret_cast<void* volatile*>(&slots->u1.Function), hook);
             DWORD ignored;
-            VirtualProtect(&slots->u1.Function, sizeof(DWORD), old, &ignored);
+            VirtualProtect(&slots->u1.Function, sizeof(void*), old, &ignored);
         }
     }
 }

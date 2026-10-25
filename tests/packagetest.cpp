@@ -46,6 +46,7 @@ int main() {
 </Package>)";
     auto info = appx::ReadPackage(root);
     CHECK(info.loaded);
+    CHECK(!info.universal);
     CHECK(info.identityName == L"Example.Game");
     CHECK(info.displayName == L"Example Game");
     CHECK(info.applicationId == L"App");
@@ -76,6 +77,16 @@ int main() {
     CHECK(info.smallLogo == L"Assets\\SmallLogo.png");
     CHECK(info.fullName.find(L"_neutral__") != std::wstring::npos);
     CHECK(info.classes.empty());
+    CHECK(!info.universal);
+
+    std::ofstream(root / L"AppxManifest.xml")
+        << R"(<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10">
+  <Identity Name="Example.Universal" Publisher="CN=Example" Version="1.0.0.0" ProcessorArchitecture="x64" />
+  <Dependencies><TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.10240.0" /></Dependencies>
+  <Applications><Application Id="App" Executable="Game.exe" EntryPoint="Example.App" /></Applications>
+</Package>)";
+    info = appx::ReadPackage(root);
+    CHECK(info.loaded && info.universal && info.architecture == L"x64");
 
     std::filesystem::remove_all(root);
     printf("packagetest: %d failure(s)\n", failures);
