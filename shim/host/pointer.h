@@ -4,6 +4,11 @@
 #include <windows.ui.xaml.input.h>
 #include <functional>
 namespace appx {
+// The desktop host selects a page as Window.Content; pointer events belong to
+// the graphics panel inside that page, as they do in the XAML visual tree.
+struct __declspec(uuid("a13bfb5a-f82f-4ffd-b1c3-b321debe31c0")) IPointerTargetProvider : public IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE GetPointerTarget(IInspectable** value) = 0;
+};
 // Borrowed UI-thread pointer; callers retaining it must AddRef.
 IInspectable* CurrentPointerTarget() noexcept;
 using PointerCallback = std::function<void(UINT, ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs*)>;

@@ -15,7 +15,7 @@ export WINEPREFIX=${WINEPREFIX:-"$root/local/wine-test"}
 export WINEDEBUG=${WINEDEBUG:--all}
 export MVK_CONFIG_LOG_LEVEL=${MVK_CONFIG_LOG_LEVEL:-0}
 # The proxies load the shim; the VC runtimes are the package's own (VCLibs 110, 120, 140).
-export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
+export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8,dwrite=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
 wine=${WINE:-"$HOME/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine"}
 [[ -x "$wine" ]] || { echo 'Set WINE to your Wine executable.' >&2; exit 1; }
 # Share managed/native executable selection with the Windows Python launcher.

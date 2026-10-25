@@ -46,9 +46,12 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
         if (wcscmp(text, L"Windows.Web.Http.HttpClient") == 0) return appx::MakeHttpFactory(false, factory);
         if (wcscmp(text, L"VungleSDK.AdFactory") == 0) return appx::MakeAdFactory(factory);
         if (wcscmp(text, L"Windows.Storage.ApplicationData") == 0) return appx::MakeStorageFactory(factory);
+        if (wcscmp(text, L"Windows.Storage.StorageFile") == 0) return appx::MakeStorageFileFactory(factory);
         if (wcscmp(text, L"Windows.UI.Input.PointerVisualizationSettings") == 0)
             return appx::MakeVisualizationFactory(factory);
         if (wcscmp(text, L"Windows.UI.Xaml.Window") == 0) return appx::MakeWindowFactory(factory);
+        if (wcscmp(text, L"Windows.UI.Xaml.Media.RectangleGeometry") == 0)
+            return appx::MakeRectangleGeometryFactory(factory);
         if (wcscmp(text, L"Windows.Graphics.Display.DisplayInformation") == 0 ||
             wcscmp(text, L"Windows.Graphics.Display.DisplayProperties") == 0)
             return appx::MakeDisplayFactory(factory);
@@ -60,6 +63,8 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
             return appx::MakeControlFactory(text, factory);
         if (wcscmp(text, L"Windows.UI.Xaml.Application") == 0) return appx::MakeApplicationFactory(factory);
         if (wcscmp(text, L"Windows.UI.Xaml.DispatcherTimer") == 0) return appx::MakeDispatcherTimerFactory(factory);
+        if (wcscmp(text, L"Windows.UI.Xaml.Media.CompositionTarget") == 0)
+            return appx::MakeCompositionTargetFactory(factory);
         if (wcscmp(text, L"Windows.UI.Core.CoreCursor") == 0) return appx::MakeCursorFactory(factory);
         if (wcscmp(text, L"Windows.UI.Core.CoreWindow") == 0) return appx::MakeCoreWindowFactory(factory);
         if (wcscmp(text, L"Windows.ApplicationModel.Package") == 0) return appx::MakePackageFactory(factory);

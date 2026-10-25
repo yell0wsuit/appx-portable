@@ -99,6 +99,7 @@ jobs:
                     'build/release/RelWithDebInfo/appxportable.dll'
                     'build/release/RelWithDebInfo/d3dcompiler_47.dll'
                     'build/release/RelWithDebInfo/XAudio2_8.dll'
+                    'build/release/RelWithDebInfo/DWrite.dll'
                   )
                   foreach ($asset in $assets) {
                     if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {

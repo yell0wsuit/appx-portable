@@ -4,6 +4,10 @@
 #include "host/host.h"
 #include "registry.h"
 #include "islands/islands.h"
+#include "package/package.h"
+#include "element.h"
+#include <shlwapi.h>
+#include <xmllite.h>
 #include <windows.applicationmodel.activation.h>
 #include <windows.ui.xaml.markup.h>
 #include <wrl/event.h>
@@ -13,6 +17,74 @@ using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::ApplicationModel::Activation;
 namespace appx {
+// Windows 8 packages retain source XAML, including the generated connection
+// IDs. Bind supported named elements and their handlers from those IDs.
+static HRESULT ConnectSourceXaml(ABI::Windows::UI::Xaml::Markup::IComponentConnector* connector,
+                                 IFrameworkElement* element, const wchar_t* filename) {
+    const auto path = CurrentPackage().directory / filename;
+    ComPtr<IStream> stream;
+    auto hr = SHCreateStreamOnFileEx(path.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE, 0, FALSE, nullptr, &stream);
+    if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) return S_FALSE;
+    if (FAILED(hr)) return hr;
+    ComPtr<IXmlReader> reader;
+    hr = CreateXmlReader(IID_PPV_ARGS(&reader), nullptr);
+    if (SUCCEEDED(hr)) hr = reader->SetProperty(XmlReaderProperty_DtdProcessing, DtdProcessing_Prohibit);
+    if (SUCCEEDED(hr)) hr = reader->SetInput(stream.Get());
+    if (FAILED(hr)) return hr;
+    XmlNodeType type{};
+    while ((hr = reader->Read(&type)) == S_OK) {
+        if (type != XmlNodeType_Element) continue;
+        const wchar_t* tag = nullptr;
+        reader->GetLocalName(&tag, nullptr);
+        if (!tag || (wcscmp(tag, L"SwapChainBackgroundPanel") && wcscmp(tag, L"SwapChainPanel") &&
+                     wcscmp(tag, L"MediaElement")))
+            continue;
+        const std::wstring elementType = tag;
+        std::wstring name, connection, visibility;
+        if (reader->MoveToAttributeByName(L"Name", L"http://schemas.microsoft.com/winfx/2006/xaml") == S_OK) {
+            const wchar_t* value = nullptr;
+            reader->GetValue(&value, nullptr);
+            if (value) name = value;
+            reader->MoveToElement();
+        }
+        if (reader->MoveToAttributeByName(L"ConnectionId", L"http://schemas.microsoft.com/winfx/2006/xaml") == S_OK) {
+            const wchar_t* value = nullptr;
+            reader->GetValue(&value, nullptr);
+            if (value) connection = value;
+            reader->MoveToElement();
+        }
+        if (name.empty() || connection.empty()) continue;
+        if (reader->MoveToAttributeByName(L"Visibility", nullptr) == S_OK) {
+            const wchar_t* value = nullptr;
+            reader->GetValue(&value, nullptr);
+            if (value) visibility = value;
+            reader->MoveToElement();
+        }
+        wchar_t* end = nullptr;
+        const long id = wcstol(connection.c_str(), &end, 10);
+        if (!end || *end || id <= 0 || id == LONG_MAX) return E_INVALIDARG;
+        ComPtr<IInspectable> target;
+        const wchar_t* canonical = elementType == L"MediaElement"               ? L"mediaElement"
+                                   : elementType == L"SwapChainBackgroundPanel" ? L"SwapChainPanel"
+                                                                                : L"swapChainPanel";
+        hr = element->FindName(Wrappers::HStringReference(canonical).Get(), &target);
+        if (FAILED(hr)) return hr;
+        if (!target) continue;
+        ComPtr<INamedElementRegistry> names;
+        hr = element->QueryInterface(IID_PPV_ARGS(&names));
+        if (SUCCEEDED(hr)) hr = names->RegisterName(Wrappers::HStringReference(name.c_str()).Get(), target.Get());
+        if (FAILED(hr)) return hr;
+        if (visibility == L"Collapsed") {
+            ComPtr<IUIElement> ui;
+            hr = target.As(&ui);
+            if (SUCCEEDED(hr)) hr = ui->put_Visibility(Visibility_Collapsed);
+            if (FAILED(hr)) return hr;
+        }
+        hr = connector->Connect(id, target.Get());
+        if (FAILED(hr)) return hr;
+    }
+    return hr == S_FALSE ? S_OK : hr;
+}
 static ComPtr<IApplication> current;
 HRESULT CurrentApplication(IApplication** value) {
     if (!value) return E_POINTER;
@@ -94,7 +166,7 @@ class InitParams final : public RuntimeClass<RuntimeClassFlags<WinRt>, IApplicat
     InspectableClass(L"Windows.UI.Xaml.ApplicationInitializationCallbackParams", BaseTrust);
 };
 class Application;
-static Application* live = nullptr;  // the game's Application, for Suspending
+static Application* live = nullptr; // the game's Application, for Suspending
 class Application final : public Composable<Application, DefaultIApplication, DefaultIApplicationOverrides> {
     EventSource<ISuspendingEventHandler> suspending_;
     EventSource<ABI::Windows::Foundation::IEventHandler<IInspectable*>> resuming_;
@@ -174,20 +246,26 @@ public:
         uri->get_AbsoluteUri(&text);
         Log("TRACE", "Application::LoadComponent %ls", WindowsGetStringRawBuffer(text, nullptr));
         const bool movie = wcscmp(WindowsGetStringRawBuffer(text, nullptr), L"ms-appx:///MovieMgrPage.xaml") == 0;
+        const bool directX = wcscmp(WindowsGetStringRawBuffer(text, nullptr), L"ms-appx:///DirectXPage.xaml") == 0;
         WindowsDeleteString(text);
-        if (movie && component) {
-            // The compiled XAML's connection 1 installs MediaOpened/Ended/Failed
-            // and PointerPressed handlers. FindName alone only binds the field.
+        if ((movie || directX) && component) {
+            // Connection 1 installs the movie events or the DirectX panel's
+            // pointer handlers. FindName alone only binds the generated field.
             ComPtr<ABI::Windows::UI::Xaml::Markup::IComponentConnector> connector;
             auto hr = component->QueryInterface(IID_PPV_ARGS(&connector));
             if (FAILED(hr)) return hr;
             ComPtr<IFrameworkElement> element;
             hr = component->QueryInterface(IID_PPV_ARGS(&element));
             if (FAILED(hr)) return hr;
-            ComPtr<IInspectable> media;
-            hr = element->FindName(Wrappers::HStringReference(L"mediaElement").Get(), &media);
+            if (directX) {
+                hr = ConnectSourceXaml(connector.Get(), element.Get(), L"DirectXPage.xaml");
+                if (hr != S_FALSE) return hr;
+            }
+            ComPtr<IInspectable> target;
+            hr = element->FindName(Wrappers::HStringReference(movie ? L"mediaElement" : L"SwapChainPanel").Get(),
+                                   &target);
             if (FAILED(hr)) return hr;
-            return connector->Connect(1, media.Get());
+            return connector->Connect(1, target.Get());
         }
         return S_OK;
     }
@@ -251,8 +329,10 @@ HRESULT MakeApplicationFactory(IActivationFactory** value) {
 }
 // Application.Suspending, which XAML games save in.
 void RaiseApplicationSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
-    if (IslandsMode()) RaiseIslandSuspending(args);
-    else if (live) live->RaiseSuspending(current.Get(), args);
+    if (IslandsMode())
+        RaiseIslandSuspending(args);
+    else if (live)
+        live->RaiseSuspending(current.Get(), args);
 }
 HRESULT MakeLaunchArgs(IActivatedEventArgs** value) {
     if (!value) return E_POINTER;

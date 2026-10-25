@@ -3,7 +3,9 @@
 #include <roapi.h>
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.xaml.media.dxinterop.h>
+#include <windows.ui.xaml.media.h>
 #include <wrl.h>
+#include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
 using namespace Microsoft::WRL;
@@ -33,6 +35,35 @@ int main() {
     CHECK(SUCCEEDED(object.As(&ui)));
     ABI::Windows::Foundation::Size size{};
     CHECK(SUCCEEDED(ui->get_RenderSize(&size)) && size.Width == 1024 && size.Height == 768);
+    // An OS XAML factory can be obtained without a XAML core, but creating a
+    // RectangleGeometry then fails with RPC_E_WRONG_THREAD. Use the shim object.
+    ComPtr<IActivationFactory> geometryFactory;
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Media.RectangleGeometry").Get(), &geometryFactory)));
+    ComPtr<IInspectable> geometryObject;
+    CHECK(geometryFactory && SUCCEEDED(geometryFactory->ActivateInstance(&geometryObject)));
+    ComPtr<ABI::Windows::UI::Xaml::Media::IRectangleGeometry> rectangle;
+    CHECK(geometryObject && SUCCEEDED(geometryObject.As(&rectangle)));
+    if (!rectangle) return 1;
+    ABI::Windows::Foundation::Rect bounds{};
+    CHECK(SUCCEEDED(rectangle->get_Rect(&bounds)) && bounds.Width == 0 && bounds.Height == 0);
+    CHECK(SUCCEEDED(rectangle->put_Rect({10, 20, 300, 200})));
+    CHECK(rectangle->get_Rect(nullptr) == E_POINTER);
+    CHECK(rectangle->put_Rect({0, 0, -1, 20}) == E_INVALIDARG);
+    ComPtr<ABI::Windows::UI::Xaml::Media::IGeometry> geometry;
+    CHECK(SUCCEEDED(rectangle.As(&geometry)));
+    CHECK(geometry && SUCCEEDED(geometry->get_Bounds(&bounds)) && bounds.X == 10 && bounds.Y == 20 &&
+          bounds.Width == 300 && bounds.Height == 200);
+    ComPtr<ABI::Windows::UI::Xaml::Media::IRectangleGeometry> clip;
+    CHECK(SUCCEEDED(ui->get_Clip(&clip)) && !clip);
+    CHECK(SUCCEEDED(ui->put_Clip(rectangle.Get())));
+    rectangle.Reset();
+    geometry.Reset();
+    geometryObject.Reset();
+    CHECK(SUCCEEDED(ui->get_Clip(&clip)) && clip);
+    CHECK(clip && SUCCEEDED(clip->get_Rect(&bounds)) && bounds.Width == 300 && bounds.Height == 200);
+    CHECK(SUCCEEDED(ui->put_Clip(nullptr)));
+    clip.Reset();
+    CHECK(SUCCEEDED(ui->get_Clip(&clip)) && !clip);
     ComPtr<INavigate> navigate;
     CHECK(SUCCEEDED(object.As(&navigate)));
     ComPtr<IFrame> frame;
@@ -60,6 +91,17 @@ int main() {
     if (!scale) return 1;
     float x = 0;
     CHECK(SUCCEEDED(scale->get_CompositionScaleX(&x)) && x == 1);
+    ComPtr<IInspectable> background, sameBackground;
+    CHECK(SUCCEEDED(element->FindName(HStringReference(L"SwapChainPanel").Get(), &background)) && background);
+    CHECK(SUCCEEDED(element->FindName(HStringReference(L"SwapChainPanel").Get(), &sameBackground)) &&
+          sameBackground.Get() == background.Get());
+    ComPtr<ISwapChainBackgroundPanel> backgroundType;
+    CHECK(background && SUCCEEDED(background.As(&backgroundType)));
+    ComPtr<ISwapChainBackgroundPanelNative> backgroundNative;
+    CHECK(background && SUCCEEDED(background.As(&backgroundNative)));
+    CHECK(backgroundNative && SUCCEEDED(backgroundNative->SetSwapChain(nullptr)));
+    ComPtr<IPanel> backgroundPanel;
+    CHECK(background && SUCCEEDED(background.As(&backgroundPanel)));
     // MainPage.InitializeComponent safe_casts this name to Grid^.
     ComPtr<IInspectable> grid, sameGrid;
     CHECK(SUCCEEDED(element->FindName(HStringReference(L"gridForTextBlocks").Get(), &grid)) && grid);
@@ -101,6 +143,43 @@ int main() {
     CHECK(SUCCEEDED(user->put_Content(nullptr)));
     userContent.Reset();
     CHECK(SUCCEEDED(user->get_Content(&userContent)) && !userContent);
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Media.CompositionTarget").Get(), &factory)));
+    ComPtr<ABI::Windows::UI::Xaml::Media::ICompositionTargetStatics> composition;
+    CHECK(SUCCEEDED(factory.As(&composition)));
+    if (!composition) return 1;
+    unsigned frames = 0;
+    INT64 previousTime = 0;
+    const DWORD renderThread = GetCurrentThreadId();
+    auto handler = Callback<ABI::Windows::Foundation::IEventHandler<IInspectable*>>(
+        [&](IInspectable*, IInspectable* args) -> HRESULT {
+            CHECK(GetCurrentThreadId() == renderThread);
+            ComPtr<ABI::Windows::UI::Xaml::Media::IRenderingEventArgs> rendering;
+            CHECK(args && SUCCEEDED(args->QueryInterface(IID_PPV_ARGS(&rendering))));
+            ABI::Windows::Foundation::TimeSpan time{};
+            CHECK(rendering && SUCCEEDED(rendering->get_RenderingTime(&time)) && time.Duration > previousTime);
+            previousTime = time.Duration;
+            ++frames;
+            return S_OK;
+        });
+    EventRegistrationToken renderingToken{};
+    CHECK(SUCCEEDED(composition->add_Rendering(handler.Get(), &renderingToken)));
+    auto pump = [](DWORD duration) {
+        const ULONGLONG until = GetTickCount64() + duration;
+        while (GetTickCount64() < until) {
+            MSG message{};
+            while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&message);
+            MsgWaitForMultipleObjects(0, nullptr, FALSE, 10, QS_ALLINPUT);
+        }
+    };
+    pump(150);
+    CHECK(frames >= 2);
+    // Static events may be removed using a separately requested factory.
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Media.CompositionTarget").Get(), &factory)));
+    CHECK(SUCCEEDED(factory.As(&composition)));
+    CHECK(SUCCEEDED(composition->remove_Rendering(renderingToken)));
+    const unsigned stopped = frames;
+    pump(65);
+    CHECK(frames == stopped);
     printf("controltest: %d failure(s)\n", failures);
     return failures ? 1 : 0;
 }

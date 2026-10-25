@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <roapi.h>
 #include <windows.storage.h>
+#include <windows.storage.streams.h>
 #include <windows.foundation.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
@@ -52,6 +53,61 @@ std::filesystem::path EnvironmentPath(const wchar_t* name) {
     auto length = GetEnvironmentVariableW(name, value, MAX_PATH);
     return length && length < MAX_PATH ? std::filesystem::absolute(value).lexically_normal() : std::filesystem::path();
 }
+HRESULT WaitForOperation(IInspectable* operation) {
+    if (!operation) return E_POINTER;
+    ComPtr<ABI::Windows::Foundation::IAsyncInfo> info;
+    auto hr = operation->QueryInterface(IID_PPV_ARGS(&info));
+    if (FAILED(hr)) return hr;
+    const auto deadline = GetTickCount64() + 5000;
+    ABI::Windows::Foundation::AsyncStatus status{};
+    do {
+        hr = info->get_Status(&status);
+        if (FAILED(hr)) return hr;
+        if (status != ABI::Windows::Foundation::AsyncStatus::Started) break;
+        Sleep(1);
+    } while (GetTickCount64() < deadline);
+    return status == ABI::Windows::Foundation::AsyncStatus::Completed ? S_OK : E_FAIL;
+}
+bool CheckPackagedFileUri(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**)) {
+    // Native audio engines open music through StorageFile, using ms-appx URIs.
+    // Exercise the factory registration and a real asynchronous stream open.
+    const auto path = ExeDirectory() / L"storage-uri-test" / L"music track.bin";
+    constexpr char payload[] = "packaged music bytes";
+    if (!WriteText(path, payload, CREATE_ALWAYS)) return false;
+    ComPtr<IActivationFactory> factory;
+    if (FAILED(get(HStringReference(L"Windows.Storage.StorageFile").Get(), &factory))) return false;
+    ComPtr<IStorageFileStatics> files;
+    if (FAILED(factory.As(&files))) return false;
+    ComPtr<ABI::Windows::Foundation::IUriRuntimeClassFactory> uris;
+    if (FAILED(RoGetActivationFactory(HStringReference(L"Windows.Foundation.Uri").Get(), IID_PPV_ARGS(&uris))))
+        return false;
+    ComPtr<ABI::Windows::Foundation::IUriRuntimeClass> uri;
+    if (FAILED(uris->CreateUri(HStringReference(L"ms-appx:///storage-uri-test/music%20track.bin").Get(), &uri)))
+        return false;
+    ComPtr<__FIAsyncOperation_1_Windows__CStorage__CStorageFile> operation;
+    if (FAILED(files->GetFileFromApplicationUriAsync(uri.Get(), &operation)) ||
+        FAILED(WaitForOperation(operation.Get())))
+        return false;
+    ComPtr<IStorageFile> file;
+    if (FAILED(operation->GetResults(&file))) return false;
+    ComPtr<IStorageItem> item;
+    HString actual;
+    if (FAILED(file.As(&item)) || FAILED(item->get_Path(actual.GetAddressOf())) ||
+        _wcsicmp(actual.GetRawBuffer(nullptr), path.c_str()))
+        return false;
+    ComPtr<
+        ABI::Windows::Foundation::IAsyncOperation<ABI::Windows::Storage::Streams::IRandomAccessStreamWithContentType*>>
+        opening;
+    ComPtr<ABI::Windows::Storage::Streams::IRandomAccessStreamReference> reference;
+    if (FAILED(file.As(&reference)) || FAILED(reference->OpenReadAsync(&opening)) ||
+        FAILED(WaitForOperation(opening.Get())))
+        return false;
+    ComPtr<ABI::Windows::Storage::Streams::IRandomAccessStreamWithContentType> stream;
+    ComPtr<ABI::Windows::Storage::Streams::IRandomAccessStream> access;
+    if (FAILED(opening->GetResults(&stream)) || FAILED(stream.As(&access))) return false;
+    UINT64 size = 0;
+    return SUCCEEDED(access->get_Size(&size)) && size == sizeof(payload) - 1;
+}
 int main(int argc, char** argv) {
     RoInitialize(RO_INIT_MULTITHREADED);
     const char* mode = argc > 1 ? argv[1] : "";
@@ -87,6 +143,10 @@ int main(int argc, char** argv) {
     auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
+    if (!*mode && !CheckPackagedFileUri(get)) {
+        puts("FAIL native StorageFile packaged URI and stream open");
+        return 94;
+    }
     ComPtr<IActivationFactory> factory;
     if (FAILED(get(HStringReference(L"Windows.Storage.ApplicationData").Get(), &factory))) return 2;
     ComPtr<IApplicationDataStatics> statics;

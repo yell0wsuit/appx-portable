@@ -271,6 +271,37 @@ int main() {
                         CHECK(SUCCEEDED(panelUi->remove_PointerPressed(pressed)));
                         CHECK(SUCCEEDED(panelUi->remove_PointerMoved(moved)));
                         CHECK(SUCCEEDED(panelUi->remove_PointerReleased(released)));
+                        // A DirectX page wraps its background panel. Selecting
+                        // the page as Window.Content must preserve panel input.
+                        ComPtr<IInspectable> background;
+                        CHECK(SUCCEEDED(element->FindName(HStringReference(L"SwapChainPanel").Get(), &background)));
+                        ComPtr<IUIElement> backgroundUi, pageUi;
+                        CHECK(SUCCEEDED(background.As(&backgroundUi)));
+                        CHECK(SUCCEEDED(page.As(&pageUi)));
+                        std::vector<int> backgroundEvents;
+                        auto backgroundHandler = Callback<Input::IPointerEventHandler>(
+                            [&](IInspectable*, Input::IPointerRoutedEventArgs* args) -> HRESULT {
+                                ComPtr<Input::IPointer> pointer;
+                                CHECK(SUCCEEDED(args->get_Pointer(&pointer)));
+                                boolean contact{};
+                                CHECK(SUCCEEDED(pointer->get_IsInContact(&contact)));
+                                backgroundEvents.push_back(contact ? 1 : 0);
+                                return S_OK;
+                            });
+                        CHECK(SUCCEEDED(backgroundUi->add_PointerPressed(backgroundHandler.Get(), &pressed)));
+                        CHECK(SUCCEEDED(backgroundUi->add_PointerMoved(backgroundHandler.Get(), &moved)));
+                        CHECK(SUCCEEDED(backgroundUi->add_PointerReleased(backgroundHandler.Get(), &released)));
+                        CHECK(SUCCEEDED(window->put_Content(pageUi.Get())));
+                        SendMessageW(host, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(37, 59));
+                        SendMessageW(host, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(37, 59));
+                        SendMessageW(host, WM_LBUTTONUP, 0, MAKELPARAM(37, 59));
+                        CHECK((backgroundEvents == std::vector<int>{1, 1, 0}));
+                        CHECK(SUCCEEDED(window->put_Content(nullptr)));
+                        SendMessageW(host, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(37, 59));
+                        CHECK(backgroundEvents.size() == 3);
+                        CHECK(SUCCEEDED(backgroundUi->remove_PointerPressed(pressed)));
+                        CHECK(SUCCEEDED(backgroundUi->remove_PointerMoved(moved)));
+                        CHECK(SUCCEEDED(backgroundUi->remove_PointerReleased(released)));
                         CHECK(activated == 0);
                         ComPtr<IActivationFactory> userActivation;
                         CHECK(SUCCEEDED(

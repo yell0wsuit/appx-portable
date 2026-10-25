@@ -1,0 +1,3 @@
+LIBRARY DWrite
+EXPORTS
+  DWriteCreateFactory=proxy_DWriteCreateFactory @1

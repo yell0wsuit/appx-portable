@@ -24,7 +24,7 @@ $VCLibs = @{
     'Microsoft.VCLibs.140.00' = @('vcruntime140_app.dll', 'msvcp140_app.dll', 'vccorlib140_app.dll')
 }
 # System DLLs games import from their folder; each loads appxportable.dll.
-$Proxies = @('d3dcompiler_47.dll', 'XAudio2_8.dll')
+$Proxies = @('d3dcompiler_47.dll', 'XAudio2_8.dll', 'DWrite.dll')
 # Package files the game never reads, and files setup itself provides.
 $Excluded = @('AppxSignature.p7x', 'AppxBlockMap.xml', '[Content_Types].xml', 'AppxMetadata',
     'microsoft.system.package.metadata', 'SaveData', 'appx-portable.ini', 'appxportable.dll') + $Proxies

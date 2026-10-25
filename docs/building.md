@@ -13,7 +13,7 @@ cmake --preset windows-x86
 cmake --build --preset windows-x86
 ```
 
-This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll` and `XAudio2_8.dll` in `build\windows-x86`. Follow the [setup instructions](../README.md#set-up-and-play) to stage them into a playable game folder.
+This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll`, `XAudio2_8.dll` and `DWrite.dll` in `build\windows-x86`. Follow the [setup instructions](../README.md#set-up-and-play) to stage them into a playable game folder.
 
 If CMake cannot find `cl`, use an x86 Visual Studio developer shell. If MSYS2's CMake appears first on `PATH`, put the native Windows CMake ahead of it (typically `C:\Program Files\CMake\bin`).
 
