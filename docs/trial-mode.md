@@ -33,7 +33,7 @@ The override has no effect with `--passthrough`, which uses Windows' own Store c
 | `ExpirationDate` | zero | zero |
 | `ProductLicenses` | empty | empty |
 
-Purchases, receipts, listings and consumable fulfillment fail as offline either way. Microsoft's [`IsTrial` documentation](https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.store.licenseinformation.istrial) describes `IsActive` true with `IsTrial` false as a full license.
+Purchases, receipts, listings and consumable fulfillment fail as offline either way unless the separate [`--stub-iap` mode](stub-iap.md) is enabled. Microsoft's [`IsTrial` documentation](https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.store.licenseinformation.istrial) describes `IsActive` true with `IsTrial` false as a full license.
 
 ## If the game stays in trial mode
 

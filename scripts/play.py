@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ElementTree
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SWITCHES = {
+    'stub-iap': 'complete in-app purchases locally without contacting the Store',
     'log': 'write failures and notes to appx-portable.log beside the game',
     'trace': 'log every traced call as well (implies --log)',
     'capture': 'save the back buffer to appx-frame.bmp on the first and every 120th frame',

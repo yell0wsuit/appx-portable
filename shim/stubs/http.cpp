@@ -1,8 +1,15 @@
+// ConnectionProfile includes the Windows 8 usage ABI.
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#else
+#pragma warning(disable : 4996)
+#endif
 #include "generated/http_filters.h"
 #include "generated/http.h"
 #include "generated/network.h"
 #include "com/factory.h"
 #include "registry.h"
+#include "options.h"
 #include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Web::Http;
@@ -108,6 +115,44 @@ public:
         return client ? client.CopyTo(value) : E_OUTOFMEMORY;
     }
 };
+// Allows games' connectivity preflight to reach the local Store stub.
+// HTTP clients remain offline; this profile does not create a connection.
+using namespace ABI::Windows::Networking::Connectivity;
+class StubConnectionProfile final : public RuntimeClass<RuntimeClassFlags<WinRt>, IConnectionProfile, FtmBase> {
+    InspectableClass(L"Windows.Networking.Connectivity.ConnectionProfile", BaseTrust);
+    template <class T> static HRESULT Unavailable(T** value) {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return E_NOTIMPL;
+    }
+
+public:
+    HRESULT STDMETHODCALLTYPE get_ProfileName(HSTRING* value) override {
+        if (!value) return E_POINTER;
+        return WindowsCreateString(L"Offline stub IAP", 16, value);
+    }
+    HRESULT STDMETHODCALLTYPE GetNetworkConnectivityLevel(NetworkConnectivityLevel* value) override {
+        if (!value) return E_POINTER;
+        *value = NetworkConnectivityLevel_InternetAccess;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetNetworkNames(__FIVectorView_1_HSTRING** value) override { return Unavailable(value); }
+    HRESULT STDMETHODCALLTYPE GetConnectionCost(IConnectionCost** value) override { return Unavailable(value); }
+    HRESULT STDMETHODCALLTYPE GetDataPlanStatus(IDataPlanStatus** value) override { return Unavailable(value); }
+    HRESULT STDMETHODCALLTYPE get_NetworkAdapter(INetworkAdapter** value) override { return Unavailable(value); }
+    HRESULT STDMETHODCALLTYPE GetLocalUsage(ABI::Windows::Foundation::DateTime, ABI::Windows::Foundation::DateTime,
+                                            IDataUsage** value) override {
+        return Unavailable(value);
+    }
+    HRESULT STDMETHODCALLTYPE GetLocalUsagePerRoamingStates(ABI::Windows::Foundation::DateTime,
+                                                            ABI::Windows::Foundation::DateTime, RoamingStates,
+                                                            IDataUsage** value) override {
+        return Unavailable(value);
+    }
+    HRESULT STDMETHODCALLTYPE get_NetworkSecuritySettings(INetworkSecuritySettings** value) override {
+        return Unavailable(value);
+    }
+};
 class NetworkFactory final : public Factory<ABI::Windows::Networking::Connectivity::DefaultINetworkInformationStatics> {
     EventSource<ABI::Windows::Networking::Connectivity::INetworkStatusChangedEventHandler> changed_;
 
@@ -117,7 +162,14 @@ public:
     GetInternetConnectionProfile(ABI::Windows::Networking::Connectivity::IConnectionProfile** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
-        return S_OK;
+        if (!GetOptions().stubIap) return S_OK;
+        auto profile = Make<StubConnectionProfile>();
+        static const bool announced = [] {
+            Log("info", "Network: stub IAP connectivity preflight enabled (HTTP stays offline)");
+            return true;
+        }();
+        (void)announced;
+        return profile ? profile.CopyTo(value) : E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE
     add_NetworkStatusChanged(ABI::Windows::Networking::Connectivity::INetworkStatusChangedEventHandler* handler,

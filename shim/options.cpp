@@ -35,6 +35,7 @@ Options Parse() {
     options.diagnostics = Environment(L"APPX_PORTABLE_DIAGNOSTICS", L"1");
     options.passthrough = Environment(L"APPX_PORTABLE_MODE", L"trace");
     options.unlockTrial = Environment(L"APPX_PORTABLE_UNLOCK_TRIAL", L"1");
+    options.stubIap = Environment(L"APPX_PORTABLE_STUB_IAP", L"1");
     bool program = true;
     ForEachWord(GetCommandLineW(), [&](const std::wstring& word) {
         if (program) {
@@ -46,6 +47,7 @@ Options Parse() {
         if (_wcsicmp(word.c_str(), L"--capture") == 0) options.capture = true;
         if (_wcsicmp(word.c_str(), L"--diagnostics") == 0) options.diagnostics = true;
         if (_wcsicmp(word.c_str(), L"--passthrough") == 0) options.passthrough = true;
+        if (_wcsicmp(word.c_str(), L"--stub-iap") == 0) options.stubIap = true;
         if (_wcsicmp(word.c_str(), L"--unlock-trial") == 0) options.unlockTrial = true;
     });
     // Tracing and passthrough exist to produce a log.

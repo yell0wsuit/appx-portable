@@ -13,22 +13,22 @@ spec.loader.exec_module(play)
 
 
 class PlayTests(unittest.TestCase):
-    def test_windows_forwards_trial_override(self):
-        with mock.patch.object(sys, 'argv', ['play.py', '--game', str(ROOT), '--unlock-trial', '--log']), \
+    def test_windows_forwards_store_overrides(self):
+        with mock.patch.object(sys, 'argv', ['play.py', '--game', str(ROOT), '--unlock-trial', '--stub-iap', '--log']), \
                 mock.patch.object(sys, 'platform', 'win32'), \
                 mock.patch.object(pathlib.Path, 'is_file', return_value=True), \
                 mock.patch.object(play, 'launch_executable', return_value='Example.exe'), \
                 mock.patch.object(play.subprocess, 'Popen') as launch:
             self.assertEqual(play.main(), 0)
-            self.assertEqual(launch.call_args.args[0], [str(ROOT / 'Example.exe'), '--log', '--unlock-trial'])
+            self.assertEqual(launch.call_args.args[0], [str(ROOT / 'Example.exe'), '--stub-iap', '--log', '--unlock-trial'])
 
-    def test_wine_forwards_trial_override(self):
-        with mock.patch.object(sys, 'argv', ['play.py', '--game', str(ROOT), '--unlock-trial']), \
+    def test_wine_forwards_store_overrides(self):
+        with mock.patch.object(sys, 'argv', ['play.py', '--game', str(ROOT), '--unlock-trial', '--stub-iap']), \
                 mock.patch.object(sys, 'platform', 'darwin'), \
                 mock.patch.object(play.subprocess, 'call', return_value=0) as launch:
             self.assertEqual(play.main(), 0)
             self.assertEqual(launch.call_args.args[0],
-                             ['bash', str(ROOT / 'scripts' / 'run.sh'), str(ROOT), '--unlock-trial'])
+                             ['bash', str(ROOT / 'scripts' / 'run.sh'), str(ROOT), '--stub-iap', '--unlock-trial'])
 
 
 class ManagedLaunchTests(unittest.TestCase):

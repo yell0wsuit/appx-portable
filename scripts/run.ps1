@@ -5,6 +5,7 @@
 #   -Capture      back buffer to appx-frame.bmp on the first and every 120th frame
 #   -Diagnostics  crashes with stack details, and heap checks (implies -Log)
 #   -Passthrough  activate the operating system's classes and only log
+#   -StubIap      complete in-app purchases locally
 #   -UnlockTrial  report an active, full base-app license
 [CmdletBinding()]
 param(
@@ -14,6 +15,7 @@ param(
     [switch]$Capture,
     [switch]$Diagnostics,
     [switch]$Passthrough,
+    [switch]$StubIap,
     [switch]$UnlockTrial
 )
 $ErrorActionPreference = 'Stop'
@@ -29,6 +31,7 @@ if ($Trace) { $arguments += '--trace' }
 if ($Capture) { $arguments += '--capture' }
 if ($Diagnostics) { $arguments += '--diagnostics' }
 if ($Passthrough) { $arguments += '--passthrough' }
+if ($StubIap) { $arguments += '--stub-iap' }
 if ($UnlockTrial) { $arguments += '--unlock-trial' }
 $start = @{ FilePath = (Join-Path $game $exe); WorkingDirectory = $game; PassThru = $true; Wait = $true }
 if ($arguments) { $start.ArgumentList = $arguments }
