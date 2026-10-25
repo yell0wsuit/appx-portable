@@ -35,6 +35,35 @@ int main() {
     CHECK(SUCCEEDED(object.As(&ui)));
     ABI::Windows::Foundation::Size size{};
     CHECK(SUCCEEDED(ui->get_RenderSize(&size)) && size.Width == 1024 && size.Height == 768);
+    // An OS XAML factory can be obtained without a XAML core, but creating a
+    // RectangleGeometry then fails with RPC_E_WRONG_THREAD. Use the shim object.
+    ComPtr<IActivationFactory> geometryFactory;
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Media.RectangleGeometry").Get(), &geometryFactory)));
+    ComPtr<IInspectable> geometryObject;
+    CHECK(geometryFactory && SUCCEEDED(geometryFactory->ActivateInstance(&geometryObject)));
+    ComPtr<ABI::Windows::UI::Xaml::Media::IRectangleGeometry> rectangle;
+    CHECK(geometryObject && SUCCEEDED(geometryObject.As(&rectangle)));
+    if (!rectangle) return 1;
+    ABI::Windows::Foundation::Rect bounds{};
+    CHECK(SUCCEEDED(rectangle->get_Rect(&bounds)) && bounds.Width == 0 && bounds.Height == 0);
+    CHECK(SUCCEEDED(rectangle->put_Rect({10, 20, 300, 200})));
+    CHECK(rectangle->get_Rect(nullptr) == E_POINTER);
+    CHECK(rectangle->put_Rect({0, 0, -1, 20}) == E_INVALIDARG);
+    ComPtr<ABI::Windows::UI::Xaml::Media::IGeometry> geometry;
+    CHECK(SUCCEEDED(rectangle.As(&geometry)));
+    CHECK(geometry && SUCCEEDED(geometry->get_Bounds(&bounds)) && bounds.X == 10 && bounds.Y == 20 &&
+          bounds.Width == 300 && bounds.Height == 200);
+    ComPtr<ABI::Windows::UI::Xaml::Media::IRectangleGeometry> clip;
+    CHECK(SUCCEEDED(ui->get_Clip(&clip)) && !clip);
+    CHECK(SUCCEEDED(ui->put_Clip(rectangle.Get())));
+    rectangle.Reset();
+    geometry.Reset();
+    geometryObject.Reset();
+    CHECK(SUCCEEDED(ui->get_Clip(&clip)) && clip);
+    CHECK(clip && SUCCEEDED(clip->get_Rect(&bounds)) && bounds.Width == 300 && bounds.Height == 200);
+    CHECK(SUCCEEDED(ui->put_Clip(nullptr)));
+    clip.Reset();
+    CHECK(SUCCEEDED(ui->get_Clip(&clip)) && !clip);
     ComPtr<INavigate> navigate;
     CHECK(SUCCEEDED(object.As(&navigate)));
     ComPtr<IFrame> frame;

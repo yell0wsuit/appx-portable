@@ -9,6 +9,7 @@ HRESULT MakeControlFactory(const wchar_t* name, IActivationFactory** value);
 HRESULT MakeDisplayFactory(IActivationFactory** v);
 HRESULT MakeCoreApplicationFactory(IActivationFactory** value);
 HRESULT MakeWindowFactory(IActivationFactory** value);
+HRESULT MakeRectangleGeometryFactory(IActivationFactory** value);
 HRESULT MakeDispatcherTimerFactory(IActivationFactory** value);
 HRESULT MakeCompositionTargetFactory(IActivationFactory** value);
 HRESULT MakeCursorFactory(IActivationFactory** value);

@@ -50,6 +50,8 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
         if (wcscmp(text, L"Windows.UI.Input.PointerVisualizationSettings") == 0)
             return appx::MakeVisualizationFactory(factory);
         if (wcscmp(text, L"Windows.UI.Xaml.Window") == 0) return appx::MakeWindowFactory(factory);
+        if (wcscmp(text, L"Windows.UI.Xaml.Media.RectangleGeometry") == 0)
+            return appx::MakeRectangleGeometryFactory(factory);
         if (wcscmp(text, L"Windows.Graphics.Display.DisplayInformation") == 0 ||
             wcscmp(text, L"Windows.Graphics.Display.DisplayProperties") == 0)
             return appx::MakeDisplayFactory(factory);

@@ -12,11 +12,56 @@
 #include <windows.ui.xaml.markup.h>
 #include <dxgi1_2.h>
 #include <vector>
+#include <cmath>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::UI::Xaml::Controls;
 using namespace ABI::Windows::UI::Xaml::Interop;
 namespace appx {
+class RectangleGeometry final : public Composable<RectangleGeometry, ABI::Windows::UI::Xaml::Media::IRectangleGeometry,
+                                                  ABI::Windows::UI::Xaml::Media::IGeometry, DefaultIDependencyObject> {
+    ABI::Windows::Foundation::Rect rect_{};
+
+public:
+    static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Media.RectangleGeometry";
+    explicit RectangleGeometry(IInspectable* outer) : Composable(outer) {}
+    HRESULT STDMETHODCALLTYPE get_Rect(ABI::Windows::Foundation::Rect* value) override {
+        if (!value) return E_POINTER;
+        *value = rect_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_Rect(ABI::Windows::Foundation::Rect value) override {
+        if (!std::isfinite(value.X) || !std::isfinite(value.Y) || !std::isfinite(value.Width) ||
+            !std::isfinite(value.Height) || value.Width < 0 || value.Height < 0)
+            return E_INVALIDARG;
+        rect_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Bounds(ABI::Windows::Foundation::Rect* value) override { return get_Rect(value); }
+    HRESULT STDMETHODCALLTYPE get_Transform(ABI::Windows::UI::Xaml::Media::ITransform** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_Transform(ABI::Windows::UI::Xaml::Media::ITransform* value) override {
+        return value ? E_NOTIMPL : S_OK;
+    }
+};
+class RectangleGeometryFactory final : public Factory<> {
+public:
+    RectangleGeometryFactory() : Factory(RectangleGeometry::Name) {}
+    HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        ComPtr<ABI::Windows::UI::Xaml::Media::IRectangleGeometry> geometry;
+        auto hr = Compose<RectangleGeometry>(nullptr, nullptr, geometry.GetAddressOf());
+        return FAILED(hr) ? hr : geometry.CopyTo(value);
+    }
+};
+HRESULT MakeRectangleGeometryFactory(IActivationFactory** value) {
+    auto factory = Make<RectangleGeometryFactory>();
+    return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
+}
 class Panel final : public Element<Panel, DefaultISwapChainPanel, ISwapChainPanelNative> {
     ComPtr<IDXGISwapChain> swapChain_;
     EventSource<ABI::Windows::Foundation::ITypedEventHandler<SwapChainPanel*, IInspectable*>> scaleChanged_;

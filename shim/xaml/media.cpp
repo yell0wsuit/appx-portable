@@ -22,6 +22,8 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <algorithm>
+#include <cmath>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::UI::Xaml::Controls;
@@ -291,6 +293,44 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
     bool ready_ = false, playRequested_ = false, failedOnce_ = false;
     MediaElementState state_ = MediaElementState_Closed;
     Stretch stretch_ = Stretch_Uniform;
+    Visibility visibility_ = Visibility_Visible;
+    HRESULT ApplyClip() {
+        if (!IsWindow(surface_)) return S_OK;
+        ComPtr<IRectangleGeometry> clip;
+        auto hr = get_Clip(&clip);
+        if (FAILED(hr)) return hr;
+        if (!clip) {
+            SetWindowRgn(surface_, nullptr, TRUE);
+            return S_OK;
+        }
+        ABI::Windows::Foundation::Rect rect{};
+        hr = clip->get_Rect(&rect);
+        if (FAILED(hr)) return hr;
+        const auto pixel = [](double value) {
+            return static_cast<int>(std::clamp(value, static_cast<double>(LONG_MIN), static_cast<double>(LONG_MAX)));
+        };
+        HRGN region = CreateRectRgn(pixel(std::floor(rect.X)), pixel(std::floor(rect.Y)),
+                                    pixel(std::ceil(static_cast<double>(rect.X) + rect.Width)),
+                                    pixel(std::ceil(static_cast<double>(rect.Y) + rect.Height)));
+        if (!region) return E_OUTOFMEMORY;
+        if (!SetWindowRgn(surface_, region, TRUE)) {
+            DeleteObject(region);
+            return E_FAIL;
+        }
+        return S_OK; // The window owns the region after a successful assignment.
+    }
+    void ApplyVisibility() {
+        if (!IsWindow(surface_)) return;
+        const bool visible = visibility_ == Visibility_Visible;
+        ShowWindow(surface_, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+        auto* self = static_cast<IFrameworkElement*>(this);
+        if (visible && CurrentPointerTarget() != self) {
+            previousPointer_ = CurrentPointerTarget();
+            SetPointerTarget(self);
+        } else if (!visible && CurrentPointerTarget() == self) {
+            SetPointerTarget(previousPointer_.Get());
+        }
+    }
     void Close() {
         // Invalidates callbacks already queued for the previous source.
         dispatch_.reset();
@@ -319,7 +359,8 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
         ComPtr<IInspectable> sender;
         QueryInterface(IID_PPV_ARGS(&sender));
         auto args = Make<RoutedArgs>(sender.Get());
-        event.InvokeAll(sender.Get(), args.Get());
+        auto hr = event.InvokeAll(sender.Get(), args.Get());
+        Log("TRACE", "MediaElement delivered handlers=%u hr=%08lx", event.GetSize(), hr);
     }
     void OnEvent(DWORD event, HRESULT hr) {
         Log("TRACE", "MediaElement event=%lu hr=%08lx", event, hr);
@@ -391,8 +432,9 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
         if (FAILED(hr)) return hr;
         surface_ = CreateSurfaceWindow();
         if (!surface_) return E_FAIL;
-        previousPointer_ = CurrentPointerTarget();
-        SetPointerTarget(static_cast<IFrameworkElement*>(this));
+        hr = ApplyClip();
+        if (FAILED(hr)) return hr;
+        ApplyVisibility();
         dispatch_ = std::make_shared<MediaDispatch>();
         dispatch_->deliver = [this](DWORD event, HRESULT result) { OnEvent(event, result); };
         auto notify = Make<EngineNotify>(dispatch_);
@@ -420,6 +462,22 @@ public:
     static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Controls.MediaElement";
     explicit MediaElement(IInspectable* outer) : Element(outer) {}
     ~MediaElement() { Close(); }
+    HRESULT STDMETHODCALLTYPE put_Clip(IRectangleGeometry* value) override {
+        auto hr = Element::put_Clip(value);
+        return FAILED(hr) ? hr : ApplyClip();
+    }
+    HRESULT STDMETHODCALLTYPE get_Visibility(Visibility* value) override {
+        if (!value) return E_POINTER;
+        *value = visibility_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_Visibility(Visibility value) override {
+        if (value != Visibility_Visible && value != Visibility_Collapsed) return E_INVALIDARG;
+        visibility_ = value;
+        Log("TRACE", "MediaElement visibility=%d", value);
+        ApplyVisibility();
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE get_Source(ABI::Windows::Foundation::IUriRuntimeClass** value) override {
         return source_.CopyTo(value);
     }

@@ -16,6 +16,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <filesystem>
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::UI::Xaml;
@@ -49,6 +50,7 @@ class PageOuter final : public IPageOverrides, public IComponentConnector {
 public:
     ComPtr<IInspectable> inner;
     int connections = 0;
+    std::vector<int> connectionIds;
     explicit PageOuter(std::string name) : name_(std::move(name)) {}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** out) override {
         if (!out) return E_POINTER;
@@ -101,8 +103,9 @@ public:
     HRESULT STDMETHODCALLTYPE OnNavigatedTo(INavigationEventArgs* args) override { return Record("to", args); }
     HRESULT STDMETHODCALLTYPE OnNavigatingFrom(INavigatingCancelEventArgs*) override { return S_OK; }
     HRESULT STDMETHODCALLTYPE Connect(INT32 id, IInspectable* target) override {
-        CHECK(id == 1 && target);
-        const bool directX = name_ == "DirectXPage";
+        const bool sourceXaml = name_ == "DirectXSourcePage";
+        CHECK((id == 1 || (sourceXaml && id == 7)) && target);
+        const bool directX = name_ == "DirectXPage" || (sourceXaml && id == 1);
         if (directX) {
             ComPtr<ISwapChainBackgroundPanelNative> panel;
             CHECK(SUCCEEDED(target->QueryInterface(IID_PPV_ARGS(&panel))));
@@ -113,9 +116,19 @@ public:
         ComPtr<IFrameworkElement> element;
         CHECK(SUCCEEDED(inner.As(&element)));
         ComPtr<IInspectable> named;
-        CHECK(SUCCEEDED(
-            element->FindName(HStringReference(directX ? L"SwapChainPanel" : L"mediaElement").Get(), &named)));
+        CHECK(SUCCEEDED(element->FindName(HStringReference(directX      ? L"SwapChainPanel"
+                                                           : sourceXaml ? L"IntroVideo"
+                                                                        : L"mediaElement")
+                                              .Get(),
+                                          &named)));
         CHECK(named.Get() == target);
+        if (sourceXaml && id == 7) {
+            ComPtr<IUIElement> ui;
+            CHECK(SUCCEEDED(target->QueryInterface(IID_PPV_ARGS(&ui))));
+            Visibility visibility{};
+            CHECK(ui && SUCCEEDED(ui->get_Visibility(&visibility)) && visibility == Visibility_Collapsed);
+        }
+        connectionIds.push_back(id);
         ++connections;
         return S_OK;
     }
@@ -309,6 +322,30 @@ static void TestMediaElement() {
     CHECK(directXOuter->connections == 1);
     directXPage.Reset();
     directXOuter->Release();
+    wchar_t exePath[32768]{};
+    GetModuleFileNameW(nullptr, exePath, ARRAYSIZE(exePath));
+    const auto sourcePath = std::filesystem::path(exePath).parent_path() / L"DirectXPage.xaml";
+    HANDLE sourceFile =
+        CreateFileW(sourcePath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    CHECK(sourceFile != INVALID_HANDLE_VALUE);
+    if (sourceFile != INVALID_HANDLE_VALUE) {
+        const char source[] = "<Page xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' "
+                              "xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>"
+                              "<SwapChainBackgroundPanel x:Name='SwapChainPanel' x:ConnectionId='1'>"
+                              "<MediaElement x:Name='IntroVideo' x:ConnectionId='7' Visibility='Collapsed'/>"
+                              "</SwapChainBackgroundPanel></Page>";
+        DWORD written = 0;
+        CHECK(WriteFile(sourceFile, source, sizeof(source) - 1, &written, nullptr) && written == sizeof(source) - 1);
+        CloseHandle(sourceFile);
+        auto* sourceOuter = new PageOuter("DirectXSourcePage");
+        CHECK(SUCCEEDED(
+            pageFactory->CreateInstance(static_cast<IPageOverrides*>(sourceOuter), &sourceOuter->inner, &directXPage)));
+        CHECK(SUCCEEDED(appStatics->LoadComponent(directXPage.Get(), componentUri.Get())));
+        CHECK((sourceOuter->connectionIds == std::vector<int>{1, 7}));
+        directXPage.Reset();
+        sourceOuter->Release();
+        CHECK(DeleteFileW(sourcePath.c_str()));
+    }
     ComPtr<IMediaElement> media;
     ComPtr<IMediaElement2> media2;
     if (!object || FAILED(object.As(&media)) || FAILED(object.As(&media2))) {

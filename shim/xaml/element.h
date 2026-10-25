@@ -7,8 +7,13 @@
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <map>
+#include <string>
 #include <functional>
 namespace appx {
+// Internal namescope bridge used by the source-XAML loader.
+MIDL_INTERFACE("B9D4328C-BA3E-4F70-A0E9-E604BB4DB236") INamedElementRegistry : IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE RegisterName(HSTRING name, IInspectable * value) = 0;
+};
 HRESULT MakePanel(IInspectable** value);
 HRESULT MakeBackgroundPanel(IInspectable** value);
 HRESULT MakeGrid(IInspectable** value);
@@ -67,13 +72,15 @@ template <class Derived, class Primary, class... Interfaces>
 class Element
     : public Composable<Derived, Primary, ABI::Windows::UI::Xaml::DefaultIFrameworkElement,
                         ABI::Windows::UI::Xaml::DefaultIUIElement, ABI::Windows::UI::Xaml::DefaultIDependencyObject,
-                        IPointerTargetProvider, Interfaces...> {
+                        IPointerTargetProvider, INamedElementRegistry, Interfaces...> {
     using Base = Composable<Derived, Primary, ABI::Windows::UI::Xaml::DefaultIFrameworkElement,
                             ABI::Windows::UI::Xaml::DefaultIUIElement, ABI::Windows::UI::Xaml::DefaultIDependencyObject,
-                            IPointerTargetProvider, Interfaces...>;
+                            IPointerTargetProvider, INamedElementRegistry, Interfaces...>;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::IRoutedEventHandler> loaded_;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::ISizeChangedEventHandler> resized_;
     Microsoft::WRL::ComPtr<IInspectable> panel_, backgroundPanel_, grid_, media_;
+    Microsoft::WRL::ComPtr<ABI::Windows::UI::Xaml::Media::IRectangleGeometry> clip_;
+    std::map<std::wstring, Microsoft::WRL::ComPtr<IInspectable>> namedElements_;
     Microsoft::WRL::Wrappers::HString name_;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerPressed_;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerMoved_;
@@ -218,6 +225,14 @@ public:
     HRESULT STDMETHODCALLTYPE ReleasePointerCaptures() override {
         return ReleaseElementPointer(static_cast<ABI::Windows::UI::Xaml::IFrameworkElement*>(this));
     }
+    HRESULT STDMETHODCALLTYPE get_Clip(ABI::Windows::UI::Xaml::Media::IRectangleGeometry** value) override {
+        if (!value) return E_POINTER;
+        return clip_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE put_Clip(ABI::Windows::UI::Xaml::Media::IRectangleGeometry* value) override {
+        clip_ = value;
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE get_RenderSize(ABI::Windows::Foundation::Size* value) override {
         if (!value) return E_POINTER;
         double width, height;
@@ -276,11 +291,18 @@ public:
     HRESULT STDMETHODCALLTYPE remove_SizeChanged(EventRegistrationToken token) override {
         return resized_.Remove(token);
     }
+    HRESULT STDMETHODCALLTYPE RegisterName(HSTRING name, IInspectable* value) override {
+        if (!value) return E_INVALIDARG;
+        namedElements_[WindowsGetStringRawBuffer(name, nullptr)] = value;
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE FindName(HSTRING name, IInspectable** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
         const wchar_t* text = WindowsGetStringRawBuffer(name, nullptr);
         Log("TRACE", "FindName(%ls)", text);
+        const auto named = namedElements_.find(text);
+        if (named != namedElements_.end()) return named->second.CopyTo(value);
         // Windows 8 DirectX pages use a SwapChainBackgroundPanel under this name.
         if (wcscmp(text, L"SwapChainPanel") == 0) {
             if (!backgroundPanel_) {

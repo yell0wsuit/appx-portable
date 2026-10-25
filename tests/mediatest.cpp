@@ -128,6 +128,32 @@ int wmain(int argc, wchar_t** argv) {
                     CHECK(SUCCEEDED(media->Pause()));
                     CHECK(SUCCEEDED(media->get_CurrentState(&state)) && state == MediaElementState_Paused);
                     CHECK(SUCCEEDED(media->Play()));
+                    ComPtr<IUIElement> visibleMedia;
+                    CHECK(SUCCEEDED(media.As(&visibleMedia)));
+                    HWND surface = GetWindow(TestWindow(), GW_CHILD);
+                    CHECK(surface && IsWindowVisible(surface));
+                    ComPtr<IActivationFactory> geometryFactory;
+                    CHECK(SUCCEEDED(
+                        get(HStringReference(L"Windows.UI.Xaml.Media.RectangleGeometry").Get(), &geometryFactory)));
+                    ComPtr<IInspectable> geometryObject;
+                    CHECK(geometryFactory && SUCCEEDED(geometryFactory->ActivateInstance(&geometryObject)));
+                    ComPtr<ABI::Windows::UI::Xaml::Media::IRectangleGeometry> clip;
+                    CHECK(geometryObject && SUCCEEDED(geometryObject.As(&clip)));
+                    CHECK(clip && SUCCEEDED(clip->put_Rect({10, 15, 80, 60})));
+                    CHECK(SUCCEEDED(visibleMedia->put_Clip(clip.Get())));
+                    HRGN region = CreateRectRgn(0, 0, 0, 0);
+                    RECT regionBounds{};
+                    CHECK(region && GetWindowRgn(surface, region) == SIMPLEREGION);
+                    CHECK(GetRgnBox(region, &regionBounds) == SIMPLEREGION && regionBounds.left == 10 &&
+                          regionBounds.top == 15 && regionBounds.right == 90 && regionBounds.bottom == 75);
+                    CHECK(SUCCEEDED(visibleMedia->put_Clip(nullptr)));
+                    CHECK(GetWindowRgn(surface, region) == ERROR);
+                    DeleteObject(region);
+                    CHECK(SUCCEEDED(visibleMedia->put_Visibility(Visibility_Collapsed)));
+                    CHECK(!IsWindowVisible(surface));
+                    SendMessageW(TestWindow(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(20, 20));
+                    CHECK(clicks == 0);
+                    CHECK(SUCCEEDED(visibleMedia->put_Visibility(Visibility_Visible)) && IsWindowVisible(surface));
                     SendMessageW(TestWindow(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(20, 20));
                     CHECK(clicks == 1);
                     CHECK(SUCCEEDED(media->get_CurrentState(&state)) && state == MediaElementState_Stopped);
