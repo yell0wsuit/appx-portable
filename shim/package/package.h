@@ -14,12 +14,13 @@ struct PackageClass {
 struct PackageInfo {
     std::filesystem::path directory;
     std::wstring identityName, publisher, version, architecture;
-    std::wstring publisherId, fullName, familyName;  // derived as Windows does
-    std::wstring displayName;                        // never empty: falls back to the executable name
+    std::wstring publisherId, fullName, familyName; // derived as Windows does
+    std::wstring displayName;                       // never empty: falls back to the executable name
     std::wstring applicationId, executable, entryPoint;
-    std::wstring smallLogo;                          // relative to directory, as written in the manifest
+    std::wstring smallLogo; // relative to directory, as written in the manifest
     std::vector<PackageClass> classes;
     bool loaded = false;
+    bool universal = false; // Windows 10 TargetDeviceFamily manifest
 };
 const PackageInfo& CurrentPackage() noexcept;
 // Parses a manifest; exposed for tests.

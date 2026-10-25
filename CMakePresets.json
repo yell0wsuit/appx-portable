@@ -1,10 +1,12 @@
 {
   "version": 6,
   "configurePresets": [
+    {"name": "windows-x64", "generator": "Ninja", "architecture": {"value": "x64", "strategy": "external"}, "toolset": {"value": "host=x64", "strategy": "external"}, "binaryDir": "${sourceDir}/build/windows-x64", "cacheVariables": {"CMAKE_CXX_COMPILER": "cl", "CMAKE_BUILD_TYPE": "RelWithDebInfo", "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"}},
     {"name": "windows-x86", "generator": "Ninja", "architecture": {"value": "x86", "strategy": "external"}, "toolset": {"value": "host=x64", "strategy": "external"}, "binaryDir": "${sourceDir}/build/windows-x86", "cacheVariables": {"CMAKE_CXX_COMPILER": "cl", "CMAKE_BUILD_TYPE": "RelWithDebInfo", "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"}},
     {"name": "macos-x86", "generator": "Ninja", "binaryDir": "${sourceDir}/build/macos-x86", "toolchainFile": "${sourceDir}/cmake/clang-cl-xwin.cmake", "cacheVariables": {"CMAKE_BUILD_TYPE": "RelWithDebInfo", "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"}}
   ],
   "buildPresets": [
+    {"name": "windows-x64", "configurePreset": "windows-x64"},
     {"name": "windows-x86", "configurePreset": "windows-x86"},
     {"name": "macos-x86", "configurePreset": "macos-x86"}
   ]

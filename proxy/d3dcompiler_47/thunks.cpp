@@ -2,6 +2,7 @@
 #include <windows.h>
 extern "C" void* appx_targets[29];
 extern "C" void __cdecl appx_resolve(unsigned index);
+#ifndef _WIN64
 extern "C" __declspec(naked) void proxy_D3DAssemble() {
   __asm {
     pushfd
@@ -350,6 +351,7 @@ extern "C" __declspec(naked) void proxy_DebugSetMute() {
     jmp dword ptr [appx_targets + 112]
   }
 }
+#endif
 extern "C" const char* appx_export_names[] = {
   "D3DAssemble",
   "D3DCompile",

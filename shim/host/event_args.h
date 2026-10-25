@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.ui.core.h>
 #include <wrl.h>
+#include "pointer.h"
 namespace appx {
 using namespace ABI::Windows::UI::Core;
 class ActivationArgs final
@@ -97,9 +98,7 @@ public:
     }
     // Win32 delivers no intermediate points; the current one is the history.
     HRESULT STDMETHODCALLTYPE GetIntermediatePoints(__FIVector_1_Windows__CUI__CInput__CPointerPoint** value) override {
-        if (!value) return E_POINTER;
-        *value = nullptr;
-        return E_NOTIMPL;
+        return MakePointerHistory(point_.Get(), value);
     }
     HRESULT STDMETHODCALLTYPE get_Handled(boolean* value) override {
         if (!value) return E_POINTER;
@@ -123,9 +122,8 @@ inline CorePhysicalKeyStatus KeyStatus(LPARAM lparam, bool released) {
     return status;
 }
 // CoreWindow.KeyDown and KeyUp.
-class KeyArgs final
-    : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::WinRt>, IKeyEventArgs,
-                                          ICoreWindowEventArgs> {
+class KeyArgs final : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::WinRt>,
+                                                          IKeyEventArgs, ICoreWindowEventArgs> {
     InspectableClass(L"Windows.UI.Core.KeyEventArgs", BaseTrust);
     ABI::Windows::System::VirtualKey key_;
     CorePhysicalKeyStatus status_;

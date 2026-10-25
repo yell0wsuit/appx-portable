@@ -399,12 +399,14 @@ void IslandInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
 void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (coreWindow) coreWindow->OnMessage(message, wparam, lparam);
 }
-// Only CoreWindow games get input through CoreWindow events; XAML games get
-// it through their elements (see pointer.cpp), never both.
+// Pointer input uses either CoreWindow or the XAML panel. Keyboard events
+// still reach CoreWindow in native XAML games, including UWP DirectX pages.
 static bool coreInput = false;
 void EnableCoreWindowInput() noexcept { coreInput = true; }
 void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
-    if (coreInput && coreWindow) coreWindow->OnInput(message, wparam, lparam);
+    const bool keyboard = message == WM_KEYDOWN || message == WM_KEYUP || message == WM_SYSKEYDOWN ||
+                          message == WM_SYSKEYUP || message == WM_CHAR;
+    if ((coreInput || keyboard) && coreWindow) coreWindow->OnInput(message, wparam, lparam);
 }
 // CoreWindow.GetForCurrentThread: the game's window on the UI thread, as on
 // Windows, and none on any other thread.

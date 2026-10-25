@@ -11,6 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 X86_PE = b'MZ' + bytes(0x3a) + struct.pack('<I', 0x40) + b'PE' + bytes(2) + struct.pack('<H', 0x14c) + bytes(2)
 SHIM_DLLS = ['appxportable.dll', 'd3dcompiler_47.dll', 'XAudio2_8.dll', 'DWrite.dll']
 VCLIBS = {'110': ['msvcr110.dll', 'msvcp110.dll', 'vccorlib110.dll'],
+          '140': ['vcruntime140_app.dll', 'msvcp140_app.dll', 'vccorlib140_app.dll'],
           '120': ['msvcr120_app.dll', 'msvcp120_app.dll', 'vccorlib120_app.dll']}
 
 
@@ -55,6 +56,22 @@ def vclibs_appx(path, vclibs):
 
 @unittest.skipUnless(shutil.which('pwsh'), 'needs PowerShell 7')
 class PowerShellSetupTests(unittest.TestCase):
+    def test_x64_vclibs140_and_transitive_dlls(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, build, dest = stage_inputs(pathlib.Path(temp), vclibs='140')
+            x64_pe = bytearray(X86_PE)
+            struct.pack_into('<H', x64_pe, 0x44, 0x8664)
+            for path in [source/'Game.exe', *source.glob('*.dll'), *build.glob('*.dll')]:
+                path.write_bytes(x64_pe)
+            for name in ['concrt140_app.dll', 'vcruntime140_1_app.dll']:
+                (source/name).write_bytes(x64_pe)
+            (build/'XAudio2_9.dll').write_bytes(x64_pe)
+            result = self.run_setup(source, dest, build)
+            self.assertEqual(result.returncode, 0, result.stderr.decode(errors='replace'))
+            for name in ['concrt140_app.dll', 'vcruntime140_1_app.dll', 'XAudio2_9.dll']:
+                self.assertEqual((dest/name).read_bytes(), x64_pe)
+            self.assertEqual((dest/'Game.exe').read_bytes(), x64_pe)
+
     def run_setup(self, source, dest, build, *extra):
         return subprocess.run(['pwsh', '-NoProfile', '-NonInteractive', '-File', str(ROOT/'scripts'/'setup.ps1'),
                                '-SourceDirectory', str(source), '-Destination', str(dest), '-BuildDirectory', str(build),

@@ -1,15 +1,51 @@
+#include "compat/win10/input.h"
 #include "pointer.h"
 #include "host.h"
 #include "generated/pointer.h"
 #include "generated/pointer_args.h"
+#include "generated/pointer_device.h"
 #include <windowsx.h>
 #include <wrl.h>
 #include <map>
 #include <vector>
+#include <winrt/Windows.Foundation.Collections.h>
+#include <winrt/Windows.UI.Input.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI;
 using ABI::Windows::Foundation::Point;
 namespace appx {
+class MouseDevice final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, ABI::Windows::Devices::Input::DefaultIPointerDevice> {
+    InspectableClass(L"Windows.Devices.Input.PointerDevice", BaseTrust);
+
+public:
+    HRESULT STDMETHODCALLTYPE get_PointerDeviceType(ABI::Windows::Devices::Input::PointerDeviceType* value) override {
+        if (!value) return E_POINTER;
+        *value = ABI::Windows::Devices::Input::PointerDeviceType_Mouse;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_IsIntegrated(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_MaxContacts(UINT32* value) override {
+        if (!value) return E_POINTER;
+        *value = 1;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_ScreenRect(ABI::Windows::Foundation::Rect* value) override {
+        if (!value) return E_POINTER;
+        *value = {static_cast<float>(GetSystemMetrics(SM_XVIRTUALSCREEN)),
+                  static_cast<float>(GetSystemMetrics(SM_YVIRTUALSCREEN)),
+                  static_cast<float>(GetSystemMetrics(SM_CXVIRTUALSCREEN)),
+                  static_cast<float>(GetSystemMetrics(SM_CYVIRTUALSCREEN))};
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_PhysicalDeviceRect(ABI::Windows::Foundation::Rect* value) override {
+        return get_ScreenRect(value);
+    }
+};
 class MousePointer final : public RuntimeClass<RuntimeClassFlags<WinRt>, Xaml::Input::IPointer> {
     InspectableClass(L"Windows.UI.Xaml.Input.Pointer", BaseTrust);
     boolean contact_;
@@ -107,6 +143,11 @@ class MousePoint final : public RuntimeClass<RuntimeClassFlags<WinRt>, Input::De
     ComPtr<MouseProperties> properties_;
 
 public:
+    HRESULT STDMETHODCALLTYPE get_PointerDevice(ABI::Windows::Devices::Input::IPointerDevice** value) override {
+        if (!value) return E_POINTER;
+        static auto device = Make<MouseDevice>();
+        return device ? device.CopyTo(value) : E_OUTOFMEMORY;
+    }
     MousePoint(Point position, WPARAM buttons, UINT message)
         : position_(position), buttons_(buttons), frame_(GetTickCount()), timestamp_(GetTickCount64() * 1000),
           properties_(Make<MouseProperties>(buttons, message, position)) {}
@@ -147,6 +188,21 @@ HRESULT MakeMousePoint(POINT position, WPARAM buttons, UINT message, Input::IPoi
     auto point =
         Make<MousePoint>(Point{static_cast<float>(position.x), static_cast<float>(position.y)}, buttons, message);
     return point ? point.CopyTo(value) : E_OUTOFMEMORY;
+}
+HRESULT MakePointerHistory(Input::IPointerPoint* point, __FIVector_1_Windows__CUI__CInput__CPointerPoint** value) {
+    if (!value) return E_POINTER;
+    *value = nullptr;
+    if (!point) return E_INVALIDARG;
+    try {
+        winrt::Windows::UI::Input::PointerPoint projected{nullptr};
+        winrt::copy_from_abi(projected, point);
+        auto points = winrt::single_threaded_vector<winrt::Windows::UI::Input::PointerPoint>();
+        points.Append(projected);
+        *value = reinterpret_cast<__FIVector_1_Windows__CUI__CInput__CPointerPoint*>(winrt::detach_abi(points));
+        return S_OK;
+    } catch (...) {
+        return winrt::to_hresult();
+    }
 }
 class MouseArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, Xaml::Input::DefaultIPointerRoutedEventArgs,
                                             Xaml::IRoutedEventArgs> {
@@ -190,6 +246,10 @@ public:
     HRESULT STDMETHODCALLTYPE GetCurrentPoint(Xaml::IUIElement*, Input::IPointerPoint** value) override {
         if (!value) return E_POINTER;
         return point_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE GetIntermediatePoints(Xaml::IUIElement*,
+                                                    __FIVector_1_Windows__CUI__CInput__CPointerPoint** value) override {
+        return MakePointerHistory(point_.Get(), value);
     }
 };
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization): allocation failure at DLL load is fatal anyway.
@@ -245,6 +305,7 @@ void UnregisterPointerTarget(IInspectable* target) noexcept {
     targets.erase(target);
 }
 void PointerHostMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    IndependentInputHostMessage(message, wparam, lparam);
     if (message != WM_LBUTTONDOWN && message != WM_LBUTTONUP && message != WM_MOUSEMOVE && message != WM_MOUSEWHEEL &&
         message != WM_MOUSEHWHEEL && message != WM_CAPTURECHANGED)
         return;

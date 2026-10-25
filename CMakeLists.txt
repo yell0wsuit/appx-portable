@@ -4,19 +4,27 @@ if(CMAKE_CROSSCOMPILING AND NOT EXISTS "${CMAKE_LINKER}")
   find_program(APPX_LLD NAMES lld-link HINTS "/opt/homebrew/opt/lld/bin" REQUIRED)
   set(CMAKE_LINKER "${APPX_LLD}")
 endif()
-if(NOT WIN32 OR NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-  message(FATAL_ERROR "Requires x86 Windows MSVC ABI (MSVC or clang-cl + xwin)")
+if(NOT WIN32 OR NOT MSVC)
+  message(FATAL_ERROR "Requires Windows MSVC ABI (MSVC or clang-cl + xwin)")
+endif()
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  enable_language(ASM_MASM)
+  set(APPX_EXPORTS shim/appxportable-x64.def)
+  set(APPX_HOST_ARCH x64)
+else()
+  set(APPX_EXPORTS shim/appxportable.def)
+  set(APPX_HOST_ARCH x86)
 endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
 add_compile_definitions(UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0603)
-add_compile_options(/W4 /EHsc /utf-8)
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/W4;/EHsc;/utf-8>")
 # MSBuild compiles a target's files one at a time without /MP; Ninja already
 # runs them in parallel.
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
-  add_compile_options(/MP)
+  add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/MP>")
 endif()
 add_link_options(/DEBUG /INCREMENTAL:NO)
 # Release builds pass their tag; local builds describe the git checkout. The
@@ -32,13 +40,16 @@ add_custom_target(appxportable_version
 add_executable(shimtest tests/shimtest.cpp)
 target_link_libraries(shimtest PRIVATE runtimeobject ole32)
 if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
-  add_library(appxportable SHARED shim/registry.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/appxportable.def shim/version.rc)
+  add_library(appxportable SHARED shim/registry.cpp shim/compat/win10/titlebar.cpp shim/compat/win10/input.cpp shim/compat/win10/xaml.cpp shim/compat/win10/memory.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp ${APPX_EXPORTS} shim/version.rc)
   target_include_directories(appxportable PRIVATE shim "${APPX_GENERATED}")
   add_dependencies(appxportable appxportable_version)
   target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
   # One proxy per system DLL a game imports from its folder (see scripts/gen_proxy.py).
-  foreach(proxy d3dcompiler_47 XAudio2_8 DWrite)
+  foreach(proxy d3dcompiler_47 XAudio2_8 XAudio2_9 DWrite)
     add_library(${proxy} SHARED proxy/proxy.cpp proxy/${proxy}/thunks.cpp proxy/${proxy}/proxy.def shim/version.rc)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+      target_sources(${proxy} PRIVATE proxy/${proxy}/thunks-x64.asm)
+    endif()
     target_include_directories(${proxy} PRIVATE "${APPX_GENERATED}" proxy/${proxy})
     target_compile_definitions(${proxy} PRIVATE APPX_PORTABLE_PROXY)
     add_dependencies(${proxy} appxportable_version)
@@ -102,6 +113,9 @@ add_test(NAME hardwaretest COMMAND hardwaretest)
 add_executable(viewtest tests/viewtest.cpp)
 target_link_libraries(viewtest PRIVATE runtimeobject ole32)
 add_test(NAME viewtest COMMAND viewtest)
+add_executable(win10test tests/win10test.cpp)
+target_link_libraries(win10test PRIVATE runtimeobject ole32 user32)
+add_test(NAME win10test COMMAND win10test)
 add_executable(readertest tests/readertest.cpp)
 target_link_libraries(readertest PRIVATE runtimeobject ole32)
 add_test(NAME readertest COMMAND readertest)
@@ -114,7 +128,7 @@ add_test(NAME xaml_settings_contract COMMAND xamlsettingstest)
 add_test(NAME islands_settings_contract COMMAND "${CMAKE_COMMAND}"
   "-DTEST_EXE=$<TARGET_FILE:xamlsettingstest>"
   "-DSHIM=$<TARGET_FILE:appxportable>"
-  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe"
+  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
   "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-settings-fixture"
   -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 25)
@@ -123,7 +137,7 @@ if(WIN32)
   add_test(NAME islands_toasttest COMMAND "${CMAKE_COMMAND}"
     "-DTEST_EXE=$<TARGET_FILE:toasttest>"
     "-DSHIM=$<TARGET_FILE:appxportable>"
-    "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe"
+    "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
     "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-toast-fixture"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 endif()
@@ -220,7 +234,7 @@ if(NOT CMAKE_CROSSCOMPILING)
   set(APPX_CSC "$ENV{WINDIR}/Microsoft.NET/Framework/v4.0.30319/csc.exe")
   file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}/host/managed.cs" APPX_HOST_SOURCE)
   add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/appx-host.exe"
-    COMMAND "${APPX_CSC}" /nologo /platform:x86 /target:winexe
+    COMMAND "${APPX_CSC}" /nologo /platform:${APPX_HOST_ARCH} /target:winexe
       /win32manifest:${CMAKE_SOURCE_DIR}/host/managed.manifest
       /r:System.Windows.Forms.dll /out:${CMAKE_BINARY_DIR}/appx-host.exe
       "${APPX_HOST_SOURCE}"
@@ -235,10 +249,10 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME managed_host_${mode} COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
       "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_host.cs"
-      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-host-${mode}"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_host.cmake")
-    set_tests_properties(managed_host_${mode} PROPERTIES TIMEOUT 25)
+    set_tests_properties(managed_host_${mode} PROPERTIES TIMEOUT 25 LABELS managed-clr)
   endforeach()
   find_file(APPX_WINDOWS_METADATA Windows.winmd
     PATHS "$ENV{WindowsSdkDir}/UnionMetadata/$ENV{WindowsSDKVersion}" NO_DEFAULT_PATH)
@@ -248,27 +262,27 @@ if(NOT CMAKE_CROSSCOMPILING)
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SETTINGS"
       "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
       "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_settings.cs"
-      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-settings"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-    set_tests_properties(managed_settings PROPERTIES TIMEOUT 25)
+    set_tests_properties(managed_settings PROPERTIES TIMEOUT 25 LABELS managed-clr)
     add_test(NAME managed_scroll COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SCROLL"
       "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
       "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_scroll.cs"
-      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-scroll"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-    set_tests_properties(managed_scroll PROPERTIES TIMEOUT 25)
+    set_tests_properties(managed_scroll PROPERTIES TIMEOUT 25 LABELS managed-clr)
     foreach(mode CONSTRUCTOR_CONTROLS LAUNCH_CONTROLS LIGHT_THEME ROOT_LIGHT_THEME XAML_LIGHT_THEME)
       add_test(NAME managed_xaml_startup_${mode} COMMAND "${CMAKE_COMMAND}"
         "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
         "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
         "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cs"
-        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
         "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-xaml-startup-${mode}"
         -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-      set_tests_properties(managed_xaml_startup_${mode} PROPERTIES TIMEOUT 25)
+      set_tests_properties(managed_xaml_startup_${mode} PROPERTIES TIMEOUT 25 LABELS managed-clr)
     endforeach()
   else()
     message(STATUS "Managed XAML startup tests need Windows SDK metadata and .NET Framework 4.8 reference assemblies")

@@ -2,6 +2,7 @@
 #include <windows.h>
 extern "C" void* appx_targets[1];
 extern "C" void __cdecl appx_resolve(unsigned index);
+#ifndef _WIN64
 extern "C" __declspec(naked) void proxy_DWriteCreateFactory() {
   __asm {
     pushfd
@@ -14,6 +15,7 @@ extern "C" __declspec(naked) void proxy_DWriteCreateFactory() {
     jmp dword ptr [appx_targets + 0]
   }
 }
+#endif
 extern "C" const char* appx_export_names[] = {
   "DWriteCreateFactory",
 };

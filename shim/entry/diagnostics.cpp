@@ -5,6 +5,7 @@
 #include <mutex>
 #include <intrin.h>
 namespace appx {
+#ifndef _WIN64
 void LogThreadStorage() noexcept {
     if (!GetOptions().diagnostics) return;
     auto* image = reinterpret_cast<BYTE*>(GetModuleHandleW(nullptr));
@@ -103,6 +104,41 @@ static LONG CALLBACK LogFault(EXCEPTION_POINTERS* fault) {
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
+#else
+void LogThreadStorage() noexcept {
+    if (!GetOptions().diagnostics) return;
+    auto* image = reinterpret_cast<BYTE*>(GetModuleHandleW(nullptr));
+    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(image + reinterpret_cast<IMAGE_DOS_HEADER*>(image)->e_lfanew);
+    const auto directory = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
+    if (!directory.VirtualAddress) return;
+    auto* tls = reinterpret_cast<IMAGE_TLS_DIRECTORY*>(image + directory.VirtualAddress);
+    DWORD index{};
+    SIZE_T read{};
+    ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(tls->AddressOfIndex), &index, sizeof(index), &read);
+    Log("TRACE", "thread storage gameIndex=%lu vector=%p", index, reinterpret_cast<void*>(__readgsqword(0x58)));
+}
+static LONG CALLBACK LogFault(EXCEPTION_POINTERS* fault) {
+    const DWORD code = fault->ExceptionRecord->ExceptionCode;
+    if (code != EXCEPTION_ACCESS_VIOLATION && code != STATUS_HEAP_CORRUPTION) return EXCEPTION_CONTINUE_SEARCH;
+    const auto* context = fault->ContextRecord;
+    Log("FAIL", "exception=%08lx ip=%p address=%p rax=%p rcx=%p rdx=%p rsp=%p", code,
+        reinterpret_cast<void*>(context->Rip), reinterpret_cast<void*>(fault->ExceptionRecord->ExceptionInformation[1]),
+        reinterpret_cast<void*>(context->Rax), reinterpret_cast<void*>(context->Rcx),
+        reinterpret_cast<void*>(context->Rdx), reinterpret_cast<void*>(context->Rsp));
+    void* frames[32]{};
+    const auto count = CaptureStackBackTrace(0, 32, frames, nullptr);
+    for (USHORT i = 0; i < count; ++i) {
+        HMODULE module{};
+        wchar_t path[MAX_PATH]{};
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(frames[i]), &module);
+        if (module) GetModuleFileNameW(module, path, MAX_PATH);
+        Log("FAIL", "frame[%u]=%p %ls+%zx", i, frames[i], path,
+            reinterpret_cast<size_t>(frames[i]) - reinterpret_cast<size_t>(module));
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+#endif
 // With --diagnostics, heap damage is looked for at each Windows Runtime
 // activation and periodically while the game runs, so the log names what
 // happened just before it rather than the free that finally trips over it.

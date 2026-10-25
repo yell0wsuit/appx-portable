@@ -14,6 +14,7 @@ Managed XAML games such as **Bejeweled LIVE** use `appx-host.exe`, which setup c
 
 | Game | Package | Status |
 | --- | --- | --- |
+| Rayman Fiesta Run Windows 10 Edition | `Ubisoft.RaymanFiestaRunWindows10Edition` 1.0.23.0 (x64) | Experimental x64 build and [caption bindings patch](patch/raymanwin10/README.md): world map renders and mouse input enters a level; level completion and saves unverified |
 | Cut the Rope 2 | `ZeptoLabUKLimited.CuttheRope2` 1.0.0.46 (x86) | Plays: gameplay, saves, resizable window, borderless fullscreen |
 | Fruit Ninja | `HalfbrickStudiosPtyLtd.FruitNinja` 1.8.1.66 (x86) | Plays: menus, slicing with the mouse, saves, resizable window. Xbox LIVE shows as disconnected |
 | Gravity Guy | `MiniclipSA.GravityGuy` 1.0.1.2 (x86) | Reaches Story gameplay with mouse input through `appx-host.exe`; Xbox LIVE remains offline. Other modes and save restoration unverified |
@@ -34,16 +35,21 @@ Obtain the game's x86 package. An `.appxbundle` is a ZIP archive holding one `.a
 
 ### 2. Get the Visual C++ runtime
 
+The experimental x64 Windows 10 path uses `Microsoft.VCLibs.140.00` of the same architecture as the game. If installed, locate it with `Get-AppxPackage Microsoft.VCLibs.140.00 | Select Architecture,InstallLocation` and pass the matching folder to setup. Setup includes available auxiliary app-runtime DLLs such as `concrt140_app.dll` and `vcruntime140_1_app.dll`. Use `-BuildDirectory build/windows-x64` for an x64 game. Otherwise, download the matching package below.
+
 Store games use the Store's own Visual C++ runtime (VCLibs), which a plain desktop has no copy of. The game's `AppxManifest.xml` names the version it needs. Setup reads it and reports a missing runtime, or check before you start:
 
 ```powershell
 Select-String -Path 'C:\Games\Source\CutTheRope2\AppxManifest.xml' -Pattern 'Microsoft\.VCLibs\.\d+\.00' | ForEach-Object { $_.Matches.Value }
 ```
 
-| Dependency | DLLs | x86 package |
+| Dependency | DLLs | Packages |
 | --- | --- | --- |
 | `Microsoft.VCLibs.110.00` (Windows 8.0 games) | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll` | [Internet Archive copy](https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx) |
 | `Microsoft.VCLibs.120.00` (Windows 8.1 games) | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll` | In Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip) |
+| `Microsoft.VCLibs.140.00` (Windows 10 UWP games) | `vcruntime140_app.dll`, `msvcp140_app.dll`, `vccorlib140_app.dll`, `concrt140_app.dll` | Microsoft-signed packages hosted by VideoLAN: [x86](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x86/Microsoft.VCLibs.x86.14.00.appx), [x64](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x64/Microsoft.VCLibs.x64.14.00.appx) |
+
+The VCLibs 140 downloads above are version `14.0.25426.0`; check the game's manifest for its minimum version. These provide the UWP `_app.dll` files; `Microsoft.VCLibs.140.00.UWPDesktop` provides a different runtime. Pass the downloaded `.appx` directly to setup with `-RuntimeDirectory`.
 
 Microsoft has no standalone download of VCLibs 110. The Internet Archive copy, `Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx`, has SHA-256 `22d49fa295486e0955a305bea65cfa4ff5d154d296878a1c577ec5507b602c9c`. For a package from anywhere other than Microsoft, check that Microsoft signed it; `Status` should be `Valid` and the signer `CN=Microsoft Corporation, …`:
 
@@ -51,7 +57,7 @@ Microsoft has no standalone download of VCLibs 110. The Internet Archive copy, `
 Get-AuthenticodeSignature .\Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx | Format-List Status, SignerCertificate
 ```
 
-If the framework is installed on your PC (any Store app that uses it installs it), its DLLs are also in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`). Pass setup the `.appx` itself or a folder with the three DLLs, with `-RuntimeDirectory`, or copy the DLLs beside the game.
+If the framework is installed on your PC (any Store app that uses it installs it), its DLLs are also in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`/`140.00`, with the matching architecture). Pass setup the `.appx` itself or a folder with its runtime DLLs, with `-RuntimeDirectory`, or copy the DLLs beside the game.
 
 ### 3. Build the DLLs
 

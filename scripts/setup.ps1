@@ -10,7 +10,7 @@ param(
     [Parameter(Mandatory = $true)][string]$SourceDirectory,
     [Parameter(Mandatory = $true)][string]$Destination,
     [string]$BuildDirectory = (Join-Path $PSScriptRoot '../build/windows-x86'),
-    # Where the x86 VCLibs DLLs are, if the game folder lacks them: a
+    # Where matching-architecture VCLibs DLLs are, if the game folder lacks them: a
     # Microsoft.VCLibs.*.appx, its extracted or installed WindowsApps folder.
     [string[]]$RuntimeDirectory = @()
 )
@@ -25,6 +25,9 @@ $VCLibs = @{
 }
 # System DLLs games import from their folder; each loads appxportable.dll.
 $Proxies = @('d3dcompiler_47.dll', 'XAudio2_8.dll', 'DWrite.dll')
+if (Test-Path -LiteralPath (Join-Path $BuildDirectory 'XAudio2_9.dll')) { $Proxies += 'XAudio2_9.dll' }
+$OptionalVCLibs140 = @('concrt140_app.dll', 'vcruntime140_1_app.dll', 'msvcp140_1_app.dll',
+    'msvcp140_2_app.dll', 'msvcp140_atomic_wait_app.dll', 'msvcp140_codecvt_ids_app.dll', 'vcamp140_app.dll', 'vcomp140_app.dll')
 # Package files the game never reads, and files setup itself provides.
 $Excluded = @('AppxSignature.p7x', 'AppxBlockMap.xml', '[Content_Types].xml', 'AppxMetadata',
     'microsoft.system.package.metadata', 'SaveData', 'appx-portable.ini', 'appxportable.dll') + $Proxies
@@ -60,7 +63,7 @@ function Assert-NoReparseTree([string]$Path) {
         }
     }
 }
-function Assert-X86PE([string]$Path) {
+function Read-PEMachine([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Missing runtime file: $Path" }
     Assert-NoReparseAncestors $Path
     $stream = [IO.File]::OpenRead($Path)
@@ -71,10 +74,14 @@ function Assert-X86PE([string]$Path) {
         $offset = $reader.ReadUInt32()
         if ($offset -gt $stream.Length - 6) { throw "Invalid PE header: $Path" }
         $stream.Position = $offset
-        if ($reader.ReadUInt32() -ne 0x00004550 -or $reader.ReadUInt16() -ne 0x014C) {
-            throw "Expected an x86 (I386) PE file: $Path"
-        }
+        if ($reader.ReadUInt32() -ne 0x00004550) { throw "Invalid PE signature: $Path" }
+        $machine = $reader.ReadUInt16()
+        if ($machine -notin @(0x014C, 0x8664)) { throw "Expected an x86 or x64 PE file: $Path" }
+        return $machine
     } finally { $reader.Dispose() }
+}
+function Assert-PE([string]$Path) {
+    if ((Read-PEMachine $Path) -ne $gameMachine) { throw "PE architecture must match the game ($gameArchitecture): $Path" }
 }
 function Test-ManagedPE([string]$Path) {
     $stream = [IO.File]::OpenRead($Path)
@@ -83,7 +90,11 @@ function Test-ManagedPE([string]$Path) {
         $stream.Position = 0x3c
         $offset = $reader.ReadUInt32()
         if ($offset -gt $stream.Length - 248) { return $false }
-        $stream.Position = $offset + 232
+        $stream.Position = $offset + 24
+        $magic = $reader.ReadUInt16()
+        $directoryOffset = if ($magic -eq 0x20b) { 112 } else { 96 }
+        $stream.Position = $offset + 24 + $directoryOffset + 14 * 8
+        if ($stream.Position + 8 -gt $stream.Length) { return $false }
         return $reader.ReadUInt32() -ne 0
     } finally { $reader.Dispose() }
 }
@@ -106,7 +117,7 @@ function Copy-AtomicDll([string]$Source, [string]$Target) {
 function Expand-RuntimePackage([string]$Package, [string]$Target) {
     if ([IO.Path]::GetExtension($Package) -ne '.appx') { throw "Not a folder or an .appx package: $Package" }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $names = @($VCLibs.Values | ForEach-Object { $_ })
+    $names = @($VCLibs.Values | ForEach-Object { $_ }) + $OptionalVCLibs140
     [IO.Directory]::CreateDirectory($Target) | Out-Null
     try { $zip = [IO.Compression.ZipFile]::OpenRead($Package) } catch { throw "Cannot read $Package as an .appx package." }
     try {
@@ -157,7 +168,8 @@ if (Test-Path -LiteralPath $destinationPath) {
 }
 $package = Read-PackageManifest $source
 $executable = Join-Path $source $package.Executable
-Assert-X86PE $executable
+$gameMachine = Read-PEMachine $executable
+$gameArchitecture = if ($gameMachine -eq 0x8664) { 'x64' } else { 'x86' }
 
 # A runtime .appx is read through a temporary folder, removed however setup ends.
 $extracted = $null
@@ -180,15 +192,25 @@ foreach ($dependency in $package.Dependencies) {
         $found = @(@($source) + $runtimeFolders | ForEach-Object { Join-Path $_ $name } |
             Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1)
         if (-not $found) {
-            throw "Missing $name ($dependency). Pass the x86 $dependency .appx, or a folder with its DLLs, with -RuntimeDirectory. 'Get the Visual C++ runtime' in README.md says where to download it."
+            throw "Missing $name ($dependency). Pass the $gameArchitecture $dependency .appx, or a folder with its DLLs, with -RuntimeDirectory. 'Get the Visual C++ runtime' in README.md says where to download it."
         }
-        Assert-X86PE $found[0]
+        Assert-PE $found[0]
         $runtimeFiles[$name] = $found[0]
+    }
+}
+if ($package.Dependencies -contains 'Microsoft.VCLibs.140.00') {
+    foreach ($name in $OptionalVCLibs140) {
+        $found = @(@($source) + $runtimeFolders | ForEach-Object { Join-Path $_ $name } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1)
+        if ($found) {
+            Assert-PE $found[0]
+            $runtimeFiles[$name] = $found[0]
+        }
     }
 }
 $shimFiles = @('appxportable.dll') + $Proxies
 if (Test-ManagedPE $executable) { $shimFiles += 'appx-host.exe' }
-foreach ($name in $shimFiles) { Assert-X86PE (Join-Path $build $name) }
+foreach ($name in $shimFiles) { Assert-PE (Join-Path $build $name) }
 $originalHash = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash
 
 [IO.Directory]::CreateDirectory($destinationPath) | Out-Null

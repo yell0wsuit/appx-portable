@@ -29,6 +29,7 @@ static std::vector<int> visibility;
 static std::vector<std::pair<float, float>> sizes; // CoreWindow SizeChanged
 static ComPtr<ICoreDispatcher> dispatcher;
 static HWND host;
+static std::vector<int> keys;
 // Runs `step` after the UI queue has drained the work posted before it.
 static void Then(const std::function<void()>& step) {
     auto work = Callback<IDispatchedHandler>([step]() -> HRESULT {
@@ -90,6 +91,22 @@ int main(int argc, char**) {
                 return S_OK;
             });
         CHECK(SUCCEEDED(core->add_SizeChanged(resized.Get(), &token)));
+        auto keyDown = Callback<ABI::Windows::Foundation::ITypedEventHandler<CoreWindow*, KeyEventArgs*>>(
+            [](ICoreWindow*, IKeyEventArgs* args) -> HRESULT {
+                ABI::Windows::System::VirtualKey key{};
+                args->get_VirtualKey(&key);
+                keys.push_back(static_cast<int>(key));
+                return S_OK;
+            });
+        CHECK(SUCCEEDED(core->add_KeyDown(keyDown.Get(), &token)));
+        auto keyUp = Callback<ABI::Windows::Foundation::ITypedEventHandler<CoreWindow*, KeyEventArgs*>>(
+            [](ICoreWindow*, IKeyEventArgs* args) -> HRESULT {
+                ABI::Windows::System::VirtualKey key{};
+                args->get_VirtualKey(&key);
+                keys.push_back(-static_cast<int>(key));
+                return S_OK;
+            });
+        CHECK(SUCCEEDED(core->add_KeyUp(keyUp.Get(), &token)));
         auto xamlActivated =
             Callback<IWindowActivatedEventHandler>([](IInspectable*, IWindowActivatedEventArgs* args) -> HRESULT {
                 CoreWindowActivationState state{};
@@ -111,6 +128,10 @@ int main(int argc, char**) {
         CHECK(host != nullptr);
         if (argc > 1) ShowWindow(host, SW_SHOWMAXIMIZED);
         CHECK(SUCCEEDED(window->Activate())); // Shows the window.
+        // Native XAML pages still receive keyboard events from CoreWindow.
+        SendMessageW(host, WM_KEYDOWN, VK_SPACE, 1);
+        SendMessageW(host, WM_KEYUP, VK_SPACE, static_cast<LPARAM>(0xC0000001u));
+        CHECK((keys == std::vector<int>{VK_SPACE, -VK_SPACE}));
         Then([] {
             CHECK((states == std::vector<int>{1}));
             CHECK((visibility == std::vector<int>{1}));

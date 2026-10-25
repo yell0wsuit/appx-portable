@@ -13,32 +13,39 @@ namespace appx {
 HRESULT QueueElementLoaded(IInspectable* value);
 HRESULT RaiseElementSizeChanged();
 HRESULT MakeCoreWindow(ABI::Windows::UI::Core::ICoreWindow** value);
-class Window final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIWindow> {
+class Window final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIWindow, IWindow2> {
+    APPX_LOG_MISSING_INTERFACES("Window")
     InspectableClass(L"Windows.UI.Xaml.Window", BaseTrust);
     ComPtr<IUIElement> content_;
+    ComPtr<IUIElement> titleBar_;
     EventSource<IWindowSizeChangedEventHandler> resized_;
     EventSource<IWindowActivatedEventHandler> activated_;
     EventSource<IWindowClosedEventHandler> closed_;
     EventSource<IWindowVisibilityChangedEventHandler> visibility_;
 
 public:
+    HRESULT STDMETHODCALLTYPE SetTitleBar(IUIElement* value) override {
+        // Retain the custom drag surface; the desktop host owns caption dragging.
+        titleBar_ = value;
+        return S_OK;
+    }
     void OnMessage(UINT message, WPARAM wparam, LPARAM lparam) {
         if (message == WM_ACTIVATE) {
             auto args = Make<ActivationArgs>(LOWORD(wparam) == WA_INACTIVE
                                                  ? ABI::Windows::UI::Core::CoreWindowActivationState_Deactivated
                                                  : ABI::Windows::UI::Core::CoreWindowActivationState_CodeActivated);
-            if (args) activated_.InvokeAll(this, args.Get());
+            if (args) activated_.InvokeAll(static_cast<IWindow*>(this), args.Get());
         }
         if (message == WM_SIZE) {
             auto args = Make<WindowSizeArgs>(
                 ABI::Windows::Foundation::Size{static_cast<float>(LOWORD(lparam)), static_cast<float>(HIWORD(lparam))});
-            if (args) resized_.InvokeAll(this, args.Get());
+            if (args) resized_.InvokeAll(static_cast<IWindow*>(this), args.Get());
             auto hr = RaiseElementSizeChanged();
             if (FAILED(hr)) Log("FAIL", "SizeChanged handler hr=%08lx", hr);
         }
         if (message == WM_SHOWWINDOW) {
             auto args = Make<VisibilityArgs>(wparam != 0);
-            if (args) visibility_.InvokeAll(this, args.Get());
+            if (args) visibility_.InvokeAll(static_cast<IWindow*>(this), args.Get());
         }
     }
     HRESULT STDMETHODCALLTYPE get_Dispatcher(ABI::Windows::UI::Core::ICoreDispatcher** value) override {

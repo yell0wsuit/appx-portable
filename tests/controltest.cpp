@@ -33,6 +33,20 @@ int main() {
     if (!object) return 1;
     ComPtr<IUIElement> ui;
     CHECK(SUCCEEDED(object.As(&ui)));
+    CHECK(SUCCEEDED(ui->put_Visibility(Visibility_Collapsed)));
+    Visibility visibility{};
+    CHECK(SUCCEEDED(ui->get_Visibility(&visibility)) && visibility == Visibility_Collapsed);
+    CHECK(SUCCEEDED(ui->put_Visibility(Visibility_Visible)));
+    ComPtr<IFrameworkElement> placementElement;
+    CHECK(SUCCEEDED(object.As(&placementElement)));
+    ComPtr<IActivationFactory> gridFactory;
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Controls.Grid").Get(), &gridFactory)));
+    ComPtr<IGridStatics> gridStatics;
+    CHECK(SUCCEEDED(gridFactory.As(&gridStatics)));
+    INT32 row{};
+    CHECK(SUCCEEDED(gridStatics->SetRow(placementElement.Get(), 3)));
+    CHECK(SUCCEEDED(gridStatics->GetRow(placementElement.Get(), &row)) && row == 3);
+    CHECK(gridStatics->SetRow(placementElement.Get(), -1) == E_INVALIDARG);
     ABI::Windows::Foundation::Size size{};
     CHECK(SUCCEEDED(ui->get_RenderSize(&size)) && size.Width == 1024 && size.Height == 768);
     // An OS XAML factory can be obtained without a XAML core, but creating a

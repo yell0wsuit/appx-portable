@@ -1,0 +1,113 @@
+#include <windows.h>
+#undef GetCurrentTime
+#include <roapi.h>
+#include <windows.system.h>
+#include <windows.applicationmodel.core.h>
+#include <windows.ui.xaml.controls.h>
+#include <windows.ui.core.h>
+#include <windows.devices.input.h>
+#include <wrl.h>
+#include <wrl/event.h>
+#include <wrl/wrappers/corewrappers.h>
+#include <cstdio>
+using namespace Microsoft::WRL;
+using namespace Microsoft::WRL::Wrappers;
+using namespace ABI::Windows::UI::Core;
+using namespace ABI::Windows::UI::Xaml;
+using namespace ABI::Windows::UI::Xaml::Controls;
+static int failures;
+#define CHECK(x)                                                                                                       \
+    do {                                                                                                               \
+        if (!(x)) {                                                                                                    \
+            printf("FAIL %d: %s\n", __LINE__, #x);                                                                     \
+            ++failures;                                                                                                \
+        }                                                                                                              \
+    } while (0)
+int main() {
+    RoInitialize(RO_INIT_MULTITHREADED);
+    auto dll = LoadLibraryW(L"appxportable.dll");
+    if (!dll) return 1;
+    auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
+    ComPtr<IActivationFactory> factory;
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.System.MemoryManager").Get(), &factory)));
+    ComPtr<ABI::Windows::System::IMemoryManagerStatics> memory;
+    CHECK(SUCCEEDED(factory.As(&memory)));
+    if (!memory) return 1;
+    UINT64 usage{}, limit{};
+    CHECK(SUCCEEDED(memory->get_AppMemoryUsage(&usage)) && usage > 0);
+    CHECK(SUCCEEDED(memory->get_AppMemoryUsageLimit(&limit)) && limit > 0);
+    CHECK(memory->get_AppMemoryUsageLimit(nullptr) == E_POINTER);
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.ApplicationModel.Core.CoreApplication").Get(), &factory)));
+    ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplication> app;
+    CHECK(SUCCEEDED(factory.As(&app)));
+    ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplicationView> view;
+    CHECK(SUCCEEDED(app->GetCurrentView(&view)));
+    ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplicationView3> view3;
+    CHECK(SUCCEEDED(view.As(&view3)));
+    ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplicationViewTitleBar> title;
+    CHECK(SUCCEEDED(view3->get_TitleBar(&title)));
+    boolean extended{};
+    CHECK(SUCCEEDED(title->put_ExtendViewIntoTitleBar(true)));
+    CHECK(SUCCEEDED(title->get_ExtendViewIntoTitleBar(&extended)) && extended);
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Controls.Frame").Get(), &factory)));
+    ComPtr<IInspectable> frame;
+    CHECK(SUCCEEDED(factory->ActivateInstance(&frame)));
+    ComPtr<IFrameworkElement> element;
+    CHECK(SUCCEEDED(frame.As(&element)));
+    ComPtr<IInspectable> named;
+    CHECK(SUCCEEDED(element->FindName(HStringReference(L"swapChainPanel").Get(), &named)));
+    ComPtr<ISwapChainPanel> panel;
+    CHECK(SUCCEEDED(named.As(&panel)));
+    ComPtr<ICoreInputSourceBase> input;
+    CHECK(SUCCEEDED(panel->CreateCoreIndependentInputSource(CoreInputDeviceTypes_Mouse, &input)));
+    if (!input) return 1;
+    ComPtr<ICoreDispatcher> dispatcher;
+    CHECK(SUCCEEDED(input->get_Dispatcher(&dispatcher)));
+    boolean access{};
+    CHECK(SUCCEEDED(dispatcher->get_HasThreadAccess(&access)) && access);
+    unsigned delivered{};
+    const DWORD thread = GetCurrentThreadId();
+    ComPtr<ICorePointerInputSource> pointer;
+    CHECK(SUCCEEDED(input.As(&pointer)));
+    auto handler = Callback<ABI::Windows::Foundation::ITypedEventHandler<IInspectable*, PointerEventArgs*>>(
+        [&](IInspectable*, IPointerEventArgs* args) -> HRESULT {
+            CHECK(GetCurrentThreadId() == thread);
+            ComPtr<ABI::Windows::UI::Input::IPointerPoint> point;
+            CHECK(SUCCEEDED(args->get_CurrentPoint(&point)));
+            ComPtr<__FIVector_1_Windows__CUI__CInput__CPointerPoint> history;
+            CHECK(SUCCEEDED(args->GetIntermediatePoints(&history)));
+            UINT32 count{};
+            CHECK(history && SUCCEEDED(history->get_Size(&count)) && count == 1);
+            ComPtr<ABI::Windows::UI::Input::IPointerPoint> latest;
+            CHECK(history && SUCCEEDED(history->GetAt(0, &latest)));
+            ABI::Windows::Foundation::Point current{}, previous{};
+            CHECK(SUCCEEDED(point->get_Position(&current)));
+            CHECK(latest && SUCCEEDED(latest->get_Position(&previous)) && current.X == previous.X &&
+                  current.Y == previous.Y);
+            ComPtr<ABI::Windows::Devices::Input::IPointerDevice> device;
+            CHECK(SUCCEEDED(point->get_PointerDevice(&device)));
+            ABI::Windows::Devices::Input::PointerDeviceType type{};
+            CHECK(SUCCEEDED(device->get_PointerDeviceType(&type)) &&
+                  type == ABI::Windows::Devices::Input::PointerDeviceType_Mouse);
+            ++delivered;
+            return S_OK;
+        });
+    EventRegistrationToken token{};
+    CHECK(SUCCEEDED(pointer->add_PointerPressed(handler.Get(), &token)));
+    HWND queue = FindWindowExW(HWND_MESSAGE, nullptr, L"AppxPortableIndependentInput", nullptr);
+    CHECK(queue && PostMessageW(queue, WM_APP + WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(50, 60)));
+    CHECK(SUCCEEDED(dispatcher->ProcessEvents(CoreProcessEventsOption_ProcessAllIfPresent)));
+    CHECK(delivered == 1);
+    CHECK(SUCCEEDED(pointer->remove_PointerPressed(token)));
+    bool ran{};
+    auto work = Callback<IDispatchedHandler>([&]() -> HRESULT {
+        ran = GetCurrentThreadId() == thread;
+        return S_OK;
+    });
+    ComPtr<ABI::Windows::Foundation::IAsyncAction> action;
+    CHECK(SUCCEEDED(dispatcher->RunAsync(CoreDispatcherPriority_Normal, work.Get(), &action)));
+    CHECK(!ran);
+    CHECK(SUCCEEDED(dispatcher->ProcessEvents(CoreProcessEventsOption_ProcessAllIfPresent)) && ran);
+    printf("win10test: %d failure(s)\n", failures);
+    return failures ? 1 : 0;
+}

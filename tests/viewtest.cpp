@@ -53,6 +53,19 @@ int main() {
     view.As(&identity1);
     view3.As(&identity2);
     if (identity1.Get() != identity2.Get()) return 15;
+    ComPtr<IApplicationViewStatics3> launch;
+    if (FAILED(factory.As(&launch))) return 16;
+    if (launch->get_PreferredLaunchViewSize(nullptr) != E_POINTER) return 17;
+    if (FAILED(launch->put_PreferredLaunchViewSize({1280, 720}))) return 18;
+    ABI::Windows::Foundation::Size preferred{};
+    if (FAILED(launch->get_PreferredLaunchViewSize(&preferred)) || preferred.Width != 1280 || preferred.Height != 720)
+        return 19;
+    if (launch->put_PreferredLaunchViewSize({-1, 720}) != E_INVALIDARG) return 20;
+    if (FAILED(launch->put_PreferredLaunchWindowingMode(ApplicationViewWindowingMode_FullScreen))) return 21;
+    ApplicationViewWindowingMode launchMode{};
+    if (FAILED(launch->get_PreferredLaunchWindowingMode(&launchMode)) ||
+        launchMode != ApplicationViewWindowingMode_FullScreen)
+        return 22;
     puts("viewtest: 0 failure(s)");
     return 0;
 }
