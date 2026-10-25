@@ -17,6 +17,10 @@ sealed class StartupApp : Application {
     private static int launches;
 
     public StartupApp() {
+#if XAML_LIGHT_THEME
+        // As generated InitializeComponent does; the theme comes from the real parser.
+        LoadComponent(this, new Uri("ms-appx:///App.xaml"));
+#endif
 #if LIGHT_THEME
         RequestedTheme = ApplicationTheme.Light;
 #endif

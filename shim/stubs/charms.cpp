@@ -146,8 +146,10 @@ public:
             GetClientRect(HostWindow(), &client);
             POINT anchor{client.right, 0};
             ClientToScreen(HostWindow(), &anchor);
+            Log("TRACE", "settings menu open (%u commands)", commands.Size());
             auto selected = static_cast<UINT>(TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTALIGN | TPM_NONOTIFY,
                                                                anchor.x, anchor.y, HostWindow(), nullptr));
+            Log("TRACE", "settings menu closed selected=%u", selected);
             showing = false;
             if (selected && selected <= commands.Size()) {
                 auto command = commands.GetAt(selected - 1).as<winrt::Windows::UI::Popups::IUICommand>();

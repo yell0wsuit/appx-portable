@@ -5,13 +5,37 @@ using Windows.ApplicationModel.Activation;
 using Windows.UI.ApplicationSettings;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Media;
 #pragma warning disable 618 // Windows 8 charm APIs are intentionally exercised.
 
 sealed class SettingsApp : Application {
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] static extern bool PostThreadMessage(uint thread, uint message, IntPtr wparam, IntPtr lparam);
-    private int requested, invoked, stage, flyoutsLoaded, appearancePhase;
+    delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lparam);
+    [DllImport("user32.dll")] static extern bool EnumThreadWindows(uint thread, EnumWindowsProc callback, IntPtr lparam);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder name, int count);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool EndMenu();
+    private int requested, invoked, stage, flyoutsLoaded, appearancePhase, menuWaits, menuOpenTicks;
+    private double authoredWidth;
+    IntPtr ThreadWindow(string className) {
+        IntPtr found = IntPtr.Zero;
+        EnumThreadWindows(uiThread, (hwnd, unused) => {
+            var name = new System.Text.StringBuilder(64);
+            GetClassName(hwnd, name, name.Capacity);
+            if (name.ToString() != className || !IsWindowVisible(hwnd)) return true;
+            found = hwnd;
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+    void ResizeHost(int width, int height) {
+        var host = ThreadWindow("AppxPortableWindow");
+        if (host == IntPtr.Zero) throw new Exception("Host window not found");
+        SetWindowPos(host, IntPtr.Zero, 0, 0, width, height, 0x2 | 0x4 | 0x10); // NOMOVE | NOZORDER | NOACTIVATE
+    }
     private uint uiThread;
     private SettingsPane pane;
     private SettingsFlyout flyout;
@@ -78,6 +102,20 @@ sealed class SettingsApp : Application {
                 ++appearancePhase;
                 return;
             }
+            if (stage == 6 && appearancePhase >= 11 && appearancePhase < 14) {
+                // Narrowing the island clamps the flyout; widening restores its own width.
+                if (appearancePhase == 11) {
+                    authoredWidth = flyout.Width;
+                    ResizeHost(300, 600);
+                } else if (appearancePhase == 12) {
+                    if (!(flyout.Width < authoredWidth)) throw new Exception("Settings flyout was not clamped to the island");
+                    ResizeHost(1040, 807);
+                } else if (flyout.Width != authoredWidth) {
+                    throw new Exception("Settings flyout stayed narrow: " + flyout.Width + " of " + authoredWidth);
+                }
+                ++appearancePhase;
+                return;
+            }
             if (stage == 6 && appearancePhase < 11) {
                 if (appearancePhase == 7) {
                     var style = new Style { TargetType = typeof(SettingsFlyout) };
@@ -105,16 +143,35 @@ sealed class SettingsApp : Application {
             }
             if (stage < 6 && stage % 2 == 0) {
                 ++stage;
+                menuWaits = menuOpenTicks = 0;
                 SettingsPane.Show();
             } else if (stage < 6) {
+                // This fixture never owns the foreground. While another application
+                // is in use, the menu can close without a selection or miss the
+                // posted keys; close it if needed and show it again.
+                if (ThreadWindow("#32768") != IntPtr.Zero) {
+                    menuWaits = 0;
+                    if (++menuOpenTicks >= 10) {
+                        menuOpenTicks = 0;
+                        EndMenu();
+                        return;
+                    }
+                } else if (++menuWaits >= 3) {
+                    menuWaits = 0;
+                    SettingsPane.Show();
+                    return;
+                }
                 // Exercise the menu's own nested message loop, without global input.
                 PostThreadMessage(uiThread, 0x100, (IntPtr)0x28, IntPtr.Zero);
                 PostThreadMessage(uiThread, 0x100, (IntPtr)0x0D, IntPtr.Zero);
             } else {
                 timer.Stop();
-                if (requested != 3 || invoked != 3 || flyoutsLoaded != 3)
+                if (requested < invoked || invoked != 3 || flyoutsLoaded != 3)
                     throw new Exception("Settings commands or flyouts did not refresh/invoke/load: " + flyoutsLoaded);
                 flyout.Hide();
+                if (flyout.ReadLocalValue(FrameworkElement.WidthProperty) != DependencyProperty.UnsetValue ||
+                    flyout.ReadLocalValue(FrameworkElement.HeightProperty) != DependencyProperty.UnsetValue)
+                    throw new Exception("Settings flyout size survived closing");
                 pane.CommandsRequested -= CommandsRequested;
                 File.WriteAllText("startup-passed.txt", "settings identity, UI thread, request refresh, command identity and invocation");
                 Window.Current.Close();
@@ -150,6 +207,14 @@ sealed class SettingsApp : Application {
             }
             flyout.Loaded += (s, e) => {
                 ++flyoutsLoaded;
+                // Settings light-dismiss as on Windows 8. Without the foreground, focus
+                // changes in other applications would dismiss the flyout under test.
+                Popup host = null;
+                foreach (var open in VisualTreeHelper.GetOpenPopupsForXamlRoot(flyout.XamlRoot))
+                    if (open.Child == flyout) host = open;
+                if (host == null || !host.IsLightDismissEnabled)
+                    throw new Exception("Settings flyout is not hosted in a light-dismiss popup");
+                host.IsLightDismissEnabled = false;
                 var expectedTheme = invoked == 2 ? ElementTheme.Dark : ElementTheme.Light;
                 if (flyout.RequestedTheme != expectedTheme) throw new Exception("Wrong default or explicit flyout theme");
                 var foreground = toggle.Foreground as SolidColorBrush;
