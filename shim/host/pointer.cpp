@@ -8,8 +8,6 @@
 #include <wrl.h>
 #include <map>
 #include <vector>
-// C++/WinRT's C++17 SDK headers include legacy coroutine declarations.
-#define _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.UI.Input.h>
 using namespace Microsoft::WRL;
