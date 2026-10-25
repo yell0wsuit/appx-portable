@@ -92,6 +92,34 @@ void SetHostCursor(HCURSOR value) noexcept {
         return; // Out of memory: the next WM_SETCURSOR shows it.
     }
 }
+static std::mutex titleMutex;
+static std::wstring viewTitle;
+// The caption as Windows shows it: the game's ApplicationView.Title, if it
+// sets one, before the app's name.
+static std::wstring HostTitle() {
+    std::lock_guard<std::mutex> lock(titleMutex);
+    const auto& name = PackageDisplayName();
+    return viewTitle.empty() ? name : viewTitle + L" - " + name;
+}
+static void ApplyHostTitle() {
+    if (window) SetWindowTextW(window, HostTitle().c_str());
+}
+void SetHostTitle(const std::wstring& title) {
+    {
+        std::lock_guard<std::mutex> lock(titleMutex);
+        viewTitle = title;
+    }
+    // A cross-thread SetWindowText waits on the UI thread; post it instead.
+    if (GetCurrentThreadId() == thread) {
+        ApplyHostTitle();
+        return;
+    }
+    try {
+        PostHostWork(0, ApplyHostTitle);
+    } catch (...) {
+        return; // Out of memory: the caption keeps its previous text.
+    }
+}
 DWORD HostThread() noexcept { return thread; }
 void ActivateHostWindow() {
     if (window) SendMessageW(window, ActivateMessage, 0, 0);
@@ -229,45 +257,24 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
     }
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
-// The manifest's small logo, as written or with the resource qualifiers the
-// package build added: targetsize variants first (the nearest at least as
-// large as the icon), then scale variants, then the plain name.
-static std::vector<std::filesystem::path> IconCandidates(int size) {
-    const auto& package = CurrentPackage();
-    if (package.smallLogo.empty()) return {};
-    const auto logo = package.directory / package.smallLogo;
-    const auto stem = logo.stem().wstring(), extension = logo.extension().wstring();
-    std::vector<std::filesystem::path> candidates;
-    for (int target : {16, 24, 32, 48, 256})
-        if (target >= size)
-            candidates.push_back(logo.parent_path() / (stem + L".targetsize-" + std::to_wstring(target) + extension));
-    for (int scale : {200, 180, 140, 100, 80})
-        candidates.push_back(logo.parent_path() / (stem + L".scale-" + std::to_wstring(scale) + extension));
-    candidates.push_back(logo);
-    return candidates;
-}
-// Store packages supply PNG shell icons rather than executable icon resources.
-static HICON LoadGameIcon(int width, int height) {
-    for (const auto& path : IconCandidates(std::max(width, height))) {
-        HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                  FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (file == INVALID_HANDLE_VALUE) continue;
-        const DWORD sizeBytes = GetFileSize(file, nullptr);
-        // Bound the allocation for missing, corrupt, or unexpectedly large assets.
-        if (!sizeBytes || sizeBytes > 1024 * 1024) {
-            CloseHandle(file);
-            continue;
-        }
-        std::vector<BYTE> bytes(sizeBytes);
-        DWORD read{};
-        const bool loaded = ReadFile(file, bytes.data(), sizeBytes, &read, nullptr) && read == sizeBytes;
+// Store packages supply PNG shell icons rather than executable icon resources:
+// the manifest's small logo, at the file resources.pri picks for this display.
+static HICON LoadGameIcon(const std::filesystem::path& path, int width, int height) {
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return nullptr;
+    const DWORD sizeBytes = GetFileSize(file, nullptr);
+    // Bound the allocation for missing, corrupt, or unexpectedly large assets.
+    if (!sizeBytes || sizeBytes > 1024 * 1024) {
         CloseHandle(file);
-        if (!loaded) continue;
-        HICON icon =
-            CreateIconFromResourceEx(bytes.data(), sizeBytes, TRUE, 0x00030000, width, height, LR_DEFAULTCOLOR);
-        if (icon) return icon;
+        return nullptr;
     }
-    return nullptr;
+    std::vector<BYTE> bytes(sizeBytes);
+    DWORD read{};
+    const bool loaded = ReadFile(file, bytes.data(), sizeBytes, &read, nullptr) && read == sizeBytes;
+    CloseHandle(file);
+    if (!loaded) return nullptr;
+    return CreateIconFromResourceEx(bytes.data(), sizeBytes, TRUE, 0x00030000, width, height, LR_DEFAULTCOLOR);
 }
 HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     InitializeDiagnostics();
@@ -300,7 +307,7 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         return HRESULT_FROM_WIN32(GetLastError());
     RECT rect{0, 0, 1024, 768};
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
-    window = CreateWindowExW(0, cls.lpszClassName, CurrentPackage().displayName.c_str(),
+    window = CreateWindowExW(0, cls.lpszClassName, HostTitle().c_str(),
                              WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                              rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, cls.hInstance, nullptr);
     if (!window) return HRESULT_FROM_WIN32(GetLastError());
@@ -309,8 +316,14 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_STRING, SettingsMenuId, L"Game settings\tCtrl+,");
         InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_SEPARATOR, 0, nullptr);
     }
-    HICON smallIcon = LoadGameIcon(GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
-    HICON largeIcon = LoadGameIcon(GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON));
+    const auto& package = CurrentPackage();
+    const auto logo = package.smallLogo.empty() ? std::filesystem::path{}
+                                                : ResolvePackageFile(package, package.smallLogo);
+    HICON smallIcon = logo.empty() ? nullptr
+                                   : LoadGameIcon(logo, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
+    HICON largeIcon =
+        logo.empty() ? nullptr : LoadGameIcon(logo, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON));
+    if (!logo.empty() && !smallIcon) Log("TRACE", "window icon: cannot load %ls", logo.c_str());
     if (smallIcon) SendMessageW(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
     if (largeIcon) SendMessageW(window, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(largeIcon));
     placement.Initialize(window);
