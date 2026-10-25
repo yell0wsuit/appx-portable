@@ -140,6 +140,11 @@ add_test(NAME store_stub_iap_catalog COMMAND ${CMAKE_COMMAND}
     "-DTEST=$<TARGET_FILE:storetest>" "-DSHIM=$<TARGET_FILE:appxportable>"
     "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/store-catalog-fixture"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/store_catalog.cmake")
+add_test(NAME store_stub_iap_discovered_catalog COMMAND ${CMAKE_COMMAND}
+    "-DTEST=$<TARGET_FILE:storetest>" "-DSHIM=$<TARGET_FILE:appxportable>"
+    "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/store-discovered-catalog-fixture"
+    "-DCATALOG=Content/Arbitrary/Subdirectory/products.XML"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/store_catalog.cmake")
 add_test(NAME store_unlocked_cli COMMAND storetest --expect-unlocked --unlock-trial)
 add_test(NAME store_unlocked_env COMMAND storetest --expect-unlocked)
 add_test(NAME store_override_disabled COMMAND storetest)

@@ -146,10 +146,9 @@ using StubListingMap =
     store::StoreMap<ListingMap, ListingIterable, ListingIterator, ListingPair, IProductListing, StubProductListing>;
 // Some packages ship a CurrentAppSimulator catalog. Use its product IDs for the
 // offline listing; prices are explicitly synthetic and no license entries are imported.
-std::vector<std::wstring> ReadStubCatalog() {
+std::vector<std::wstring> ReadStubCatalogFile(const std::filesystem::path& path) {
     ComPtr<IStream> stream;
     ComPtr<IXmlReader> reader;
-    const auto path = CurrentPackage().directory / L"Assets" / L"in-app-purchase.xml";
     std::vector<std::wstring> ids;
     if (FAILED(SHCreateStreamOnFileEx(path.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE, 0, FALSE, nullptr, &stream)) ||
         FAILED(CreateXmlReader(IID_PPV_ARGS(&reader), nullptr)) ||
@@ -160,10 +159,17 @@ std::vector<std::wstring> ReadStubCatalog() {
     HRESULT hr;
     bool listing = false;
     while ((hr = reader->Read(&type)) == S_OK) {
+        if (type != XmlNodeType_Element && type != XmlNodeType_EndElement) continue;
+        UINT depth{};
+        if (FAILED(reader->GetDepth(&depth))) return {};
         const wchar_t* name = nullptr;
         reader->GetLocalName(&name, nullptr);
-        if (name && wcscmp(name, L"ListingInformation") == 0) listing = type == XmlNodeType_Element;
-        if (!listing || type != XmlNodeType_Element || !name || wcscmp(name, L"Product")) continue;
+        // Recognize the catalog schema, rather than interpreting arbitrary
+        // asset XML containing Product or ListingInformation elements.
+        if (!name || (depth == 0 && wcscmp(name, L"CurrentApp"))) return {};
+        if (depth == 1)
+            listing = type == XmlNodeType_Element && !reader->IsEmptyElement() && !wcscmp(name, L"ListingInformation");
+        if (!listing || depth != 2 || type != XmlNodeType_Element || wcscmp(name, L"Product")) continue;
         if (SUCCEEDED(reader->MoveToAttributeByName(L"ProductId", nullptr))) {
             const wchar_t* id = nullptr;
             UINT32 length{};
@@ -175,6 +181,40 @@ std::vector<std::wstring> ReadStubCatalog() {
         }
     }
     if (FAILED(hr)) ids.clear();
+    return ids;
+}
+std::vector<std::wstring> DiscoverStubCatalog() {
+    const auto& package = CurrentPackage();
+    if (!package.loaded) return {};
+    std::error_code error;
+    std::vector<std::filesystem::path> candidates;
+    std::filesystem::recursive_directory_iterator files(
+        package.directory, std::filesystem::directory_options::skip_permission_denied, error),
+        end;
+    for (; !error && files != end; files.increment(error)) {
+        const auto& file = *files;
+        const auto attributes = GetFileAttributesW(file.path().c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+            files.disable_recursion_pending();
+            continue;
+        }
+        if (file.is_regular_file(error) && _wcsicmp(file.path().extension().c_str(), L".xml") == 0)
+            candidates.push_back(file.path());
+    }
+    std::sort(candidates.begin(), candidates.end());
+    std::vector<std::wstring> ids;
+    for (const auto& path : candidates) {
+        auto products = ReadStubCatalogFile(path);
+        if (!products.empty()) Log("info", "Store: stub IAP catalog %ls (%zu products)", path.c_str(), products.size());
+        for (auto& product : products)
+            if (std::find(ids.begin(), ids.end(), product) == ids.end()) ids.push_back(std::move(product));
+    }
+    return ids;
+}
+const std::vector<std::wstring>& ReadStubCatalog() {
+    // Package assets do not change during a run. Scan once, including when
+    // there is no catalog, rather than on every license or listing query.
+    static const auto ids = DiscoverStubCatalog();
     return ids;
 }
 std::mutex stubPurchasesMutex;
