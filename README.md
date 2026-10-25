@@ -17,6 +17,8 @@ Managed XAML games such as **Bejeweled LIVE** use `appx-host.exe`, which setup c
 | Cut the Rope 2 | `ZeptoLabUKLimited.CuttheRope2` 1.0.0.46 (x86) | Plays: gameplay, saves, resizable window, borderless fullscreen |
 | Fruit Ninja | `HalfbrickStudiosPtyLtd.FruitNinja` 1.8.1.66 (x86) | Plays: menus, slicing with the mouse, saves, resizable window. Xbox LIVE shows as disconnected |
 | Gravity Guy | `MiniclipSA.GravityGuy` 1.0.1.2 (x86) | Reaches Story gameplay with mouse input through `appx-host.exe`; Xbox LIVE remains offline. Other modes and save restoration unverified |
+| Bejeweled LIVE | `PopCap.BejweledLIVE` 4.0.0.10 (x86) | Classic board mouse swaps and scoring checked through `appx-host.exe`; use the [dark theme patch](patch/bejeweled/README.md) for readable settings; see [managed hosting](docs/islands.md) for settings and save limitations |
+| Microsoft Sudoku | `Microsoft.MicrosoftSudoku` 1.7.10190.0 (x86) | Requires the [video-preloader asset patch](patch/mssudoku/README.md). Menu, Very Easy tutorial dismissal, and mouse number entry work through `appx-host.exe` |
 | Where's My Water? | `Disney.WheresMyWater` 1.13.1.3 (x86) | Plays: menu clicks, mouse dragging, music and sound effects; first level completed with three ducks. Save restoration unverified |
 | Where's My Mickey? | `Disney.WheresMyMickey` 1.1.0.30 (x86) | Requires the [AMPS startup EXE patch](patch/wheresmymickey/README.md). Intro and mouse input work; first level completed with three stars. Save restoration unverified |
 

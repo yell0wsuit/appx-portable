@@ -225,6 +225,15 @@ HRESULT Encode(IInspectable* object, Entry& entry) {
         entry.value = Number(n);
         break;
     }
+    case PropertyType_Guid: {
+        GUID guid{};
+        hr = value->GetGuid(&guid);
+        wchar_t text[39]{};
+        if (SUCCEEDED(hr) && !StringFromGUID2(guid, text, ARRAYSIZE(text))) return E_UNEXPECTED;
+        entry.type = L"Guid";
+        entry.value = text;
+        break;
+    }
     case PropertyType_Double: {
         double number{};
         hr = value->GetDouble(&number);
@@ -277,6 +286,12 @@ HRESULT Decode(IPropertyValueStatics* props, const Entry& entry, IInspectable** 
     if (entry.type == L"Int64") {
         INT64 n{};
         return ParseNumber(entry.value, n) ? props->CreateInt64(n, result) : E_INVALIDARG;
+    }
+    if (entry.type == L"Guid") {
+        GUID guid{};
+        if (entry.value.size() != 38 || entry.value.front() != L'{' || entry.value.back() != L'}') return E_INVALIDARG;
+        auto hr = CLSIDFromString(entry.value.c_str(), &guid);
+        return FAILED(hr) ? hr : props->CreateGuid(guid, result);
     }
     if (entry.type == L"DoubleBits") {
         if (entry.value.size() != 16) return E_INVALIDARG;

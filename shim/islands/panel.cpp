@@ -20,10 +20,11 @@ namespace C = ABI::Windows::UI::Xaml::Controls;
 
 #include "registry.h"
 #include "log.h"
+#include "com/factory.h"
 namespace appx {
 void IslandPointerEvent(UINT message, ABI::Windows::UI::Input::IPointerPoint* point,
                         ABI::Windows::System::VirtualKeyModifiers modifiers);
-static HRESULT ConnectIslandPointerInput(IInspectable* inner) {
+static HRESULT ConnectIslandPointerInput(IInspectable* inner, bool capturePointers = true) {
     using namespace ABI::Windows::UI::Xaml;
     ComPtr<IUIElement> element;
     auto hr = inner->QueryInterface(IID_PPV_ARGS(&element));
@@ -54,7 +55,7 @@ static HRESULT ConnectIslandPointerInput(IInspectable* inner) {
     // The panel owns the delegates; they do not retain the panel/managed outer.
     for (UINT message : {WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_LBUTTONUP, WM_MOUSEWHEEL}) {
         auto handler = Callback<Input::IPointerEventHandler>(
-            [message](IInspectable* sender, Input::IPointerRoutedEventArgs* args) -> HRESULT {
+            [message, capturePointers](IInspectable* sender, Input::IPointerRoutedEventArgs* args) -> HRESULT {
                 ComPtr<IUIElement> panel;
                 ComPtr<ABI::Windows::UI::Input::IPointerPoint> point;
                 ComPtr<Input::IPointer> pointer;
@@ -66,7 +67,7 @@ static HRESULT ConnectIslandPointerInput(IInspectable* inner) {
                 IslandPointerEvent(message, point.Get(), modifiers);
                 // Retain drags outside the panel through XAML, not SetCapture
                 // on the desktop frame, which takes input away from the island.
-                if (SUCCEEDED(args->get_Pointer(&pointer))) {
+                if (capturePointers && SUCCEEDED(args->get_Pointer(&pointer))) {
                     if (message == WM_LBUTTONDOWN) {
                         boolean captured = false;
                         panel->CapturePointer(pointer.Get(), &captured);
@@ -223,4 +224,33 @@ public:
 };
 
 HRESULT MakeIslandPanelFactory(IActivationFactory** out) { return Make<PanelFactory>().CopyTo(out); }
+
+// Windows 8.1 games can use SwapChainPanel directly (including Unity). Keep
+// its real composition/identity and bridge its routed input just as for the
+// Windows 8.0 panel adapter above. Leave pointer capture to its XAML children.
+class SwapChainPanelFactory final : public Factory<C::ISwapChainPanelFactory> {
+    ComPtr<IActivationFactory> real_;
+
+public:
+    explicit SwapChainPanelFactory(IActivationFactory* real)
+        : Factory(L"Windows.UI.Xaml.Controls.SwapChainPanel"), real_(real) {}
+    HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) override {
+        auto hr = real_->ActivateInstance(value);
+        return SUCCEEDED(hr) ? ConnectIslandPointerInput(*value, false) : hr;
+    }
+    HRESULT STDMETHODCALLTYPE CreateInstance(IInspectable* outer, IInspectable** inner,
+                                             C::ISwapChainPanel** value) override {
+        ComPtr<C::ISwapChainPanelFactory> factory;
+        auto hr = real_.As(&factory);
+        if (SUCCEEDED(hr)) hr = factory->CreateInstance(outer, inner, value);
+        if (SUCCEEDED(hr)) hr = ConnectIslandPointerInput(inner && *inner ? *inner : *value, false);
+        return hr;
+    }
+};
+HRESULT MakeIslandSwapChainPanelFactory(IActivationFactory** out) {
+    ComPtr<IActivationFactory> real;
+    auto hr = OsGetActivationFactory(Wrappers::HStringReference(L"Windows.UI.Xaml.Controls.SwapChainPanel").Get(),
+                                     IID_PPV_ARGS(&real));
+    return SUCCEEDED(hr) ? Make<SwapChainPanelFactory>(real.Get()).CopyTo(out) : hr;
+}
 }

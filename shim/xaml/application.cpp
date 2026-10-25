@@ -131,10 +131,16 @@ void DismissSplashScreen() {
         if (auto splash = SharedSplash()) splash->Dismiss();
     });
 }
-class LaunchArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, ILaunchActivatedEventArgs, IActivatedEventArgs> {
+class LaunchArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, ILaunchActivatedEventArgs, IActivatedEventArgs,
+                                             IPrelaunchActivatedEventArgs> {
     InspectableClass(L"Windows.ApplicationModel.Activation.LaunchActivatedEventArgs", BaseTrust);
 
 public:
+    HRESULT STDMETHODCALLTYPE get_PrelaunchActivated(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE get_Arguments(HSTRING* v) override {
         if (!v) return E_POINTER;
         *v = nullptr;
@@ -172,7 +178,7 @@ class Application final : public Composable<Application, DefaultIApplication, De
     EventSource<ABI::Windows::Foundation::IEventHandler<IInspectable*>> resuming_;
     EventSource<IUnhandledExceptionEventHandler> unhandled_;
     ComPtr<IResourceDictionary> resources_;
-    ApplicationTheme theme_ = ApplicationTheme_Light;
+    ApplicationTheme theme_ = ApplicationTheme_Dark;
 
 public:
     static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Application";

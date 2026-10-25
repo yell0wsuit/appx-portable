@@ -267,7 +267,9 @@ int main(int argc, char** argv) {
         const wchar_t* keys[] = {
             L"__appxportable_test_string", L"__appxportable_test_bool",   L"__appxportable_test_i32",
             L"__appxportable_test_i64",    L"__appxportable_test_double", L"__appxportable_test_bytes",
+            L"__appxportable_test_guid",
         };
+        const GUID expectedGuid{0x12345678, 0x9abc, 0xdef0, {0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef}};
         ComPtr<ABI::Windows::Foundation::Collections::IObservableMap<HSTRING, IInspectable*>> observable;
         if (FAILED(set.As(&observable))) return 29;
         ComPtr<IUnknown> setIdentity, mapIdentity, observableIdentity;
@@ -411,7 +413,7 @@ int main(int argc, char** argv) {
             if (FAILED(observable->remove_MapChanged(token))) return 46;
             continue;
         }
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < ARRAYSIZE(keys); ++i) {
             HString key;
             key.Set(keys[i]);
             if (i == 0) {
@@ -440,6 +442,9 @@ int main(int argc, char** argv) {
                     break;
                 case 5:
                     hr = props->CreateUInt8Array(3, arrayBytes, &value);
+                    break;
+                case 6:
+                    hr = props->CreateGuid(expectedGuid, &value);
                     break;
                 default:
                     break;
@@ -499,6 +504,11 @@ int main(int argc, char** argv) {
                     if (!okay) return 27;
                     break;
                 }
+                case 6: {
+                    GUID actual{};
+                    if (FAILED(prop->GetGuid(&actual)) || actual != expectedGuid) return 92;
+                    break;
+                }
                 default:
                     break;
                 }
@@ -538,7 +548,10 @@ int main(int argc, char** argv) {
                 if (FAILED(map->Remove(key.Get()))) return 50;
             }
         }
-        if (argc > 1 && events != (!strcmp(argv[1], "write") ? 7u : !strcmp(argv[1], "read") ? 6u : 4u)) return 32;
+        if (argc > 1 && events != (!strcmp(argv[1], "write")  ? ARRAYSIZE(keys) + 1u
+                                   : !strcmp(argv[1], "read") ? ARRAYSIZE(keys)
+                                                              : 4u))
+            return 32;
         if (FAILED(observable->remove_MapChanged(token))) return 33;
     }
     puts("storagetest: path/file and settings checks passed");

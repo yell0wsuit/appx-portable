@@ -240,6 +240,23 @@ if(NOT CMAKE_CROSSCOMPILING)
       -P "${CMAKE_SOURCE_DIR}/tests/managed_host.cmake")
     set_tests_properties(managed_host_${mode} PROPERTIES TIMEOUT 25)
   endforeach()
+  find_file(APPX_WINDOWS_METADATA Windows.winmd
+    PATHS "$ENV{WindowsSdkDir}/UnionMetadata/$ENV{WindowsSDKVersion}" NO_DEFAULT_PATH)
+  set(APPX_FRAMEWORK_FACADES "$ENV{ProgramFiles\(x86\)}/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.8/Facades")
+  if(APPX_WINDOWS_METADATA AND EXISTS "${APPX_FRAMEWORK_FACADES}/System.Runtime.dll")
+    foreach(mode CONSTRUCTOR_CONTROLS LAUNCH_CONTROLS LIGHT_THEME ROOT_LIGHT_THEME XAML_LIGHT_THEME)
+      add_test(NAME managed_xaml_startup_${mode} COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cs"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-xaml-startup-${mode}"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_xaml_startup_${mode} PROPERTIES TIMEOUT 25)
+    endforeach()
+  else()
+    message(STATUS "Managed XAML startup tests need Windows SDK metadata and .NET Framework 4.8 reference assemblies")
+  endif()
 endif()
 
 add_test(NAME containers_write COMMAND storagetest containers_write)

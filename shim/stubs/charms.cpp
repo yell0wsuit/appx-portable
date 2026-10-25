@@ -10,6 +10,7 @@
 #include "registry.h"
 #include "host/host.h"
 #include <windows.ui.popups.h>
+#include <windows.ui.startscreen.h>
 #include <shobjidl.h>
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
@@ -193,6 +194,92 @@ public:
         return SUCCEEDED(hr) ? real->GetTemplateContent(type, value) : hr;
     }
 };
+class BadgeUpdater final : public RuntimeClass<RuntimeClassFlags<WinRt>, Tiles::IBadgeUpdater, FtmBase> {
+    InspectableClass(L"Windows.UI.Notifications.BadgeUpdater", BaseTrust);
+
+public:
+    HRESULT STDMETHODCALLTYPE Update(Tiles::IBadgeNotification*) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE Clear() override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE StartPeriodicUpdate(ABI::Windows::Foundation::IUriRuntimeClass*,
+                                                  Tiles::PeriodicUpdateRecurrence) override {
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE StartPeriodicUpdateAtTime(ABI::Windows::Foundation::IUriRuntimeClass*,
+                                                        ABI::Windows::Foundation::DateTime,
+                                                        Tiles::PeriodicUpdateRecurrence) override {
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE StopPeriodicUpdate() override { return S_OK; }
+};
+class BadgeFactory final : public Factory<Tiles::IBadgeUpdateManagerStatics> {
+public:
+    BadgeFactory() : Factory(L"Windows.UI.Notifications.BadgeUpdateManager") {}
+    HRESULT STDMETHODCALLTYPE CreateBadgeUpdaterForApplication(Tiles::IBadgeUpdater** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto updater = Make<BadgeUpdater>();
+        return updater ? updater.CopyTo(value) : E_OUTOFMEMORY;
+    }
+    HRESULT STDMETHODCALLTYPE CreateBadgeUpdaterForApplicationWithId(HSTRING, Tiles::IBadgeUpdater** value) override {
+        return CreateBadgeUpdaterForApplication(value);
+    }
+    HRESULT STDMETHODCALLTYPE CreateBadgeUpdaterForSecondaryTile(HSTRING, Tiles::IBadgeUpdater** value) override {
+        return CreateBadgeUpdaterForApplication(value);
+    }
+    HRESULT STDMETHODCALLTYPE GetTemplateContent(Tiles::BadgeTemplateType type,
+                                                 ABI::Windows::Data::Xml::Dom::IXmlDocument** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        ComPtr<Tiles::IBadgeUpdateManagerStatics> real;
+        auto hr = OsGetActivationFactory(
+            Wrappers::HStringReference(L"Windows.UI.Notifications.BadgeUpdateManager").Get(), IID_PPV_ARGS(&real));
+        return SUCCEEDED(hr) ? real->GetTemplateContent(type, value) : hr;
+    }
+};
+namespace Start = ABI::Windows::UI::StartScreen;
+using TileSearch = __FIAsyncOperation_1___FIVectorView_1_Windows__CUI__CStartScreen__CSecondaryTile;
+// Querying a pin is harmless without a package: there are no portable Start
+// tiles. Leave explicit pin creation/enumeration to Windows as before.
+class SecondaryTileFactory final : public Factory<Start::ISecondaryTileStatics> {
+    using Base = Factory<Start::ISecondaryTileStatics>;
+    static HRESULT Real(Start::ISecondaryTileStatics** value) {
+        return OsGetActivationFactory(Wrappers::HStringReference(L"Windows.UI.StartScreen.SecondaryTile").Get(),
+                                      IID_PPV_ARGS(value));
+    }
+
+public:
+    SecondaryTileFactory() : Base(L"Windows.UI.StartScreen.SecondaryTile") {}
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** value) noexcept override {
+        auto hr = Base::QueryInterface(iid, value);
+        return hr == E_NOINTERFACE
+                   ? OsGetActivationFactory(Wrappers::HStringReference(L"Windows.UI.StartScreen.SecondaryTile").Get(),
+                                            iid, value)
+                   : hr;
+    }
+    HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) override {
+        return OsActivateInstance(Wrappers::HStringReference(L"Windows.UI.StartScreen.SecondaryTile").Get(), value);
+    }
+    HRESULT STDMETHODCALLTYPE Exists(HSTRING, boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE FindAllAsync(TileSearch** value) override {
+        ComPtr<Start::ISecondaryTileStatics> real;
+        auto hr = Real(&real);
+        return SUCCEEDED(hr) ? real->FindAllAsync(value) : hr;
+    }
+    HRESULT STDMETHODCALLTYPE FindAllForApplicationAsync(HSTRING id, TileSearch** value) override {
+        ComPtr<Start::ISecondaryTileStatics> real;
+        auto hr = Real(&real);
+        return SUCCEEDED(hr) ? real->FindAllForApplicationAsync(id, value) : hr;
+    }
+    HRESULT STDMETHODCALLTYPE FindAllForPackageAsync(TileSearch** value) override {
+        ComPtr<Start::ISecondaryTileStatics> real;
+        auto hr = Real(&real);
+        return SUCCEEDED(hr) ? real->FindAllForPackageAsync(value) : hr;
+    }
+};
 template <class T> HRESULT Shared(IActivationFactory** value) {
     static auto factory = Make<T>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
@@ -201,5 +288,7 @@ template <class T> HRESULT Shared(IActivationFactory** value) {
 HRESULT MakeShareFactory(IActivationFactory** value) { return Shared<ShareFactory>(value); }
 HRESULT MakeSettingsPaneFactory(IActivationFactory** value) { return Shared<SettingsFactory>(value); }
 HRESULT MakeTileFactory(IActivationFactory** value) { return Shared<TileFactory>(value); }
+HRESULT MakeBadgeFactory(IActivationFactory** value) { return Shared<BadgeFactory>(value); }
+HRESULT MakeSecondaryTileFactory(IActivationFactory** value) { return Shared<SecondaryTileFactory>(value); }
 HRESULT MakeMessageDialogFactory(IActivationFactory** value) { return Shared<MessageDialogFactory>(value); }
 }
