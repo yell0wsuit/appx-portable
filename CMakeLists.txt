@@ -130,12 +130,29 @@ endif()
 add_executable(storetest tests/storetest.cpp)
 target_link_libraries(storetest PRIVATE runtimeobject ole32)
 add_test(NAME storetest COMMAND storetest)
+add_test(NAME store_stub_iap_cli COMMAND storetest --expect-stub-iap --stub-iap)
+add_test(NAME store_stub_iap_env COMMAND storetest --expect-stub-iap)
+add_test(NAME store_stub_iap_disabled COMMAND storetest)
+add_test(NAME store_stub_iap_dispatcher COMMAND storetest --expect-stub-iap --expect-host --stub-iap)
+set_tests_properties(store_stub_iap_dispatcher PROPERTIES TIMEOUT 10
+    ENVIRONMENT "APPX_PORTABLE_UNLOCK_TRIAL=0;APPX_PORTABLE_STUB_IAP=0;APPX_PORTABLE_DATA=${CMAKE_CURRENT_BINARY_DIR}/store-host-save")
+add_test(NAME store_stub_iap_catalog COMMAND ${CMAKE_COMMAND}
+    "-DTEST=$<TARGET_FILE:storetest>" "-DSHIM=$<TARGET_FILE:appxportable>"
+    "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/store-catalog-fixture"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/store_catalog.cmake")
 add_test(NAME store_unlocked_cli COMMAND storetest --expect-unlocked --unlock-trial)
 add_test(NAME store_unlocked_env COMMAND storetest --expect-unlocked)
 add_test(NAME store_override_disabled COMMAND storetest)
 set_tests_properties(storetest store_unlocked_cli PROPERTIES ENVIRONMENT_MODIFICATION "APPX_PORTABLE_UNLOCK_TRIAL=unset:")
 set_tests_properties(store_unlocked_env PROPERTIES ENVIRONMENT_MODIFICATION "APPX_PORTABLE_UNLOCK_TRIAL=set:1")
 set_tests_properties(store_override_disabled PROPERTIES ENVIRONMENT_MODIFICATION "APPX_PORTABLE_UNLOCK_TRIAL=set:0")
+set_tests_properties(storetest store_unlocked_cli store_unlocked_env store_override_disabled PROPERTIES
+    ENVIRONMENT "APPX_PORTABLE_STUB_IAP=0")
+set_tests_properties(store_stub_iap_cli store_stub_iap_env store_stub_iap_disabled PROPERTIES
+    ENVIRONMENT "APPX_PORTABLE_UNLOCK_TRIAL=0")
+set_tests_properties(store_stub_iap_cli PROPERTIES ENVIRONMENT_MODIFICATION "APPX_PORTABLE_STUB_IAP=unset:")
+set_tests_properties(store_stub_iap_env PROPERTIES ENVIRONMENT_MODIFICATION "APPX_PORTABLE_STUB_IAP=set:1")
+set_tests_properties(store_stub_iap_disabled PROPERTIES ENVIRONMENT_MODIFICATION "APPX_PORTABLE_STUB_IAP=set:0")
 add_executable(devicetest tests/devicetest.cpp)
 target_link_libraries(devicetest PRIVATE runtimeobject ole32)
 add_test(NAME devicetest COMMAND devicetest)

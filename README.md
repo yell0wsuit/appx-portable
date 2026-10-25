@@ -20,7 +20,7 @@ Managed XAML games such as **Bejeweled LIVE** use `appx-host.exe`, which setup c
 | Where's My Water? | `Disney.WheresMyWater` 1.13.1.3 (x86) | Plays: menu clicks, mouse dragging, music and sound effects; first level completed with three ducks. Save restoration unverified |
 | Where's My Mickey? | `Disney.WheresMyMickey` 1.1.0.30 (x86) | Requires the [AMPS startup EXE patch](patch/wheresmymickey/README.md). Intro and mouse input work; first level completed with three stars. Save restoration unverified |
 
-Online services are offline: Xbox LIVE for Windows 8 and other game services have shut down, so sign-in, leaderboards and similar features report no connection, and nothing is sent. By default there is no Store license, so a game with a trial mode runs as it would without a purchase. An opt-in [trial override](docs/trial-mode.md) reports a full base-app license for games using the Windows 8/8.1 `CurrentApp` API.
+Online services are offline: Xbox LIVE for Windows 8 and other game services have shut down, so sign-in, leaderboards and similar features report no connection, and nothing is sent. By default there is no Store license, so a game with a trial mode runs as it would without a purchase. An opt-in [`--stub-iap` mode](docs/stub-iap.md) completes in-app purchases locally. An opt-in [trial override](docs/trial-mode.md) reports a full base-app license for games using the Windows 8/8.1 `CurrentApp` API.
 
 Other games built the same way may work, or fail in a way the log explains. Managed C# games use `appx-host.exe`, with CoreWindow or XAML Islands hosting selected automatically. HTML/JavaScript Store apps cannot be supported.
 
