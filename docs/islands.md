@@ -12,6 +12,40 @@ The launcher must remain beside the game because system XAML resolves `ms-appx:/
 
 Managed mode uses real Windows XAML, a desktop window, and a composed `SwapChainPanel` for Windows 8 `SwapChainBackgroundPanel` subclasses. The shim supplies package identity, persistent settings (including named containers), URI file mapping, disconnected Xbox LIVE SDK 1.2 services, splash dismissal, popup XAML roots, and window lifecycle events. The host bridges XAML routed pointer events to CoreWindow subscribers for native game boards, using XAML pointer capture for drags. Keyboard messages are forwarded from the desktop queue. Only the island window is resized; XAML internal windows retain their own bounds. Native games continue using the existing hosting path.
 
+## Settings and scrolling
+
+In XAML Islands mode, press **Ctrl+,** or choose **Game settings** from the
+title-bar menu (**Alt+Space**, or right-click the title bar). The host requests
+the game's own `SettingsPane` commands and invokes the selected command on its
+UI thread. Sudoku exposes **About**, **Game options**, and **How to play**.
+Its original `SettingsFlyout` controls are hosted in an island popup, positioned
+at the right edge and resized with the game window. Back returns to the command
+list; independent flyouts return to the game. Clicking outside dismisses a flyout.
+
+Flyout appearance follows the game's actual content instead of a fixed light
+theme or named brush override. When no background is authored on the flyout,
+the host reuses its root content's background brush. Opaque solid backgrounds
+select the native light or dark theme using an sRGB contrast comparison;
+translucent, gradient, or absent backgrounds inherit the page's current theme.
+An explicit theme on the content root takes priority over that inference.
+Explicit flyout themes, styles, bindings, and local property values retain
+priority. Property notifications update the appearance while open, including
+brush color/opacity changes, replacement content, authored styles, and page
+theme changes. Listeners and host-owned overrides are removed on closing.
+
+The current Windows control template is retained. This fixes unreadable headers
+and mismatched backgrounds without claiming a pixel-for-pixel Windows 8 shell
+reproduction. Regression checks inspect rendered headers, runtime updates,
+authored styles, explicit dark themes, and cleanup after closing.
+
+Legacy GridViews with horizontal item/group panels use a horizontal scroller
+and an automatic scroll bar. Ordinary mouse wheels pan these pages when there
+is no vertical overflow. Vertical panels and handled application input retain
+their normal behavior. Live Sudoku Help scrolling was checked using real wheel
+input and UI Automation offsets; the original settings controls were also
+verified. Regression fixtures cover command refresh/invocation, flyout bounds,
+composed GridViews, horizontal panning, and vertical-grid preservation.
+
 ## Bejeweled LIVE
 
 Windows 8 defaulted to dark; modern islands inherit the desktop theme. The host

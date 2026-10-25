@@ -52,6 +52,8 @@ static ComPtr<Hosting::IWindowsXamlManager> xamlManager;
 static ComPtr<Hosting::IDesktopWindowXamlSource> xamlSource;
 static ComPtr<IDesktopWindowXamlSourceNative2> xamlNative;
 static ComPtr<IInspectable> appInstance;
+HRESULT ConnectIslandScrolling(IInspectable* root);
+HRESULT MakeIslandGridFactory(IActivationFactory** value);
 static ComPtr<IUIElement> pendingContent;
 static ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> islandDispatcher;
 using RequestedThemeCall = HRESULT(STDMETHODCALLTYPE*)(IApplication*, ApplicationTheme);
@@ -187,7 +189,8 @@ public:
         // XAML runs OnLaunched inside InitializeForCurrentThread, before the
         // island exists; hold the content until it is attached.
         content_ = v;
-        HRESULT hr = S_OK;
+        HRESULT hr = ConnectIslandScrolling(v);
+        if (FAILED(hr)) return hr;
         if (v) {
             hr = ApplyRootTheme(v);
             if (FAILED(hr)) return hr;
@@ -379,8 +382,129 @@ static HRESULT InitializePopups() {
     VirtualProtect(slot, sizeof(void*), protection, &ignored);
     return S_OK;
 }
+// Keep the real SettingsFlyout control and its template, but host it in a
+// standard island Popup: its Windows 8 Show implementation uses CoreWindow's
+// token 1x1 window for placement even when the control has an island XamlRoot.
+using SettingsFlyoutHideCall = HRESULT(STDMETHODCALLTYPE*)(Controls::ISettingsFlyout*);
+static SettingsFlyoutHideCall originalSettingsFlyoutHide;
+static ComPtr<Controls::Primitives::IPopup> settingsPopup;
+static ComPtr<Controls::ISettingsFlyout> settingsFlyout;
+static EventRegistrationToken settingsBackToken;
+HRESULT ConnectSettingsAppearance(IInspectable* flyout, IInspectable* page, IInspectable* popup);
+void DisconnectSettingsAppearance();
+static void CloseSettingsFlyout() {
+    DisconnectSettingsAppearance();
+    auto popup = std::move(settingsPopup);
+    auto flyout = std::move(settingsFlyout);
+    if (flyout) flyout->remove_BackClick(settingsBackToken);
+    if (popup) {
+        popup->put_IsOpen(false);
+        popup->put_Child(nullptr);
+    }
+}
+static HRESULT SizeSettingsFlyout(double width, double height) {
+    if (!settingsPopup || !settingsFlyout) return S_OK;
+    ComPtr<IFrameworkElement> element;
+    auto hr = settingsFlyout.As(&element);
+    double requested = 320;
+    if (SUCCEEDED(hr)) hr = element->get_Width(&requested);
+    if (!(requested > 0)) requested = 320;
+    const double actual = (std::min)(requested, width);
+    if (SUCCEEDED(hr)) hr = element->put_Width(actual);
+    if (SUCCEEDED(hr)) hr = element->put_Height(height);
+    if (SUCCEEDED(hr)) hr = settingsPopup->put_HorizontalOffset(width - actual);
+    return hr;
+}
+static HRESULT OpenSettingsFlyout(Controls::ISettingsFlyout* flyout, bool independent) {
+    CloseSettingsFlyout();
+    if (!xamlSource) return E_UNEXPECTED;
+    ComPtr<IUIElement> content, child;
+    ComPtr<IUIElement10> contentElement, popupElement;
+    ComPtr<IXamlRoot> root;
+    auto hr = xamlSource->get_Content(&content);
+    if (SUCCEEDED(hr) && !content) return E_UNEXPECTED;
+    if (SUCCEEDED(hr)) hr = content.As(&contentElement);
+    if (SUCCEEDED(hr)) hr = contentElement->get_XamlRoot(&root);
+    if (SUCCEEDED(hr)) hr = flyout->QueryInterface(IID_PPV_ARGS(&child));
+    ComPtr<IInspectable> instance;
+    ComPtr<Controls::Primitives::IPopup> popup;
+    if (SUCCEEDED(hr))
+        hr = OsActivateInstance(Wrappers::HStringReference(L"Windows.UI.Xaml.Controls.Primitives.Popup").Get(),
+                                &instance);
+    if (SUCCEEDED(hr)) hr = instance.As(&popup);
+    if (SUCCEEDED(hr)) hr = instance.As(&popupElement);
+    if (SUCCEEDED(hr)) hr = popupElement->put_XamlRoot(root.Get());
+    if (SUCCEEDED(hr)) hr = ConnectSettingsAppearance(flyout, content.Get(), popup.Get());
+    if (SUCCEEDED(hr)) hr = popup->put_Child(child.Get());
+    if (SUCCEEDED(hr)) hr = popup->put_IsLightDismissEnabled(true);
+    if (FAILED(hr)) {
+        DisconnectSettingsAppearance();
+        return hr;
+    }
+    settingsPopup = popup;
+    settingsFlyout = flyout;
+    ABI::Windows::Foundation::Size size{};
+    hr = root->get_Size(&size);
+    if (SUCCEEDED(hr)) hr = SizeSettingsFlyout(size.Width, size.Height);
+    auto back = Callback<Controls::IBackClickEventHandler>(
+        [independent](IInspectable*, Controls::IBackClickEventArgs* args) -> HRESULT {
+            boolean handled = false;
+            auto result = args->get_Handled(&handled);
+            if (FAILED(result) || handled) return result;
+            args->put_Handled(true);
+            CloseSettingsFlyout();
+            return independent ? S_OK : ShowGameSettings();
+        });
+    if (SUCCEEDED(hr)) hr = flyout->add_BackClick(back.Get(), &settingsBackToken);
+    auto closed = Callback<__FIEventHandler_1_IInspectable>([](IInspectable* sender, IInspectable*) -> HRESULT {
+        ComPtr<Controls::Primitives::IPopup> popup;
+        if (SUCCEEDED(sender->QueryInterface(IID_PPV_ARGS(&popup))) && popup == settingsPopup) CloseSettingsFlyout();
+        return S_OK;
+    });
+    EventRegistrationToken closedToken{};
+    if (SUCCEEDED(hr)) hr = popup->add_Closed(closed.Get(), &closedToken);
+    if (SUCCEEDED(hr)) hr = originalPopupOpen(popup.Get(), true);
+    if (FAILED(hr)) CloseSettingsFlyout();
+    return hr;
+}
+static HRESULT STDMETHODCALLTYPE ShowSettingsFlyout(Controls::ISettingsFlyout* flyout) {
+    return OpenSettingsFlyout(flyout, false);
+}
+static HRESULT STDMETHODCALLTYPE ShowIndependentSettingsFlyout(Controls::ISettingsFlyout* flyout) {
+    return OpenSettingsFlyout(flyout, true);
+}
+static HRESULT STDMETHODCALLTYPE HideSettingsFlyout(Controls::ISettingsFlyout* flyout) {
+    if (settingsFlyout.Get() == flyout) {
+        CloseSettingsFlyout();
+        return S_OK;
+    }
+    return originalSettingsFlyoutHide(flyout);
+}
+static HRESULT InitializeSettingsFlyouts() {
+    ComPtr<Controls::ISettingsFlyoutFactory> factory;
+    ComPtr<Controls::ISettingsFlyout> flyout;
+    ComPtr<IInspectable> inner;
+    auto hr = GetReal(L"Windows.UI.Xaml.Controls.SettingsFlyout", IID_PPV_ARGS(&factory));
+    if (SUCCEEDED(hr)) hr = factory->CreateInstance(nullptr, &inner, &flyout);
+    if (FAILED(hr)) return hr;
+    void** table = *reinterpret_cast<void***>(flyout.Get());
+    DWORD protection;
+    if (!VirtualProtect(table + 17, 3 * sizeof(void*), PAGE_READWRITE, &protection))
+        return HRESULT_FROM_WIN32(GetLastError());
+    if (!originalSettingsFlyoutHide) {
+        originalSettingsFlyoutHide = reinterpret_cast<SettingsFlyoutHideCall>(table[19]);
+        InterlockedExchangePointer(table + 17, reinterpret_cast<void*>(&ShowSettingsFlyout));
+        InterlockedExchangePointer(table + 18, reinterpret_cast<void*>(&ShowIndependentSettingsFlyout));
+        InterlockedExchangePointer(table + 19, reinterpret_cast<void*>(&HideSettingsFlyout));
+    }
+    DWORD ignored;
+    VirtualProtect(table + 17, 3 * sizeof(void*), protection, &ignored);
+    return S_OK;
+}
 void ResizeIslandView(int width, int height) {
     if (islandWindow) SetWindowPos(islandWindow, HWND_TOP, 0, 0, width, height, SWP_NOACTIVATE);
+    const double scale = GetDpiForWindow(HostWindow()) / 96.0;
+    SizeSettingsFlyout(width / scale, height / scale);
 }
 void IslandInputMessage(UINT message, WPARAM wparam, LPARAM lparam);
 bool IslandPreTranslate(MSG* message) {
@@ -428,6 +552,8 @@ static HRESULT RunIsland(IApplicationInitializationCallback* callback) {
             if (FAILED(hr)) return hr;
         }
         hr = InitializePopups();
+        if (FAILED(hr)) return hr;
+        hr = InitializeSettingsFlyouts();
         if (FAILED(hr)) return hr;
         ActivateHostWindow();
         DismissSplashScreen();
@@ -557,6 +683,7 @@ HRESULT MakeIslandFactory(const wchar_t* name, IActivationFactory** out) {
         if (FAILED(hr)) return hr;
     }
     if (wcscmp(name, L"Windows.UI.Xaml.Window") == 0) return Make<IslandWindowFactory>().CopyTo(out);
+    if (wcscmp(name, L"Windows.UI.Xaml.Controls.GridView") == 0) return MakeIslandGridFactory(out);
     if (wcscmp(name, L"Windows.UI.Core.CoreWindow") == 0) return MakeCoreWindowFactory(out);
     if (wcscmp(name, L"Windows.UI.Xaml.Controls.SwapChainBackgroundPanel") == 0) return MakeIslandPanelFactory(out);
     if (wcscmp(name, L"Windows.UI.Xaml.Controls.SwapChainPanel") == 0) return MakeIslandSwapChainPanelFactory(out);

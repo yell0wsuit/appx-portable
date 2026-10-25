@@ -16,5 +16,6 @@ HRESULT SetHostFullscreen(bool value);
 // until this is first called.
 void SetHostCursor(HCURSOR value) noexcept;
 HRESULT PostHostWork(int priority, std::function<void()> work);
+HRESULT ShowGameSettings();
 HRESULT RunHost(const std::function<HRESULT()>& initialize);
 }

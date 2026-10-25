@@ -28,6 +28,7 @@ static constexpr UINT WorkMessage = WM_APP + 1;
 static constexpr UINT CreateSurfaceMessage = WM_APP + 2;
 static constexpr UINT FullscreenMessage = WM_APP + 3;
 static constexpr UINT ActivateMessage = WM_APP + 4;
+static constexpr UINT SettingsMenuId = 0x1F00;
 static WindowPlacement placement;
 static std::atomic<bool> cursorChosen{false};
 static std::atomic<HCURSOR> cursor{nullptr};
@@ -141,6 +142,10 @@ static void ForwardWindowMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     });
 }
 static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+    if (message == WM_SYSCOMMAND && (wparam & 0xFFF0) == SettingsMenuId) {
+        ShowGameSettings();
+        return 0;
+    }
     PointerHostMessage(message, wparam, lparam);
     CoreInputMessage(message, wparam, lparam);
     placement.OnMessage(message, wparam);
@@ -299,6 +304,11 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
                              WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                              rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, cls.hInstance, nullptr);
     if (!window) return HRESULT_FROM_WIN32(GetLastError());
+    if (IslandsMode()) {
+        auto menu = GetSystemMenu(window, FALSE);
+        InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_STRING, SettingsMenuId, L"Game settings\tCtrl+,");
+        InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_SEPARATOR, 0, nullptr);
+    }
     HICON smallIcon = LoadGameIcon(GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
     HICON largeIcon = LoadGameIcon(GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON));
     if (smallIcon) SendMessageW(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
@@ -311,6 +321,12 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         MSG msg{};
         BOOL result;
         while ((result = GetMessageW(&msg, nullptr, 0, 0)) > 0) {
+            if (IslandsMode() &&
+                (msg.hwnd == window || IsChild(window, msg.hwnd) || GetAncestor(msg.hwnd, GA_ROOTOWNER) == window) &&
+                msg.message == WM_KEYDOWN && msg.wParam == VK_OEM_COMMA && (GetKeyState(VK_CONTROL) & 0x8000)) {
+                if (!(msg.lParam & (1L << 30))) ShowGameSettings();
+                continue;
+            }
             if (IslandsMode() && IslandPreTranslate(&msg)) continue;
             TranslateMessage(&msg);
             DispatchMessageW(&msg);

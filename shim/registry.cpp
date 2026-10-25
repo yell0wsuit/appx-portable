@@ -19,6 +19,7 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
             if (wcscmp(text, L"Windows.Storage.ApplicationData") != 0 &&
                 wcscmp(text, L"Windows.ApplicationModel.Package") != 0 &&
                 wcscmp(text, L"Windows.ApplicationModel.Store.CurrentApp") != 0 &&
+                wcscmp(text, L"Windows.UI.ApplicationSettings.SettingsPane") != 0 &&
                 wcscmp(text, L"Windows.UI.Notifications.TileUpdateManager") != 0 &&
                 wcscmp(text, L"Windows.UI.Notifications.BadgeUpdateManager") != 0 &&
                 wcscmp(text, L"Windows.UI.StartScreen.SecondaryTile") != 0 &&

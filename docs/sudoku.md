@@ -33,5 +33,10 @@ the upper-left cell), and an advancing timer. Bejeweled LIVE 4.0.0.10 was tested
 with the same runtime: a real drag made a Classic match, increasing the score
 from 1,100 to 1,150. See [managed hosting](islands.md) for limits and details.
 
+Open the charm command list with **Ctrl+,** or **Alt+Space → Game settings**.
+Choose **Game options** for sound/music controls, **About**, or **How to play**.
+The original flyouts now use correctly sized island popups. The Help page's
+horizontal GridView also has a scroll bar and responds to ordinary wheel input.
+
 Probes, disassembly, screenshots, and diagnostic logs remain gitignored under
 `local/sudoku-investigation/`; no game assets are included in the repository.

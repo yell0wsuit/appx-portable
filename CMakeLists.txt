@@ -32,7 +32,7 @@ add_custom_target(appxportable_version
 add_executable(shimtest tests/shimtest.cpp)
 target_link_libraries(shimtest PRIVATE runtimeobject ole32)
 if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
-  add_library(appxportable SHARED shim/registry.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/mode.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/appxportable.def shim/version.rc)
+  add_library(appxportable SHARED shim/registry.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/appxportable.def shim/version.rc)
   target_include_directories(appxportable PRIVATE shim "${APPX_GENERATED}")
   add_dependencies(appxportable appxportable_version)
   target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
@@ -244,6 +244,22 @@ if(NOT CMAKE_CROSSCOMPILING)
     PATHS "$ENV{WindowsSdkDir}/UnionMetadata/$ENV{WindowsSDKVersion}" NO_DEFAULT_PATH)
   set(APPX_FRAMEWORK_FACADES "$ENV{ProgramFiles\(x86\)}/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.8/Facades")
   if(APPX_WINDOWS_METADATA AND EXISTS "${APPX_FRAMEWORK_FACADES}/System.Runtime.dll")
+    add_test(NAME managed_settings COMMAND "${CMAKE_COMMAND}"
+      "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SETTINGS"
+      "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+      "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_settings.cs"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-settings"
+      -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+    set_tests_properties(managed_settings PROPERTIES TIMEOUT 25)
+    add_test(NAME managed_scroll COMMAND "${CMAKE_COMMAND}"
+      "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SCROLL"
+      "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+      "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_scroll.cs"
+      "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe"
+      "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-scroll"
+      -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+    set_tests_properties(managed_scroll PROPERTIES TIMEOUT 25)
     foreach(mode CONSTRUCTOR_CONTROLS LAUNCH_CONTROLS LIGHT_THEME ROOT_LIGHT_THEME XAML_LIGHT_THEME)
       add_test(NAME managed_xaml_startup_${mode} COMMAND "${CMAKE_COMMAND}"
         "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
