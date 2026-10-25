@@ -49,6 +49,8 @@ int main() {
     CHECK(!info.universal);
     CHECK(info.identityName == L"Example.Game");
     CHECK(info.displayName == L"Example Game");
+    CHECK(info.tileName == L"Tile Name");
+    CHECK(appx::ResolveDisplayName(info) == L"Example Game");
     CHECK(info.applicationId == L"App");
     CHECK(info.executable == L"Game_Win8.exe");
     CHECK(info.entryPoint == L"Game.App");
@@ -73,7 +75,10 @@ int main() {
   </Applications>
 </Package>)";
     info = appx::ReadPackage(root);
-    CHECK(info.displayName == L"Other Game"); // the literal tile name, not the resource reference
+    CHECK(info.displayName == L"ms-resource:AppName");
+    // Without resources.pri the reference does not resolve: the literal tile name.
+    CHECK(appx::ResolveDisplayName(info) == L"Other Game");
+    CHECK(appx::ResolvePackageFile(info, info.smallLogo) == root / L"Assets\\SmallLogo.png");
     CHECK(info.smallLogo == L"Assets\\SmallLogo.png");
     CHECK(info.fullName.find(L"_neutral__") != std::wstring::npos);
     CHECK(info.classes.empty());

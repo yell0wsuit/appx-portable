@@ -272,7 +272,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE get_FormattedPrice(HSTRING* value) override { return store::CopyString(L"0.00", value); }
     HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override {
-        return store::CopyString(CurrentPackage().displayName, value);
+        return store::CopyString(PackageDisplayName(), value);
     }
     HRESULT STDMETHODCALLTYPE get_AgeRating(UINT32* value) override {
         if (!value) return E_POINTER;

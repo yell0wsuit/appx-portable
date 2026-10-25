@@ -31,8 +31,24 @@ class View final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIApplica
     using BoundsHandler = ABI::Windows::Foundation::ITypedEventHandler<ApplicationView*, IInspectable*>;
     EventSource<ConsolidatedHandler> consolidated_;
     EventSource<BoundsHandler> boundsChanged_;
+    std::mutex titleMutex_;
+    std::wstring title_;
 
 public:
+    HRESULT STDMETHODCALLTYPE put_Title(HSTRING value) override {
+        std::wstring title = WindowsGetStringRawBuffer(value, nullptr);
+        {
+            std::lock_guard<std::mutex> lock(titleMutex_);
+            title_ = title;
+        }
+        SetHostTitle(title);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Title(HSTRING* value) override {
+        if (!value) return E_POINTER;
+        std::lock_guard<std::mutex> lock(titleMutex_);
+        return WindowsCreateString(title_.data(), static_cast<UINT32>(title_.size()), value);
+    }
     HRESULT STDMETHODCALLTYPE get_Orientation(ApplicationViewOrientation* v) override {
         if (!v) return E_POINTER;
         auto bounds = VisibleBounds();

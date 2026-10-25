@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <functional>
+#include <string>
 namespace appx {
 HWND HostWindow() noexcept;
 // A child window covering the host's client area, on top of earlier ones,
@@ -15,6 +16,9 @@ HRESULT SetHostFullscreen(bool value);
 // The pointer shown over the game's client area; nullptr hides it. The arrow
 // until this is first called.
 void SetHostCursor(HCURSOR value) noexcept;
+// ApplicationView.Title: shown before the app's name in the caption; empty
+// shows the name alone. Before the window exists, it names the new window.
+void SetHostTitle(const std::wstring& title);
 HRESULT PostHostWork(int priority, std::function<void()> work);
 HRESULT ShowGameSettings();
 HRESULT RunHost(const std::function<HRESULT()>& initialize);

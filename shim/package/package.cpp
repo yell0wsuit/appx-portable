@@ -4,6 +4,8 @@
 #include <shlwapi.h>
 #include <xmllite.h>
 #include <wrl/client.h>
+#include <algorithm>
+#include <string_view>
 using Microsoft::WRL::ComPtr;
 namespace appx {
 std::wstring PublisherId(const std::wstring& publisher) {
@@ -50,6 +52,46 @@ static std::wstring Text(IXmlReader* reader) {
     }
     return text;
 }
+// A resource from the package's resources.pri, read in place as the shell reads
+// an installed package's: a string's value, or a file candidate's full path.
+// Empty when the package has no index or the index has no such resource.
+static std::wstring LoadResource(const PackageInfo& info, const std::wstring& uri) {
+    const auto index = info.directory / L"resources.pri";
+    if (GetFileAttributesW(index.c_str()) == INVALID_FILE_ATTRIBUTES) return {};
+    const auto source = L"@{" + index.wstring() + L"? " + uri + L"}";
+    std::wstring value(32768, L'\0');
+    if (FAILED(SHLoadIndirectString(source.c_str(), value.data(), static_cast<UINT>(value.size()), nullptr)))
+        return {};
+    value.resize(wcsnlen(value.c_str(), value.size()));
+    return value;
+}
+// "ms-resource:AppName" names a string in the default Resources.resw map and
+// "ms-resource:Other/AppName" may name one in Other.resw; "ms-resource:/path"
+// and "ms-resource://package/path" are absolute. Other text is the name itself.
+static std::wstring ResolveName(const PackageInfo& info, const std::wstring& name) {
+    static constexpr std::wstring_view scheme = L"ms-resource:";
+    if (name.rfind(scheme, 0) != 0) return name;
+    const auto reference = name.substr(scheme.size());
+    if (reference.rfind(L"//", 0) == 0) return LoadResource(info, name);
+    const auto package = L"ms-resource://" + info.identityName;
+    if (reference.rfind(L'/', 0) == 0) return LoadResource(info, package + reference);
+    auto value = LoadResource(info, package + L"/resources/" + reference);
+    if (value.empty() && reference.find(L'/') != std::wstring::npos)
+        value = LoadResource(info, package + L"/" + reference);
+    return value;
+}
+std::filesystem::path ResolvePackageFile(const PackageInfo& package, const std::wstring& relative) {
+    auto name = relative;
+    std::replace(name.begin(), name.end(), L'\\', L'/');
+    const auto resolved = LoadResource(package, L"ms-resource://" + package.identityName + L"/Files/" + name);
+    return resolved.empty() ? package.directory / relative : std::filesystem::path(resolved);
+}
+std::wstring ResolveDisplayName(const PackageInfo& package) {
+    for (const auto* name : {&package.displayName, &package.tileName})
+        if (!name->empty())
+            if (auto value = ResolveName(package, *name); !value.empty()) return value;
+    return {};
+}
 PackageInfo ReadPackage(const std::filesystem::path& directory) {
     PackageInfo info;
     info.directory = directory;
@@ -64,7 +106,7 @@ PackageInfo ReadPackage(const std::filesystem::path& directory) {
         return info;
     // Elements are matched by local name: Windows 8, 8.1 and 10 manifests use
     // different namespaces for the same elements.
-    std::wstring propertiesName, visualName, serverModule;
+    std::wstring serverModule;
     bool inProperties = false, inServer = false, firstApplication = true;
     XmlNodeType type;
     HRESULT hr;
@@ -89,14 +131,14 @@ PackageInfo ReadPackage(const std::filesystem::path& directory) {
         } else if (!wcscmp(name, L"Properties")) {
             inProperties = !reader->IsEmptyElement();
         } else if (inProperties && !wcscmp(name, L"DisplayName")) {
-            propertiesName = Text(reader.Get());
+            info.displayName = Text(reader.Get());
         } else if (!wcscmp(name, L"Application") && firstApplication) {
             firstApplication = false;
             info.applicationId = Attribute(reader.Get(), L"Id");
             info.executable = Attribute(reader.Get(), L"Executable");
             info.entryPoint = Attribute(reader.Get(), L"EntryPoint");
         } else if (!wcscmp(name, L"VisualElements") && info.smallLogo.empty()) {
-            visualName = Attribute(reader.Get(), L"DisplayName");
+            info.tileName = Attribute(reader.Get(), L"DisplayName");
             // Windows 8: SmallLogo; 8.1: Square30x30Logo; 10: Square44x44Logo.
             for (const auto* logo : {L"SmallLogo", L"Square30x30Logo", L"Square44x44Logo"})
                 if (info.smallLogo.empty()) info.smallLogo = Attribute(reader.Get(), logo);
@@ -111,11 +153,6 @@ PackageInfo ReadPackage(const std::filesystem::path& directory) {
         }
     }
     if (FAILED(hr)) Log("FAIL", "AppxManifest.xml parse error hr=%08lx; using defaults", hr);
-    // Localized names ("ms-resource:...") need the package resource index; prefer
-    // a literal name, then the executable's.
-    for (const auto* candidate : {&propertiesName, &visualName})
-        if (info.displayName.empty() && !candidate->empty() && candidate->rfind(L"ms-resource:", 0) != 0)
-            info.displayName = *candidate;
     if (!info.publisher.empty()) {
         info.publisherId = PublisherId(info.publisher);
         info.familyName = info.identityName + L"_" + info.publisherId;
@@ -124,26 +161,21 @@ PackageInfo ReadPackage(const std::filesystem::path& directory) {
     info.loaded = !info.identityName.empty();
     return info;
 }
-static std::filesystem::path ExecutableDirectory() {
+static std::filesystem::path ExecutablePath() {
     std::wstring path(MAX_PATH, L'\0');
     DWORD length = 0;
     while ((length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()))) == path.size())
         path.resize(path.size() * 2);
     path.resize(length);
-    return std::filesystem::path(path).parent_path();
+    return path;
 }
 const PackageInfo& CurrentPackage() noexcept {
     static const PackageInfo info = [] {
         PackageInfo result;
         try {
-            result = ReadPackage(ExecutableDirectory());
-            if (result.displayName.empty()) {
-                std::wstring path(MAX_PATH, L'\0');
-                path.resize(GetModuleFileNameW(nullptr, path.data(), MAX_PATH));
-                result.displayName = std::filesystem::path(path).stem().wstring();
-            }
+            result = ReadPackage(ExecutablePath().parent_path());
         } catch (...) {
-            result.displayName = L"Game";
+            return result;
         }
         if (result.loaded)
             Log("INFO", "package %ls (%ls) app=%ls entry=%ls, %zu in-package classes", result.fullName.c_str(),
@@ -154,5 +186,16 @@ const PackageInfo& CurrentPackage() noexcept {
         return result;
     }();
     return info;
+}
+const std::wstring& PackageDisplayName() noexcept {
+    static const std::wstring name = [] {
+        try {
+            if (auto value = ResolveDisplayName(CurrentPackage()); !value.empty()) return value;
+            return ExecutablePath().stem().wstring();
+        } catch (...) {
+            return std::wstring(L"Game");
+        }
+    }();
+    return name;
 }
 }
