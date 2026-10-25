@@ -3,8 +3,6 @@
 #include <windows.ui.xaml.h>
 #include <windows.ui.xaml.controls.h>
 #include <wrl.h>
-// C++/WinRT's C++17 SDK headers include legacy coroutine declarations.
-#define _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.Input.h>

@@ -1,7 +1,6 @@
 #include <windows.h>
 #undef GetCurrentTime
 #include <inspectable.h>
-#define _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>

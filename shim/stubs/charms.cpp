@@ -14,9 +14,6 @@
 #include <shobjidl.h>
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
-// The SDK projection includes legacy coroutine support under C++17; this
-// adapter only uses its collections and ABI interop, never coroutines.
-#define _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.UI.ApplicationSettings.h>
 #include <winrt/Windows.UI.Popups.h>

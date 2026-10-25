@@ -15,6 +15,7 @@ inline HRESULT CopyString(const std::wstring& text, HSTRING* value) {
 // Immutable key snapshots shared by offline Store listings and product licenses.
 template <class Pair, class Value, class Item>
 class StorePair final : public RuntimeClass<RuntimeClassFlags<WinRt>, Pair, FtmBase> {
+    using RuntimeClassT = RuntimeClass<RuntimeClassFlags<WinRt>, Pair, FtmBase>;
     InspectableClass(L"Windows.Foundation.Collections.IKeyValuePair`2", BaseTrust);
     std::wstring id_;
 
@@ -30,6 +31,7 @@ public:
 };
 template <class Iterator, class Pair, class Value, class Item>
 class StoreIterator final : public RuntimeClass<RuntimeClassFlags<WinRt>, Iterator, FtmBase> {
+    using RuntimeClassT = RuntimeClass<RuntimeClassFlags<WinRt>, Iterator, FtmBase>;
     InspectableClass(L"Windows.Foundation.Collections.IIterator`1", BaseTrust);
     std::vector<std::wstring> ids_;
     size_t index_ = 0;
@@ -68,6 +70,7 @@ public:
 };
 template <class Map, class Iterable, class Iterator, class Pair, class Value, class Item>
 class StoreMap final : public RuntimeClass<RuntimeClassFlags<WinRt>, Map, Iterable, FtmBase> {
+    using RuntimeClassT = RuntimeClass<RuntimeClassFlags<WinRt>, Map, Iterable, FtmBase>;
     InspectableClass(L"Windows.Foundation.Collections.IMapView`2", BaseTrust);
     std::vector<std::wstring> ids_;
 
