@@ -1,0 +1,7 @@
+# How it works
+
+The proxy DLLs load `appxportable.dll` while the game starts. It hooks Windows Runtime activation (`RoGetActivationFactory`) and, for calls from the game's own modules, answers with its own classes where Windows cannot serve an unpackaged process: the app lifecycle (`CoreApplication`, both for XAML games and for games that run their own `IFrameworkView` loop), a `CoreWindow` hosted on a normal window with its mouse and keyboard events, the XAML objects games draw their swap chain into, `ApplicationData`, `Package`, `CurrentApp`, the Share and Settings charms, live tiles, and offline stand-ins for the Xbox LIVE SDK and similar service libraries. Everything else goes to Windows unchanged. Classes a package registers for itself in its manifest are loaded from their DLLs in the game folder, as an installed package would. Swap chains made for a XAML panel or a `CoreWindow` are redirected to a child window of the game's desktop window.
+
+Closing the window ends a game the way Windows 8 ends a Store app: the game is suspended, so it saves, and the process then ends. Store games never ran their own teardown on Windows, and some (Fruit Ninja, Cut the Rope 2) crash in it.
+
+See the [building guide](building.md) for compilation, tests, and code generation, and the [compatibility structure](compatibility.md) for how the runtime is organized across package generations and architectures.

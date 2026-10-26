@@ -13,7 +13,7 @@ cmake --preset windows-x86
 cmake --build --preset windows-x86
 ```
 
-This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll`, `XAudio2_8.dll` and `DWrite.dll` in `build\windows-x86`. Pass that folder to `installappx.py` with `--build` to install a game with them; see [Use your own build](../README.md#use-your-own-build).
+This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll`, `XAudio2_8.dll` and `DWrite.dll` in `build\windows-x86`. Pass that folder to `installappx.py` with `--build` to install a game with them; see [Use your own build](installer.md#use-your-own-build).
 
 For x64 games, use an **x64 Native Tools Command Prompt**, `cmake --preset windows-x64`, and `cmake --build --preset windows-x64`. This requires the MSVC x64 assembler and also builds the `XAudio2_9.dll` proxy. Pass `installappx.py` `--build build/windows-x64` and a matching x64 VCLibs framework. See [compatibility structure](compatibility.md) and the [Rayman Windows 10 caption patch](../patch/raymanwin10/README.md).
 
@@ -64,7 +64,7 @@ python3 -m unittest discover -s tests/python
 
 The xwin command accepts Microsoft's SDK license. Outputs are in `build/macos-x86`; these are Windows binaries and require Wine to run. Gameplay under Wine remains experimental.
 
-The toolchain defaults to LLVM in `/opt/homebrew/opt/llvm` and SDK files in `.sdk`. Set `LLVM_ROOT` and `XWIN_ROOT` if yours are elsewhere. See the [Wine setup instructions](../README.md#macos--wine-experimental) to launch.
+The toolchain defaults to LLVM in `/opt/homebrew/opt/llvm` and SDK files in `.sdk`. Set `LLVM_ROOT` and `XWIN_ROOT` if yours are elsewhere. See the [Wine setup instructions](installer.md#macos--wine-experimental) to launch.
 
 ## Development tools
 
