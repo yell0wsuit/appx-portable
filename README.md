@@ -65,11 +65,11 @@ The installer changes no game file except through a known game's patch. Game-spe
 The installer asks for anything it needs:
 
 1. The folder to install into. The default is beside the package, named after the game's package name.
-2. Each VCLibs package that is missing.
+2. A VCLibs package, only if downloading it from the [VCLibs release](https://github.com/yell0wsuit/vclibs-appx/releases/latest) fails.
 3. Whether to unlock the trial, complete in-app purchases locally, both, or neither. The choice is saved in `appx-portable.ini`; see [trial override](docs/trial-mode.md) and [offline in-app purchases](docs/stub-iap.md).
 4. Whether to write the `00_click2startme` launcher.
 
-Along the way it picks the x86 or x64 game package out of a bundle (ARM-only bundles are not supported), downloads the matching release, adds `appx-host.exe` for a managed game, applies the patch for a known game, and on Windows 8/8.1 makes the desktop copy the game needs (see [Troubleshooting](#troubleshooting)).
+Along the way it picks the x86 or x64 game package out of a bundle (ARM-only bundles are not supported), downloads the VCLibs packages the game needs and the matching release, adds `appx-host.exe` for a managed game, applies the patch for a known game, and on Windows 8/8.1 makes the desktop copy the game needs (see [Troubleshooting](#troubleshooting)).
 
 Every question has a command-line option, so an install can run without any prompts:
 
@@ -126,18 +126,18 @@ Store games use the Store's own Visual C++ runtime (VCLibs), which a plain deskt
 Select-String -Path 'C:\Games\CutTheRope2\AppxManifest.xml' -Pattern 'Microsoft\.VCLibs\.\d+\.00' | ForEach-Object { $_.Matches.Value }
 ```
 
-| Dependency                                       | DLLs                                                                                   | Packages                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Microsoft.VCLibs.110.00` (Windows 8.0 games)    | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll`                                      | [Internet Archive copy](https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx)                                                                                                                                                                                         |
-| `Microsoft.VCLibs.120.00` (Windows 8.1 games)    | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll`                          | In Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip)                                                                                                                                                                                       |
-| `Microsoft.VCLibs.140.00` (Windows 10 UWP games) | `vcruntime140_app.dll`, `msvcp140_app.dll`, `vccorlib140_app.dll`, `concrt140_app.dll` | Microsoft-signed packages hosted by VideoLAN: [x86](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x86/Microsoft.VCLibs.x86.14.00.appx), [x64](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x64/Microsoft.VCLibs.x64.14.00.appx) |
+| Dependency                                       | DLLs                                                                                   |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `Microsoft.VCLibs.110.00` (Windows 8.0 games)    | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll`                                      |
+| `Microsoft.VCLibs.120.00` (Windows 8.1 games)    | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll`                          |
+| `Microsoft.VCLibs.140.00` (Windows 10 UWP games) | `vcruntime140_app.dll`, `msvcp140_app.dll`, `vccorlib140_app.dll`, `concrt140_app.dll` |
 
-The VCLibs 140 downloads above are version `14.0.25426.0`; check the game's manifest for its minimum version. These provide the UWP `_app.dll` files; `Microsoft.VCLibs.140.00.UWPDesktop` provides a different runtime. An x64 game needs the x64 package.
+Download the packages with the game's architecture from the [VCLibs release](https://github.com/yell0wsuit/vclibs-appx/releases/latest). The installer uses `11.0.51106.1`, `12.0.21005.1` and `14.0.30704.0`; check the game's manifest for its minimum version. These provide the UWP `_app.dll` files; `Microsoft.VCLibs.140.00.UWPDesktop` provides a different runtime. An x64 game needs the x64 package.
 
-Microsoft has no standalone download of VCLibs 110. The Internet Archive copy, `Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx`, has SHA-256 `22d49fa295486e0955a305bea65cfa4ff5d154d296878a1c577ec5507b602c9c`. For a package from anywhere other than Microsoft, check that Microsoft signed it; `Status` should be `Valid` and the signer `CN=Microsoft Corporation, …`:
+The release notes list each package's SHA-256. For a package from anywhere other than Microsoft, check that Microsoft signed it; `Status` should be `Valid` and the signer `CN=Microsoft Corporation, …`:
 
 ```powershell
-Get-AuthenticodeSignature .\Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx | Format-List Status, SignerCertificate
+Get-AuthenticodeSignature .\Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx | Format-List Status, SignerCertificate
 ```
 
 If the framework is installed on your PC (any Store app that uses it installs it), its DLLs are also in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`/`140.00`, with the matching architecture); `Get-AppxPackage Microsoft.VCLibs.140.00 | Select Architecture,InstallLocation` lists them. The installer accepts that folder instead of an `.appx`.

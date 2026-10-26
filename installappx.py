@@ -9,6 +9,7 @@ Portable release, applies the patch for a known game, and can write a
 """
 
 import argparse
+import hashlib
 import http.client
 import io
 import json
@@ -374,28 +375,37 @@ OPTIONAL_VCLIBS140 = (
     "vcamp140_app.dll",
     "vcomp140_app.dll",
 )
-VCLIBS_110 = (
-    "https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/"
-    "Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx"
-)
-VCLIBS_120_REDIST = (
-    "https://download.microsoft.com/download/5/f/0/"
-    "5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip"
-)
-VCLIBS_140 = (
-    "https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/"
-    "VLC.Universal_3.0.3.0_ARM_Test/Dependencies"
-)
+VCLIBS_RELEASE = "https://github.com/yell0wsuit/vclibs-appx/releases/download/v1/"
+# The Microsoft-signed package for each dependency and architecture in
+# VCLIBS_RELEASE, with its SHA-256 so a replaced release asset is refused.
+VCLIBS_PACKAGES = {
+    ("Microsoft.VCLibs.110.00", "x86"): (
+        "Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx",
+        "22d49fa295486e0955a305bea65cfa4ff5d154d296878a1c577ec5507b602c9c",
+    ),
+    ("Microsoft.VCLibs.110.00", "x64"): (
+        "Microsoft.VCLibs.110.00_11.0.51106.1_x64__8wekyb3d8bbwe.Appx",
+        "b3383e6543e9ad90968143347f2ec5cb7b1e24acdd1c797af4a1ba98df98ae85",
+    ),
+    ("Microsoft.VCLibs.120.00", "x86"): (
+        "Microsoft.VCLibs.120.00_12.0.21005.1_x86__8wekyb3d8bbwe.Appx",
+        "f1302e899f015818b1b807f7a1dc44c221c184e3f34a19fe81b5874d4ab974bd",
+    ),
+    ("Microsoft.VCLibs.120.00", "x64"): (
+        "Microsoft.VCLibs.120.00_12.0.21005.1_x64__8wekyb3d8bbwe.Appx",
+        "64dd765b88d1983c09ebb33dc631bdfefb415f45f29177ab423bbc12c506e64f",
+    ),
+    ("Microsoft.VCLibs.140.00", "x86"): (
+        "Microsoft.VCLibs.140.00_14.0.30704.0_x86__8wekyb3d8bbwe.Appx",
+        "397b610554d67abaddfdc287ced6a9bf1ada4d4c9ddf53e01c6a061bed2860ef",
+    ),
+    ("Microsoft.VCLibs.140.00", "x64"): (
+        "Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx",
+        "009f7db134c6061fe8f260e075374a28abbbc44e6cf23de107f93ec8b8c59816",
+    ),
+}
 VCLIBS_DOWNLOADS = {
-    ("Microsoft.VCLibs.110.00", "x86"): VCLIBS_110,
-    ("Microsoft.VCLibs.120.00", "x86"): VCLIBS_120_REDIST
-    + " (extract the x86 .appx from it)",
-    ("Microsoft.VCLibs.120.00", "x64"): VCLIBS_120_REDIST
-    + " (extract the x64 .appx from it)",
-    ("Microsoft.VCLibs.140.00", "x86"): VCLIBS_140
-    + "/x86/Microsoft.VCLibs.x86.14.00.appx",
-    ("Microsoft.VCLibs.140.00", "x64"): VCLIBS_140
-    + "/x64/Microsoft.VCLibs.x64.14.00.appx",
+    key: VCLIBS_RELEASE + name for key, (name, _) in VCLIBS_PACKAGES.items()
 }
 
 
@@ -450,6 +460,20 @@ def add_vclibs(dependency: str, source: Path, game: Path, architecture: str) -> 
                 )
         for name in found:
             shutil.copyfile(folder / name, game / name)
+
+
+def download_vclibs(dependency: str, game: Path, architecture: str) -> None:
+    """Add one dependency's DLLs from its pinned package in VCLIBS_RELEASE."""
+    name, sha256 = VCLIBS_PACKAGES[(dependency, architecture)]
+    data = fetch(VCLIBS_RELEASE + name, "pass it with --vclibs")
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise InstallError(
+            f"{VCLIBS_RELEASE + name} does not have the expected SHA-256 {sha256}."
+        )
+    with tempfile.TemporaryDirectory(prefix="installappx-vclibs-") as temporary:
+        package = Path(temporary) / name
+        package.write_bytes(data)
+        add_vclibs(dependency, package, game, architecture)
 
 
 # Appx Portable runtime
@@ -614,8 +638,8 @@ def write_settings(game: Path, store: Optional[str]) -> None:
 REPOSITORY = "yell0wsuit/appx-portable"
 
 
-def fetch(url: str) -> bytes:
-    """Download url; any failure is an InstallError naming it."""
+def fetch(url: str, instead: str = "pass --build with a local build folder") -> bytes:
+    """Download url; any failure is an InstallError naming it and what to do instead."""
     request = urllib.request.Request(url, headers={"User-Agent": "installappx"})
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
@@ -623,8 +647,7 @@ def fetch(url: str) -> bytes:
     except (urllib.error.URLError, OSError, http.client.HTTPException) as error:
         reason = getattr(error, "reason", error)
         raise InstallError(
-            f"Could not download {url}: {reason}. Check the connection,"
-            " or pass --build with a local build folder."
+            f"Could not download {url}: {reason}. Check the connection, or {instead}."
         ) from error
 
 
@@ -1053,12 +1076,16 @@ def try_vclibs(
 def add_missing_vclibs(
     args, ask: Callable[[str], str], manifest: Manifest, game: Path, architecture: str
 ) -> None:
-    """Add each VCLibs dependency the game lacks, from --vclibs or by asking."""
+    """Add each VCLibs dependency the game lacks: --vclibs, download, then ask."""
     for dependency in missing_vclibs(manifest, game):
         refused = try_vclibs(dependency, args.vclibs, game, architecture)
-        link = VCLIBS_DOWNLOADS.get(
-            (dependency, architecture), "no known download; see the README"
-        )
+        if dependency in missing_vclibs(manifest, game):
+            print(f"Downloading {dependency} ({architecture})")
+            try:
+                download_vclibs(dependency, game, architecture)
+            except InstallError as error:
+                refused.append(str(error))
+        link = VCLIBS_DOWNLOADS[(dependency, architecture)]
         missing = f"Missing {dependency} ({architecture}). Download: {link}."
         if args.yes and dependency in missing_vclibs(manifest, game):
             raise InstallError(" ".join(refused + [missing, "Pass it with --vclibs."]))
