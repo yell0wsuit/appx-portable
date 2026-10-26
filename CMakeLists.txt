@@ -45,7 +45,8 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
   add_dependencies(appxportable appxportable_version)
   target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
   # One proxy per system DLL a game imports from its folder (see scripts/gen_proxy.py).
-  foreach(proxy d3dcompiler_47 XAudio2_8 XAudio2_9 DWrite)
+  set(APPX_PROXIES d3dcompiler_47 XAudio2_8 XAudio2_9 DWrite)
+  foreach(proxy IN LISTS APPX_PROXIES)
     add_library(${proxy} SHARED proxy/proxy.cpp proxy/${proxy}/thunks.cpp proxy/${proxy}/proxy.def shim/version.rc)
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
       target_sources(${proxy} PRIVATE proxy/${proxy}/thunks-x64.asm)
@@ -313,3 +314,19 @@ set_tests_properties(containers_read PROPERTIES FIXTURES_REQUIRED container_roun
 set_tests_properties(containers_write containers_read PROPERTIES
   ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/container-test-data;APPX_PORTABLE_WINDOW_STATE=off"
   RESOURCE_LOCK appx_container_store)
+
+# Most files include the same Windows and WinRT headers; the shim and tests
+# share one precompiled copy of shim/pch.h. The proxies define
+# APPX_PORTABLE_PROXY, and the files that raise _WIN32_WINNT above
+# <windows.h> must parse it themselves.
+add_library(appx_pch OBJECT shim/pch.cpp)
+target_precompile_headers(appx_pch PRIVATE shim/pch.h)
+get_property(appx_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+list(REMOVE_ITEM appx_targets ${APPX_PROXIES} xamlsettingstest)
+foreach(target IN LISTS appx_targets)
+  get_target_property(type ${target} TYPE)
+  if(type STREQUAL "EXECUTABLE" OR type STREQUAL "SHARED_LIBRARY")
+    target_precompile_headers(${target} REUSE_FROM appx_pch)
+  endif()
+endforeach()
+set_source_files_properties(shim/islands/islands.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)

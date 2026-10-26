@@ -13,8 +13,14 @@ concurrency:
 
 jobs:
     test:
+        name: test (${{ matrix.architecture }})
         runs-on: windows-latest
         timeout-minutes: 30
+        strategy:
+            # Let the other architecture finish so both failures show at once.
+            fail-fast: false
+            matrix:
+                architecture: [x86, x64]
         steps:
             - name: Check out source
               uses: actions/checkout@v6
@@ -23,12 +29,14 @@ jobs:
 
             - name: Build and test
               uses: ./.github/actions/build-test
+              with:
+                  architecture: ${{ matrix.architecture }}
 
             - name: Upload test fixtures
               if: failure()
               uses: actions/upload-artifact@v4
               with:
-                  name: test-fixtures
+                  name: test-fixtures-${{ matrix.architecture }}
                   path: |
                       build/release-*/managed-*/
                       build/release-*/Testing/Temporary/LastTest*.log

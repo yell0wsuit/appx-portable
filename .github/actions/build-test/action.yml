@@ -1,7 +1,10 @@
 name: Build and test
-description: Configures, builds and tests the x86 and x64 builds in build/release-<architecture>.
+description: Configures, builds and tests one architecture in build/release-<architecture>.
 
 inputs:
+    architecture:
+        description: x86 or x64.
+        required: true
     version:
         description: Version stamped into the DLLs (APPX_PORTABLE_VERSION).
         required: false
@@ -10,50 +13,54 @@ inputs:
 runs:
     using: composite
     steps:
-        - name: Configure x86 and x64 builds
+        # Caches from main are shared with pull requests; evicting what this job
+        # did not use keeps each saved cache to one build's objects.
+        - name: Restore compiler cache
+          uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
+          with:
+              key: ${{ inputs.architecture }}
+              max-size: 1G
+              evict-old-files: job
+
+        # Ninja runs each compile through ccache, which the Visual Studio
+        # generator cannot, so the step enters the MSVC environment itself.
+        - name: Configure and build
           shell: pwsh
           env:
+              ARCHITECTURE: ${{ inputs.architecture }}
               RELEASE_TAG: ${{ inputs.version }}
+              # Required for ccache to reuse compiles that use the precompiled header.
+              CCACHE_SLOPPINESS: pch_defines,time_macros
           run: |
               $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
               $installation = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json
               if ($LASTEXITCODE -ne 0 -or -not $installation) {
                   throw 'No Visual Studio installation with x86/x64 C++ tools was found.'
               }
-              $majorVersion = ([version]$installation.installationVersion).Major
-              $capabilities = cmake -E capabilities | ConvertFrom-Json
-              if ($LASTEXITCODE -ne 0) { throw 'Failed to query CMake generators.' }
-              $generator = $capabilities.generators.name | Where-Object { $_ -match "^Visual Studio $majorVersion " } | Select-Object -First 1
-              if (-not $generator) {
-                  throw "CMake does not support installed Visual Studio version $majorVersion; update CMake on the runner."
-              }
-              Write-Host "Using $generator at $($installation.installationPath)"
-              foreach ($architecture in @('x86', 'x64')) {
-                $platform = if ($architecture -eq 'x86') { 'Win32' } else { 'x64' }
-                cmake -S . -B "build/release-$architecture" -G $generator -A $platform "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)" "-DAPPX_PORTABLE_VERSION=$env:RELEASE_TAG"
-                if ($LASTEXITCODE -ne 0) { throw "Failed to configure the $architecture build." }
-              }
-
-        - name: Build
-          shell: pwsh
-          run: |
-              foreach ($architecture in @('x86', 'x64')) {
-                cmake --build "build/release-$architecture" --config RelWithDebInfo --parallel
-                if ($LASTEXITCODE -ne 0) { throw "Failed to build $architecture." }
-              }
+              Write-Host "Using $($installation.displayName) at $($installation.installationPath)"
+              $targetArch = if ($env:ARCHITECTURE -eq 'x86') { 'x86' } else { 'amd64' }
+              Import-Module "$($installation.installationPath)/Common7/Tools/Microsoft.VisualStudio.DevShell.dll"
+              Enter-VsDevShell -VsInstallPath $installation.installationPath -SkipAutomaticLocation -DevCmdArguments "-arch=$targetArch -host_arch=amd64 -no_logo"
+              $build = "build/release-$env:ARCHITECTURE"
+              cmake -S . -B $build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_COMPILER=cl -DCMAKE_CXX_COMPILER_LAUNCHER=ccache "-DAPPX_PORTABLE_VERSION=$env:RELEASE_TAG"
+              if ($LASTEXITCODE -ne 0) { throw "Failed to configure the $env:ARCHITECTURE build." }
+              cmake --build $build
+              if ($LASTEXITCODE -ne 0) { throw "Failed to build $env:ARCHITECTURE." }
 
         - name: Run native tests
           # GPU and media playback tests require desktop hardware unavailable on hosted runners.
           shell: pwsh
+          env:
+              ARCHITECTURE: ${{ inputs.architecture }}
           run: |
-              foreach ($architecture in @('x86', 'x64')) {
-                # CLR activation interception currently supports x86 only.
-                $testOptions = @()
-                if ($architecture -eq 'x64') { $testOptions += @('-LE', 'managed-clr') }
-                ctest --test-dir "build/release-$architecture" -C RelWithDebInfo --output-on-failure --timeout 60 -E '^(gputest|mediatest)$' @testOptions
-                if ($LASTEXITCODE -ne 0) { throw "Native tests failed for $architecture." }
-              }
+              # CLR activation interception currently supports x86 only.
+              $testOptions = @()
+              if ($env:ARCHITECTURE -eq 'x64') { $testOptions += @('-LE', 'managed-clr') }
+              ctest --test-dir "build/release-$env:ARCHITECTURE" --output-on-failure --timeout 60 -E '^(gputest|mediatest)$' @testOptions
+              if ($LASTEXITCODE -ne 0) { throw "Native tests failed for $env:ARCHITECTURE." }
 
+        # The script tests do not depend on the architecture; run them once.
         - name: Run script tests
+          if: inputs.architecture == 'x86'
           shell: pwsh
           run: python -m unittest discover -s tests/python
