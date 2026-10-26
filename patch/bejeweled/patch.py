@@ -7,7 +7,6 @@ from pathlib import Path
 import sys
 import tempfile
 
-
 ASSET = Path("App.xaml")
 ORIGINAL_SHA256 = "f1c4c0f91d60e6c9af70ea0422fe6a80f697a2690e4e43e51f31ea4eb3f09ea7"
 PATCHED_SHA256 = "0efd317b23d328be99c5281fd0809470cb050ff25d91f48529cbfd1e71a58d84"
@@ -30,7 +29,9 @@ def identify(data):
 def replace_file(path, data):
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=path.name + ".", suffix=".tmp", delete=False) as output:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=path.name + ".", suffix=".tmp", delete=False
+        ) as output:
             temporary = Path(output.name)
             output.write(data)
             output.flush()
@@ -69,17 +70,25 @@ def patch_file(path, *, restore=False, check=False):
             os.fsync(output.fileno())
     except FileExistsError as error:
         if sha256(backup.read_bytes()) != ORIGINAL_SHA256:
-            raise ValueError(f"Existing backup differs; refusing to overwrite: {backup}") from error
+            raise ValueError(
+                f"Existing backup differs; refusing to overwrite: {backup}"
+            ) from error
     replace_file(path, result)
     return f"Patched: {path}\nOriginal backup: {backup}"
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("game", type=Path, help="Staged Bejeweled LIVE folder (close the game first)")
+    parser.add_argument(
+        "game", type=Path, help="Staged Bejeweled LIVE folder (close the game first)"
+    )
     action = parser.add_mutually_exclusive_group()
-    action.add_argument("--check", action="store_true", help="Identify the asset without changing files")
-    action.add_argument("--restore", action="store_true", help="Restore the verified original asset")
+    action.add_argument(
+        "--check", action="store_true", help="Identify the asset without changing files"
+    )
+    action.add_argument(
+        "--restore", action="store_true", help="Restore the verified original asset"
+    )
     args = parser.parse_args(argv)
     try:
         game = args.game.resolve(strict=True)

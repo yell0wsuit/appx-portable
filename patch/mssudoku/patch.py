@@ -7,7 +7,6 @@ from pathlib import Path
 import sys
 import tempfile
 
-
 ASSET = Path("Arkadium.Advertisement/Video/Controls/VideoAdsPreloader.xbf")
 ORIGINAL_SHA256 = "ec0b514054475dad3412c368bb4efeb9cc00f9a9c9d4597cd44311ec9320f751"
 PATCHED_SHA256 = "5295665cbf6bda6443b7bbdaec1e2b4a55acd21a03fb00c41b9f4d974724c82c"
@@ -33,7 +32,9 @@ def identify(data):
 def replace_file(path, data):
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=path.name + ".", suffix=".tmp", delete=False) as output:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=path.name + ".", suffix=".tmp", delete=False
+        ) as output:
             temporary = Path(output.name)
             output.write(data)
             output.flush()
@@ -75,17 +76,25 @@ def patch_file(path, *, restore=False, check=False):
             os.fsync(output.fileno())
     except FileExistsError as error:
         if sha256(backup.read_bytes()) != ORIGINAL_SHA256:
-            raise ValueError(f"Existing backup differs; refusing to overwrite: {backup}") from error
+            raise ValueError(
+                f"Existing backup differs; refusing to overwrite: {backup}"
+            ) from error
     replace_file(path, result)
     return f"Patched: {path}\nOriginal backup: {backup}"
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("game", type=Path, help="Staged Microsoft Sudoku folder (close the game first)")
+    parser.add_argument(
+        "game", type=Path, help="Staged Microsoft Sudoku folder (close the game first)"
+    )
     action = parser.add_mutually_exclusive_group()
-    action.add_argument("--check", action="store_true", help="Identify the asset without changing files")
-    action.add_argument("--restore", action="store_true", help="Restore the verified original asset")
+    action.add_argument(
+        "--check", action="store_true", help="Identify the asset without changing files"
+    )
+    action.add_argument(
+        "--restore", action="store_true", help="Restore the verified original asset"
+    )
     args = parser.parse_args(argv)
     try:
         game = args.game.resolve(strict=True)

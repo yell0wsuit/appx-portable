@@ -9,6 +9,8 @@ on:
             - 'cmake/**'
             - 'tests/**'
             - 'scripts/**'
+            - 'installappx.py'
+            - 'patch/**'
             - 'CMakeLists.txt'
             - 'CMakePresets.json'
             - '.github/workflows/release.yml'
@@ -136,5 +138,6 @@ jobs:
                     Compress-Archive -LiteralPath $assets -DestinationPath $archive -CompressionLevel Optimal -Force
                     $archives += $archive
                   }
-                  gh release create $env:RELEASE_TAG @archives --target $env:GITHUB_SHA --title $env:RELEASE_TAG --generate-notes --latest
+                  # installappx.py is published beside the zips: players download only it.
+                  gh release create $env:RELEASE_TAG @archives installappx.py --target $env:GITHUB_SHA --title $env:RELEASE_TAG --generate-notes --latest
                   if ($LASTEXITCODE -ne 0) { throw 'Failed to publish release.' }

@@ -159,6 +159,23 @@ add_test(NAME store_stub_iap_discovered_catalog COMMAND ${CMAKE_COMMAND}
     "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/store-discovered-catalog-fixture"
     "-DCATALOG=Content/Arbitrary/Subdirectory/products.XML"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/store_catalog.cmake")
+# Store options from appx-portable.ini beside the game; a set variable wins.
+# ENV items are "|"-separated: add_test would split a ";" list.
+function(add_store_settings_test name ini env args)
+    add_test(NAME store_${name} COMMAND ${CMAKE_COMMAND}
+        "-DTEST=$<TARGET_FILE:storetest>" "-DSHIM=$<TARGET_FILE:appxportable>"
+        "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/store-settings-${name}"
+        "-DINI=${ini}" "-DENV=${env}" "-DARGS=${args}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/store_settings.cmake")
+endfunction()
+add_store_settings_test(unlocked_ini "[options]\\nUnlockTrial=1"
+    "--unset=APPX_PORTABLE_UNLOCK_TRIAL|APPX_PORTABLE_STUB_IAP=0" --expect-unlocked)
+add_store_settings_test(stub_iap_ini "[options]\\nStubIap=1"
+    "--unset=APPX_PORTABLE_STUB_IAP|APPX_PORTABLE_UNLOCK_TRIAL=0" --expect-stub-iap)
+add_store_settings_test(ini_env_off "[options]\\nUnlockTrial=1\\nStubIap=1"
+    "APPX_PORTABLE_UNLOCK_TRIAL=0|APPX_PORTABLE_STUB_IAP=0" "")
+add_store_settings_test(ini_absent_section "[storage]\\nSaveLocation=game"
+    "--unset=APPX_PORTABLE_UNLOCK_TRIAL|--unset=APPX_PORTABLE_STUB_IAP" "")
 add_test(NAME store_unlocked_cli COMMAND storetest --expect-unlocked --unlock-trial)
 add_test(NAME store_unlocked_env COMMAND storetest --expect-unlocked)
 add_test(NAME store_override_disabled COMMAND storetest)

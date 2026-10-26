@@ -73,10 +73,39 @@ internal static class Host
     [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern void ShimSetManagedCoreWindowMode();
 
+    // The command line after the program name, as it was given.
+    private static string Arguments()
+    {
+        string line = Environment.CommandLine;
+        int end = line.StartsWith("\"") ? line.IndexOf('"', 1) + 1 : line.IndexOf(' ');
+        return end <= 0 || end >= line.Length ? "" : line.Substring(end).TrimStart();
+    }
+
     [MTAThread]
     private static int Main(string[] args)
     {
-        string dir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+        // GetFullPath expands 8.3 names, as it does for the executable below.
+        string launched = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+        string dir = Path.GetFullPath(launched).TrimEnd('\\');
+        // Started through an 8.3 path (C:\PROGRA~1\...), XAML resolves the
+        // game's resources against a folder the short name does not match:
+        // run again from the long path, before the shim loads.
+        if (!string.Equals(launched, dir, StringComparison.Ordinal) &&
+            Environment.GetEnvironmentVariable("APPX_HOST_RELAUNCHED") == null)
+        {
+            Environment.SetEnvironmentVariable("APPX_HOST_RELAUNCHED", "1");
+            string self = Path.Combine(dir, Path.GetFileName(Assembly.GetEntryAssembly().Location));
+            using (System.Diagnostics.Process child = System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(self, Arguments())
+                {
+                    UseShellExecute = false,
+                    WorkingDirectory = Path.GetFullPath(Environment.CurrentDirectory)
+                }))
+            {
+                child.WaitForExit();
+                return child.ExitCode;
+            }
+        }
         string log = Path.Combine(dir, "managed.log");
         File.WriteAllText(log, "");
         AppDomain.CurrentDomain.FirstChanceException += (s, e) =>

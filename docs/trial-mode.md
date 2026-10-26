@@ -4,17 +4,22 @@ Windows 8/8.1 games ask `Windows.ApplicationModel.Store.CurrentApp.LicenseInform
 
 ## Turn it on
 
-Rebuild and rerun [setup](../README.md#4-stage-the-game) so the staged folder has the current `appxportable.dll`, then pass the switch to the game executable named in `AppxManifest.xml`:
+Rerun [`installappx.py`](../README.md#quickstart) so the game folder has the current `appxportable.dll`. Its Store question turns this on in `appx-portable.ini`; otherwise, pass the switch to the game executable named in `AppxManifest.xml`:
 
 ```powershell
-python scripts/play.py --game 'C:\Games\MyGame' --unlock-trial
-.\scripts\run.ps1 -GameDirectory 'C:\Games\MyGame' -UnlockTrial
 C:\Games\MyGame\Game.exe --unlock-trial
 ```
 
-On macOS / Wine, `python3 scripts/play.py --game /path/to/game --unlock-trial` passes the switch through.
+On macOS / Wine, `/path/to/game/00_click2startme.sh --unlock-trial` passes the switch through.
 
-For double-click launches, either add `--unlock-trial` after the executable in a shortcut's Target, or set the variable for your user account, which applies to every staged game started afterwards:
+For double-click launches, set it in `appx-portable.ini` beside the game executable (`installappx.py` writes this when you choose to unlock the trial):
+
+```ini
+[options]
+UnlockTrial=1
+```
+
+Alternatively, add `--unlock-trial` after the executable in a shortcut's Target, or set the variable for your user account, which applies to every staged game started afterwards and overrides the ini:
 
 ```powershell
 setx APPX_PORTABLE_UNLOCK_TRIAL 1

@@ -3,12 +3,17 @@
 `--stub-iap` makes Windows 8/8.1 `CurrentApp` product purchases complete locally. It is off by default.
 
 ```powershell
-python scripts/play.py --game 'C:\Games\MyGame' --stub-iap --log
-.\scripts\run.ps1 -GameDirectory 'C:\Games\MyGame' -StubIap -Log
 C:\Games\MyGame\Game.exe --stub-iap
 ```
 
-Rebuild and rerun setup first to stage the updated runtime. The environment equivalent is `APPX_PORTABLE_STUB_IAP=1`; remove it or set it to `0` to disable it. Options are read once at startup. `--passthrough` uses Windows classes, so the stub has no effect there.
+To keep it on however the game is started, set it in `appx-portable.ini` beside the game executable (`installappx.py` writes this when you choose stub IAP):
+
+```ini
+[options]
+StubIap=1
+```
+
+Rerun `installappx.py` first so the game folder has a runtime that supports it. The environment equivalent is `APPX_PORTABLE_STUB_IAP=1`; remove it or set it to `0` to disable it; a set variable overrides the ini. Options are read once at startup. `--passthrough` uses Windows classes, so the stub has no effect there.
 
 With this option:
 

@@ -16,12 +16,14 @@ The patch replaces the first three bytes of each initializer at image addresses
 exit cleanup. Only six bytes change. Shared XAML fixes, including the former
 post-intro freeze, remain in the core runtime.
 
+`installappx.py` applies this patch automatically for this exact version. The commands below check, reapply, or restore it by hand.
+
 Close the game and run these commands from the repository root, using Python 3
 and the executable in your staged game folder:
 
 ```powershell
-python patch/wheresmymickey/patch.py 'C:\Games\Mickey\WheresMyMickey.Windows8.exe' --check
-python patch/wheresmymickey/patch.py 'C:\Games\Mickey\WheresMyMickey.Windows8.exe'
+py patch/wheresmymickey/patch.py 'C:\Games\Mickey\WheresMyMickey.Windows8.exe' --check
+py patch/wheresmymickey/patch.py 'C:\Games\Mickey\WheresMyMickey.Windows8.exe'
 ```
 
 The script checks the complete input hash and instruction bytes, creates
@@ -37,7 +39,7 @@ package restores its EXE, so reapply this patch after doing so.
 To restore the verified backup (the backup is retained):
 
 ```powershell
-python patch/wheresmymickey/patch.py 'C:\Games\Mickey\WheresMyMickey.Windows8.exe' --restore
+py patch/wheresmymickey/patch.py 'C:\Games\Mickey\WheresMyMickey.Windows8.exe' --restore
 ```
 
 | Executable | SHA-256 |
@@ -48,7 +50,7 @@ python patch/wheresmymickey/patch.py 'C:\Games\Mickey\WheresMyMickey.Windows8.ex
 Run the patcher safety tests without game binaries:
 
 ```powershell
-python -m unittest discover -s tests/python -p test_wheresmymickey_patch.py -v
+py -m unittest discover -s tests/python -p test_wheresmymickey_patch.py -v
 ```
 
 With the current runtime, menu, intro, and mouse input have been verified and the
