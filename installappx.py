@@ -7,13 +7,18 @@ Portable release, applies the patch for a known game, and can write a
 00_click2startme launcher. Run it without arguments to be asked for each step.
 """
 
+import io
+import json
 import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ElementTree
 import zipfile
 from dataclasses import dataclass
@@ -454,3 +459,95 @@ def write_settings(game: Path, store: Optional[str]) -> None:
         return
     # CRLF, so Notepad on Windows 8 shows the lines.
     path.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8", newline="")
+
+
+# Releases and patches
+
+REPOSITORY = "yell0wsuit/appx-portable"
+
+
+def fetch(url: str) -> bytes:
+    request = urllib.request.Request(url, headers={"User-Agent": "installappx"})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read()
+    except (urllib.error.URLError, OSError) as error:
+        reason = getattr(error, "reason", error)
+        raise InstallError(
+            f"Could not download {url}: {reason}. Check the connection, or pass --build with a local build folder."
+        )
+
+
+def resolve_release(tag: Optional[str]) -> str:
+    if tag:
+        return tag
+    try:
+        return json.loads(fetch(f"https://api.github.com/repos/{REPOSITORY}/releases/latest"))["tag_name"]
+    except (ValueError, KeyError):
+        raise InstallError("Could not read the latest release from GitHub.")
+
+
+def download_runtime(tag: str, architecture: str, folder: Path) -> Path:
+    """Download and unpack appx-portable-<tag>-<architecture>.zip into folder."""
+    try:
+        release = json.loads(fetch(f"https://api.github.com/repos/{REPOSITORY}/releases/tags/{tag}"))
+        assets = {asset["name"]: asset["browser_download_url"] for asset in release.get("assets", [])}
+    except (ValueError, KeyError, TypeError):
+        raise InstallError(f"Could not read release {tag} from GitHub.")
+    name = f"appx-portable-{tag}-{architecture}.zip"
+    if name not in assets:
+        raise InstallError(f"Release {tag} has no {name}.")
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        with zipfile.ZipFile(io.BytesIO(fetch(assets[name]))) as archive:
+            for entry in archive.namelist():
+                # The release zip holds plain DLLs; anything in a folder is ignored.
+                if "/" not in entry and "\\" not in entry and entry not in ("", ".", ".."):
+                    (folder / entry).write_bytes(archive.read(entry))
+    except zipfile.BadZipFile:
+        raise InstallError(f"{name} is not a readable zip.")
+    return folder
+
+
+@dataclass
+class KnownPatch:
+    folder: str
+    files: Tuple[str, ...]
+    target: str  # what the patch is given: "" for the game folder, else a path in it
+
+
+# Patches in patch/<folder>, for the exact package identity and version each supports.
+KNOWN_PATCHES = {
+    ("PopCap.BejweledLIVE", "4.0.0.10"): KnownPatch("bejeweled", ("patch.py",), ""),
+    ("Microsoft.MicrosoftSudoku", "1.7.10190.0"): KnownPatch("mssudoku", ("patch.py",), ""),
+    ("Disney.WheresMyMickey", "1.1.0.30"): KnownPatch("wheresmymickey", ("patch.py",), "WheresMyMickey.Windows8.exe"),
+    ("Ubisoft.RaymanFiestaRunWindows10Edition", "1.0.23.0"): KnownPatch(
+        "raymanwin10", ("patch.py", "CustomTitleBar.xaml"), ""
+    ),
+}
+
+
+def apply_known_patch(manifest: Manifest, game: Path, tag: Optional[str], local: Optional[Path]) -> Optional[str]:
+    """Run the patch for a known game; None when there is none.
+
+    local is a repository's patch/ folder; otherwise the patch is downloaded at
+    the release tag, so it always matches the runtime."""
+    patch = KNOWN_PATCHES.get((manifest.name, manifest.version))
+    if patch is None:
+        return None
+    game = Path(game)
+    with tempfile.TemporaryDirectory(prefix="installappx-patch-") as temporary:
+        folder = Path(temporary)
+        for name in patch.files:
+            if local is not None:
+                shutil.copyfile(Path(local) / patch.folder / name, folder / name)
+            else:
+                (folder / name).write_bytes(fetch(f"https://raw.githubusercontent.com/{REPOSITORY}/{tag}/patch/{patch.folder}/{name}"))
+        target = game / patch.target if patch.target else game
+        result = subprocess.run(
+            [sys.executable, "-I", str(folder / "patch.py"), str(target)], capture_output=True, text=True, cwd=temporary
+        )
+    if result.returncode != 0:
+        raise InstallError(f"The {patch.folder} patch failed: {(result.stderr or result.stdout).strip()}")
+    return result.stdout.strip()
