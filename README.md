@@ -26,16 +26,16 @@ The installer changes no game file except through a known game's patch. Game-spe
 
 ## Tested games
 
-| Game                                 | Version     | Arch | Status          |
-| ------------------------------------ | ----------- | ---- | --------------- |
-| Cut the Rope 2                       | 1.0.0.46    | x86  | ✅ Playable     |
-| Fruit Ninja                          | 1.8.1.66    | x86  | ✅ Playable     |
-| Where's My Water?                    | 1.13.1.3    | x86  | ✅ Playable     |
-| Bejeweled LIVE                       | 4.0.0.10    | x86  | ✅ Playable     |
-| Gravity Guy                          | 1.0.1.2     | x86  | ✅ Playable     |
-| Where's My Mickey?                   | 1.1.0.30    | x86  | 🩹 Needs patch  |
-| Microsoft Sudoku (2018)              | 1.7.10190.0 | x86  | 🩹 Needs patch  |
-| Rayman Fiesta Run Windows 10 Edition | 1.0.23.0    | x64  | 🩹 Needs patch  |
+| Game                                 | Version     | Arch | Status         |
+| ------------------------------------ | ----------- | ---- | -------------- |
+| Cut the Rope 2                       | 1.0.0.46    | x86  | ✅ Playable    |
+| Fruit Ninja                          | 1.8.1.66    | x86  | ✅ Playable    |
+| Where's My Water?                    | 1.13.1.3    | x86  | ✅ Playable    |
+| Bejeweled LIVE                       | 4.0.0.10    | x86  | ✅ Playable    |
+| Gravity Guy                          | 1.0.1.2     | x86  | ✅ Playable    |
+| Where's My Mickey?                   | 1.1.0.30    | x86  | 🩹 Needs patch |
+| Microsoft Sudoku (2018)              | 1.7.10190.0 | x86  | 🩹 Needs patch |
+| Rayman Fiesta Run Windows 10 Edition | 1.0.23.0    | x64  | 🩹 Needs patch |
 
 See [tested games](docs/games.md) for package names, patches, and what was verified.
 
@@ -47,14 +47,18 @@ See [tested games](docs/games.md) for package names, patches, and what was verif
 
 ## Quickstart
 
-1. Get the game's `.appxbundle` or `.appx`; there is no need to extract it. An already-extracted package folder works too.
-2. Download `installappx.py` from the latest [release](https://github.com/yell0wsuit/appx-portable/releases), and double-click it or run it with the package:
+1. Install **Python 3.8 or later** from [python.org](https://www.python.org/downloads/windows/).
+
+   On Windows 8/8.1, use a Python release that still supports your Windows version; see [installing Python](docs/installer.md#python).
+
+2. Get the game's `.appxbundle` or `.appx`; there is no need to extract it. An already-extracted package folder works too.
+3. Download `installappx.py` from the latest [release](https://github.com/yell0wsuit/appx-portable/releases), and double-click it or run it with the package:
 
    ```powershell
    py installappx.py "C:\Downloads\CutTheRope2.appxbundle"
    ```
 
-3. Double-click `00_click2startme.bat` in the game folder to play.
+4. Double-click `00_click2startme.bat` in the game folder to play.
 
 The installer downloads the Visual C++ runtime and the Appx Portable DLLs the game needs, and asks where to install, which Store options to turn on, and whether to write the launcher. Run it again on the same folder to update; saves and settings are kept. See the [installer guide](docs/installer.md) for its command-line options, using your own build, and macOS/Wine.
 

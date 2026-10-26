@@ -4,7 +4,7 @@
 
 ## Python
 
-On Windows, install Python 3 from [python.org](https://www.python.org/downloads/windows/) (the installer adds the `py` launcher) or with `winget install Python.Python.3.13`. On Windows 8/8.1, use a Python 3 release that still supports your Windows version; the installer needs 3.8 or later.
+The installer needs **Python 3.8 or later**. On Windows, install it from [python.org](https://www.python.org/downloads/windows/) (the installer adds the `py` launcher) or with `winget install Python.Python.3.13`. On Windows 8/8.1, use a Python 3 release that still supports your Windows version.
 
 ## What it asks
 
