@@ -501,7 +501,7 @@ def stage_runtime(
 
 # appx-portable.ini
 
-SETTINGS_TEMPLATE = """\
+SETTINGS_TEMPLATE: str = """\
 ; appx-portable settings. installappx.py writes this file once; edit it here.
 
 [storage]
@@ -738,10 +738,9 @@ APPCONTAINER = 0x1000  # IMAGE_DLLCHARACTERISTICS_APPCONTAINER
 
 def needs_desktop_copy() -> bool:
     """Windows 8 and 8.1 refuse to start an AppContainer image outside a package."""
-    if sys.platform != "win32":
-        return False
-    version = sys.getwindowsversion()  # pylint: disable=no-member  # Windows only
-    return tuple(version[:2]) in ((6, 2), (6, 3))
+    # getattr: the function exists only on Windows, where type checkers skip it.
+    version = getattr(sys, "getwindowsversion", lambda: (0, 0))
+    return sys.platform == "win32" and tuple(version()[:2]) in ((6, 2), (6, 3))
 
 
 def appcontainer_offset(data: bytes, dll: bool) -> Optional[int]:
@@ -1033,11 +1032,8 @@ def choose_folders(args, ask: Callable[[str], str]) -> Tuple[Path, Path, Manifes
     destination = args.dest
     if destination is None and not args.yes:
         destination = ask(f"Folder to install the game in [{default}]: ")
-    return (
-        source,
-        absolute(destination) if unquote_path(destination or "") else default,
-        manifest,
-    )
+    chosen = unquote_path(destination or "")
+    return source, absolute(chosen) if chosen else default, manifest
 
 
 def try_vclibs(
