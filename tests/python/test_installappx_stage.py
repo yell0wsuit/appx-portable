@@ -168,5 +168,31 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(installer.read_store(self.game), 'none')
 
 
+
+class ReviewSettingsTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.game = pathlib.Path(folder.name)
+        self.ini = self.game / 'appx-portable.ini'
+
+    def test_ansi_ini_is_kept_byte_for_byte(self):
+        # Windows 8 Notepad saves ANSI: a non-ASCII save folder is not UTF-8.
+        self.ini.write_bytes(b'[storage]\r\nSaveLocation=D:\\Sp\xe9l\r\n')
+        installer.write_settings(self.game, 'trial')
+        data = self.ini.read_bytes()
+        self.assertIn(b'SaveLocation=D:\\Sp\xe9l', data)
+        self.assertIn(b'UnlockTrial=1', data)
+        self.assertEqual(installer.read_store(self.game), 'trial')
+
+    def test_utf16_ini_stays_utf16(self):
+        self.ini.write_bytes('[storage]\r\nSaveLocation=D:\\\u03a0\r\n'.encode('utf-16'))
+        installer.write_settings(self.game, 'iap')
+        text = self.ini.read_bytes().decode('utf-16')
+        self.assertIn('SaveLocation=D:\\\u03a0', text)
+        self.assertIn('StubIap=1', text)
+        self.assertEqual(installer.read_store(self.game), 'iap')
+
+
 if __name__ == '__main__':
     unittest.main()

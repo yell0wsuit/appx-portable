@@ -1,5 +1,6 @@
 import contextlib
 import io
+import os
 import pathlib
 import sys
 import tempfile
@@ -66,9 +67,9 @@ class CliTests(unittest.TestCase):
         with zipfile.ZipFile(vclibs_appx, 'w') as archive:
             for name in VCLIBS['120']:
                 archive.writestr(name, pe(dll=True))
-        # Package, destination, VCLibs, Store choice, launcher (Enter is yes).
-        # --build is not a prompt, so it goes on the command line.
-        answers = Answers(f'"{self.package}"', f' "{self.dest}" ', f'"{vclibs_appx}"', '3', '')
+        # Package, destination, VCLibs, Store choice, launcher (Enter is yes),
+        # then the closing prompt. --build is not a prompt: it goes on the command line.
+        answers = Answers(f'"{self.package}"', f' "{self.dest}" ', f'"{vclibs_appx}"', '3', '', '')
         code = self.main(['--build', str(self.build)], answers)
         self.assertEqual(code, 0, self.stderr.getvalue())
         self.assertEqual(self.options(), (True, True))
@@ -86,7 +87,7 @@ class CliTests(unittest.TestCase):
         for answer, expected in [('1', (True, False)), ('2', (False, True)), ('3', (True, True)),
                                  ('', (True, True)), ('0', (False, False))]:
             with self.subTest(answer=answer):
-                answers = Answers(answer)
+                answers = Answers(answer, '')
                 code = self.main([str(self.package), '--dest', str(self.dest), '--build', str(self.build),
                                   '--no-launcher'], answers)
                 self.assertEqual(code, 0, self.stderr.getvalue())
@@ -94,9 +95,9 @@ class CliTests(unittest.TestCase):
 
     def test_invalid_store_answer_asks_again(self):
         vclibs_folder(self.dest, '120')
-        answers = Answers('7', '2')
+        answers = Answers('7', '2', '')
         self.main([str(self.package), '--dest', str(self.dest), '--build', str(self.build), '--no-launcher'], answers)
-        self.assertEqual(len(answers.prompts), 2)
+        self.assertEqual(len(answers.prompts), 3)
         self.assertEqual(self.options(), (False, True))
 
     def test_yes_without_vclibs_fails(self):
@@ -168,6 +169,49 @@ class CliTests(unittest.TestCase):
         self.main(self.scripted('--vclibs', str(self.vclibs), '--store', 'trial'))
         self.assertEqual(self.main(self.scripted()), 0, self.stderr.getvalue())
         self.assertEqual(self.options(), (True, False))
+
+
+    def test_wrong_architecture_vclibs_is_named(self):
+        package = appx(self.base / 'x64.appx', game_files(machine=0x8664, arch='x64'))
+        build = build_folder(self.base / 'build64', machine=0x8664, host=False)
+        code = self.main([str(package), '--dest', str(self.dest), '--build', str(build),
+                          '--vclibs', str(self.vclibs), '--yes'])
+        self.assertEqual(code, 1)
+        message = self.stderr.getvalue()
+        self.assertIn('is x86, but the game is x64', message)
+
+    def test_unexpected_error_is_shown_before_closing(self):
+        answers = Answers('')
+        with mock.patch.object(installer, 'install', side_effect=ValueError('boom')):
+            self.assertEqual(self.main([], answers), 1)
+        self.assertIn('boom', self.stderr.getvalue())
+        self.assertTrue(self.stderr.getvalue().startswith('Error: '))
+        self.assertIn('Press Enter', answers.prompts[-1])
+
+    def test_drag_and_drop_waits_before_closing(self):
+        # Dropping a package on the script gives it one argument, no --yes.
+        vclibs_folder(self.dest, '120')
+        answers = Answers(str(self.dest), '', '', '')
+        code = self.main([str(self.package), '--build', str(self.build)], answers)
+        self.assertEqual(code, 0, self.stderr.getvalue())
+        self.assertIn('Press Enter', answers.prompts[-1])
+
+    def test_relative_destination_becomes_absolute(self):
+        # Python 3.8/3.9 on Windows resolve() a missing path to itself, relative.
+        original = installer.Path.resolve
+
+        def old_resolve(path, strict=False):
+            return path if not path.exists() else original(path, strict)
+
+        cwd = os.getcwd()
+        os.chdir(self.base)
+        self.addCleanup(os.chdir, cwd)
+        with mock.patch.object(installer.Path, 'resolve', old_resolve), \
+                mock.patch.object(installer, 'apply_known_patch', return_value=None) as apply:
+            code = self.main([str(self.package), '--dest', 'relative', '--build', str(self.build),
+                              '--vclibs', str(self.vclibs), '--yes'])
+        self.assertEqual(code, 0, self.stderr.getvalue())
+        self.assertTrue(apply.call_args.args[1].is_absolute())
 
 
 if __name__ == '__main__':

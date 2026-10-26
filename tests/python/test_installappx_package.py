@@ -146,5 +146,16 @@ class PackageTests(unittest.TestCase):
         ast.parse((ROOT / 'installappx.py').read_text(encoding='utf-8'), feature_version=(3, 8))
 
 
+
+class ReviewPackageTests(unittest.TestCase):
+    def test_manifest_rejects_unsafe_identity_name(self):
+        for name in ['../../escaped', 'C:\\Users\\x', '/tmp/x', '...', 'a b', 'x' * 51]:
+            with self.subTest(name=name):
+                with self.assertRaises(installer.InstallError):
+                    installer.read_manifest(manifest_xml(name=name))
+        for name in ['PopCap.BejweledLIVE', 'Ubisoft.RaymanFiestaRunWindows10Edition', 'ZeptoLabUKLimited.CuttheRope2']:
+            self.assertEqual(installer.read_manifest(manifest_xml(name=name)).name, name)
+
+
 if __name__ == '__main__':
     unittest.main()

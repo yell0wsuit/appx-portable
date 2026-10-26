@@ -152,5 +152,33 @@ class PatchTests(unittest.TestCase):
                                 f'{patch.folder}/{name}')
 
 
+
+class ReviewFetchTests(unittest.TestCase):
+    def test_dropped_connection_is_an_install_error(self):
+        import http.client
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.side_effect = http.client.IncompleteRead(b'partial', 10)
+        with mock.patch.object(installer.urllib.request, 'urlopen', return_value=response):
+            with self.assertRaisesRegex(installer.InstallError, '--build'):
+                installer.fetch('https://example.test/release.zip')
+
+
+class ReviewPatchEncodingTests(unittest.TestCase):
+    def test_patch_output_is_read_as_utf8(self):
+        # The child prints paths; outside the ANSI code page they must not fail.
+        manifest = installer.read_manifest(manifest_xml(name='PopCap.BejweledLIVE', version='4.0.0.10'))
+        with tempfile.TemporaryDirectory() as folder:
+            local = pathlib.Path(folder) / 'patch'
+            (local / 'bejeweled').mkdir(parents=True)
+            (local / 'bejeweled' / 'patch.py').write_text('print("ok")')
+            done = mock.Mock(returncode=0, stdout='ok', stderr='')
+            with mock.patch.object(installer.subprocess, 'run', return_value=done) as run:
+                installer.apply_known_patch(manifest, pathlib.Path(folder), None, local)
+        command, options = run.call_args.args[0], run.call_args.kwargs
+        self.assertEqual(command[1:4], ['-X', 'utf8', '-I'])
+        self.assertEqual(options.get('encoding'), 'utf-8')
+        self.assertEqual(options.get('errors'), 'replace')
+
+
 if __name__ == '__main__':
     unittest.main()

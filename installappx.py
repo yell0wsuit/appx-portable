@@ -8,6 +8,7 @@ Portable release, applies the patch for a known game, and can write a
 """
 
 import argparse
+import http.client
 import io
 import json
 import os
@@ -38,6 +39,7 @@ PACKAGE_METADATA = {
 }
 # Bundle application packages in order of preference: x86 is the tested path.
 BUNDLE_ARCHITECTURES = ("x86", "neutral", "x64")
+IDENTITY_NAME = re.compile(r"^(?=.*[A-Za-z0-9])[A-Za-z0-9.-]{3,50}$")
 INVALID_NAME = re.compile(r'[<>:"|?*\x00-\x1f]')
 
 
@@ -113,8 +115,12 @@ def read_manifest(data: bytes) -> Manifest:
         raise InstallError(
             f"AppxManifest.xml has an unusable Executable: {application.get('Executable')!r}"
         )
+    name = identity.get("Name", "")
+    # The identity name becomes a folder name; hold it to the appx schema.
+    if not IDENTITY_NAME.match(name):
+        raise InstallError(f"AppxManifest.xml has an unusable Identity Name: {name!r}")
     return Manifest(
-        name=identity.get("Name", ""),
+        name=name,
         version=identity.get("Version", ""),
         architecture=identity.get("ProcessorArchitecture", "neutral").lower(),
         executable=executable.as_posix(),
@@ -483,9 +489,19 @@ STORE_CHOICES = {
 STORE_KEYS = ("UnlockTrial", "StubIap")
 
 
+def settings_encoding(data: bytes) -> str:
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return "utf-16"
+    return "utf-8-sig" if data.startswith(b"\xef\xbb\xbf") else "utf-8"
+
+
 def settings_lines(game: Path) -> List[str]:
+    # Unknown bytes (an ANSI file) survive as surrogates and are written back.
     path = game / "appx-portable.ini"
-    return path.read_text(encoding="utf-8-sig").splitlines() if path.is_file() else []
+    if not path.is_file():
+        return []
+    data = path.read_bytes()
+    return data.decode(settings_encoding(data), errors="surrogateescape").splitlines()
 
 
 def option_values(lines: List[str]) -> Dict[str, str]:
@@ -543,8 +559,10 @@ def write_settings(game: Path, store: Optional[str]) -> None:
             ]
     elif path.is_file():
         return
+    encoding = settings_encoding(path.read_bytes()) if path.is_file() else "utf-8"
+    errors = "strict" if encoding == "utf-16" else "surrogateescape"
     # CRLF, so Notepad on Windows 8 shows the lines.
-    path.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8", newline="")
+    path.write_bytes(("\r\n".join(lines) + "\r\n").encode(encoding, errors))
 
 
 # Releases and patches
@@ -557,7 +575,7 @@ def fetch(url: str) -> bytes:
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             return response.read()
-    except (urllib.error.URLError, OSError) as error:
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as error:
         reason = getattr(error, "reason", error)
         raise InstallError(
             f"Could not download {url}: {reason}. Check the connection, or pass --build with a local build folder."
@@ -653,9 +671,10 @@ def apply_known_patch(
                 )
         target = game / patch.target if patch.target else game
         result = subprocess.run(
-            [sys.executable, "-I", str(folder / "patch.py"), str(target)],
+            [sys.executable, "-X", "utf8", "-I", str(folder / "patch.py"), str(target)],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=temporary,
         )
     if result.returncode != 0:
@@ -917,6 +936,8 @@ def parse_arguments(argv: List[str]):
 
 def main(argv: Optional[List[str]] = None, ask: Callable[[str], str] = input) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    # Double-clicked, or a package dropped on the script: keep the window open.
+    interactive = "--yes" not in argv
     try:
         return install(parse_arguments(argv), ask)
     except InstallError as error:
@@ -928,9 +949,11 @@ def main(argv: Optional[List[str]] = None, ask: Callable[[str], str] = input) ->
     except (KeyboardInterrupt, EOFError):
         print(file=sys.stderr)
         return 1
+    except Exception as error:  # noqa: BLE001 - a double-clicked window must show it
+        print(f"Error: {type(error).__name__}: {error}", file=sys.stderr)
+        return 1
     finally:
-        if not argv:
-            # Started by double-clicking: keep the window open to read the result.
+        if interactive:
             try:
                 ask("Press Enter to close.")
             except (KeyboardInterrupt, EOFError):
@@ -949,7 +972,7 @@ def install(args, ask: Callable[[str], str]) -> int:
     )
     if not package:
         raise InstallError("No game package given.")
-    source = Path(package).expanduser().resolve()
+    source = Path(os.path.abspath(Path(package).expanduser())).resolve()
     manifest = peek_manifest(source)
     default = source.parent / manifest.name
     if default == source:
@@ -961,7 +984,7 @@ def install(args, ask: Callable[[str], str]) -> int:
             if args.yes
             else unquote_path(ask(f"Folder to install the game in [{default}]: "))
         )
-    destination = Path(unquote_path(destination) or default).expanduser().resolve()
+    destination = Path(os.path.abspath(Path(unquote_path(destination) or default).expanduser())).resolve()
 
     print(f"Installing {manifest.name} {manifest.version} into {destination}")
     manifest = extract_game(source, destination)
@@ -970,6 +993,7 @@ def install(args, ask: Callable[[str], str]) -> int:
     managed = pe_info(executable).managed
 
     for dependency in missing_vclibs(manifest, destination):
+        tried = []
         for candidate in args.vclibs:
             try:
                 add_vclibs(
@@ -979,16 +1003,19 @@ def install(args, ask: Callable[[str], str]) -> int:
                     architecture,
                 )
                 break
-            except InstallError:
-                continue
+            except InstallError as error:
+                tried.append(str(error))
         while dependency in missing_vclibs(manifest, destination):
             link = VCLIBS_DOWNLOADS.get(
                 (dependency, architecture), "no known download; see the README"
             )
             if args.yes:
                 raise InstallError(
-                    f"Missing {dependency} ({architecture}). Download: {link}. Pass it with --vclibs."
+                    " ".join([*tried, f"Missing {dependency} ({architecture}). Download: {link}. Pass it with --vclibs."])
                 )
+            for message in tried:
+                print(message)
+            tried = []
             print(f"The game needs {dependency} ({architecture}). Download: {link}")
             answer = unquote_path(ask(f"{dependency} .appx or folder: "))
             if not answer:
