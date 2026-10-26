@@ -7,6 +7,7 @@ Portable release, applies the patch for a known game, and can write a
 00_click2startme launcher. Run it without arguments to be asked for each step.
 """
 
+import argparse
 import io
 import json
 import os
@@ -61,7 +62,10 @@ def pe_info(path: Path) -> PEInfo:
     offset = struct.unpack_from("<I", data, 0x3C)[0]
     if offset + 24 + 96 > len(data) or data[offset : offset + 4] != b"PE\0\0":
         raise InstallError(f"Invalid PE header: {path}")
-    machine, characteristics = struct.unpack_from("<H", data, offset + 4)[0], struct.unpack_from("<H", data, offset + 22)[0]
+    machine, characteristics = (
+        struct.unpack_from("<H", data, offset + 4)[0],
+        struct.unpack_from("<H", data, offset + 22)[0],
+    )
     optional = offset + 24
     magic = struct.unpack_from("<H", data, optional)[0]
     # The CLR runtime header is data directory 14.
@@ -106,13 +110,17 @@ def read_manifest(data: bytes) -> Manifest:
         raise InstallError("AppxManifest.xml declares no Identity or Application.")
     executable = PureWindowsPath(application.get("Executable", ""))
     if not executable.parts or executable.anchor or ".." in executable.parts:
-        raise InstallError(f"AppxManifest.xml has an unusable Executable: {application.get('Executable')!r}")
+        raise InstallError(
+            f"AppxManifest.xml has an unusable Executable: {application.get('Executable')!r}"
+        )
     return Manifest(
         name=identity.get("Name", ""),
         version=identity.get("Version", ""),
         architecture=identity.get("ProcessorArchitecture", "neutral").lower(),
         executable=executable.as_posix(),
-        dependencies=[e.get("Name", "") for e in elements if local_name(e) == "PackageDependency"],
+        dependencies=[
+            e.get("Name", "") for e in elements if local_name(e) == "PackageDependency"
+        ],
     )
 
 
@@ -138,7 +146,9 @@ def target_parts(name: str) -> Optional[List[str]]:
     if first in PACKAGE_METADATA:
         return None
     # Saves, settings and logs belong to the player, not the package.
-    if first in ("savedata", "appx-portable.ini") or (first.startswith("appx-portable") and first.endswith(".log")):
+    if first in ("savedata", "appx-portable.ini") or (
+        first.startswith("appx-portable") and first.endswith(".log")
+    ):
         return None
     return parts
 
@@ -164,7 +174,9 @@ def folder_entries(folder: Path) -> List[Entry]:
         for name in directories + files:
             path = Path(parent) / name
             if path.is_symlink():
-                raise InstallError(f"Links are not allowed in the package folder: {path}")
+                raise InstallError(
+                    f"Links are not allowed in the package folder: {path}"
+                )
         for name in files:
             path = Path(parent) / name
             parts = target_parts(path.relative_to(folder).as_posix())
@@ -185,9 +197,13 @@ def write_entries(entries: Iterable[Entry], destination: Path, overwrite: bool) 
 
 def select_bundle_packages(bundle: zipfile.ZipFile) -> Tuple[str, List[str]]:
     try:
-        root = ElementTree.fromstring(bundle.read("AppxMetadata/AppxBundleManifest.xml"))
+        root = ElementTree.fromstring(
+            bundle.read("AppxMetadata/AppxBundleManifest.xml")
+        )
     except KeyError:
-        raise InstallError("Not a recognized .appxbundle: it has no AppxMetadata/AppxBundleManifest.xml.")
+        raise InstallError(
+            "Not a recognized .appxbundle: it has no AppxMetadata/AppxBundleManifest.xml."
+        )
     except ElementTree.ParseError as error:
         raise InstallError(f"Unreadable AppxBundleManifest.xml: {error}")
     names = set(bundle.namelist())
@@ -201,21 +217,30 @@ def select_bundle_packages(bundle: zipfile.ZipFile) -> Tuple[str, List[str]]:
 
     packages = [e for e in root.iter() if local_name(e) == "Package"]
     applications = {
-        e.get("Architecture", "neutral").lower(): e for e in packages if e.get("Type", "application").lower() == "application"
+        e.get("Architecture", "neutral").lower(): e
+        for e in packages
+        if e.get("Type", "application").lower() == "application"
     }
     resources = [entry(e) for e in packages if e.get("Type", "").lower() == "resource"]
     for architecture in BUNDLE_ARCHITECTURES:
         if architecture in applications:
             return entry(applications[architecture]), resources
     if any(a.startswith("arm") for a in applications):
-        raise InstallError("This bundle only has ARM packages; Appx Portable supports x86 and x64 games.")
+        raise InstallError(
+            "This bundle only has ARM packages; Appx Portable supports x86 and x64 games."
+        )
     raise InstallError("Could not find an x86 or x64 game package in the bundle.")
 
 
 def package_manifest(entries: List[Entry]) -> Manifest:
-    found = next((e for e in entries if [p.lower() for p in e.parts] == ["appxmanifest.xml"]), None)
+    found = next(
+        (e for e in entries if [p.lower() for p in e.parts] == ["appxmanifest.xml"]),
+        None,
+    )
     if found is None:
-        raise InstallError("Missing AppxManifest.xml. Give the whole .appx or .appxbundle, or a complete extraction.")
+        raise InstallError(
+            "Missing AppxManifest.xml. Give the whole .appx or .appxbundle, or a complete extraction."
+        )
     with found.open() as stream:
         manifest = read_manifest(stream.read())
     wanted = manifest.executable.lower().split("/")
@@ -231,8 +256,14 @@ def extract_game(source: Path, destination: Path) -> Manifest:
     package's files and keeps saves, appx-portable.ini and logs."""
     source, destination = Path(source).resolve(), Path(destination).resolve()
     if source.is_dir():
-        if source == destination or source in destination.parents or destination in source.parents:
-            raise InstallError("The package folder and the game folder must not overlap.")
+        if (
+            source == destination
+            or source in destination.parents
+            or destination in source.parents
+        ):
+            raise InstallError(
+                "The package folder and the game folder must not overlap."
+            )
         entries = folder_entries(source)
         manifest = package_manifest(entries)
         destination.mkdir(parents=True, exist_ok=True)
@@ -240,7 +271,10 @@ def extract_game(source: Path, destination: Path) -> Manifest:
         return manifest
     try:
         with zipfile.ZipFile(source) as archive:
-            if source.suffix.lower() == ".appxbundle" or "AppxMetadata/AppxBundleManifest.xml" in archive.namelist():
+            if (
+                source.suffix.lower() == ".appxbundle"
+                or "AppxMetadata/AppxBundleManifest.xml" in archive.namelist()
+            ):
                 return extract_bundle(archive, destination)
             entries = zip_entries(archive)
             manifest = package_manifest(entries)
@@ -284,8 +318,16 @@ def extract_bundle(bundle: zipfile.ZipFile, destination: Path) -> Manifest:
 # The runtime DLLs each VCLibs framework package provides to Store apps.
 VCLIBS = {
     "Microsoft.VCLibs.110.00": ("msvcr110.dll", "msvcp110.dll", "vccorlib110.dll"),
-    "Microsoft.VCLibs.120.00": ("msvcr120_app.dll", "msvcp120_app.dll", "vccorlib120_app.dll"),
-    "Microsoft.VCLibs.140.00": ("vcruntime140_app.dll", "msvcp140_app.dll", "vccorlib140_app.dll"),
+    "Microsoft.VCLibs.120.00": (
+        "msvcr120_app.dll",
+        "msvcp120_app.dll",
+        "vccorlib120_app.dll",
+    ),
+    "Microsoft.VCLibs.140.00": (
+        "vcruntime140_app.dll",
+        "msvcp140_app.dll",
+        "vccorlib140_app.dll",
+    ),
 }
 OPTIONAL_VCLIBS140 = (
     "concrt140_app.dll",
@@ -300,11 +342,18 @@ OPTIONAL_VCLIBS140 = (
 VCLIBS_120_REDIST = "https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip"
 VCLIBS_140 = "https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies"
 VCLIBS_DOWNLOADS = {
-    ("Microsoft.VCLibs.110.00", "x86"): "https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx",
-    ("Microsoft.VCLibs.120.00", "x86"): VCLIBS_120_REDIST + " (extract the x86 .appx from it)",
-    ("Microsoft.VCLibs.120.00", "x64"): VCLIBS_120_REDIST + " (extract the x64 .appx from it)",
-    ("Microsoft.VCLibs.140.00", "x86"): VCLIBS_140 + "/x86/Microsoft.VCLibs.x86.14.00.appx",
-    ("Microsoft.VCLibs.140.00", "x64"): VCLIBS_140 + "/x64/Microsoft.VCLibs.x64.14.00.appx",
+    (
+        "Microsoft.VCLibs.110.00",
+        "x86",
+    ): "https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx",
+    ("Microsoft.VCLibs.120.00", "x86"): VCLIBS_120_REDIST
+    + " (extract the x86 .appx from it)",
+    ("Microsoft.VCLibs.120.00", "x64"): VCLIBS_120_REDIST
+    + " (extract the x64 .appx from it)",
+    ("Microsoft.VCLibs.140.00", "x86"): VCLIBS_140
+    + "/x86/Microsoft.VCLibs.x86.14.00.appx",
+    ("Microsoft.VCLibs.140.00", "x64"): VCLIBS_140
+    + "/x64/Microsoft.VCLibs.x64.14.00.appx",
 }
 
 
@@ -312,14 +361,17 @@ def missing_vclibs(manifest: Manifest, game: Path) -> List[str]:
     return [
         dependency
         for dependency in manifest.dependencies
-        if dependency in VCLIBS and not all((game / name).is_file() for name in VCLIBS[dependency])
+        if dependency in VCLIBS
+        and not all((game / name).is_file() for name in VCLIBS[dependency])
     ]
 
 
 def add_vclibs(dependency: str, source: Path, game: Path, architecture: str) -> None:
     """Copy one dependency's DLLs from a VCLibs .appx or a folder into game."""
     source = Path(source)
-    names = VCLIBS[dependency] + (OPTIONAL_VCLIBS140 if dependency.startswith("Microsoft.VCLibs.140.") else ())
+    names = VCLIBS[dependency] + (
+        OPTIONAL_VCLIBS140 if dependency.startswith("Microsoft.VCLibs.140.") else ()
+    )
     with tempfile.TemporaryDirectory(prefix="installappx-vclibs-") as temporary:
         folder = source
         if source.is_file():
@@ -331,14 +383,18 @@ def add_vclibs(dependency: str, source: Path, game: Path, architecture: str) -> 
                     wanted = {name.lower(): name for name in names}
                     for entry in archive.namelist():
                         if entry.lower() in wanted:
-                            (folder / wanted[entry.lower()]).write_bytes(archive.read(entry))
+                            (folder / wanted[entry.lower()]).write_bytes(
+                                archive.read(entry)
+                            )
             except zipfile.BadZipFile:
                 raise InstallError(f"Cannot read {source} as an .appx package.")
         elif not source.is_dir():
             raise InstallError(f"Not found: {source}")
         missing = [name for name in VCLIBS[dependency] if not (folder / name).is_file()]
         if missing:
-            raise InstallError(f"{source} does not have {', '.join(missing)} ({dependency}).")
+            raise InstallError(
+                f"{source} does not have {', '.join(missing)} ({dependency})."
+            )
         found = [name for name in names if (folder / name).is_file()]
         for name in found:
             actual = architecture_of(folder / name)
@@ -358,7 +414,9 @@ PROXIES = ("d3dcompiler_47.dll", "XAudio2_8.dll", "DWrite.dll")
 
 def replace_file(source: Path, target: Path) -> None:
     # By rename, never in place: a running game maps the old file.
-    fd, temporary = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=target.parent)
+    fd, temporary = tempfile.mkstemp(
+        prefix=target.name + ".", suffix=".tmp", dir=target.parent
+    )
     os.close(fd)
     try:
         shutil.copyfile(source, temporary)
@@ -368,9 +426,13 @@ def replace_file(source: Path, target: Path) -> None:
             os.unlink(temporary)
 
 
-def stage_runtime(build: Path, game: Path, architecture: str, managed: bool) -> List[str]:
+def stage_runtime(
+    build: Path, game: Path, architecture: str, managed: bool
+) -> List[str]:
     if managed and architecture == "x64":
-        raise InstallError("Managed x64 games are not supported; managed hosting is x86 only.")
+        raise InstallError(
+            "Managed x64 games are not supported; managed hosting is x86 only."
+        )
     build = Path(build)
     names = ["appxportable.dll", *PROXIES]
     if (build / "XAudio2_9.dll").is_file():
@@ -382,7 +444,9 @@ def stage_runtime(build: Path, game: Path, architecture: str, managed: bool) -> 
             raise InstallError(f"Build output missing: {build / name}")
         actual = architecture_of(build / name)
         if actual != architecture:
-            raise InstallError(f"{build / name} is {actual}, but the game is {architecture}.")
+            raise InstallError(
+                f"{build / name} is {actual}, but the game is {architecture}."
+            )
     for name in names:
         replace_file(build / name, game / name)
     return names
@@ -410,7 +474,12 @@ SaveLocation=game
 UnlockTrial=0
 StubIap=0
 """
-STORE_CHOICES = {"none": (False, False), "trial": (True, False), "iap": (False, True), "both": (True, True)}
+STORE_CHOICES = {
+    "none": (False, False),
+    "trial": (True, False),
+    "iap": (False, True),
+    "both": (True, True),
+}
 STORE_KEYS = ("UnlockTrial", "StubIap")
 
 
@@ -444,18 +513,34 @@ def write_settings(game: Path, store: Optional[str]) -> None:
     path = game / "appx-portable.ini"
     lines = settings_lines(game) or SETTINGS_TEMPLATE.splitlines()
     if store is not None:
-        wanted = {key: "1" if on else "0" for key, on in zip(STORE_KEYS, STORE_CHOICES[store])}
-        start = next((i for i, line in enumerate(lines) if line.strip().lower() == "[options]"), None)
+        wanted = {
+            key: "1" if on else "0" for key, on in zip(STORE_KEYS, STORE_CHOICES[store])
+        }
+        start = next(
+            (i for i, line in enumerate(lines) if line.strip().lower() == "[options]"),
+            None,
+        )
         if start is None:
-            lines += ["", "[options]"] + [f"{key}={value}" for key, value in wanted.items()]
+            lines += ["", "[options]"] + [
+                f"{key}={value}" for key, value in wanted.items()
+            ]
         else:
-            end = next((i for i in range(start + 1, len(lines)) if lines[i].strip().startswith("[")), len(lines))
+            end = next(
+                (
+                    i
+                    for i in range(start + 1, len(lines))
+                    if lines[i].strip().startswith("[")
+                ),
+                len(lines),
+            )
             for i in range(start + 1, end):
                 key = lines[i].split("=", 1)[0].strip()
                 match = next((k for k in wanted if k.lower() == key.lower()), None)
                 if "=" in lines[i] and not lines[i].strip().startswith(";") and match:
                     lines[i] = f"{match}={wanted.pop(match)}"
-            lines[start + 1 : start + 1] = [f"{key}={value}" for key, value in wanted.items()]
+            lines[start + 1 : start + 1] = [
+                f"{key}={value}" for key, value in wanted.items()
+            ]
     elif path.is_file():
         return
     # CRLF, so Notepad on Windows 8 shows the lines.
@@ -483,7 +568,9 @@ def resolve_release(tag: Optional[str]) -> str:
     if tag:
         return tag
     try:
-        return json.loads(fetch(f"https://api.github.com/repos/{REPOSITORY}/releases/latest"))["tag_name"]
+        return json.loads(
+            fetch(f"https://api.github.com/repos/{REPOSITORY}/releases/latest")
+        )["tag_name"]
     except (ValueError, KeyError):
         raise InstallError("Could not read the latest release from GitHub.")
 
@@ -491,8 +578,13 @@ def resolve_release(tag: Optional[str]) -> str:
 def download_runtime(tag: str, architecture: str, folder: Path) -> Path:
     """Download and unpack appx-portable-<tag>-<architecture>.zip into folder."""
     try:
-        release = json.loads(fetch(f"https://api.github.com/repos/{REPOSITORY}/releases/tags/{tag}"))
-        assets = {asset["name"]: asset["browser_download_url"] for asset in release.get("assets", [])}
+        release = json.loads(
+            fetch(f"https://api.github.com/repos/{REPOSITORY}/releases/tags/{tag}")
+        )
+        assets = {
+            asset["name"]: asset["browser_download_url"]
+            for asset in release.get("assets", [])
+        }
     except (ValueError, KeyError, TypeError):
         raise InstallError(f"Could not read release {tag} from GitHub.")
     name = f"appx-portable-{tag}-{architecture}.zip"
@@ -504,7 +596,11 @@ def download_runtime(tag: str, architecture: str, folder: Path) -> Path:
         with zipfile.ZipFile(io.BytesIO(fetch(assets[name]))) as archive:
             for entry in archive.namelist():
                 # The release zip holds plain DLLs; anything in a folder is ignored.
-                if "/" not in entry and "\\" not in entry and entry not in ("", ".", ".."):
+                if (
+                    "/" not in entry
+                    and "\\" not in entry
+                    and entry not in ("", ".", "..")
+                ):
                     (folder / entry).write_bytes(archive.read(entry))
     except zipfile.BadZipFile:
         raise InstallError(f"{name} is not a readable zip.")
@@ -521,15 +617,21 @@ class KnownPatch:
 # Patches in patch/<folder>, for the exact package identity and version each supports.
 KNOWN_PATCHES = {
     ("PopCap.BejweledLIVE", "4.0.0.10"): KnownPatch("bejeweled", ("patch.py",), ""),
-    ("Microsoft.MicrosoftSudoku", "1.7.10190.0"): KnownPatch("mssudoku", ("patch.py",), ""),
-    ("Disney.WheresMyMickey", "1.1.0.30"): KnownPatch("wheresmymickey", ("patch.py",), "WheresMyMickey.Windows8.exe"),
+    ("Microsoft.MicrosoftSudoku", "1.7.10190.0"): KnownPatch(
+        "mssudoku", ("patch.py",), ""
+    ),
+    ("Disney.WheresMyMickey", "1.1.0.30"): KnownPatch(
+        "wheresmymickey", ("patch.py",), "WheresMyMickey.Windows8.exe"
+    ),
     ("Ubisoft.RaymanFiestaRunWindows10Edition", "1.0.23.0"): KnownPatch(
         "raymanwin10", ("patch.py", "CustomTitleBar.xaml"), ""
     ),
 }
 
 
-def apply_known_patch(manifest: Manifest, game: Path, tag: Optional[str], local: Optional[Path]) -> Optional[str]:
+def apply_known_patch(
+    manifest: Manifest, game: Path, tag: Optional[str], local: Optional[Path]
+) -> Optional[str]:
     """Run the patch for a known game; None when there is none.
 
     local is a repository's patch/ folder; otherwise the patch is downloaded at
@@ -544,13 +646,22 @@ def apply_known_patch(manifest: Manifest, game: Path, tag: Optional[str], local:
             if local is not None:
                 shutil.copyfile(Path(local) / patch.folder / name, folder / name)
             else:
-                (folder / name).write_bytes(fetch(f"https://raw.githubusercontent.com/{REPOSITORY}/{tag}/patch/{patch.folder}/{name}"))
+                (folder / name).write_bytes(
+                    fetch(
+                        f"https://raw.githubusercontent.com/{REPOSITORY}/{tag}/patch/{patch.folder}/{name}"
+                    )
+                )
         target = game / patch.target if patch.target else game
         result = subprocess.run(
-            [sys.executable, "-I", str(folder / "patch.py"), str(target)], capture_output=True, text=True, cwd=temporary
+            [sys.executable, "-I", str(folder / "patch.py"), str(target)],
+            capture_output=True,
+            text=True,
+            cwd=temporary,
         )
     if result.returncode != 0:
-        raise InstallError(f"The {patch.folder} patch failed: {(result.stderr or result.stdout).strip()}")
+        raise InstallError(
+            f"The {patch.folder} patch failed: {(result.stderr or result.stdout).strip()}"
+        )
     return result.stdout.strip()
 
 
@@ -561,7 +672,10 @@ APPCONTAINER = 0x1000  # IMAGE_DLLCHARACTERISTICS_APPCONTAINER
 
 def needs_desktop_copy() -> bool:
     """Windows 8 and 8.1 refuse to start an AppContainer image outside a package."""
-    return sys.platform == "win32" and tuple(sys.getwindowsversion()[:2]) in ((6, 2), (6, 3))
+    return sys.platform == "win32" and tuple(sys.getwindowsversion()[:2]) in (
+        (6, 2),
+        (6, 3),
+    )
 
 
 def appcontainer_offset(data: bytes, dll: bool) -> Optional[int]:
@@ -572,7 +686,9 @@ def appcontainer_offset(data: bytes, dll: bool) -> Optional[int]:
     pe = struct.unpack_from("<I", data, 0x3C)[0]
     if pe < 64 or pe + 24 > len(data) or data[pe : pe + 4] != b"PE\0\0":
         raise InstallError("Invalid or truncated PE header.")
-    machine, size, characteristics = struct.unpack_from("<H", data, pe + 4)[0], *struct.unpack_from("<HH", data, pe + 20)
+    machine, size, characteristics = struct.unpack_from("<H", data, pe + 4)[
+        0
+    ], *struct.unpack_from("<HH", data, pe + 20)
     if machine == 0x8664:
         return None
     optional = pe + 24
@@ -584,7 +700,9 @@ def appcontainer_offset(data: bytes, dll: bool) -> Optional[int]:
         or not characteristics & 0x2
         or bool(characteristics & 0x2000) != dll
     ):
-        raise InstallError("Expected an x86 PE32 image of the appropriate EXE/DLL type.")
+        raise InstallError(
+            "Expected an x86 PE32 image of the appropriate EXE/DLL type."
+        )
     return optional + 70
 
 
@@ -594,12 +712,19 @@ def cleared(data: bytes, dll: bool) -> Optional[bytes]:
     if offset is None or not struct.unpack_from("<H", data, offset)[0] & APPCONTAINER:
         return None
     patched = bytearray(data)
-    struct.pack_into("<H", patched, offset, struct.unpack_from("<H", data, offset)[0] & ~APPCONTAINER & 0xFFFF)
+    struct.pack_into(
+        "<H",
+        patched,
+        offset,
+        struct.unpack_from("<H", data, offset)[0] & ~APPCONTAINER & 0xFFFF,
+    )
     return bytes(patched)
 
 
 def write_replacing(target: Path, data: bytes) -> None:
-    fd, temporary = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=target.parent)
+    fd, temporary = tempfile.mkstemp(
+        prefix=target.name + ".", suffix=".tmp", dir=target.parent
+    )
     try:
         with os.fdopen(fd, "wb") as output:
             output.write(data)
@@ -620,7 +745,9 @@ def make_desktop_copy(game: Path, executable: str) -> str:
     relative = Path(executable)
     desktop = relative.with_name(relative.stem + ".desktop" + relative.suffix)
     # The staged DLLs are copies, so they are patched in place.
-    names = [name for names in VCLIBS.values() for name in names] + list(OPTIONAL_VCLIBS140)
+    names = [name for names in VCLIBS.values() for name in names] + list(
+        OPTIONAL_VCLIBS140
+    )
     for name in names:
         if (game / name).is_file():
             image = cleared((game / name).read_bytes(), dll=True)
@@ -682,10 +809,251 @@ def launch_executable(executable: str, managed: bool) -> str:
 def write_launcher(game: Path, executable: str, windows: bool) -> Path:
     if windows:
         path = Path(game) / (LAUNCHER + ".bat")
-        text = BAT_LAUNCHER.format(exe=str(PureWindowsPath(executable)).replace("%", "%%"))
+        text = BAT_LAUNCHER.format(
+            exe=str(PureWindowsPath(executable)).replace("%", "%%")
+        )
         path.write_bytes(text.replace("\n", "\r\n").encode())
     else:
         path = Path(game) / (LAUNCHER + ".sh")
         path.write_bytes(SH_LAUNCHER.format(exe=shlex.quote(executable)).encode())
         path.chmod(0o755)
     return path
+
+
+# Command line
+
+STORE_ANSWERS = {"0": "none", "1": "trial", "2": "iap", "3": "both"}
+
+
+def peek_manifest(source: Path) -> Manifest:
+    """The package's manifest, read without extracting anything."""
+    source = Path(source)
+    if source.is_dir():
+        path = source / "AppxManifest.xml"
+        if not path.is_file():
+            raise InstallError(
+                f"Missing {path}. Give the whole .appx or .appxbundle, or a complete extraction."
+            )
+        return read_manifest(path.read_bytes())
+    try:
+        with zipfile.ZipFile(source) as archive:
+            if (
+                source.suffix.lower() == ".appxbundle"
+                or "AppxMetadata/AppxBundleManifest.xml" in archive.namelist()
+            ):
+                application, _ = select_bundle_packages(archive)
+                with archive.open(application) as stream, zipfile.ZipFile(
+                    stream
+                ) as inner:
+                    return package_manifest(zip_entries(inner))
+            return package_manifest(zip_entries(archive))
+    except (zipfile.BadZipFile, zipfile.LargeZipFile) as error:
+        raise InstallError(f"Cannot read {source} as a package: {error}")
+    except FileNotFoundError:
+        raise InstallError(f"Not found: {source}")
+
+
+def unquote_path(text: str) -> str:
+    # Explorer's "Copy as path" and dragging into a console add quotes.
+    return text.strip().strip('"').strip()
+
+
+def parse_arguments(argv: List[str]):
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "package", nargs="?", help=".appxbundle, .appx, or extracted package folder"
+    )
+    parser.add_argument(
+        "--dest", help="folder to install the game in (default: beside the package)"
+    )
+    parser.add_argument(
+        "--vclibs",
+        action="append",
+        default=[],
+        help="VCLibs .appx or folder; repeat for several",
+    )
+    parser.add_argument(
+        "--build",
+        help="use the DLLs in this local build folder instead of downloading a release",
+    )
+    parser.add_argument(
+        "--release", help="release tag to download (default: the latest)"
+    )
+    parser.add_argument(
+        "--store", choices=sorted(STORE_CHOICES), help="Store overrides to turn on"
+    )
+    launcher = parser.add_mutually_exclusive_group()
+    launcher.add_argument(
+        "--launcher",
+        action="store_true",
+        default=None,
+        help=f"write {LAUNCHER} (the default)",
+    )
+    launcher.add_argument(
+        "--no-launcher",
+        dest="launcher",
+        action="store_false",
+        help=f"do not write {LAUNCHER}",
+    )
+    parser.add_argument(
+        "--no-patch",
+        action="store_true",
+        help="do not apply the patch for a known game",
+    )
+    parser.add_argument(
+        "--desktop-copy",
+        action="store_true",
+        help="clear the AppContainer flag as Windows 8/8.1 need",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="never ask; fail when something required is missing",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None, ask: Callable[[str], str] = input) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    try:
+        return install(parse_arguments(argv), ask)
+    except InstallError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
+    except (KeyboardInterrupt, EOFError):
+        print(file=sys.stderr)
+        return 1
+    finally:
+        if not argv:
+            # Started by double-clicking: keep the window open to read the result.
+            try:
+                ask("Press Enter to close.")
+            except (KeyboardInterrupt, EOFError):
+                pass
+
+
+def install(args, ask: Callable[[str], str]) -> int:
+    def question(prompt: str) -> str:
+        if args.yes:
+            raise InstallError(f"{prompt.rstrip(': ')} is required.")
+        return ask(prompt)
+
+    package = unquote_path(
+        args.package
+        or question("Game package (.appxbundle, .appx or extracted folder): ")
+    )
+    if not package:
+        raise InstallError("No game package given.")
+    source = Path(package).expanduser().resolve()
+    manifest = peek_manifest(source)
+    default = source.parent / manifest.name
+    if default == source:
+        default = source.parent / (manifest.name + "-portable")
+    destination = args.dest
+    if destination is None:
+        destination = (
+            ""
+            if args.yes
+            else unquote_path(ask(f"Folder to install the game in [{default}]: "))
+        )
+    destination = Path(unquote_path(destination) or default).expanduser().resolve()
+
+    print(f"Installing {manifest.name} {manifest.version} into {destination}")
+    manifest = extract_game(source, destination)
+    executable = destination / manifest.executable
+    architecture = architecture_of(executable)
+    managed = pe_info(executable).managed
+
+    for dependency in missing_vclibs(manifest, destination):
+        for candidate in args.vclibs:
+            try:
+                add_vclibs(
+                    dependency,
+                    Path(unquote_path(candidate)).expanduser(),
+                    destination,
+                    architecture,
+                )
+                break
+            except InstallError:
+                continue
+        while dependency in missing_vclibs(manifest, destination):
+            link = VCLIBS_DOWNLOADS.get(
+                (dependency, architecture), "no known download; see the README"
+            )
+            if args.yes:
+                raise InstallError(
+                    f"Missing {dependency} ({architecture}). Download: {link}. Pass it with --vclibs."
+                )
+            print(f"The game needs {dependency} ({architecture}). Download: {link}")
+            answer = unquote_path(ask(f"{dependency} .appx or folder: "))
+            if not answer:
+                raise InstallError(f"Missing {dependency} ({architecture}).")
+            try:
+                add_vclibs(
+                    dependency, Path(answer).expanduser(), destination, architecture
+                )
+            except InstallError as error:
+                print(error)
+
+    tag = args.release
+    with tempfile.TemporaryDirectory(prefix="installappx-runtime-") as temporary:
+        if args.build:
+            build = Path(unquote_path(args.build)).expanduser()
+        else:
+            tag = resolve_release(args.release)
+            print(f"Downloading Appx Portable {tag} ({architecture})")
+            build = download_runtime(tag, architecture, Path(temporary))
+        stage_runtime(build, destination, architecture, managed)
+
+    if not args.no_patch:
+        local = Path(__file__).resolve().parent / "patch"
+        local = local if local.is_dir() else None
+        if (
+            local is None
+            and tag is None
+            and (manifest.name, manifest.version) in KNOWN_PATCHES
+        ):
+            tag = resolve_release(None)
+        output = apply_known_patch(manifest, destination, tag, local)
+        if output:
+            print(output)
+
+    launch = launch_executable(manifest.executable, managed)
+    if not managed and (args.desktop_copy or needs_desktop_copy()):
+        launch = make_desktop_copy(destination, manifest.executable)
+
+    store = args.store
+    if store is None and not args.yes:
+        current = read_store(destination)
+        while True:
+            answer = ask(
+                f"Store options: 1 unlock trial, 2 stub in-app purchases, 3 both, 0 neither [Enter keeps {current}]: "
+            ).strip()
+            if not answer or answer in STORE_ANSWERS:
+                store = STORE_ANSWERS.get(answer)
+                break
+    write_settings(destination, store)
+
+    launcher = args.launcher
+    if launcher is None:
+        launcher = args.yes or ask(
+            f"Create the {LAUNCHER} launcher? [Y/n]: "
+        ).strip().lower() not in ("n", "no")
+    if launcher:
+        written = write_launcher(destination, launch, windows=sys.platform == "win32")
+        print(f"Start the game with {written}")
+    else:
+        print(f"Start the game with {destination / launch}")
+    print(
+        f"Store options: {read_store(destination)}. Settings: {destination / 'appx-portable.ini'}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
