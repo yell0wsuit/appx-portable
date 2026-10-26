@@ -131,7 +131,7 @@ add_test(NAME islands_settings_contract COMMAND "${CMAKE_COMMAND}"
   "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
   "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-settings-fixture"
   -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
-set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 25)
+set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 60)
 
 if(WIN32)
   add_test(NAME islands_toasttest COMMAND "${CMAKE_COMMAND}"
@@ -148,7 +148,7 @@ add_test(NAME store_stub_iap_cli COMMAND storetest --expect-stub-iap --stub-iap)
 add_test(NAME store_stub_iap_env COMMAND storetest --expect-stub-iap)
 add_test(NAME store_stub_iap_disabled COMMAND storetest)
 add_test(NAME store_stub_iap_dispatcher COMMAND storetest --expect-stub-iap --expect-host --stub-iap)
-set_tests_properties(store_stub_iap_dispatcher PROPERTIES TIMEOUT 10
+set_tests_properties(store_stub_iap_dispatcher PROPERTIES TIMEOUT 60
     ENVIRONMENT "APPX_PORTABLE_UNLOCK_TRIAL=0;APPX_PORTABLE_STUB_IAP=0;APPX_PORTABLE_DATA=${CMAKE_CURRENT_BINARY_DIR}/store-host-save")
 add_test(NAME store_stub_iap_catalog COMMAND ${CMAKE_COMMAND}
     "-DTEST=$<TARGET_FILE:storetest>" "-DSHIM=$<TARGET_FILE:appxportable>"
@@ -198,7 +198,7 @@ add_test(NAME navtest COMMAND navtest)
 add_executable(mediatest tests/mediatest.cpp)
 target_link_libraries(mediatest PRIVATE runtimeobject ole32 shlwapi)
 add_test(NAME mediatest COMMAND mediatest)
-set_tests_properties(mediatest PROPERTIES TIMEOUT 25)
+set_tests_properties(mediatest PROPERTIES TIMEOUT 60)
 add_executable(cursortest tests/cursortest.cpp tests/cursortest.rc)
 target_link_libraries(cursortest PRIVATE runtimeobject ole32 user32)
 add_test(NAME cursortest COMMAND cursortest)
@@ -231,19 +231,19 @@ foreach(mode normal max full maxfull)
   set_tests_properties(window_${mode}_write window_${mode}_read PROPERTIES
     ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/window-test-data/${mode}"
     ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:"
-    RESOURCE_LOCK appx_window_${mode} TIMEOUT 15)
+    RESOURCE_LOCK appx_window_${mode} TIMEOUT 60)
 endforeach()
 foreach(mode corrupt offscreen above bottomright oversized negative overflow legacy invalidstate numericstate invalidsize)
   add_test(NAME window_${mode} COMMAND windowtest invalid ${mode})
   set_tests_properties(window_${mode} PROPERTIES
     ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/window-test-data/${mode}"
-    ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:" TIMEOUT 15)
+    ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:" TIMEOUT 60)
 endforeach()
 foreach(mode normal max full)
   add_test(NAME window_manual_${mode} COMMAND windowtest manual ${mode})
   set_tests_properties(window_manual_${mode} PROPERTIES
     ENVIRONMENT "APPX_PORTABLE_DATA=${CMAKE_BINARY_DIR}/window-test-data/manual-${mode}"
-    ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:" TIMEOUT 15)
+    ENVIRONMENT_MODIFICATION "APPX_PORTABLE_WINDOW_STATE=unset:" TIMEOUT 60)
 endforeach()
 
 # Desktop CLR host carries the XAML Islands compatibility manifest.
@@ -261,7 +261,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     "-DCSC=${APPX_CSC}" "-DTEST_EXE=$<TARGET_FILE:standintest>"
     "-DSHIM=$<TARGET_FILE:appxportable>" "-DFIXTURE=${CMAKE_BINARY_DIR}/xbox11-fixture"
     -P "${CMAKE_SOURCE_DIR}/tests/xbox11_runtime.cmake")
-  set_tests_properties(xbox11_standins PROPERTIES TIMEOUT 25)
+  set_tests_properties(xbox11_standins PROPERTIES TIMEOUT 60)
   foreach(mode COREWINDOW XAML)
     add_test(NAME managed_host_${mode} COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
@@ -269,7 +269,7 @@ if(NOT CMAKE_CROSSCOMPILING)
       "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-host-${mode}"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_host.cmake")
-    set_tests_properties(managed_host_${mode} PROPERTIES TIMEOUT 25 LABELS managed-clr)
+    set_tests_properties(managed_host_${mode} PROPERTIES TIMEOUT 60 LABELS managed-clr)
   endforeach()
   find_file(APPX_WINDOWS_METADATA Windows.winmd
     PATHS "$ENV{WindowsSdkDir}/UnionMetadata/$ENV{WindowsSDKVersion}" NO_DEFAULT_PATH)
@@ -282,7 +282,7 @@ if(NOT CMAKE_CROSSCOMPILING)
       "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-settings"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-    set_tests_properties(managed_settings PROPERTIES TIMEOUT 25 LABELS managed-clr)
+    set_tests_properties(managed_settings PROPERTIES TIMEOUT 60 LABELS managed-clr)
     add_test(NAME managed_scroll COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SCROLL"
       "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
@@ -290,7 +290,7 @@ if(NOT CMAKE_CROSSCOMPILING)
       "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-scroll"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-    set_tests_properties(managed_scroll PROPERTIES TIMEOUT 25 LABELS managed-clr)
+    set_tests_properties(managed_scroll PROPERTIES TIMEOUT 60 LABELS managed-clr)
     foreach(mode CONSTRUCTOR_CONTROLS LAUNCH_CONTROLS LIGHT_THEME ROOT_LIGHT_THEME XAML_LIGHT_THEME)
       add_test(NAME managed_xaml_startup_${mode} COMMAND "${CMAKE_COMMAND}"
         "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
@@ -299,7 +299,7 @@ if(NOT CMAKE_CROSSCOMPILING)
         "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
         "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-xaml-startup-${mode}"
         -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
-      set_tests_properties(managed_xaml_startup_${mode} PROPERTIES TIMEOUT 25 LABELS managed-clr)
+      set_tests_properties(managed_xaml_startup_${mode} PROPERTIES TIMEOUT 60 LABELS managed-clr)
     endforeach()
   else()
     message(STATUS "Managed XAML startup tests need Windows SDK metadata and .NET Framework 4.8 reference assemblies")

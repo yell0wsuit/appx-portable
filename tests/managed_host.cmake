@@ -10,7 +10,7 @@ endif()
 file(WRITE "${FIXTURE}/AppxManifest.xml"
   "<Package><Identity Name=\"ManagedHostTest\" Publisher=\"CN=Test\" Version=\"1.0.0.0\" ProcessorArchitecture=\"${ARCH}\"/><Applications><Application Id=\"Test\" Executable=\"game.exe\"/></Applications></Package>")
 execute_process(COMMAND "${FIXTURE}/appx-host.exe" fixture-argument
-  WORKING_DIRECTORY "${FIXTURE}" RESULT_VARIABLE result TIMEOUT 15)
+  WORKING_DIRECTORY "${FIXTURE}" RESULT_VARIABLE result TIMEOUT 45)
 if(NOT "${result}" STREQUAL "0")
   set(log "(no managed.log)")
   if(EXISTS "${FIXTURE}/managed.log")

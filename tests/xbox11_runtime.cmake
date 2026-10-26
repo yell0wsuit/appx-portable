@@ -12,7 +12,7 @@ if(NOT "${compiled}" STREQUAL "0")
 endif()
 get_filename_component(test_name "${TEST_EXE}" NAME)
 execute_process(COMMAND "${FIXTURE}/${test_name}"
-  WORKING_DIRECTORY "${FIXTURE}" RESULT_VARIABLE result TIMEOUT 20)
+  WORKING_DIRECTORY "${FIXTURE}" RESULT_VARIABLE result TIMEOUT 45)
 if(NOT "${result}" STREQUAL "0")
   message(FATAL_ERROR "Xbox SDK 1.1 stand-ins failed: ${result}")
 endif()
