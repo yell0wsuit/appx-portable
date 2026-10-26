@@ -21,7 +21,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ElementTree
+from xml.etree import ElementTree
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
