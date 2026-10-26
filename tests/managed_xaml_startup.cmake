@@ -24,6 +24,9 @@ file(WRITE "${FIXTURE}/AppxManifest.xml"
 execute_process(COMMAND "${FIXTURE}/appx-host.exe" --trace
   WORKING_DIRECTORY "${FIXTURE}" RESULT_VARIABLE result TIMEOUT 15)
 if(NOT "${result}" STREQUAL "0" OR NOT EXISTS "${FIXTURE}/startup-passed.txt")
-  file(READ "${FIXTURE}/managed.log" log)
+  set(log "(no managed.log)")
+  if(EXISTS "${FIXTURE}/managed.log")
+    file(READ "${FIXTURE}/managed.log" log)
+  endif()
   message(FATAL_ERROR "Managed XAML startup failed (${result}): ${log}")
 endif()
