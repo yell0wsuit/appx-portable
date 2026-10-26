@@ -13,6 +13,9 @@ from installappx_fixtures import load_installer, pe
 
 installer = load_installer()
 FLAGS = 0xDE  # DllCharacteristics in the fixture's PE32 header
+# The .sh launcher is for Linux. On Windows, bash on PATH is WSL's or MSYS's,
+# neither of which takes a Windows path as is.
+BASH = shutil.which("bash") if os.name != "nt" else None
 
 
 class DesktopCopyTests(unittest.TestCase):
@@ -147,15 +150,15 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("CreateDXGIFactory1 begin", text)
         self.assertIn("--log", text)
         self.assertIn("WINEDLLOVERRIDES", text)
-        if shutil.which("bash"):
+        if BASH:
             result = subprocess.run(
-                ["bash", "-n", str(path)], capture_output=True, text=True
+                [BASH, "-n", str(path)], capture_output=True, text=True
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_sh_launcher_runs_wine_from_the_game_folder(self):
-        if not shutil.which("bash"):
-            self.skipTest("needs bash")
+        if not BASH:
+            self.skipTest("needs bash on a POSIX host")
         fake = self.game / "fake-wine"
         fake.write_text(
             '#!/bin/sh\n[ "$1" = reg ] && exit 0\necho "$PWD|$*" > wine-call.txt\n'
@@ -163,7 +166,7 @@ class LauncherTests(unittest.TestCase):
         fake.chmod(0o755)
         path = installer.write_launcher(self.game, "Game.exe", windows=False)
         result = subprocess.run(
-            ["bash", str(path), "--unlock-trial"],
+            [BASH, str(path), "--unlock-trial"],
             capture_output=True,
             text=True,
             cwd="/",

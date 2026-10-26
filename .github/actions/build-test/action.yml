@@ -1,0 +1,59 @@
+name: Build and test
+description: Configures, builds and tests the x86 and x64 builds in build/release-<architecture>.
+
+inputs:
+    version:
+        description: Version stamped into the DLLs (APPX_PORTABLE_VERSION).
+        required: false
+        default: ''
+
+runs:
+    using: composite
+    steps:
+        - name: Configure x86 and x64 builds
+          shell: pwsh
+          env:
+              RELEASE_TAG: ${{ inputs.version }}
+          run: |
+              $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+              $installation = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json
+              if ($LASTEXITCODE -ne 0 -or -not $installation) {
+                  throw 'No Visual Studio installation with x86/x64 C++ tools was found.'
+              }
+              $majorVersion = ([version]$installation.installationVersion).Major
+              $capabilities = cmake -E capabilities | ConvertFrom-Json
+              if ($LASTEXITCODE -ne 0) { throw 'Failed to query CMake generators.' }
+              $generator = $capabilities.generators.name | Where-Object { $_ -match "^Visual Studio $majorVersion " } | Select-Object -First 1
+              if (-not $generator) {
+                  throw "CMake does not support installed Visual Studio version $majorVersion; update CMake on the runner."
+              }
+              Write-Host "Using $generator at $($installation.installationPath)"
+              foreach ($architecture in @('x86', 'x64')) {
+                $platform = if ($architecture -eq 'x86') { 'Win32' } else { 'x64' }
+                cmake -S . -B "build/release-$architecture" -G $generator -A $platform "-DCMAKE_GENERATOR_INSTANCE=$($installation.installationPath)" "-DAPPX_PORTABLE_VERSION=$env:RELEASE_TAG"
+                if ($LASTEXITCODE -ne 0) { throw "Failed to configure the $architecture build." }
+              }
+
+        - name: Build
+          shell: pwsh
+          run: |
+              foreach ($architecture in @('x86', 'x64')) {
+                cmake --build "build/release-$architecture" --config RelWithDebInfo --parallel
+                if ($LASTEXITCODE -ne 0) { throw "Failed to build $architecture." }
+              }
+
+        - name: Run native tests
+          # GPU and media playback tests require desktop hardware unavailable on hosted runners.
+          shell: pwsh
+          run: |
+              foreach ($architecture in @('x86', 'x64')) {
+                # CLR activation interception currently supports x86 only.
+                $testOptions = @()
+                if ($architecture -eq 'x64') { $testOptions += @('-LE', 'managed-clr') }
+                ctest --test-dir "build/release-$architecture" -C RelWithDebInfo --output-on-failure --timeout 60 -E '^(gputest|mediatest)$' @testOptions
+                if ($LASTEXITCODE -ne 0) { throw "Native tests failed for $architecture." }
+              }
+
+        - name: Run script tests
+          shell: pwsh
+          run: python -m unittest discover -s tests/python
