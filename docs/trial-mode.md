@@ -12,7 +12,14 @@ C:\Games\MyGame\Game.exe --unlock-trial
 
 On macOS / Wine, `bash scripts/run.sh /path/to/game --unlock-trial` passes the switch through.
 
-For double-click launches, either add `--unlock-trial` after the executable in a shortcut's Target, or set the variable for your user account, which applies to every staged game started afterwards:
+For double-click launches, set it in `appx-portable.ini` beside the game executable (`installappx.py` writes this when you choose to unlock the trial):
+
+```ini
+[options]
+UnlockTrial=1
+```
+
+Alternatively, add `--unlock-trial` after the executable in a shortcut's Target, or set the variable for your user account, which applies to every staged game started afterwards and overrides the ini:
 
 ```powershell
 setx APPX_PORTABLE_UNLOCK_TRIAL 1

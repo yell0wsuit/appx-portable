@@ -1,7 +1,9 @@
 #pragma once
 namespace appx {
 // Switches read once from the game's command line, each with an environment
-// variable equivalent for scripts and tests. All are off by default.
+// variable equivalent for scripts and tests. All are off by default. The two
+// Store overrides can also be set in appx-portable.ini, [options] UnlockTrial=1
+// and StubIap=1; a set environment variable wins over the file.
 //   --log           write failures and notes to appx-portable.log  APPX_PORTABLE_LOG=1
 //   --trace         also log every call traced (implies --log)     APPX_PORTABLE_TRACE=1
 //   --capture       save the back buffer to appx-frame.bmp         APPX_PORTABLE_CAPTURE=1

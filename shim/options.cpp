@@ -27,6 +27,21 @@ bool Environment(const wchar_t* name, const wchar_t* expected) {
     const auto length = GetEnvironmentVariableW(name, value, 16);
     return length > 0 && length < 16 && wcscmp(value, expected) == 0;
 }
+// A Store override set in the environment decides; otherwise the [options]
+// key in appx-portable.ini beside the game executable does.
+bool Setting(const wchar_t* variable, const wchar_t* key, const std::wstring& ini) {
+    if (GetEnvironmentVariableW(variable, nullptr, 0) > 0) return Environment(variable, L"1");
+    return GetPrivateProfileIntW(L"options", key, 0, ini.c_str()) != 0;
+}
+// kernel32 only: first use can be inside DllMain.
+std::wstring SettingsFile() {
+    std::wstring path(MAX_PATH, L'\0');
+    DWORD length = 0;
+    while ((length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()))) == path.size())
+        path.resize(path.size() * 2);
+    path.resize(length);
+    return path.substr(0, path.find_last_of(L"\\/") + 1) + L"appx-portable.ini";
+}
 Options Parse() {
     Options options;
     options.log = Environment(L"APPX_PORTABLE_LOG", L"1");
@@ -34,8 +49,9 @@ Options Parse() {
     options.capture = Environment(L"APPX_PORTABLE_CAPTURE", L"1");
     options.diagnostics = Environment(L"APPX_PORTABLE_DIAGNOSTICS", L"1");
     options.passthrough = Environment(L"APPX_PORTABLE_MODE", L"trace");
-    options.unlockTrial = Environment(L"APPX_PORTABLE_UNLOCK_TRIAL", L"1");
-    options.stubIap = Environment(L"APPX_PORTABLE_STUB_IAP", L"1");
+    const auto ini = SettingsFile();
+    options.unlockTrial = Setting(L"APPX_PORTABLE_UNLOCK_TRIAL", L"UnlockTrial", ini);
+    options.stubIap = Setting(L"APPX_PORTABLE_STUB_IAP", L"StubIap", ini);
     bool program = true;
     ForEachWord(GetCommandLineW(), [&](const std::wstring& word) {
         if (program) {
