@@ -40,8 +40,10 @@ PACKAGE_METADATA = {
     "appxmetadata",
     "microsoft.system.package.metadata",
 }
-# Bundle application packages in order of preference: x86 is the tested path.
+# Bundle application packages in order of preference: Windows 8 and 8.1 games
+# are tested as x86, Windows 10 games as x64.
 BUNDLE_ARCHITECTURES = ("x86", "neutral", "x64")
+UNIVERSAL_BUNDLE_ARCHITECTURES = ("x64", "neutral", "x86")
 IDENTITY_NAME = re.compile(r"^(?=.*[A-Za-z0-9])[A-Za-z0-9.-]{3,50}$")
 INVALID_NAME = re.compile(r'[<>:"|?*\x00-\x1f]')
 
@@ -102,6 +104,7 @@ class Manifest:
     architecture: str
     executable: str
     dependencies: List[str]
+    universal: bool = False  # a Windows 10 package: it names a TargetDeviceFamily
 
 
 def local_name(element) -> str:
@@ -138,6 +141,7 @@ def read_manifest(data: bytes) -> Manifest:
         dependencies=[
             e.get("Name", "") for e in elements if local_name(e) == "PackageDependency"
         ],
+        universal=any(local_name(e) == "TargetDeviceFamily" for e in elements),
     )
 
 
@@ -217,6 +221,15 @@ def write_entries(entries: Iterable[Entry], destination: Path, overwrite: bool) 
             shutil.copyfileobj(source, output)
 
 
+def windows_is_32bit() -> bool:
+    """32-bit Windows, which cannot run an x64 game; 32-bit Python reports the OS's
+    architecture in PROCESSOR_ARCHITEW6432."""
+    machine = os.environ.get("PROCESSOR_ARCHITEW6432") or os.environ.get(
+        "PROCESSOR_ARCHITECTURE", ""
+    )
+    return sys.platform == "win32" and machine.upper() == "X86"
+
+
 def select_bundle_packages(bundle: zipfile.ZipFile) -> Tuple[str, List[str]]:
     """The bundle's game package entry and its resource package entries."""
     try:
@@ -245,9 +258,20 @@ def select_bundle_packages(bundle: zipfile.ZipFile) -> Tuple[str, List[str]]:
         if e.get("Type", "application").lower() == "application"
     }
     resources = [entry(e) for e in packages if e.get("Type", "").lower() == "resource"]
-    for architecture in BUNDLE_ARCHITECTURES:
-        if architecture in applications:
-            return entry(applications[architecture]), resources
+    found = [a for a in BUNDLE_ARCHITECTURES if a in applications]
+    if found:
+        # Every application package of a bundle targets the same Windows.
+        with bundle.open(entry(applications[found[0]])) as stream, zipfile.ZipFile(
+            stream
+        ) as inner:
+            universal = package_manifest(zip_entries(inner)).universal
+        order = (
+            UNIVERSAL_BUNDLE_ARCHITECTURES
+            if universal and not windows_is_32bit()
+            else BUNDLE_ARCHITECTURES
+        )
+        best = next(a for a in order if a in applications)
+        return entry(applications[best]), resources
     if any(a.startswith("arm") for a in applications):
         raise InstallError(
             "This bundle only has ARM packages; Appx Portable supports x86 and x64 games."
@@ -846,6 +870,30 @@ def make_desktop_copy(game: Path, executable: str) -> str:
     return desktop.as_posix()
 
 
+# Folder depth
+
+# Store games keep paths in MAX_PATH buffers, so they cannot open a file whose
+# path is longer; some (Fruit Ninja) crash in any game folder near 180 characters.
+MAX_PATH = 260
+LONG_FOLDER = 150
+
+
+def path_warning(game: Path, files: Iterable[str]) -> Optional[str]:
+    """Why the game may fail in its folder, given its files' paths; None if not."""
+    longest = max(files, key=len, default="")
+    if len(longest) >= MAX_PATH:
+        return (
+            f"{longest} is {len(longest)} characters long, and games cannot open"
+            f" a file past {MAX_PATH - 1}. Install into a shorter folder."
+        )
+    if len(str(game)) > LONG_FOLDER:
+        return (
+            f"{game} is {len(str(game))} characters long, and some games crash in"
+            " a folder this deep. If the game does not start, install into a shorter folder."
+        )
+    return None
+
+
 # Launchers
 
 LAUNCHER = "00_click2startme"
@@ -1169,6 +1217,11 @@ def install(args, ask: Callable[[str], str]) -> int:
         launch = str(
             write_launcher(destination, launch, windows=sys.platform == "win32")
         )
+    warning = path_warning(
+        destination, [str(p) for p in destination.rglob("*") if p.is_file()]
+    )
+    if warning:
+        print(f"Warning: {warning}")
     print(f"Start the game with {destination / launch}")
     print(
         f"Store options: {read_store(destination)}. Settings: {destination / 'appx-portable.ini'}"

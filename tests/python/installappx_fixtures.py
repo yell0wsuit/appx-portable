@@ -33,9 +33,12 @@ def pe(machine=0x14C, managed=False, dll=False, appcontainer=False):
     return bytes(data)
 
 
-def manifest_xml(name='Example.Game', version='1.0.0.0', arch='x86', executable='Game.exe', vclibs=('120',)):
+def manifest_xml(name='Example.Game', version='1.0.0.0', arch='x86', executable='Game.exe', vclibs=('120',),
+                 universal=False):
     dependencies = ''.join(
         f'<PackageDependency Name="Microsoft.VCLibs.{v}.00" MinVersion="11.0.0.0" />' for v in vclibs)
+    if universal:
+        dependencies += '<TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.10240.0" />'
     return f'''<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/2010/manifest">
   <Identity Name="{name}" Publisher="CN=Example" Version="{version}" ProcessorArchitecture="{arch}" />

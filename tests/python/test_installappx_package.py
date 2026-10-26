@@ -2,6 +2,7 @@ import ast
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 from installappx_fixtures import ROOT, appx, bundle, game_files, load_installer, manifest_xml, pe
 
@@ -82,6 +83,31 @@ class PackageTests(unittest.TestCase):
         manifest = installer.extract_game(package, self.dest)
         self.assertEqual(manifest.architecture, 'neutral')
         self.assertEqual((self.dest / 'Game.exe').read_bytes(), pe(0x14C, managed=True))
+
+    def test_windows10_bundle_prefers_x64(self):
+        package = bundle(self.base / 'game.appxbundle', [
+            ('application', 'x86', 'Game_x86.appx', game_files(universal=True)),
+            ('application', 'x64', 'Game_x64.appx', game_files(machine=0x8664, arch='x64', universal=True)),
+        ])
+        manifest = installer.extract_game(package, self.dest)
+        self.assertTrue(manifest.universal)
+        self.assertEqual(manifest.architecture, 'x64')
+        self.assertEqual((self.dest / 'Game.exe').read_bytes(), pe(0x8664))
+
+    def test_windows10_bundle_on_32bit_windows_takes_x86(self):
+        package = bundle(self.base / 'game.appxbundle', [
+            ('application', 'x86', 'Game_x86.appx', game_files(universal=True)),
+            ('application', 'x64', 'Game_x64.appx', game_files(machine=0x8664, arch='x64', universal=True)),
+        ])
+        with mock.patch.object(installer, 'windows_is_32bit', return_value=True):
+            self.assertEqual(installer.extract_game(package, self.dest).architecture, 'x86')
+
+    def test_windows10_bundle_without_x64_takes_x86(self):
+        package = bundle(self.base / 'game.appxbundle', [
+            ('application', 'arm', 'Game_arm.appx', game_files(universal=True)),
+            ('application', 'x86', 'Game_x86.appx', game_files(universal=True)),
+        ])
+        self.assertEqual(installer.extract_game(package, self.dest).architecture, 'x86')
 
     def test_arm_only_bundle_fails(self):
         package = bundle(self.base / 'game.appxbundle', [

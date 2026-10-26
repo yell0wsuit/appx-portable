@@ -69,7 +69,7 @@ The installer asks for anything it needs:
 3. Whether to unlock the trial, complete in-app purchases locally, both, or neither. The choice is saved in `appx-portable.ini`; see [trial override](docs/trial-mode.md) and [offline in-app purchases](docs/stub-iap.md).
 4. Whether to write the `00_click2startme` launcher.
 
-Along the way it picks the x86 or x64 game package out of a bundle (ARM-only bundles are not supported), downloads the VCLibs packages the game needs and the matching release, adds `appx-host.exe` for a managed game, applies the patch for a known game, and on Windows 8/8.1 makes the desktop copy the game needs (see [Troubleshooting](#troubleshooting)).
+Along the way it picks the game package out of a bundle (x86 for a Windows 8/8.1 game; x64 for a Windows 10 game, or x86 on 32-bit Windows; ARM-only bundles are not supported), downloads the VCLibs packages the game needs and the matching release, adds `appx-host.exe` for a managed game, applies the patch for a known game, and on Windows 8/8.1 makes the desktop copy the game needs (see [Troubleshooting](#troubleshooting)).
 
 Every question has a command-line option, so an install can run without any prompts:
 
@@ -116,7 +116,7 @@ The same steps by hand, without Python.
 
 ### 1. Extract the game package
 
-Obtain the game's x86 or x64 package. An `.appxbundle` is a ZIP archive holding one `.appx` per architecture; open it and extract the x86 `.appx` (or the x64 one, for an x64-only game). Then extract that `.appx` (also a ZIP archive) into a folder such as `C:\Games\CutTheRope2`. Rename either archive to `.zip` if your extractor requires it. The folder should contain the game's executable and its `AppxManifest.xml`; `AppxSignature.p7x`, `AppxBlockMap.xml`, `[Content_Types].xml` and `AppxMetadata` are not needed.
+Obtain the game's x86 or x64 package. An `.appxbundle` is a ZIP archive holding one `.appx` per architecture; open it and extract the x86 `.appx` for a Windows 8/8.1 game, or the x64 one for a Windows 10 game (x86 on 32-bit Windows). Then extract that `.appx` (also a ZIP archive) into a folder such as `C:\Games\CutTheRope2`. Rename either archive to `.zip` if your extractor requires it. The folder should contain the game's executable and its `AppxManifest.xml`; `AppxSignature.p7x`, `AppxBlockMap.xml`, `[Content_Types].xml` and `AppxMetadata` are not needed.
 
 ### 2. Get the Visual C++ runtime
 

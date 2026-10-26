@@ -124,6 +124,26 @@ class CliTests(unittest.TestCase):
             self.assertTrue((self.dest / name).is_file(), name)
         self.assertEqual(self.options(), (True, True))
 
+    def test_long_folder_warns(self):
+        self.dest = self.base / ("x" * (installer.LONG_FOLDER - len(str(self.base))))
+        code = self.main(self.scripted("--vclibs", str(self.vclibs)))
+        self.assertEqual(code, 0, self.stderr.getvalue())
+        self.assertIn("Warning:", self.stdout.getvalue())
+        self.assertIn("shorter folder", self.stdout.getvalue())
+
+    def test_short_folder_does_not_warn(self):
+        code = self.main(self.scripted("--vclibs", str(self.vclibs)))
+        self.assertEqual(code, 0, self.stderr.getvalue())
+        self.assertNotIn("Warning:", self.stdout.getvalue())
+
+    def test_path_warning(self):
+        game = pathlib.PureWindowsPath("C:/Games/Example")
+        self.assertIsNone(installer.path_warning(game, [str(game / "Game.exe")]))
+        deep = str(game / ("x" * 250 + ".png"))
+        self.assertIn(deep, installer.path_warning(game, [str(game / "Game.exe"), deep]))
+        folder = pathlib.PureWindowsPath("C:/" + "x" * installer.LONG_FOLDER)
+        self.assertIn(str(folder), installer.path_warning(folder, [str(folder / "Game.exe")]))
+
     def test_vclibs_sources_are_tried_in_turn(self):
         wrong = vclibs_folder(self.base / "v140", "140")
         code = self.main(
