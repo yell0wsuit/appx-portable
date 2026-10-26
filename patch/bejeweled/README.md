@@ -9,6 +9,8 @@ application resources load. It changes no executable, save, or preference.
 Only the known original and patched SHA-256 hashes are accepted; the original
 is kept as `App.xaml.islands-original`. No game assets are distributed here.
 
+`installappx.py` applies this patch automatically for this exact version. The commands below check, reapply, or restore it by hand.
+
 Close the game, then run from this repository:
 
 ```powershell

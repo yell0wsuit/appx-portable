@@ -13,9 +13,9 @@ cmake --preset windows-x86
 cmake --build --preset windows-x86
 ```
 
-This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll`, `XAudio2_8.dll` and `DWrite.dll` in `build\windows-x86`. Follow the [setup instructions](../README.md#set-up-and-play) to stage them into a playable game folder.
+This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll`, `XAudio2_8.dll` and `DWrite.dll` in `build\windows-x86`. Pass that folder to `installappx.py` with `--build` to install a game with them; see [Use your own build](../README.md#use-your-own-build).
 
-For x64 games, use an **x64 Native Tools Command Prompt**, `cmake --preset windows-x64`, and `cmake --build --preset windows-x64`. This requires the MSVC x64 assembler and also builds the `XAudio2_9.dll` proxy. Pass setup `-BuildDirectory build/windows-x64` and a matching x64 VCLibs framework. See [compatibility structure](compatibility.md) and the [Rayman Windows 10 caption patch](../patch/raymanwin10/README.md).
+For x64 games, use an **x64 Native Tools Command Prompt**, `cmake --preset windows-x64`, and `cmake --build --preset windows-x64`. This requires the MSVC x64 assembler and also builds the `XAudio2_9.dll` proxy. Pass `installappx.py` `--build build/windows-x64` and a matching x64 VCLibs framework. See [compatibility structure](compatibility.md) and the [Rayman Windows 10 caption patch](../patch/raymanwin10/README.md).
 
 GitHub Actions builds and tests both architectures in separate directories and publishes `appx-portable-<version>-x86.zip` and `appx-portable-<version>-x64.zip` together. Both ZIPs contain the runtime and all four proxy DLLs. The x86 ZIP also contains `appx-host.exe`; x64 currently supports native games only, so its ZIP omits the CLR host. Microsoft VCLibs packages remain separate downloads.
 
@@ -97,4 +97,4 @@ A game loads appx-portable through a system DLL it imports and looks up in its o
 
 1. Create `proxy/<name>/exports.txt` listing the real DLL's exports, one per line, in the real DLL's ordinal order (games may import by ordinal).
 2. Run `python scripts/gen_proxy.py` to generate the thunks, `.def` file and names header.
-3. Add the name to the proxy list in `CMakeLists.txt`, `scripts/setup.ps1`, `scripts/setup.sh` and the release workflow.
+3. Add the name to the proxy list in `CMakeLists.txt`, `PROXIES` in `installappx.py`, and the release workflow.

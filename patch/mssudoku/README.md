@@ -14,6 +14,8 @@ loading overlay closed. It preserves the executable, game logic, license,
 puzzle assets, and saves. This does not enable online advertising services or
 change premium status. The runtime and setup do not apply it automatically.
 
+`installappx.py` applies this patch automatically for this exact version. The commands below check, reapply, or restore it by hand.
+
 With the game closed, run from the repository root:
 
 ```powershell

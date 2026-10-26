@@ -16,6 +16,8 @@ The patch replaces the first three bytes of each initializer at image addresses
 exit cleanup. Only six bytes change. Shared XAML fixes, including the former
 post-intro freeze, remain in the core runtime.
 
+`installappx.py` applies this patch automatically for this exact version. The commands below check, reapply, or restore it by hand.
+
 Close the game and run these commands from the repository root, using Python 3
 and the executable in your staged game folder:
 

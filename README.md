@@ -1,55 +1,72 @@
-# appx-portable
+# Appx Portable
 
-Run Windows 8 and 8.1 Store games as ordinary portable desktop games: extract the `.appx` package into a folder, add the appx-portable runtime, and launch the game. No installation, Store account, developer mode, or package registration is needed. Setup preserves the game executable; optional game-specific patches are applied separately.
+**Run Windows 8, 8.1 and UWP Store games as ordinary portable desktop games.**
 
-Store apps expect to run inside an installed package, with an app container, a package identity, and the Store's app model around them. appx-portable supplies the Windows Runtime pieces a game needs from that environment, in-process: the app lifecycle and window, input, save folders and settings, the Store license, live tiles, and offline stand-ins for services that no longer exist.
+No installation · No Store account · No developer mode · No package registration
 
-Neither games nor Microsoft runtime files are included in this repository.
+## Overview
 
-Optional game-specific workarounds live under [`patch/`](patch/README.md), separate from the core runtime.
+Store games expect to run inside an installed package, with an app container, a package identity and the Store's app model around them. Appx Portable supplies those Windows Runtime pieces _in-process_, so the game runs from a plain folder:
 
-Managed XAML games such as **Bejeweled LIVE** use `appx-host.exe`, which setup copies beside the original executable. The launch scripts select it automatically. This hosting mode requires Windows 10 version 1903 or later and the desktop .NET Framework 4.x runtime; Wine support is unverified. The original game executable stays unchanged. See [managed game hosting](docs/islands.md) for status and diagnostics.
+1. Run `installappx.py` on the game's `.appxbundle` or `.appx`.
+2. It extracts the game and adds the Visual C++ runtime and the Appx Portable DLLs.
+3. Launch the game.
 
-## Games
+The installer changes no game file except through a known game's patch. Game-specific workarounds live under [`patch/`](patch/README.md), and the installer applies the one for the exact version it supports.
 
-| Game | Package | Status |
-| --- | --- | --- |
-| Rayman Fiesta Run Windows 10 Edition | `Ubisoft.RaymanFiestaRunWindows10Edition` 1.0.23.0 (x64) | Experimental x64 build and [caption bindings patch](patch/raymanwin10/README.md): world map renders and mouse input enters a level; level completion and saves unverified |
-| Cut the Rope 2 | `ZeptoLabUKLimited.CuttheRope2` 1.0.0.46 (x86) | Plays: gameplay, saves, resizable window, borderless fullscreen |
-| Fruit Ninja | `HalfbrickStudiosPtyLtd.FruitNinja` 1.8.1.66 (x86) | Plays: menus, slicing with the mouse, saves, resizable window. Xbox LIVE shows as disconnected |
-| Gravity Guy | `MiniclipSA.GravityGuy` 1.0.1.2 (x86) | Reaches Story gameplay with mouse input through `appx-host.exe`; Xbox LIVE remains offline. Other modes and save restoration unverified |
-| Bejeweled LIVE | `PopCap.BejweledLIVE` 4.0.0.10 (x86) | Classic board mouse swaps and scoring checked through `appx-host.exe`; use the [dark theme patch](patch/bejeweled/README.md) for readable settings; see [managed hosting](docs/islands.md) for settings and save limitations |
-| Microsoft Sudoku | `Microsoft.MicrosoftSudoku` 1.7.10190.0 (x86) | Requires the [video-preloader asset patch](patch/mssudoku/README.md). Menu, Very Easy tutorial dismissal, and mouse number entry work through `appx-host.exe` |
-| Where's My Water? | `Disney.WheresMyWater` 1.13.1.3 (x86) | Plays: menu clicks, mouse dragging, music and sound effects; first level completed with three ducks. Save restoration unverified |
-| Where's My Mickey? | `Disney.WheresMyMickey` 1.1.0.30 (x86) | Requires the [AMPS startup EXE patch](patch/wheresmymickey/README.md). Intro and mouse input work; first level completed with three stars. Save restoration unverified |
+> [!NOTE]
+> This repository contains no games and no Microsoft runtime files. You supply your own game packages.
 
-Online services are offline: Xbox LIVE for Windows 8 and other game services have shut down, so sign-in, leaderboards and similar features report no connection, and nothing is sent. By default there is no Store license, so a game with a trial mode runs as it would without a purchase. An opt-in [`--stub-iap` mode](docs/stub-iap.md) completes in-app purchases locally. An opt-in [trial override](docs/trial-mode.md) reports a full base-app license for games using the Windows 8/8.1 `CurrentApp` API.
+## Features
 
-Other games built the same way may work, or fail in a way the log explains. Managed C# games use `appx-host.exe`, with CoreWindow or XAML Islands hosting selected automatically. HTML/JavaScript Store apps cannot be supported.
+- 🪟 **Desktop window hosting.** The app lifecycle, `CoreWindow` and XAML swap chains run inside a normal, resizable desktop window, with borderless fullscreen.
+- 🖱️ **Input.** Mouse and keyboard events are delivered as the game expects.
+- 💾 **Portable saves.** Saves and settings live beside the game by default, or in a folder you choose.
+- 🧩 **Store and package APIs.** `ApplicationData`, `Package`, `CurrentApp`, the Share and Settings charms, and live tiles are provided locally.
+- 📴 **Offline service stand-ins.** The Xbox LIVE SDK and similar shut-down services report "no connection" cleanly instead of crashing. Nothing is sent over the network.
+- 🧠 **Managed (C#) games.** `appx-host.exe` hosts .NET games through CoreWindow or XAML Islands, selected automatically.
+- 🏗️ **x86 and x64.** Windows 8/8.1 x86 games, plus experimental support for x64 Windows 10 UWP games.
+- 🍷 **Wine (experimental).** Cross-compile and run on macOS through Wine.
+
+## Tested games
+
+| Game                                                                                             | Version     | Arch | Status          | Notes                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------ | ----------- | ---- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cut the Rope 2**<br><sub>`ZeptoLabUKLimited.CuttheRope2`</sub>                                 | 1.0.0.46    | x86  | ✅ Playable     | Gameplay, saves, resizable window and borderless fullscreen                                                                                                                              |
+| **Fruit Ninja**<br><sub>`HalfbrickStudiosPtyLtd.FruitNinja`</sub>                                | 1.8.1.66    | x86  | ✅ Playable     | Menus, mouse slicing, saves, resizable window. Xbox LIVE shows as disconnected                                                                                                           |
+| **Where's My Water?**<br><sub>`Disney.WheresMyWater`</sub>                                       | 1.13.1.3    | x86  | ✅ Playable     | Menus, mouse dragging, music and sound; first level completed. Save restoration unverified                                                                                               |
+| **Where's My Mickey?**<br><sub>`Disney.WheresMyMickey`</sub>                                     | 1.1.0.30    | x86  | 🩹 Needs patch  | [AMPS startup EXE patch](patch/wheresmymickey/README.md). Intro and mouse input; first level completed. Save restoration unverified                                                      |
+| **Microsoft Sudoku**<br><sub>`Microsoft.MicrosoftSudoku`</sub>                                   | 1.7.10190.0 | x86  | 🩹 Needs patch  | [Video-preloader asset patch](patch/mssudoku/README.md). Menu, tutorial and mouse number entry, through `appx-host.exe`                                                                  |
+| **Bejeweled LIVE**<br><sub>`PopCap.BejweledLIVE`</sub>                                           | 4.0.0.10    | x86  | 🟡 Partial      | Classic board swaps and scoring, through `appx-host.exe`. [Dark theme patch](patch/bejeweled/README.md) recommended; see [managed hosting](docs/islands.md) for settings and save limits |
+| **Gravity Guy**<br><sub>`MiniclipSA.GravityGuy`</sub>                                            | 1.0.1.2     | x86  | 🟡 Partial      | Story gameplay with mouse input, through `appx-host.exe`. Other modes and save restoration unverified                                                                                    |
+| **Rayman Fiesta Run Windows 10 Edition**<br><sub>`Ubisoft.RaymanFiestaRunWindows10Edition`</sub> | 1.0.23.0    | x64  | 🧪 Experimental | [Caption bindings patch](patch/raymanwin10/README.md). World map renders and mouse input enters a level; level completion and saves unverified                                           |
+
+<sub>✅ Playable · 🟡 Partial: core gameplay checked, some features unverified or limited · 🩹 Needs patch: playable with an optional patch from [`patch/`](patch/README.md) · 🧪 Experimental: early support</sub>
+
+## Requirements
+
+- **Python 3**, on every platform: the installer and the game patches are Python scripts. On Windows, install it from [python.org](https://www.python.org/downloads/windows/) (the installer adds the `py` launcher) or with `winget install Python.Python.3.13`. On Windows 8/8.1, use a Python 3 release that still supports your Windows version; the installer needs 3.8 or later.
+- **Windows:** managed XAML games need Windows 10 version 1903 or later and the .NET Framework 4.x.
+- **macOS / Wine (experimental):** Wine and `python3`.
+- **The Appx Portable DLLs** are downloaded from the latest [release](https://github.com/yell0wsuit/appx-portable/releases). To use your own build, see the [building guide](docs/building.md) and [Use your own build](#use-your-own-build).
 
 ## Set up and play
 
-### 1. Extract the game package
+### 1. Get the game package
 
-Obtain the game's x86 package. An `.appxbundle` is a ZIP archive holding one `.appx` per architecture; open it and extract the x86 `.appx`. Then extract that `.appx` (also a ZIP archive) into a folder such as `C:\Games\Source\CutTheRope2`. Rename either archive to `.zip` if your extractor requires it. The folder should contain the game's executable and its `AppxManifest.xml`.
+Obtain the game's `.appxbundle` or `.appx`. There is no need to extract it; the installer picks the x86 or x64 game package out of a bundle (ARM-only bundles are not supported). An already-extracted package folder works too.
 
 ### 2. Get the Visual C++ runtime
 
-The experimental x64 Windows 10 path uses `Microsoft.VCLibs.140.00` of the same architecture as the game. If installed, locate it with `Get-AppxPackage Microsoft.VCLibs.140.00 | Select Architecture,InstallLocation` and pass the matching folder to setup. Setup includes available auxiliary app-runtime DLLs such as `concrt140_app.dll` and `vcruntime140_1_app.dll`. Use `-BuildDirectory build/windows-x64` for an x64 game. Otherwise, download the matching package below.
+Store games use the Store's own Visual C++ runtime (VCLibs), which a plain desktop has no copy of. The installer reads the game's `AppxManifest.xml` and asks for each VCLibs package the game needs, with its download link:
 
-Store games use the Store's own Visual C++ runtime (VCLibs), which a plain desktop has no copy of. The game's `AppxManifest.xml` names the version it needs. Setup reads it and reports a missing runtime, or check before you start:
-
-```powershell
-Select-String -Path 'C:\Games\Source\CutTheRope2\AppxManifest.xml' -Pattern 'Microsoft\.VCLibs\.\d+\.00' | ForEach-Object { $_.Matches.Value }
-```
-
-| Dependency | DLLs | Packages |
-| --- | --- | --- |
-| `Microsoft.VCLibs.110.00` (Windows 8.0 games) | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll` | [Internet Archive copy](https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx) |
-| `Microsoft.VCLibs.120.00` (Windows 8.1 games) | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll` | In Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip) |
+| Dependency                                       | DLLs                                                                                   | Packages                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Microsoft.VCLibs.110.00` (Windows 8.0 games)    | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll`                                      | [Internet Archive copy](https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx)                                                                                                                                                                                         |
+| `Microsoft.VCLibs.120.00` (Windows 8.1 games)    | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll`                          | In Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip)                                                                                                                                                                                       |
 | `Microsoft.VCLibs.140.00` (Windows 10 UWP games) | `vcruntime140_app.dll`, `msvcp140_app.dll`, `vccorlib140_app.dll`, `concrt140_app.dll` | Microsoft-signed packages hosted by VideoLAN: [x86](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x86/Microsoft.VCLibs.x86.14.00.appx), [x64](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x64/Microsoft.VCLibs.x64.14.00.appx) |
 
-The VCLibs 140 downloads above are version `14.0.25426.0`; check the game's manifest for its minimum version. These provide the UWP `_app.dll` files; `Microsoft.VCLibs.140.00.UWPDesktop` provides a different runtime. Pass the downloaded `.appx` directly to setup with `-RuntimeDirectory`.
+The VCLibs 140 downloads above are version `14.0.25426.0`; check the game's manifest for its minimum version. These provide the UWP `_app.dll` files; `Microsoft.VCLibs.140.00.UWPDesktop` provides a different runtime. An x64 game needs the x64 package. Give the installer the downloaded `.appx` itself.
 
 Microsoft has no standalone download of VCLibs 110. The Internet Archive copy, `Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx`, has SHA-256 `22d49fa295486e0955a305bea65cfa4ff5d154d296878a1c577ec5507b602c9c`. For a package from anywhere other than Microsoft, check that Microsoft signed it; `Status` should be `Valid` and the signer `CN=Microsoft Corporation, …`:
 
@@ -57,52 +74,81 @@ Microsoft has no standalone download of VCLibs 110. The Internet Archive copy, `
 Get-AuthenticodeSignature .\Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx | Format-List Status, SignerCertificate
 ```
 
-If the framework is installed on your PC (any Store app that uses it installs it), its DLLs are also in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`/`140.00`, with the matching architecture). Pass setup the `.appx` itself or a folder with its runtime DLLs, with `-RuntimeDirectory`, or copy the DLLs beside the game.
+If the framework is installed on your PC (any Store app that uses it installs it), its DLLs are also in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`/`140.00`, with the matching architecture); `Get-AppxPackage Microsoft.VCLibs.140.00 | Select Architecture,InstallLocation` lists them. Give the installer that folder instead of an `.appx`.
 
-### 3. Build the DLLs
+### 3. Install the game
 
-[Build appx-portable](docs/building.md#windows). The build produces `appx-host.exe`, `appxportable.dll` and the proxy DLLs (`d3dcompiler_47.dll`, `XAudio2_8.dll`, `DWrite.dll`) in `build\windows-x86`. A proxy stands in for a system DLL the game imports from its own folder, loads appx-portable, and forwards every call to the real DLL.
-
-### 4. Stage the game
-
-From the repository root, stage the extracted package into a separate folder:
+Download `installappx.py` from the latest [release](https://github.com/yell0wsuit/appx-portable/releases) and double-click it, or run it with the package:
 
 ```powershell
-.\scripts\setup.ps1 -SourceDirectory 'C:\Games\Source\CutTheRope2' -Destination 'C:\Games\CutTheRope2'
+py installappx.py "C:\Downloads\CutTheRope2.appxbundle"
 ```
 
-Add `-RuntimeDirectory <.appx or folder>` if the VCLibs DLLs are not beside the game, and `-BuildDirectory <folder>` to use DLLs built elsewhere. Setup copies the package (leaving out its signature and package metadata), adds the runtime and appx-portable DLLs, decodes the percent-encoded file names a raw `.appx` extraction keeps (`%21_Name.xml`, `User%20Controls`), and checks that the game executable is byte-for-byte unchanged. Rerun it after rebuilding; saves and `appx-portable.ini` are kept.
+It asks for anything it needs:
 
-### 5. Play
+1. The folder to install into. The default is beside the package, named after the game's package name.
+2. Each VCLibs package from step 2 that is missing.
+3. Whether to unlock the trial, complete in-app purchases locally, both, or neither. The choice is saved in `appx-portable.ini`; see [trial override](docs/trial-mode.md) and [offline in-app purchases](docs/stub-iap.md).
+4. Whether to write the `00_click2startme` launcher.
 
-Double-click the game's executable in the staged folder (`Game.exe` for Cut the Rope 2; the manifest's `Executable` in general). With Python 3, `python scripts/play.py --game C:\Games\CutTheRope2` does the same; `scripts\play.bat` and `scripts\run.ps1` are alternatives.
+Along the way it downloads the matching x86 or x64 release, adds `appx-host.exe` for a managed game, applies the patch for a known game, and on Windows 8/8.1 makes the desktop copy the game needs (see [Troubleshooting](#troubleshooting)).
+
+Every question has a command-line option, so an install can run without any prompts:
+
+| Option | Does |
+| --- | --- |
+| `--dest <folder>` | Install into this folder |
+| `--vclibs <.appx or folder>` | A VCLibs package; repeat it for several |
+| `--store none\|trial\|iap\|both` | Store overrides to turn on |
+| `--launcher`, `--no-launcher` | Write the launcher or not (the default is to write it) |
+| `--build <folder>` | Use these DLLs instead of downloading a release |
+| `--release <tag>` | Download this release instead of the latest |
+| `--no-patch` | Skip the known-game patch |
+| `--desktop-copy` | Make the Windows 8/8.1 desktop copy on any Windows version |
+| `--yes` | Never ask; fail when something required is missing |
+
+Run it again on the same folder to update after a new release: it replaces the game files and DLLs and reapplies the patch, and keeps saves, `appx-portable.ini` and logs.
+
+### 4. Play
+
+Double-click `00_click2startme.bat` in the game folder, or the game's executable itself (`appx-host.exe` for managed games). The Store options in `appx-portable.ini` apply either way.
+
+### Use your own build
+
+[Build Appx Portable](docs/building.md#windows), then pass the build folder:
+
+```powershell
+py installappx.py "C:\Downloads\CutTheRope2.appxbundle" --build build\windows-x86
+```
+
+Use `build\windows-x64` for an x64 game. From a repository checkout, the installer applies patches from the local `patch/` folder instead of downloading them.
 
 ### macOS / Wine (experimental)
 
-With the same extracted package and runtime DLLs, [cross-compile](docs/building.md#macos-cross-compilation) and stage with Python 3 installed:
+[Cross-compile](docs/building.md#macos-cross-compilation), then install and launch:
 
 ```sh
-bash scripts/setup.sh '/path/to/extracted-package' local/game build/macos-x86 '/path/to/Microsoft.VCLibs.appx'
-python3 scripts/play.py
+python3 installappx.py '/path/to/game.appxbundle' --build build/macos-x86
+'/path/to/Example.Game/00_click2startme.sh'
 ```
 
-The runtime argument, an `.appx` or a folder with its DLLs, is optional when the DLLs are beside the game. The launcher defaults to Wine Devel in `~/Applications` and keeps its Wine prefix in `local/wine-test`; set `WINE` and `WINEPREFIX` to use others. Wine launches always write a log.
+The launcher uses `wine` from your `PATH`, or Wine Devel in `~/Applications`; set `WINE` to use another, and `WINEPREFIX` for a separate prefix. Wine launches always write a log.
 
 ## Saves and window settings
 
-Saves go to `SaveData` beside the game executable. To change that, edit `appx-portable.ini` in the staged folder:
+Saves go to `SaveData` beside the game executable. To change that, edit `appx-portable.ini` in the game folder:
 
 ```ini
 [storage]
 SaveLocation=game
 ```
 
-| Value | Save folder |
-| --- | --- |
-| `game` (default) | `SaveData` beside the game executable |
-| `documents` | `Documents\appx-portable\<package>` |
-| `appdata` | `%LOCALAPPDATA%\appx-portable\<package>` |
-| A folder path | That folder; relative paths start beside the game |
+| Value            | Save folder                                       |
+| ---------------- | ------------------------------------------------- |
+| `game` (default) | `SaveData` beside the game executable             |
+| `documents`      | `Documents\appx-portable\<package>`               |
+| `appdata`        | `%LOCALAPPDATA%\appx-portable\<package>`          |
+| A folder path    | That folder; relative paths start beside the game |
 
 `<package>` is the identity name from the game's manifest, so games never share saves. If the folder cannot be written, saves go to `documents`, then `appdata`. Changing the location does not move existing saves.
 
@@ -111,9 +157,9 @@ Press **F11** or **Alt+Enter** to toggle borderless fullscreen. Window size, pos
 ## Troubleshooting
 
 - **Need a log:** start the game with `--log` (for example `.\Game.exe --log` in PowerShell, from the game folder). The log is `appx-portable.log` beside the executable, and the two previous runs are kept as `appx-portable.1.log` and `appx-portable.2.log`. Its first lines name the appx-portable version and the package it found. `--trace` logs every Windows Runtime class the game activates; `--diagnostics` adds crash details and checks the heap for damage as the game runs (slower). Both imply `--log`.
-- **Setup reports a missing file:** check that the source folder is a complete package extraction (with `AppxManifest.xml`), and that the VCLibs DLLs the manifest depends on are beside it or in the `-RuntimeDirectory` package or folder.
-- **The game fails to start or crashes after loading:** check the log. appx-portable decodes percent-encoded file names itself at startup, so the game folder must be writable; staging with setup avoids the problem.
-- **Windows 8/8.1 says the app can only run in an app container:** run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\patch_exe.ps1 -Exe "C:\Games\CutTheRope2\Game.exe"`. It creates `Game.desktop.exe` beside the original with only the executable's AppContainer flag cleared, and never overwrites anything. If the desktop copy then fails with `0xC000A200`, the VCLibs DLLs carry the flag too: add `-IncludeRuntime` to create a `desktop` folder with patched copies of the executable and runtime DLLs. Gameplay on Windows 8/8.1 itself remains unverified.
+- **The installer reports a missing file:** check that the package is the complete `.appx` or `.appxbundle` (or a complete extraction, with `AppxManifest.xml`), and that each VCLibs `.appx` or folder you give has the DLLs listed in step 2.
+- **The game fails to start or crashes after loading:** check the log. appx-portable decodes percent-encoded file names itself at startup, so the game folder must be writable; installing with `installappx.py` avoids the problem.
+- **Windows 8/8.1 says the app can only run in an app container:** Windows 8/8.1 refuse to start a Store executable or VCLibs DLL marked for an app container outside a package. On those versions the installer creates `Game.desktop.exe` beside the original with only that flag cleared, clears it in the game folder's VCLibs DLLs, and points the launcher at the desktop copy. Pass `--desktop-copy` to do the same on another Windows version. Gameplay on Windows 8/8.1 itself remains unverified.
 - **Check which version is installed:** right-click `appxportable.dll` and open **Properties → Details**. **Product version** names the release and the commit it was built from. All appx-portable DLLs in a game folder should show the same version.
 
 ## How it works

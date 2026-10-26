@@ -4,13 +4,13 @@ Windows 8/8.1 games ask `Windows.ApplicationModel.Store.CurrentApp.LicenseInform
 
 ## Turn it on
 
-Rebuild and rerun [setup](../README.md#4-stage-the-game) so the staged folder has the current `appxportable.dll`, then pass the switch to the game executable named in `AppxManifest.xml`:
+Rerun [`installappx.py`](../README.md#3-install-the-game) so the game folder has the current `appxportable.dll`. Its Store question turns this on in `appx-portable.ini`; otherwise, pass the switch to the game executable named in `AppxManifest.xml`:
 
 ```powershell
 C:\Games\MyGame\Game.exe --unlock-trial
 ```
 
-On macOS / Wine, `bash scripts/run.sh /path/to/game --unlock-trial` passes the switch through.
+On macOS / Wine, `/path/to/game/00_click2startme.sh --unlock-trial` passes the switch through.
 
 For double-click launches, set it in `appx-portable.ini` beside the game executable (`installappx.py` writes this when you choose to unlock the trial):
 

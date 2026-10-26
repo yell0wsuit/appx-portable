@@ -13,7 +13,7 @@ To keep it on however the game is started, set it in `appx-portable.ini` beside 
 StubIap=1
 ```
 
-Rebuild and rerun setup first to stage the updated runtime. The environment equivalent is `APPX_PORTABLE_STUB_IAP=1`; remove it or set it to `0` to disable it; a set variable overrides the ini. Options are read once at startup. `--passthrough` uses Windows classes, so the stub has no effect there.
+Rerun `installappx.py` first so the game folder has a runtime that supports it. The environment equivalent is `APPX_PORTABLE_STUB_IAP=1`; remove it or set it to `0` to disable it; a set variable overrides the ini. Options are read once at startup. `--passthrough` uses Windows classes, so the stub has no effect there.
 
 With this option:
 

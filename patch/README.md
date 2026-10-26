@@ -1,9 +1,10 @@
 # Optional game patches
 
 Game-specific compatibility patches live here, separate from the core runtime.
-Apply each patch explicitly after staging the game. Setup and the main runtime
-build do not apply patches automatically. No game executables or assets are
-included here.
+`installappx.py` applies the patch for a game it recognizes by package name
+and version, downloading it at the same release tag as the DLLs. Each patch can
+also be run by hand to check, reapply, or restore it. No game executables or
+assets are included here.
 
 | Patch | Status |
 | --- | --- |
