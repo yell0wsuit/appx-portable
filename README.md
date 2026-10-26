@@ -45,53 +45,31 @@ The installer changes no game file except through a known game's patch. Game-spe
 
 ## Requirements
 
-- **Python 3**, on every platform: the installer and the game patches are Python scripts. On Windows, install it from [python.org](https://www.python.org/downloads/windows/) (the installer adds the `py` launcher) or with `winget install Python.Python.3.13`. On Windows 8/8.1, use a Python 3 release that still supports your Windows version; the installer needs 3.8 or later.
 - **Windows:** managed XAML games need Windows 10 version 1903 or later and the .NET Framework 4.x.
+- **Python 3**, for the [Quickstart](#quickstart) installer and the game patches. On Windows, install it from [python.org](https://www.python.org/downloads/windows/) (the installer adds the `py` launcher) or with `winget install Python.Python.3.13`. On Windows 8/8.1, use a Python 3 release that still supports your Windows version; the installer needs 3.8 or later. [Manual installation](#manual-installation) needs no Python.
 - **macOS / Wine (experimental):** Wine and `python3`.
-- **The Appx Portable DLLs** are downloaded from the latest [release](https://github.com/yell0wsuit/appx-portable/releases). To use your own build, see the [building guide](docs/building.md) and [Use your own build](#use-your-own-build).
+- **The Appx Portable DLLs** come from the latest [release](https://github.com/yell0wsuit/appx-portable/releases). To use your own build, see the [building guide](docs/building.md) and [Use your own build](#use-your-own-build).
 
-## Set up and play
+## Quickstart
 
-### 1. Get the game package
+1. Get the game's `.appxbundle` or `.appx`; there is no need to extract it. An already-extracted package folder works too.
+2. Get the [Visual C++ runtime](#2-get-the-visual-c-runtime) packages the game needs. The installer says which, with their download links.
+3. Download `installappx.py` from the latest [release](https://github.com/yell0wsuit/appx-portable/releases), and double-click it or run it with the package:
 
-Obtain the game's `.appxbundle` or `.appx`. There is no need to extract it; the installer picks the x86 or x64 game package out of a bundle (ARM-only bundles are not supported). An already-extracted package folder works too.
+   ```powershell
+   py installappx.py "C:\Downloads\CutTheRope2.appxbundle"
+   ```
 
-### 2. Get the Visual C++ runtime
+4. Double-click `00_click2startme.bat` in the game folder to play.
 
-Store games use the Store's own Visual C++ runtime (VCLibs), which a plain desktop has no copy of. The installer reads the game's `AppxManifest.xml` and asks for each VCLibs package the game needs, with its download link:
-
-| Dependency                                       | DLLs                                                                                   | Packages                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Microsoft.VCLibs.110.00` (Windows 8.0 games)    | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll`                                      | [Internet Archive copy](https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx)                                                                                                                                                                                         |
-| `Microsoft.VCLibs.120.00` (Windows 8.1 games)    | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll`                          | In Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip)                                                                                                                                                                                       |
-| `Microsoft.VCLibs.140.00` (Windows 10 UWP games) | `vcruntime140_app.dll`, `msvcp140_app.dll`, `vccorlib140_app.dll`, `concrt140_app.dll` | Microsoft-signed packages hosted by VideoLAN: [x86](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x86/Microsoft.VCLibs.x86.14.00.appx), [x64](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x64/Microsoft.VCLibs.x64.14.00.appx) |
-
-The VCLibs 140 downloads above are version `14.0.25426.0`; check the game's manifest for its minimum version. These provide the UWP `_app.dll` files; `Microsoft.VCLibs.140.00.UWPDesktop` provides a different runtime. An x64 game needs the x64 package. Give the installer the downloaded `.appx` itself.
-
-Microsoft has no standalone download of VCLibs 110. The Internet Archive copy, `Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx`, has SHA-256 `22d49fa295486e0955a305bea65cfa4ff5d154d296878a1c577ec5507b602c9c`. For a package from anywhere other than Microsoft, check that Microsoft signed it; `Status` should be `Valid` and the signer `CN=Microsoft Corporation, …`:
-
-```powershell
-Get-AuthenticodeSignature .\Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx | Format-List Status, SignerCertificate
-```
-
-If the framework is installed on your PC (any Store app that uses it installs it), its DLLs are also in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`/`140.00`, with the matching architecture); `Get-AppxPackage Microsoft.VCLibs.140.00 | Select Architecture,InstallLocation` lists them. Give the installer that folder instead of an `.appx`.
-
-### 3. Install the game
-
-Download `installappx.py` from the latest [release](https://github.com/yell0wsuit/appx-portable/releases) and double-click it, or run it with the package:
-
-```powershell
-py installappx.py "C:\Downloads\CutTheRope2.appxbundle"
-```
-
-It asks for anything it needs:
+The installer asks for anything it needs:
 
 1. The folder to install into. The default is beside the package, named after the game's package name.
-2. Each VCLibs package from step 2 that is missing.
+2. Each VCLibs package that is missing.
 3. Whether to unlock the trial, complete in-app purchases locally, both, or neither. The choice is saved in `appx-portable.ini`; see [trial override](docs/trial-mode.md) and [offline in-app purchases](docs/stub-iap.md).
 4. Whether to write the `00_click2startme` launcher.
 
-Along the way it downloads the matching x86 or x64 release, adds `appx-host.exe` for a managed game, applies the patch for a known game, and on Windows 8/8.1 makes the desktop copy the game needs (see [Troubleshooting](#troubleshooting)).
+Along the way it picks the x86 or x64 game package out of a bundle (ARM-only bundles are not supported), downloads the matching release, adds `appx-host.exe` for a managed game, applies the patch for a known game, and on Windows 8/8.1 makes the desktop copy the game needs (see [Troubleshooting](#troubleshooting)).
 
 Every question has a command-line option, so an install can run without any prompts:
 
@@ -109,9 +87,7 @@ Every question has a command-line option, so an install can run without any prom
 
 Run it again on the same folder to update after a new release: it replaces the game files and DLLs and reapplies the patch, and keeps saves, `appx-portable.ini` and logs.
 
-### 4. Play
-
-Double-click `00_click2startme.bat` in the game folder, or the game's executable itself (`appx-host.exe` for managed games). The Store options in `appx-portable.ini` apply either way.
+Without the launcher, double-click the game's executable itself (`appx-host.exe` for managed games; the `.desktop.exe` copy on Windows 8/8.1). The Store options in `appx-portable.ini` apply either way.
 
 ### Use your own build
 
@@ -133,6 +109,54 @@ python3 installappx.py '/path/to/game.appxbundle' --build build/macos-x86
 ```
 
 The launcher uses `wine` from your `PATH`, or Wine Devel in `~/Applications`; set `WINE` to use another, and `WINEPREFIX` for a separate prefix. Wine launches always write a log.
+
+## Manual installation
+
+The same steps by hand, without Python.
+
+### 1. Extract the game package
+
+Obtain the game's x86 or x64 package. An `.appxbundle` is a ZIP archive holding one `.appx` per architecture; open it and extract the x86 `.appx` (or the x64 one, for an x64-only game). Then extract that `.appx` (also a ZIP archive) into a folder such as `C:\Games\CutTheRope2`. Rename either archive to `.zip` if your extractor requires it. The folder should contain the game's executable and its `AppxManifest.xml`; `AppxSignature.p7x`, `AppxBlockMap.xml`, `[Content_Types].xml` and `AppxMetadata` are not needed.
+
+### 2. Get the Visual C++ runtime
+
+Store games use the Store's own Visual C++ runtime (VCLibs), which a plain desktop has no copy of. The game's `AppxManifest.xml` names the versions it needs:
+
+```powershell
+Select-String -Path 'C:\Games\CutTheRope2\AppxManifest.xml' -Pattern 'Microsoft\.VCLibs\.\d+\.00' | ForEach-Object { $_.Matches.Value }
+```
+
+| Dependency                                       | DLLs                                                                                   | Packages                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Microsoft.VCLibs.110.00` (Windows 8.0 games)    | `msvcr110.dll`, `msvcp110.dll`, `vccorlib110.dll`                                      | [Internet Archive copy](https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx)                                                                                                                                                                                         |
+| `Microsoft.VCLibs.120.00` (Windows 8.1 games)    | `msvcr120_app.dll`, `msvcp120_app.dll`, `vccorlib120_app.dll`                          | In Microsoft's [`vclibs_redist_packages.zip`](https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip)                                                                                                                                                                                       |
+| `Microsoft.VCLibs.140.00` (Windows 10 UWP games) | `vcruntime140_app.dll`, `msvcp140_app.dll`, `vccorlib140_app.dll`, `concrt140_app.dll` | Microsoft-signed packages hosted by VideoLAN: [x86](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x86/Microsoft.VCLibs.x86.14.00.appx), [x64](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x64/Microsoft.VCLibs.x64.14.00.appx) |
+
+The VCLibs 140 downloads above are version `14.0.25426.0`; check the game's manifest for its minimum version. These provide the UWP `_app.dll` files; `Microsoft.VCLibs.140.00.UWPDesktop` provides a different runtime. An x64 game needs the x64 package.
+
+Microsoft has no standalone download of VCLibs 110. The Internet Archive copy, `Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx`, has SHA-256 `22d49fa295486e0955a305bea65cfa4ff5d154d296878a1c577ec5507b602c9c`. For a package from anywhere other than Microsoft, check that Microsoft signed it; `Status` should be `Valid` and the signer `CN=Microsoft Corporation, …`:
+
+```powershell
+Get-AuthenticodeSignature .\Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.appx | Format-List Status, SignerCertificate
+```
+
+If the framework is installed on your PC (any Store app that uses it installs it), its DLLs are also in `C:\Program Files\WindowsApps\Microsoft.VCLibs.110.00_<version>_x86__8wekyb3d8bbwe` (or `120.00`/`140.00`, with the matching architecture); `Get-AppxPackage Microsoft.VCLibs.140.00 | Select Architecture,InstallLocation` lists them. The installer accepts that folder instead of an `.appx`.
+
+Each VCLibs `.appx` is a ZIP archive with its DLLs at the root. Copy the DLLs listed above, with the same architecture as the game, beside the game's executable. For VCLibs 140, also copy any other `*140*_app.dll` the package has.
+
+### 3. Add the Appx Portable DLLs
+
+Download `appx-portable-<version>-x86.zip` (or `-x64.zip` for an x64 game) from the latest [release](https://github.com/yell0wsuit/appx-portable/releases) and extract its DLLs beside the game's executable. For a managed (C#) game, also copy `appx-host.exe` from the x86 zip; the game starts through it.
+
+### 4. Settings and patches
+
+Saves go to `SaveData` beside the game, and the Store overrides are off. To change either, create `appx-portable.ini` beside the game; see [Saves and window settings](#saves-and-window-settings), [trial override](docs/trial-mode.md) and [offline in-app purchases](docs/stub-iap.md).
+
+Games marked 🩹 above need their patch from [`patch/`](patch/README.md), run with Python. On Windows 8/8.1, the game needs a desktop copy of its executable; `installappx.py --desktop-copy` makes it (see [Troubleshooting](#troubleshooting)).
+
+### 5. Play
+
+Double-click the game's executable (`Game.exe` for Cut the Rope 2; the manifest's `Executable` in general), or `appx-host.exe` for a managed game.
 
 ## Saves and window settings
 

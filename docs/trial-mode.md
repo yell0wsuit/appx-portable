@@ -4,7 +4,7 @@ Windows 8/8.1 games ask `Windows.ApplicationModel.Store.CurrentApp.LicenseInform
 
 ## Turn it on
 
-Rerun [`installappx.py`](../README.md#3-install-the-game) so the game folder has the current `appxportable.dll`. Its Store question turns this on in `appx-portable.ini`; otherwise, pass the switch to the game executable named in `AppxManifest.xml`:
+Rerun [`installappx.py`](../README.md#quickstart) so the game folder has the current `appxportable.dll`. Its Store question turns this on in `appx-portable.ini`; otherwise, pass the switch to the game executable named in `AppxManifest.xml`:
 
 ```powershell
 C:\Games\MyGame\Game.exe --unlock-trial
