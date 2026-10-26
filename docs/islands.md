@@ -1,6 +1,6 @@
 # Managed Store games with XAML Islands
 
-Setup detects the CLR header in the manifest executable and stages `appx-host.exe` for managed games. Use `scripts/play.py --game <folder>`, `scripts/run.ps1`, or the staged host itself. Build on Windows with the normal x86 preset; the managed launcher is compiled with the .NET Framework compiler shipped with Windows.
+Setup detects the CLR header in the manifest executable and stages `appx-host.exe` for managed games. Start the staged host itself, or `scripts\play.bat`. Build on Windows with the normal x86 preset; the managed launcher is compiled with the .NET Framework compiler shipped with Windows.
 
 The launcher reads the executable's entry-point apartment attribute. An `MTAThread` entry point selects managed CoreWindow hosting, using the shim's `IFrameworkView` lifecycle and graphics redirection. Other managed entry points use the STA XAML Islands path. CLR activation interception remains enabled for both paths. System message dialogs in CoreWindow mode receive the desktop game window as their owner.
 

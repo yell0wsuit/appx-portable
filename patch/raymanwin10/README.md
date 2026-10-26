@@ -6,12 +6,14 @@ Download the [Microsoft-signed x64 VCLibs 140 package hosted by VideoLAN](https:
 
 The package embeds its caption XAML in `resources.pri`. Until the portable loader can read embedded XBF, this patch supplies source caption bindings with the same connection IDs. The host's desktop caption and F11/Alt+Enter provide the visible window controls. The custom caption's decorative controls are not rendered. No game executable or PRI bytes are changed.
 
-After staging the package with `scripts/setup.ps1`, apply:
+After staging the package with `scripts\setup.bat`, close the game and run from the repository root:
 
 ```powershell
-.\patch\raymanwin10\apply.ps1 -GameDirectory '.\local\rayman-win10'
+py patch/raymanwin10/patch.py '.\local\rayman-win10'
 ```
+
+Use `--check` to inspect without writing. The patch accepts only this package's manifest identity and version, and never replaces a different `CustomTitleBar.xaml`. Reapplying it is safe.
 
 Launch `RFRXAML.exe` in the staged folder. Verified: portable startup, world-map rendering, mouse entry into a level, keyboard controls, drag scrolling, and maximize/restore. Keyboard and dragging were also confirmed during interactive testing. Level completion, touch input, and save restoration are unverified. Online services remain unavailable.
 
-To undo the caption patch, remove `CustomTitleBar.xaml` from the staged folder while the game is closed.
+To undo the caption patch, run it again with `--restore` while the game is closed; it removes only the file this patch added.

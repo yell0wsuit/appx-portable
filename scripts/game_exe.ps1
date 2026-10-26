@@ -1,6 +1,6 @@
 #requires -Version 3.0
 # Prints the game executable a staged folder's AppxManifest.xml names, or
-# Game.exe when the folder has no manifest. Used by run.ps1 and play.bat.
+# Game.exe when the folder has no manifest. Used by play.bat.
 param([Parameter(Mandatory = $true)][string]$GameDirectory)
 $ErrorActionPreference = 'Stop'
 $exe = 'Game.exe'

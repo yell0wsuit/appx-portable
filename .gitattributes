@@ -1,2 +1,4 @@
 # LF line endings everywhere, whatever core.autocrlf says; Git detects binaries.
 * text=auto eol=lf
+# Except batch files: cmd.exe can miss goto labels in LF-only scripts.
+*.bat text eol=crlf

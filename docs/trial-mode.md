@@ -7,12 +7,10 @@ Windows 8/8.1 games ask `Windows.ApplicationModel.Store.CurrentApp.LicenseInform
 Rebuild and rerun [setup](../README.md#4-stage-the-game) so the staged folder has the current `appxportable.dll`, then pass the switch to the game executable named in `AppxManifest.xml`:
 
 ```powershell
-python scripts/play.py --game 'C:\Games\MyGame' --unlock-trial
-.\scripts\run.ps1 -GameDirectory 'C:\Games\MyGame' -UnlockTrial
 C:\Games\MyGame\Game.exe --unlock-trial
 ```
 
-On macOS / Wine, `python3 scripts/play.py --game /path/to/game --unlock-trial` passes the switch through.
+On macOS / Wine, `bash scripts/run.sh /path/to/game --unlock-trial` passes the switch through.
 
 For double-click launches, either add `--unlock-trial` after the executable in a shortcut's Target, or set the variable for your user account, which applies to every staged game started afterwards:
 

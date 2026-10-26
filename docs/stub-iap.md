@@ -3,8 +3,6 @@
 `--stub-iap` makes Windows 8/8.1 `CurrentApp` product purchases complete locally. It is off by default.
 
 ```powershell
-python scripts/play.py --game 'C:\Games\MyGame' --stub-iap --log
-.\scripts\run.ps1 -GameDirectory 'C:\Games\MyGame' -StubIap -Log
 C:\Games\MyGame\Game.exe --stub-iap
 ```
 

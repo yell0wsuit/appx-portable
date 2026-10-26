@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Usage: run.sh [GAME_DIRECTORY] [--trace] [--capture] [--diagnostics] [--passthrough] [--unlock-trial] [--stub-iap]
+# GAME_DIRECTORY defaults to local/game.
 root=$(cd "$(dirname "$0")/.." && pwd)
 game="$root/local/game"
 # --log always: the relaunch check below reads the log.
@@ -18,12 +19,36 @@ export MVK_CONFIG_LOG_LEVEL=${MVK_CONFIG_LOG_LEVEL:-0}
 export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8,dwrite=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
 wine=${WINE:-"$HOME/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine"}
 [[ -x "$wine" ]] || { echo 'Set WINE to your Wine executable.' >&2; exit 1; }
-# Share managed/native executable selection with the Windows Python launcher.
-exe=$(python3 -c '
-import pathlib, sys
-sys.path.insert(0, sys.argv[1])
-from play import launch_executable
-print(launch_executable(pathlib.Path(sys.argv[2])))' "$root/scripts" "$game")
+# The executable the manifest names (Game.exe without one), or appx-host.exe
+# for a managed one; the same choice as game_exe.ps1.
+exe=$(python3 - "$game" <<'EXE'
+import pathlib, struct, sys
+import xml.etree.ElementTree as ElementTree
+game = pathlib.Path(sys.argv[1])
+exe = 'Game.exe'
+manifest = game / 'AppxManifest.xml'
+if manifest.is_file():
+    # By local name: Windows 8, 8.1 and 10 manifests use different namespaces.
+    for element in ElementTree.parse(manifest).iter():
+        if element.tag.rsplit('}', 1)[-1] == 'Application' and element.get('Executable'):
+            exe = pathlib.PureWindowsPath(element.get('Executable')).as_posix()
+            break
+path = game / exe
+if path.is_file():
+    with path.open('rb') as stream:
+        if stream.read(2) == b'MZ':
+            stream.seek(0x3c)
+            offset = stream.read(4)
+            if len(offset) == 4:
+                stream.seek(struct.unpack('<I', offset)[0])
+                header = stream.read(248)
+                if (len(header) >= 248 and header[:4] == b'PE\0\0'
+                        and struct.unpack_from('<H', header, 24)[0] == 0x10b
+                        and struct.unpack_from('<I', header, 232)[0]):
+                    exe = 'appx-host.exe'
+print(exe)
+EXE
+)
 [[ -f "$game/$exe" && -f "$game/appxportable.dll" ]] || { echo 'Run setup.sh first.' >&2; exit 1; }
 # A crash otherwise opens Wine's crash dialog, which keeps the process alive
 # until closed and stalls the relaunch below; print the backtrace and exit.
