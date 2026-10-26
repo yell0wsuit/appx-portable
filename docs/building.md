@@ -17,7 +17,7 @@ This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll`, `XAudio
 
 For x64 games, use an **x64 Native Tools Command Prompt**, `cmake --preset windows-x64`, and `cmake --build --preset windows-x64`. This requires the MSVC x64 assembler and also builds the `XAudio2_9.dll` proxy. Pass `installappx.py` `--build build/windows-x64` and a matching x64 VCLibs framework. See [compatibility structure](compatibility.md) and the [Rayman Windows 10 caption patch](../patch/raymanwin10/README.md).
 
-GitHub Actions builds and tests both architectures in separate directories and publishes `appx-portable-<version>-x86.zip` and `appx-portable-<version>-x64.zip` together. Both ZIPs contain the runtime and all four proxy DLLs. The x86 ZIP also contains `appx-host.exe`; x64 currently supports native games only, so its ZIP omits the CLR host. `installappx.py` downloads the Microsoft VCLibs packages from [yell0wsuit/vclibs-appx](https://github.com/yell0wsuit/vclibs-appx/releases/latest).
+GitHub Actions builds and tests each architecture in its own job, with Ninja and a ccache compiler cache, and publishes `appx-portable-<version>-x86.zip` and `appx-portable-<version>-x64.zip` together. Both ZIPs contain the runtime and all four proxy DLLs. The x86 ZIP also contains `appx-host.exe`; x64 currently supports native games only, so its ZIP omits the CLR host. `installappx.py` downloads the Microsoft VCLibs packages from [yell0wsuit/vclibs-appx](https://github.com/yell0wsuit/vclibs-appx/releases/latest).
 
 If CMake cannot find `cl`, use an x86 Visual Studio developer shell. If MSYS2's CMake appears first on `PATH`, put the native Windows CMake ahead of it (typically `C:\Program Files\CMake\bin`).
 
