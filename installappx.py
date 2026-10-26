@@ -271,3 +271,186 @@ def extract_bundle(bundle: zipfile.ZipFile, destination: Path) -> Manifest:
         finally:
             for archive in archives:
                 archive.close()
+
+
+# Visual C++ runtime (VCLibs)
+
+# The runtime DLLs each VCLibs framework package provides to Store apps.
+VCLIBS = {
+    "Microsoft.VCLibs.110.00": ("msvcr110.dll", "msvcp110.dll", "vccorlib110.dll"),
+    "Microsoft.VCLibs.120.00": ("msvcr120_app.dll", "msvcp120_app.dll", "vccorlib120_app.dll"),
+    "Microsoft.VCLibs.140.00": ("vcruntime140_app.dll", "msvcp140_app.dll", "vccorlib140_app.dll"),
+}
+OPTIONAL_VCLIBS140 = (
+    "concrt140_app.dll",
+    "vcruntime140_1_app.dll",
+    "msvcp140_1_app.dll",
+    "msvcp140_2_app.dll",
+    "msvcp140_atomic_wait_app.dll",
+    "msvcp140_codecvt_ids_app.dll",
+    "vcamp140_app.dll",
+    "vcomp140_app.dll",
+)
+VCLIBS_120_REDIST = "https://download.microsoft.com/download/5/f/0/5f0f8404-9329-44a9-8176-ed6f7f746f25/vclibs_redist_packages.zip"
+VCLIBS_140 = "https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies"
+VCLIBS_DOWNLOADS = {
+    ("Microsoft.VCLibs.110.00", "x86"): "https://archive.org/download/vclibs-appxs/Microsoft.VCLibs.APPXs.zip/Microsoft.VCLibs.110.00_11.0.51106.1_x86__8wekyb3d8bbwe.Appx",
+    ("Microsoft.VCLibs.120.00", "x86"): VCLIBS_120_REDIST + " (extract the x86 .appx from it)",
+    ("Microsoft.VCLibs.120.00", "x64"): VCLIBS_120_REDIST + " (extract the x64 .appx from it)",
+    ("Microsoft.VCLibs.140.00", "x86"): VCLIBS_140 + "/x86/Microsoft.VCLibs.x86.14.00.appx",
+    ("Microsoft.VCLibs.140.00", "x64"): VCLIBS_140 + "/x64/Microsoft.VCLibs.x64.14.00.appx",
+}
+
+
+def missing_vclibs(manifest: Manifest, game: Path) -> List[str]:
+    return [
+        dependency
+        for dependency in manifest.dependencies
+        if dependency in VCLIBS and not all((game / name).is_file() for name in VCLIBS[dependency])
+    ]
+
+
+def add_vclibs(dependency: str, source: Path, game: Path, architecture: str) -> None:
+    """Copy one dependency's DLLs from a VCLibs .appx or a folder into game."""
+    source = Path(source)
+    names = VCLIBS[dependency] + (OPTIONAL_VCLIBS140 if dependency.startswith("Microsoft.VCLibs.140.") else ())
+    with tempfile.TemporaryDirectory(prefix="installappx-vclibs-") as temporary:
+        folder = source
+        if source.is_file():
+            # An .appx is a zip with the DLLs at its root. Only those names are
+            # extracted, so entry paths never reach the file system.
+            folder = Path(temporary)
+            try:
+                with zipfile.ZipFile(source) as archive:
+                    wanted = {name.lower(): name for name in names}
+                    for entry in archive.namelist():
+                        if entry.lower() in wanted:
+                            (folder / wanted[entry.lower()]).write_bytes(archive.read(entry))
+            except zipfile.BadZipFile:
+                raise InstallError(f"Cannot read {source} as an .appx package.")
+        elif not source.is_dir():
+            raise InstallError(f"Not found: {source}")
+        missing = [name for name in VCLIBS[dependency] if not (folder / name).is_file()]
+        if missing:
+            raise InstallError(f"{source} does not have {', '.join(missing)} ({dependency}).")
+        found = [name for name in names if (folder / name).is_file()]
+        for name in found:
+            actual = architecture_of(folder / name)
+            if actual != architecture:
+                raise InstallError(
+                    f"{name} in {source} is {actual}, but the game is {architecture}. Use the {architecture} {dependency}."
+                )
+        for name in found:
+            shutil.copyfile(folder / name, game / name)
+
+
+# Appx Portable runtime
+
+# System DLLs games import from their folder; each loads appxportable.dll.
+PROXIES = ("d3dcompiler_47.dll", "XAudio2_8.dll", "DWrite.dll")
+
+
+def replace_file(source: Path, target: Path) -> None:
+    # By rename, never in place: a running game maps the old file.
+    fd, temporary = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=target.parent)
+    os.close(fd)
+    try:
+        shutil.copyfile(source, temporary)
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def stage_runtime(build: Path, game: Path, architecture: str, managed: bool) -> List[str]:
+    if managed and architecture == "x64":
+        raise InstallError("Managed x64 games are not supported; managed hosting is x86 only.")
+    build = Path(build)
+    names = ["appxportable.dll", *PROXIES]
+    if (build / "XAudio2_9.dll").is_file():
+        names.append("XAudio2_9.dll")
+    if managed:
+        names.append("appx-host.exe")
+    for name in names:
+        if not (build / name).is_file():
+            raise InstallError(f"Build output missing: {build / name}")
+        actual = architecture_of(build / name)
+        if actual != architecture:
+            raise InstallError(f"{build / name} is {actual}, but the game is {architecture}.")
+    for name in names:
+        replace_file(build / name, game / name)
+    return names
+
+
+# appx-portable.ini
+
+SETTINGS_TEMPLATE = """\
+; appx-portable settings. installappx.py writes this file once; edit it here.
+
+[storage]
+; Where the game keeps its saves (<package> is the manifest's identity name):
+;   game       SaveData beside the game executable (the default)
+;   documents  Documents\\appx-portable\\<package>
+;   appdata    %LOCALAPPDATA%\\appx-portable\\<package>
+;   or a folder path; relative paths start beside the game, and %VARIABLES% expand.
+; If the folder cannot be written (for example under Program Files), saves go
+; to documents, then appdata. Changing the location does not move saves.
+SaveLocation=game
+
+[options]
+; Store overrides, off with 0 and on with 1. Restart the game after a change.
+;   UnlockTrial  report a full license, for games with a trial mode
+;   StubIap      complete in-app purchases locally, without the Store
+UnlockTrial=0
+StubIap=0
+"""
+STORE_CHOICES = {"none": (False, False), "trial": (True, False), "iap": (False, True), "both": (True, True)}
+STORE_KEYS = ("UnlockTrial", "StubIap")
+
+
+def settings_lines(game: Path) -> List[str]:
+    path = game / "appx-portable.ini"
+    return path.read_text(encoding="utf-8-sig").splitlines() if path.is_file() else []
+
+
+def option_values(lines: List[str]) -> Dict[str, str]:
+    values, section = {}, ""
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("["):
+            section = stripped.strip("[]").strip().lower()
+        elif section == "options" and "=" in stripped and not stripped.startswith(";"):
+            key, value = stripped.split("=", 1)
+            values[key.strip().lower()] = value.strip()
+    return values
+
+
+def read_store(game: Path) -> str:
+    values = option_values(settings_lines(Path(game)))
+    on = tuple(values.get(key.lower(), "0") not in ("", "0") for key in STORE_KEYS)
+    return next(name for name, choice in STORE_CHOICES.items() if choice == on)
+
+
+def write_settings(game: Path, store: Optional[str]) -> None:
+    """Create appx-portable.ini once, and set the Store choice unless store is
+    None. Only the UnlockTrial and StubIap lines change; the rest is kept."""
+    game = Path(game)
+    path = game / "appx-portable.ini"
+    lines = settings_lines(game) or SETTINGS_TEMPLATE.splitlines()
+    if store is not None:
+        wanted = {key: "1" if on else "0" for key, on in zip(STORE_KEYS, STORE_CHOICES[store])}
+        start = next((i for i, line in enumerate(lines) if line.strip().lower() == "[options]"), None)
+        if start is None:
+            lines += ["", "[options]"] + [f"{key}={value}" for key, value in wanted.items()]
+        else:
+            end = next((i for i in range(start + 1, len(lines)) if lines[i].strip().startswith("[")), len(lines))
+            for i in range(start + 1, end):
+                key = lines[i].split("=", 1)[0].strip()
+                match = next((k for k in wanted if k.lower() == key.lower()), None)
+                if "=" in lines[i] and not lines[i].strip().startswith(";") and match:
+                    lines[i] = f"{match}={wanted.pop(match)}"
+            lines[start + 1 : start + 1] = [f"{key}={value}" for key, value in wanted.items()]
+    elif path.is_file():
+        return
+    # CRLF, so Notepad on Windows 8 shows the lines.
+    path.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8", newline="")
