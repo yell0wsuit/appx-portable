@@ -11,6 +11,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -551,3 +552,140 @@ def apply_known_patch(manifest: Manifest, game: Path, tag: Optional[str], local:
     if result.returncode != 0:
         raise InstallError(f"The {patch.folder} patch failed: {(result.stderr or result.stdout).strip()}")
     return result.stdout.strip()
+
+
+# Windows 8/8.1: AppContainer flag
+
+APPCONTAINER = 0x1000  # IMAGE_DLLCHARACTERISTICS_APPCONTAINER
+
+
+def needs_desktop_copy() -> bool:
+    """Windows 8 and 8.1 refuse to start an AppContainer image outside a package."""
+    return sys.platform == "win32" and tuple(sys.getwindowsversion()[:2]) in ((6, 2), (6, 3))
+
+
+def appcontainer_offset(data: bytes, dll: bool) -> Optional[int]:
+    """The DllCharacteristics offset of an x86 PE32 image, or None for x64."""
+    if len(data) < 64 or data[:2] != b"MZ":
+        raise InstallError("Expected a DOS/PE image.")
+    # Bounds checks before every read: the offsets come from the file.
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    if pe < 64 or pe + 24 > len(data) or data[pe : pe + 4] != b"PE\0\0":
+        raise InstallError("Invalid or truncated PE header.")
+    machine, size, characteristics = struct.unpack_from("<H", data, pe + 4)[0], *struct.unpack_from("<HH", data, pe + 20)
+    if machine == 0x8664:
+        return None
+    optional = pe + 24
+    if size < 96 or optional + size > len(data):
+        raise InstallError("Invalid or truncated PE optional header.")
+    if (
+        machine != 0x14C
+        or struct.unpack_from("<H", data, optional)[0] != 0x10B
+        or not characteristics & 0x2
+        or bool(characteristics & 0x2000) != dll
+    ):
+        raise InstallError("Expected an x86 PE32 image of the appropriate EXE/DLL type.")
+    return optional + 70
+
+
+def cleared(data: bytes, dll: bool) -> Optional[bytes]:
+    """data with only the AppContainer flag cleared, or None when it is not set."""
+    offset = appcontainer_offset(data, dll)
+    if offset is None or not struct.unpack_from("<H", data, offset)[0] & APPCONTAINER:
+        return None
+    patched = bytearray(data)
+    struct.pack_into("<H", patched, offset, struct.unpack_from("<H", data, offset)[0] & ~APPCONTAINER & 0xFFFF)
+    return bytes(patched)
+
+
+def write_replacing(target: Path, data: bytes) -> None:
+    fd, temporary = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=target.parent)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(data)
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def make_desktop_copy(game: Path, executable: str) -> str:
+    """Write <name>.desktop.exe with the AppContainer flag cleared, and clear it
+    in the staged VCLibs DLLs; returns the executable to launch."""
+    game = Path(game)
+    source = game / executable
+    patched = cleared(source.read_bytes(), dll=False)
+    if patched is None:
+        return executable
+    relative = Path(executable)
+    desktop = relative.with_name(relative.stem + ".desktop" + relative.suffix)
+    # The staged DLLs are copies, so they are patched in place.
+    names = [name for names in VCLIBS.values() for name in names] + list(OPTIONAL_VCLIBS140)
+    for name in names:
+        if (game / name).is_file():
+            image = cleared((game / name).read_bytes(), dll=True)
+            if image is not None:
+                write_replacing(game / name, image)
+    write_replacing(game / desktop, patched)
+    return desktop.as_posix()
+
+
+# Launchers
+
+LAUNCHER = "00_click2startme"
+BAT_LAUNCHER = """\
+@echo off
+rem Starts the game. Written by installappx.py; options are in appx-portable.ini.
+cd /d "%~dp0"
+start "" "%~dp0{exe}" %*
+"""
+SH_LAUNCHER = """\
+#!/usr/bin/env bash
+# Starts the game under Wine. Written by installappx.py; options are in
+# appx-portable.ini. Set WINE to choose the Wine executable.
+set -euo pipefail
+cd "$(dirname "$0")"
+# --log always: the relaunch check below reads the log.
+flags=(--log "$@")
+export WINEDEBUG=${{WINEDEBUG:--all}}
+export MVK_CONFIG_LOG_LEVEL=${{MVK_CONFIG_LOG_LEVEL:-0}}
+# The proxies load the shim; the VC runtimes are the package's own (VCLibs 110, 120, 140).
+export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8,xaudio2_9,dwrite=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n${{WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}}"
+wine=${{WINE:-$(command -v wine || echo "$HOME/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine")}}
+[[ -x "$wine" ]] || {{ echo 'Install Wine, or set WINE to your Wine executable.' >&2; exit 1; }}
+# A crash otherwise opens Wine's crash dialog, which keeps the process alive
+# until closed and stalls the relaunch below; print the backtrace and exit.
+"$wine" reg add 'HKCU\\Software\\Wine\\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1 || true
+# Wine 11 WoW64 sometimes kills the process inside wined3d's first OpenGL
+# setup ("Exception frame is not in stack limits"). That startup death leaves
+# "CreateDXGIFactory1 begin" without a result in the log; retry only that case.
+status=0
+for attempt in 1 2 3; do
+  "$wine" {exe} "${{flags[@]}}" && exit 0 || status=$?
+  # Wine launches always log, and each logging run starts a new appx-portable.log.
+  run=$(cat appx-portable.log 2>/dev/null || true)
+  if grep -q 'CreateDXGIFactory1 begin' <<< "$run" && ! grep -q 'CreateDXGIFactory1 hr=' <<< "$run"; then
+    echo "Wine graphics startup crashed (attempt $attempt/3); relaunching." >&2
+    continue
+  fi
+  exit "$status"
+done
+exit "$status"
+"""
+
+
+def launch_executable(executable: str, managed: bool) -> str:
+    # Managed games start through appx-host.exe beside the original executable.
+    return "appx-host.exe" if managed else executable
+
+
+def write_launcher(game: Path, executable: str, windows: bool) -> Path:
+    if windows:
+        path = Path(game) / (LAUNCHER + ".bat")
+        text = BAT_LAUNCHER.format(exe=str(PureWindowsPath(executable)).replace("%", "%%"))
+        path.write_bytes(text.replace("\n", "\r\n").encode())
+    else:
+        path = Path(game) / (LAUNCHER + ".sh")
+        path.write_bytes(SH_LAUNCHER.format(exe=shlex.quote(executable)).encode())
+        path.chmod(0o755)
+    return path
