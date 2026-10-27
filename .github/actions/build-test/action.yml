@@ -19,6 +19,12 @@ runs:
           uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
           with:
               key: ${{ inputs.architecture }}
+              # The runner's ccache (4.9, from Strawberry Perl) cannot cache the
+              # /Yc compile, so the precompiled header is rebuilt every run. The
+              # x86 compiler does not rebuild it byte for byte, which made every
+              # x86 file that uses it miss. The action's pinned binary (4.13)
+              # caches /Yc.
+              install: binary
               max-size: 1G
               evict-old-files: job
 
