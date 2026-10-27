@@ -40,7 +40,7 @@ add_custom_target(appxportable_version
 add_executable(shimtest tests/shimtest.cpp)
 target_link_libraries(shimtest PRIVATE runtimeobject ole32)
 if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
-  add_library(appxportable SHARED shim/registry.cpp shim/compat/win10/titlebar.cpp shim/compat/win10/input.cpp shim/compat/win10/xaml.cpp shim/compat/win10/memory.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp ${APPX_EXPORTS} shim/version.rc)
+  add_library(appxportable SHARED shim/registry.cpp shim/compat/win10/titlebar.cpp shim/compat/win10/input.cpp shim/compat/win10/xaml.cpp shim/compat/win10/memory.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/search.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp ${APPX_EXPORTS} shim/version.rc)
   target_include_directories(appxportable PRIVATE shim "${APPX_GENERATED}")
   add_dependencies(appxportable appxportable_version)
   target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
@@ -133,6 +133,10 @@ add_test(NAME islands_settings_contract COMMAND "${CMAKE_COMMAND}"
   "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-settings-fixture"
   -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 60)
+add_executable(searchtest tests/searchtest.cpp host/managed.manifest)
+target_link_libraries(searchtest PRIVATE runtimeobject ole32)
+add_test(NAME searchtest COMMAND searchtest)
+set_tests_properties(searchtest PROPERTIES TIMEOUT 60)
 
 if(WIN32)
   add_test(NAME islands_toasttest COMMAND "${CMAKE_COMMAND}"
@@ -322,7 +326,7 @@ set_tests_properties(containers_write containers_read PROPERTIES
 add_library(appx_pch OBJECT shim/pch.cpp)
 target_precompile_headers(appx_pch PRIVATE shim/pch.h)
 get_property(appx_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
-list(REMOVE_ITEM appx_targets ${APPX_PROXIES} xamlsettingstest)
+list(REMOVE_ITEM appx_targets ${APPX_PROXIES} xamlsettingstest searchtest)
 foreach(target IN LISTS appx_targets)
   get_target_property(type ${target} TYPE)
   if(type STREQUAL "EXECUTABLE" OR type STREQUAL "SHARED_LIBRARY")

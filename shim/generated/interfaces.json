@@ -138,6 +138,10 @@
       "ABI::Windows::UI::ApplicationSettings::ISettingsPaneStatics"
     ]
   },
+  "search.h": {
+    "header": "windows.applicationmodel.search.core.h",
+    "interfaces": ["ABI::Windows::ApplicationModel::Search::Core::ISearchSuggestionManager"]
+  },
   "share.h": {
     "header": "windows.applicationmodel.datatransfer.h",
     "interfaces": [
