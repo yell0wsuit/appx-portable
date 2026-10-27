@@ -33,11 +33,12 @@ The installer changes no game file except through a known game's patch. Game-spe
 | Where's My Water?                    | 1.13.1.3    | x86  | ✅ Playable    |
 | Bejeweled LIVE                       | 4.0.0.10    | x86  | ✅ Playable    |
 | Gravity Guy                          | 1.0.1.2     | x86  | ✅ Playable    |
+| Leo's Fortune                        | 1.1.0.9     | x86  | ✅ Playable    |
 | Where's My Mickey?                   | 1.1.0.30    | x86  | 🩹 Needs patch |
 | Microsoft Sudoku (2018)              | 1.7.10190.0 | x86  | 🩹 Needs patch |
 | Rayman Fiesta Run Windows 10 Edition | 1.0.23.0    | x64  | 🩹 Needs patch |
 
-See [tested games](docs/games.md) for package names, patches, and what was verified.
+For more tested games and the Store package IDs, please see [tested games](docs/games.md).
 
 ## Requirements
 
