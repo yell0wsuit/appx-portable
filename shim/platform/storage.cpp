@@ -508,4 +508,8 @@ HRESULT MakeStorageFactory(IActivationFactory** value) {
     static auto factory = Make<StorageFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass storageFileClass{L"Windows.Storage.StorageFile", MakeStorageFileFactory, ShimPolicy::Replace,
+                                 InIslands};
+const ShimClass applicationDataClass{L"Windows.Storage.ApplicationData", MakeStorageFactory, ShimPolicy::Replace,
+                                     InIslands};
 }

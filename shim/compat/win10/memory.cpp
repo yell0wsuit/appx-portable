@@ -1,3 +1,4 @@
+#include "registry.h"
 #include "generated/win10_memory.h"
 #include "com/factory.h"
 #include <psapi.h>
@@ -71,4 +72,5 @@ HRESULT MakeMemoryManagerFactory(IActivationFactory** value) {
     static auto factory = Make<MemoryFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass memoryManagerClass{L"Windows.System.MemoryManager", MakeMemoryManagerFactory};
 }

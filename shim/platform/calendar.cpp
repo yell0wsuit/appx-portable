@@ -218,4 +218,7 @@ HRESULT MakeCalendarFactory(IActivationFactory** value) {
     auto factory = Make<CalendarFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+// A Gregorian calendar for Wine, which has none; Windows' own also has the
+// language and time zone constructors.
+const ShimClass calendarClass{L"Windows.Globalization.Calendar", MakeCalendarFactory, ShimPolicy::FillMissing};
 }

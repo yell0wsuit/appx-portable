@@ -42,4 +42,5 @@ HRESULT MakeVisualizationFactory(IActivationFactory** value) {
     static auto factory = Make<VisualizationFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass visualizationClass{L"Windows.UI.Input.PointerVisualizationSettings", MakeVisualizationFactory};
 }

@@ -86,13 +86,9 @@ static HRESULT GetFactoryFor(HSTRING name, REFIID iid, void** out, bool game) no
     if (TraceMode()) {
         hr = originalFactory(name, iid, out);
     } else {
-        // Prefer the OS implementation when available. The partial buffer
-        // reader and Gregorian calendar fill classes missing from Wine, without
-        // replacing the complete Windows ones (Calendar's language and time
-        // zone constructors, for example).
-        const wchar_t* text = WindowsGetStringRawBuffer(name, nullptr);
-        if (wcscmp(text, L"Windows.Storage.Streams.DataReader") == 0 ||
-            wcscmp(text, L"Windows.Globalization.Calendar") == 0) {
+        // Shim classes that only fill in where the OS lacks a class (Wine)
+        // leave the complete Windows implementation in place when it exists.
+        if (GetShimPolicy(WindowsGetStringRawBuffer(name, nullptr)) == ShimPolicy::FillMissing) {
             hr = originalFactory(name, iid, out);
             if (SUCCEEDED(hr)) {
                 LogActivation(name, iid, hr);

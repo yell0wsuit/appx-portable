@@ -139,4 +139,6 @@ HRESULT MakeDataReaderFactory(IActivationFactory** value) {
     auto factory = Make<ReaderFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+// A buffer reader for Wine, which lacks the class; Windows' is complete.
+const ShimClass dataReaderClass{L"Windows.Storage.Streams.DataReader", MakeDataReaderFactory, ShimPolicy::FillMissing};
 }

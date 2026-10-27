@@ -75,4 +75,8 @@ HRESULT MakeDeviceFactory(bool display, IActivationFactory** value) {
     auto factory = Make<DeviceFactory>(display);
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass displayRequestClass{L"Windows.System.Display.DisplayRequest",
+                                    [](IActivationFactory** value) { return MakeDeviceFactory(true, value); }};
+const ShimClass deviceInformationClass{L"Windows.Security.ExchangeActiveSyncProvisioning.EasClientDeviceInformation",
+                                       [](IActivationFactory** value) { return MakeDeviceFactory(false, value); }};
 }

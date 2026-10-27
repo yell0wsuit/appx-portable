@@ -65,4 +65,5 @@ HRESULT MakeAdFactory(IActivationFactory** value) {
     auto factory = Make<AdFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass vungleClass{L"VungleSDK.AdFactory", MakeAdFactory};
 }

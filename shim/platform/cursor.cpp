@@ -58,4 +58,5 @@ HRESULT MakeCursorFactory(IActivationFactory** value) {
     auto factory = Make<CursorFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass cursorClass{L"Windows.UI.Core.CoreCursor", MakeCursorFactory};
 }

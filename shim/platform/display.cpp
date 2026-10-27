@@ -111,4 +111,6 @@ HRESULT MakeDisplayFactory(IActivationFactory** v) {
     static auto factory = Make<DisplayFactory>();
     return factory ? factory.CopyTo(v) : E_OUTOFMEMORY;
 }
+const ShimClass displayInformationClass{L"Windows.Graphics.Display.DisplayInformation", MakeDisplayFactory};
+const ShimClass displayPropertiesClass{L"Windows.Graphics.Display.DisplayProperties", MakeDisplayFactory};
 }

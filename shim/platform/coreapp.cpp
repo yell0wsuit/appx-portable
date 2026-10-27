@@ -278,6 +278,8 @@ HRESULT MakeCoreApplicationFactory(IActivationFactory** value) {
     auto factory = SharedFactory();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass coreApplicationClass{L"Windows.ApplicationModel.Core.CoreApplication", MakeCoreApplicationFactory,
+                                     ShimPolicy::Replace, InIslands};
 // Closing a game's window: Windows 8 suspends a closed Store app so it can
 // save, then ends the process; the game's own teardown never runs. Games
 // depend on that (Fruit Ninja's teardown corrupts its heap; Cut the Rope 2's

@@ -361,6 +361,7 @@ HRESULT MakeApplicationFactory(IActivationFactory** value) {
     auto factory = Make<ApplicationFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass applicationClass{L"Windows.UI.Xaml.Application", MakeApplicationFactory};
 // Application.Suspending, which XAML games save in.
 void RaiseApplicationSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
     if (IslandsMode())

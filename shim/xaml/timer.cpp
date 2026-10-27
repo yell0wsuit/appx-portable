@@ -197,4 +197,6 @@ HRESULT MakeCompositionTargetFactory(IActivationFactory** value) {
     static thread_local auto factory = Make<CompositionTargetFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass dispatcherTimerClass{L"Windows.UI.Xaml.DispatcherTimer", MakeDispatcherTimerFactory};
+const ShimClass compositionTargetClass{L"Windows.UI.Xaml.Media.CompositionTarget", MakeCompositionTargetFactory};
 }

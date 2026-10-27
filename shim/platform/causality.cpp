@@ -46,4 +46,5 @@ HRESULT MakeCausalityFactory(IActivationFactory** value) {
     static auto factory = Make<CausalityFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass causalityClass{L"Windows.Foundation.Diagnostics.AsyncCausalityTracer", MakeCausalityFactory};
 }

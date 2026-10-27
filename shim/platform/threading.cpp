@@ -287,4 +287,8 @@ HRESULT MakeThreadPoolFactory(bool timers, IActivationFactory** factory) {
     auto value = Make<PoolFactory>();
     return value ? value.CopyTo(factory) : E_OUTOFMEMORY;
 }
+const ShimClass threadPoolTimerClass{L"Windows.System.Threading.ThreadPoolTimer",
+                                     [](IActivationFactory** value) { return MakeThreadPoolFactory(true, value); }};
+const ShimClass threadPoolClass{L"Windows.System.Threading.ThreadPool",
+                                [](IActivationFactory** value) { return MakeThreadPoolFactory(false, value); }};
 }

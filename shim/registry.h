@@ -3,44 +3,45 @@
 #include <activation.h>
 extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** factory) noexcept;
 namespace appx {
-HRESULT MakeThreadPoolFactory(bool timers, IActivationFactory** factory);
-HRESULT MakeApplicationFactory(IActivationFactory** value);
-HRESULT MakeControlFactory(const wchar_t* name, IActivationFactory** value);
-HRESULT MakeDisplayFactory(IActivationFactory** v);
-HRESULT MakeCoreApplicationFactory(IActivationFactory** value);
-HRESULT MakeWindowFactory(IActivationFactory** value);
-HRESULT MakeRectangleGeometryFactory(IActivationFactory** value);
-HRESULT MakeDispatcherTimerFactory(IActivationFactory** value);
-HRESULT MakeCompositionTargetFactory(IActivationFactory** value);
-HRESULT MakeCursorFactory(IActivationFactory** value);
+// How a shim class relates to the Windows class of the same name.
+enum class ShimPolicy {
+    Replace,     // the shim's class serves the game in place of Windows'
+    FillMissing, // Windows' class when it has one; the shim's fills in where it is missing (Wine)
+};
+// XAML Islands mode uses system XAML and its own island classes, so there only
+// the classes registered with InIslands replace Windows'.
+constexpr bool InIslands = true;
+// A class the shim serves, registered by a namespace-scope ShimClass beside
+// its implementation; ShimGetFactory serves every registered class.
+class ShimClass {
+public:
+    using Make = HRESULT (*)(IActivationFactory** factory);
+    using MakeNamed = HRESULT (*)(const wchar_t* name, IActivationFactory** factory);
+    // name is a class name or, for a MakeNamed factory, a namespace prefix ending in '.'.
+    ShimClass(const wchar_t* name, Make make, ShimPolicy policy = ShimPolicy::Replace, bool islands = false) noexcept;
+    ShimClass(const wchar_t* name, MakeNamed make, ShimPolicy policy = ShimPolicy::Replace,
+              bool islands = false) noexcept;
+    ShimClass(const ShimClass&) = delete;
+    ShimClass& operator=(const ShimClass&) = delete;
+    bool Serves(const wchar_t* name) const noexcept;
+    HRESULT Create(const wchar_t* name, IActivationFactory** factory) const {
+        return make_ ? make_(factory) : named_(name, factory);
+    }
+    const ShimPolicy policy;
+    const bool islands;
+    const ShimClass* const next;
+
+private:
+    const wchar_t* const name_;
+    const Make make_ = nullptr;
+    const MakeNamed named_ = nullptr;
+};
+// The registered class serving name, or nullptr.
+const ShimClass* FindShimClass(const wchar_t* name) noexcept;
+// The policy of the shim class for name; Replace for classes the shim does not serve.
+ShimPolicy GetShimPolicy(const wchar_t* name) noexcept;
 HRESULT MakeCoreWindowFactory(IActivationFactory** value);
-HRESULT MakePackageFactory(IActivationFactory** value);
-HRESULT MakeShareFactory(IActivationFactory** value);
-HRESULT MakeMessageDialogFactory(IActivationFactory** value);
-HRESULT MakeSettingsPaneFactory(IActivationFactory** value);
-HRESULT MakeTileFactory(IActivationFactory** value);
-HRESULT MakeBadgeFactory(IActivationFactory** value);
-HRESULT MakeSecondaryTileFactory(IActivationFactory** value);
-// The offline Xbox LIVE stand-in; REGDB_E_CLASSNOTREG for Xbox classes it lacks.
-HRESULT MakeXboxFactory(const wchar_t* name, IActivationFactory** value);
-// Halfbrick's C# HTTP component, stood in offline.
-HRESULT MakeHttpClientCSharpFactory(const wchar_t* name, IActivationFactory** value);
-HRESULT MakeVisualizationFactory(IActivationFactory** value);
-HRESULT MakeStorageFileFactory(IActivationFactory** value);
 HRESULT MakeStorageFactory(IActivationFactory** value);
-HRESULT MakeAdFactory(IActivationFactory** value);
-HRESULT MakeHttpFactory(bool filter, IActivationFactory** value);
-HRESULT MakeNetworkFactory(IActivationFactory** value);
-HRESULT MakeApplicationViewFactory(IActivationFactory** v);
-HRESULT MakeHardwareFactory(IActivationFactory** value);
-HRESULT MakeDataReaderFactory(IActivationFactory** value);
-HRESULT MakeStoreFactory(IActivationFactory** value);
-HRESULT MakeToastFactory(IActivationFactory** value);
-HRESULT MakeScheduledToastFactory(IActivationFactory** value);
-HRESULT MakeDeviceFactory(bool display, IActivationFactory** value);
-HRESULT MakeCausalityFactory(IActivationFactory** value);
-HRESULT MakeCalendarFactory(IActivationFactory** value);
-HRESULT MakeMemoryManagerFactory(IActivationFactory** value);
 void InstallActivationHook() noexcept;
 // The OS activation functions, bypassing the hook: for shim code that wraps an OS class.
 HRESULT OsGetActivationFactory(HSTRING name, REFIID iid, void** out) noexcept;
