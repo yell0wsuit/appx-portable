@@ -208,4 +208,5 @@ HRESULT MakeApplicationViewFactory(IActivationFactory** v) {
     static auto factory = Make<ViewFactory>();
     return factory ? factory.CopyTo(v) : E_OUTOFMEMORY;
 }
+const ShimClass applicationViewClass{L"Windows.UI.ViewManagement.ApplicationView", MakeApplicationViewFactory};
 }

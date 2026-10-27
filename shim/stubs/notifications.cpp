@@ -227,4 +227,8 @@ HRESULT MakeScheduledToastFactory(IActivationFactory** value) {
     auto factory = Make<ScheduledToastFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass toastsClass{L"Windows.UI.Notifications.ToastNotificationManager", MakeToastFactory, ShimPolicy::Replace,
+                            InIslands};
+const ShimClass scheduledToastClass{L"Windows.UI.Notifications.ScheduledToastNotification", MakeScheduledToastFactory,
+                                    ShimPolicy::Replace, InIslands};
 }

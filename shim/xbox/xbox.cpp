@@ -3,6 +3,7 @@
 // Nobody is signed in and every service call fails as a disconnected client's
 // would, so games carry on offline. Every other Microsoft.Xbox class reports
 // "not registered", so the real DLL is never loaded.
+#include "registry.h"
 #include "xbox_abi.h"
 #include "com/factory.h"
 #include "com/failed_operation.h"
@@ -405,4 +406,5 @@ HRESULT MakeXboxFactory(const wchar_t* name, IActivationFactory** value) {
     Log("TRACE", "Xbox LIVE offline: %ls not provided", name);
     return REGDB_E_CLASSNOTREG; // never the real Microsoft.Xbox.dll
 }
+const ShimClass xboxClass{L"Microsoft.Xbox.", MakeXboxFactory, ShimPolicy::Replace, InIslands};
 }

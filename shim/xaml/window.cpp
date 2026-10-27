@@ -116,4 +116,5 @@ HRESULT MakeWindowFactory(IActivationFactory** value) {
     static auto factory = Make<WindowFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass windowClass{L"Windows.UI.Xaml.Window", MakeWindowFactory};
 }

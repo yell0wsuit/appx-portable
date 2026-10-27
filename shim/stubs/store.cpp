@@ -452,4 +452,6 @@ HRESULT MakeStoreFactory(IActivationFactory** value) {
     auto factory = Make<StoreFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass currentAppClass{L"Windows.ApplicationModel.Store.CurrentApp", MakeStoreFactory, ShimPolicy::Replace,
+                                InIslands};
 }

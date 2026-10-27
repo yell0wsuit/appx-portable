@@ -360,4 +360,14 @@ HRESULT MakeTileFactory(IActivationFactory** value) { return Shared<TileFactory>
 HRESULT MakeBadgeFactory(IActivationFactory** value) { return Shared<BadgeFactory>(value); }
 HRESULT MakeSecondaryTileFactory(IActivationFactory** value) { return Shared<SecondaryTileFactory>(value); }
 HRESULT MakeMessageDialogFactory(IActivationFactory** value) { return Shared<MessageDialogFactory>(value); }
+const ShimClass shareClass{L"Windows.ApplicationModel.DataTransfer.DataTransferManager", MakeShareFactory};
+const ShimClass settingsPaneClass{L"Windows.UI.ApplicationSettings.SettingsPane", MakeSettingsPaneFactory,
+                                  ShimPolicy::Replace, InIslands};
+const ShimClass tilesClass{L"Windows.UI.Notifications.TileUpdateManager", MakeTileFactory, ShimPolicy::Replace,
+                           InIslands};
+const ShimClass badgesClass{L"Windows.UI.Notifications.BadgeUpdateManager", MakeBadgeFactory, ShimPolicy::Replace,
+                            InIslands};
+const ShimClass secondaryTileClass{L"Windows.UI.StartScreen.SecondaryTile", MakeSecondaryTileFactory,
+                                   ShimPolicy::Replace, InIslands};
+const ShimClass messageDialogClass{L"Windows.UI.Popups.MessageDialog", MakeMessageDialogFactory};
 }

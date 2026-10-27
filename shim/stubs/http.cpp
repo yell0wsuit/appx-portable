@@ -229,4 +229,9 @@ HRESULT MakeNetworkFactory(IActivationFactory** value) {
     static auto factory = Make<NetworkFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass httpFilterClass{L"Windows.Web.Http.Filters.HttpBaseProtocolFilter",
+                                [](IActivationFactory** value) { return MakeHttpFactory(true, value); }};
+const ShimClass httpClientClass{L"Windows.Web.Http.HttpClient",
+                                [](IActivationFactory** value) { return MakeHttpFactory(false, value); }};
+const ShimClass networkClass{L"Windows.Networking.Connectivity.NetworkInformation", MakeNetworkFactory};
 }

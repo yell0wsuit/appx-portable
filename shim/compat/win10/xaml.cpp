@@ -1,3 +1,4 @@
+#include "registry.h"
 #include "xaml.h"
 #ifndef __clang__
 #pragma warning(disable : 4996)
@@ -85,6 +86,7 @@ HRESULT MakeWin10GridFactory(IActivationFactory** value) {
     auto factory = Make<GridFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass gridClass{L"Windows.UI.Xaml.Controls.Grid", MakeWin10GridFactory};
 HRESULT MakeWin10XamlElement(const wchar_t* tag, IInspectable** value) {
     if (!value) return E_POINTER;
     *value = nullptr;

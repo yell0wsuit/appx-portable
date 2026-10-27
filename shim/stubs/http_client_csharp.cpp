@@ -4,6 +4,7 @@
 // request completes at once, unsuccessfully, and nothing is sent.
 // Interfaces declared from HttpClientCSharp.winmd (same ABI for object
 // parameters as IInspectable*).
+#include "registry.h"
 #include "com/factory.h"
 #include "log.h"
 #include <wrl.h>
@@ -187,4 +188,5 @@ HRESULT MakeHttpClientCSharpFactory(const wchar_t* name, IActivationFactory** va
     else return REGDB_E_CLASSNOTREG;
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass httpClientCSharpClass{L"HttpClientCSharp.", MakeHttpClientCSharpFactory};
 }

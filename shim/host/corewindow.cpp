@@ -1,3 +1,4 @@
+#include "registry.h"
 #include "islands/islands.h"
 #include "generated/uicore.h"
 #include "host.h"
@@ -424,4 +425,5 @@ HRESULT MakeCoreWindowFactory(IActivationFactory** value) {
     static auto factory = Make<CoreWindowFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass coreWindowClass{L"Windows.UI.Core.CoreWindow", MakeCoreWindowFactory};
 }

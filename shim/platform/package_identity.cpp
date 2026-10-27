@@ -76,4 +76,5 @@ HRESULT MakePackageFactory(IActivationFactory** value) {
     static auto factory = Make<PackageFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+const ShimClass packageClass{L"Windows.ApplicationModel.Package", MakePackageFactory, ShimPolicy::Replace, InIslands};
 }

@@ -495,4 +495,8 @@ HRESULT MakeControlFactory(const wchar_t* name, IActivationFactory** value) {
     }
     return CLASS_E_CLASSNOTAVAILABLE;
 }
+const ShimClass rectangleGeometryClass{L"Windows.UI.Xaml.Media.RectangleGeometry", MakeRectangleGeometryFactory};
+const ShimClass frameClass{L"Windows.UI.Xaml.Controls.Frame", MakeControlFactory};
+const ShimClass pageClass{L"Windows.UI.Xaml.Controls.Page", MakeControlFactory};
+const ShimClass userControlClass{L"Windows.UI.Xaml.Controls.UserControl", MakeControlFactory};
 }
