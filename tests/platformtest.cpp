@@ -100,6 +100,30 @@ int main() {
     if (FAILED(calendar->get_Day(&day)) || FAILED(calendar->AddDays(1)) || FAILED(calendar->get_Day(&nextDay)) ||
         (nextDay != day + 1 && nextDay != 1))
         return 33;
+    // Games reach the complete Windows Calendar, including its Windows 8.1 time
+    // zone constructor (Leo's Fortune); the shim's calendar only fills in for Wine.
+    using namespace ABI::Windows::Globalization;
+    ComPtr<IApplicationLanguagesStatics> languages;
+    ComPtr<ABI::Windows::Foundation::Collections::IVectorView<HSTRING>> languageList;
+    ComPtr<ABI::Windows::Foundation::Collections::IIterable<HSTRING>> languageItems;
+    if (FAILED(RoGetActivationFactory(HStringReference(L"Windows.Globalization.ApplicationLanguages").Get(),
+                                      IID_PPV_ARGS(&languages))) ||
+        FAILED(languages->get_Languages(&languageList)) || FAILED(languageList.As(&languageItems)))
+        return 34;
+    ComPtr<ICalendarFactory2> zonedFactory;
+    if (FAILED(RoGetActivationFactory(HStringReference(L"Windows.Globalization.Calendar").Get(),
+                                      IID_PPV_ARGS(&zonedFactory)))) {
+        puts("FAIL calendar time zone factory");
+        return 35;
+    }
+    ComPtr<ICalendar> zoned;
+    ComPtr<ITimeZoneOnCalendar> zone;
+    HString zoneId;
+    if (FAILED(zonedFactory->CreateCalendarWithTimeZone(
+            languageItems.Get(), HStringReference(L"GregorianCalendar").Get(),
+            HStringReference(L"24HourClock").Get(), HStringReference(L"UTC").Get(), &zoned)) ||
+        FAILED(zoned.As(&zone)) || FAILED(zone->GetTimeZone(zoneId.GetAddressOf())))
+        return 36;
     puts("platformtest: 0 failure(s)");
     return 0;
 }
