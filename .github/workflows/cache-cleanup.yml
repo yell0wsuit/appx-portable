@@ -1,10 +1,10 @@
 name: Clean up PR caches
 
 # A pull request's caches can only be restored by that pull request, so they
-# are dead weight once it closes. pull_request_target grants the write token
-# fork pull requests need; it is safe because nothing is checked out.
+# are dead weight once it closes. Fork pull requests get a read-only token
+# under pull_request, so they are skipped and their caches left to expire.
 on:
-    pull_request_target:
+    pull_request:
         types: [closed]
 
 permissions:
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
     cleanup:
+        if: github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
         timeout-minutes: 5
         steps:
