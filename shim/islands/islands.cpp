@@ -34,6 +34,7 @@ using ABI::Windows::Foundation::Rect;
 #include "host/host.h"
 #include "host/event_args.h"
 #include "islands.h"
+#include "webview.h"
 #include "package/package.h"
 namespace appx {
 HRESULT MakeCoreWindow(ABI::Windows::UI::Core::ICoreWindow** value);
@@ -50,7 +51,6 @@ static HRESULT GetReal(const wchar_t* name, REFIID iid, void** out) {
 }
 // ---- island state --------------------------------------------------------------
 static HWND islandWindow;
-HWND IslandWindow() noexcept { return islandWindow; }
 static ComPtr<Hosting::IWindowsXamlManager> xamlManager;
 static ComPtr<Hosting::IDesktopWindowXamlSource> xamlSource;
 static ComPtr<IDesktopWindowXamlSourceNative2> xamlNative;
@@ -337,6 +337,8 @@ static HRESULT STDMETHODCALLTYPE HookOnLaunched(IApplicationOverrides* self, ILa
         launchPending = true;
         return S_OK;
     }
+    hr = HookIslandWebViewMetadata(appInstance.Get());
+    if (FAILED(hr)) return hr;
     appx::Log("TRACE", "STAGE launched: OnLaunched intercepted (system args %p), passing portable launch args", args);
     auto argsOverride = IslandLaunchArgs();
     return argsOverride ? realOnLaunched(self, argsOverride.Get()) : E_OUTOFMEMORY;
@@ -596,12 +598,17 @@ static HRESULT InitializeSettingsFlyouts() {
     return S_OK;
 }
 void ResizeIslandView(int width, int height) {
-    if (islandWindow) SetWindowPos(islandWindow, HWND_TOP, 0, 0, width, height, SWP_NOACTIVATE);
+    // Browser HWNDs are siblings above the bridge so they receive native input.
+    if (islandWindow) SetWindowPos(islandWindow, nullptr, 0, 0, width, height, SWP_NOACTIVATE | SWP_NOZORDER);
     const double scale = GetDpiForWindow(HostWindow()) / 96.0;
     SizeSettingsFlyout(width / scale, height / scale);
 }
 void IslandInputMessage(UINT message, WPARAM wparam, LPARAM lparam);
 bool IslandPreTranslate(MSG* message) {
+    if (RouteIslandWebViewInput(*message)) return true;
+    // Browser children are siblings of the island. XAML must not consume
+    // their native mouse/keyboard messages before Chromium receives them.
+    if (IsIslandWebViewWindow(message->hwnd)) return false;
     if (message->hwnd == HostWindow() || IsChild(HostWindow(), message->hwnd)) {
         const auto kind = message->message;
         // Pointer input belongs to XAML's routed events, including capture.
@@ -745,7 +752,8 @@ public:
         if (uri) uri->get_AbsoluteUri(&text);
         appx::Log("TRACE", "-> LoadComponent %s", text ? Narrow(text).c_str() : "?");
         ComPtr<IApplicationStatics> s;
-        HRESULT hr = InitXaml("LoadComponent");
+        HRESULT hr = HookIslandWebViewMetadata(appInstance.Get());
+        if (SUCCEEDED(hr)) hr = InitXaml("LoadComponent");
         if (SUCCEEDED(hr)) hr = real_.As(&s);
         if (SUCCEEDED(hr)) hr = LoadApplicationTheme(component, uri, [&] { return s->LoadComponent(component, uri); });
         appx::Log("TRACE", "<- LoadComponent %s hr=0x%08lX", text ? Narrow(text).c_str() : "?", hr);
@@ -759,7 +767,8 @@ public:
         if (uri) uri->get_AbsoluteUri(&text);
         appx::Log("TRACE", "-> LoadComponent %s (location %d)", text ? Narrow(text).c_str() : "?", location);
         ComPtr<IApplicationStatics> s;
-        HRESULT hr = InitXaml("LoadComponentWithResourceLocation");
+        HRESULT hr = HookIslandWebViewMetadata(appInstance.Get());
+        if (SUCCEEDED(hr)) hr = InitXaml("LoadComponentWithResourceLocation");
         if (SUCCEEDED(hr)) hr = real_.As(&s);
         if (SUCCEEDED(hr))
             hr = LoadApplicationTheme(component, uri,

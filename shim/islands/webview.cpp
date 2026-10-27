@@ -1,7 +1,9 @@
 // EdgeHTML requires CoreWindow, which XAML Islands cannot supply. A WebView
-// outer composes a system Grid and renders WebView2 into the island HWND.
+// outer composes a system Grid and renders WebView2 beside the island HWND.
 #include "com/factory.h"
 #include "islands.h"
+#include "webview.h"
+#include "host/host.h"
 #include "registry.h"
 #include "package/package.h"
 #include <WebView2.h>
@@ -193,7 +195,7 @@ public:
     }
 };
 
-class WebView final : public Controls::IWebView {
+class WebView final : public Controls::IWebView, public IIslandWebView {
     std::atomic<ULONG> refs_{1};
     // Only retain the nondelegating inner: ordinary interfaces retain this
     // outer and would form a reference cycle if stored as members.
@@ -204,6 +206,10 @@ class WebView final : public Controls::IWebView {
     std::shared_ptr<Lifetime> lifetime_ = std::make_shared<Lifetime>(Lifetime{this});
     ComPtr<ICoreWebView2Controller> controller_;
     ComPtr<ICoreWebView2> browser_;
+    // Own a host sibling whose z-order we can control without depending on
+    // Chromium's private window classes or reparenting XAML's bridge.
+    HWND window_ = nullptr;
+    COLORREF windowBackground_ = CLR_INVALID;
     ComPtr<Foundation::IUriRuntimeClass> source_;
     EventSource<Controls::INotifyEventHandler> notify_;
     EventSource<Xaml::Navigation::ILoadCompletedEventHandler> loaded_;
@@ -213,6 +219,20 @@ class WebView final : public Controls::IWebView {
     bool attached_ = false, starting_ = false, ready_ = false, pendingHtml_ = false, pending_ = false;
     HRESULT browserError_ = S_OK;
     std::wstring navigation_;
+    ABI::Windows::UI::Color background_{255, 255, 255, 255};
+
+    static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+        auto* self = reinterpret_cast<WebView*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+        if (message == WM_NCCREATE) {
+            self = static_cast<WebView*>(reinterpret_cast<CREATESTRUCTW*>(lparam)->lpCreateParams);
+            SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+        }
+        if (message == WM_NCDESTROY && self) {
+            self->window_ = nullptr;
+            SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+        }
+        return DefWindowProcW(window, message, wparam, lparam);
+    }
 
     template <class T> HRESULT Inner(ComPtr<T>& out) { return inner_.As(&out); }
     // Game code may invoke synchronous JS from ScriptNotify. Queue it on XAML
@@ -237,7 +257,7 @@ class WebView final : public Controls::IWebView {
         if (FAILED(hr)) Log("FAIL", "WebView2 event dispatch failed hr=%08lx", hr);
     }
     void UpdateBounds() {
-        if (!controller_) return;
+        if (!controller_ || !window_) return;
         ComPtr<Xaml::IFrameworkElement> element;
         ComPtr<Xaml::IUIElement> ui;
         if (FAILED(Inner(element)) || FAILED(Inner(ui))) return;
@@ -255,11 +275,15 @@ class WebView final : public Controls::IWebView {
         ComPtr<Xaml::IXamlRoot> root;
         if (SUCCEEDED(inner_.As(&modern)) && SUCCEEDED(modern->get_XamlRoot(&root)) && root)
             root->get_RasterizationScale(&scale);
-        bool visible = attached_ && SUCCEEDED(hr) && visibility == Xaml::Visibility_Visible && width > 0 && height > 0;
+        bool visible =
+            ready_ && attached_ && SUCCEEDED(hr) && visibility == Xaml::Visibility_Visible && width > 0 && height > 0;
         // An HWND does not inherit XAML's effective visibility. In particular,
         // collapsing a containing panel must hide the browser as well.
         ComPtr<Xaml::Media::IVisualTreeHelperStatics> tree;
         ComPtr<Xaml::IDependencyObject> ancestor;
+        bool opaqueBackground = background_.A == 255;
+        COLORREF background =
+            opaqueBackground ? RGB(background_.R, background_.G, background_.B) : GetSysColor(COLOR_WINDOW);
         if (visible &&
             SUCCEEDED(OsGetActivationFactory(HStringReference(L"Windows.UI.Xaml.Media.VisualTreeHelper").Get(),
                                              IID_PPV_ARGS(&tree))) &&
@@ -270,17 +294,49 @@ class WebView final : public Controls::IWebView {
                     parentUi->get_Visibility(&visibility);
                     visible = visibility == Xaml::Visibility_Visible;
                 }
+                // A native HWND cannot expose the island's backdrop through
+                // browser transparency. Resolve the nearest opaque XAML brush.
+                if (!opaqueBackground) {
+                    ComPtr<Controls::IPanel> panel;
+                    ComPtr<Controls::IBorder> border;
+                    ComPtr<Xaml::Media::IBrush> brush;
+                    if (SUCCEEDED(ancestor.As(&panel)))
+                        panel->get_Background(&brush);
+                    else if (SUCCEEDED(ancestor.As(&border)))
+                        border->get_Background(&brush);
+                    ComPtr<Xaml::Media::ISolidColorBrush> solid;
+                    double opacity = 0;
+                    ABI::Windows::UI::Color color{};
+                    if (brush && SUCCEEDED(brush->get_Opacity(&opacity)) && opacity == 1 &&
+                        SUCCEEDED(brush.As(&solid)) && SUCCEEDED(solid->get_Color(&color)) && color.A == 255) {
+                        background = RGB(color.R, color.G, color.B);
+                        opaqueBackground = true;
+                    }
+                }
                 ComPtr<Xaml::IDependencyObject> parent;
                 if (FAILED(tree->GetParent(ancestor.Get(), &parent))) break;
                 ancestor = std::move(parent);
             }
+        }
+        if (windowBackground_ != background) {
+            windowBackground_ = background;
+            ComPtr<ICoreWebView2Controller2> color;
+            auto colorHr = controller_.As(&color);
+            if (SUCCEEDED(colorHr))
+                colorHr = color->put_DefaultBackgroundColor(
+                    {255, GetRValue(background), GetGValue(background), GetBValue(background)});
+            if (FAILED(colorHr)) Log("FAIL", "WebView background failed hr=%08lx", colorHr);
         }
         if (visible) {
             RECT bounds{static_cast<LONG>(std::lround(origin.X * scale)),
                         static_cast<LONG>(std::lround(origin.Y * scale)),
                         static_cast<LONG>(std::lround((origin.X + width) * scale)),
                         static_cast<LONG>(std::lround((origin.Y + height) * scale))};
-            controller_->put_Bounds(bounds);
+            SetWindowPos(window_, HWND_TOP, bounds.left, bounds.top, bounds.right - bounds.left,
+                         bounds.bottom - bounds.top, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            controller_->put_Bounds({0, 0, bounds.right - bounds.left, bounds.bottom - bounds.top});
+        } else {
+            ShowWindow(window_, SW_HIDE);
         }
         controller_->put_IsVisible(visible);
     }
@@ -292,6 +348,16 @@ class WebView final : public Controls::IWebView {
     HRESULT Connect(ICoreWebView2Controller* controller) {
         controller_ = controller;
         auto hr = controller->get_CoreWebView2(&browser_);
+        if (FAILED(hr)) return hr;
+        // Legacy apps author their HTML for a light canvas. Chromium's OS
+        // scheme can override even an explicitly light DefaultBackgroundColor.
+        ComPtr<ICoreWebView2_13> modernBrowser;
+        ComPtr<ICoreWebView2Profile> profile;
+        if (SUCCEEDED(browser_.As(&modernBrowser)) && SUCCEEDED(modernBrowser->get_Profile(&profile))) {
+            auto scheme = profile->put_PreferredColorScheme(COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT);
+            if (FAILED(scheme)) Log("FAIL", "WebView color scheme failed hr=%08lx", scheme);
+        }
+        hr = SetBackgroundColor(background_);
         if (FAILED(hr)) return hr;
         ComPtr<ICoreWebView2_3> mapping;
         hr = browser_.As(&mapping);
@@ -373,8 +439,18 @@ class WebView final : public Controls::IWebView {
     }
     HRESULT Start() {
         if (starting_ || browser_ || !attached_) return browserError_;
-        const HWND parent = IslandWindow();
-        if (!parent) return E_PENDING;
+        if (!HostWindow()) return E_PENDING;
+        WNDCLASSW type{};
+        type.lpfnWndProc = WindowProc;
+        type.hInstance = GetModuleHandleW(nullptr);
+        type.hbrBackground = GetSysColorBrush(COLOR_WINDOW);
+        type.lpszClassName = L"AppxPortableWebView";
+        if (!RegisterClassW(&type) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+            return HRESULT_FROM_WIN32(GetLastError());
+        window_ = CreateWindowExW(0, type.lpszClassName, nullptr, WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 1,
+                                  1, HostWindow(), nullptr, type.hInstance, this);
+        if (!window_) return HRESULT_FROM_WIN32(GetLastError());
+        const HWND parent = window_;
         starting_ = true;
         auto weak = std::weak_ptr<Lifetime>(lifetime_);
         auto environment = Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
@@ -427,6 +503,7 @@ public:
             browser_->remove_NavigationCompleted(navigationToken_);
         }
         if (controller_) controller_->Close();
+        if (window_) DestroyWindow(window_);
     }
     HRESULT Initialize() {
         ComPtr<Controls::IGridFactory> factory;
@@ -475,9 +552,26 @@ public:
             AddRef();
             return S_OK;
         }
+        if (iid == __uuidof(IIslandWebView)) {
+            *value = static_cast<IIslandWebView*>(this);
+            AddRef();
+            return S_OK;
+        }
         return inner_ ? inner_->QueryInterface(iid, value) : E_NOINTERFACE;
     }
     ULONG STDMETHODCALLTYPE AddRef() override { return ++refs_; }
+    HRESULT STDMETHODCALLTYPE GetBackgroundColor(ABI::Windows::UI::Color* value) override {
+        if (!value) return E_POINTER;
+        *value = background_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE SetBackgroundColor(ABI::Windows::UI::Color value) override {
+        background_ = value;
+        windowBackground_ = CLR_INVALID;
+        if (!controller_) return S_OK;
+        UpdateBounds();
+        return S_OK;
+    }
     ULONG STDMETHODCALLTYPE Release() override {
         const auto n = --refs_;
         if (!n) {
@@ -662,5 +756,105 @@ HRESULT MakeWebViewFactory(IActivationFactory** value) {
     return SUCCEEDED(hr) ? factory.CopyTo(value) : hr;
 }
 const ShimClass webViewClass{L"Windows.UI.Xaml.Controls.WebView", MakeWebViewFactory, ShimPolicy::Replace, InIslands};
+}
+HRESULT CreateIslandWebView(IInspectable** value) {
+    ComPtr<IActivationFactory> factory;
+    auto hr = MakeWebViewFactory(&factory);
+    return SUCCEEDED(hr) ? factory->ActivateInstance(value) : hr;
+}
+bool IsIslandWebViewWindow(HWND window) {
+    if (!window || !IsChild(HostWindow(), window)) return false;
+    for (; window && window != HostWindow(); window = GetParent(window)) {
+        wchar_t name[64]{};
+        GetClassNameW(window, name, ARRAYSIZE(name));
+        if (wcscmp(name, L"AppxPortableWebView") == 0) return true;
+    }
+    return false;
+}
+bool RouteIslandWebViewInput(const MSG& message) {
+    static HWND dragTarget = nullptr;
+    static UINT32 dragPointer = 0;
+    if (message.message == WM_POINTERCAPTURECHANGED && LOWORD(message.wParam) == dragPointer) {
+        dragTarget = nullptr;
+        dragPointer = 0;
+    }
+    const bool mousePointer =
+        message.message == WM_POINTERDOWN || message.message == WM_POINTERUP || message.message == WM_POINTERUPDATE;
+    const bool pointer = message.message == WM_POINTERWHEEL || message.message == WM_POINTERHWHEEL;
+    if (!pointer && !mousePointer && message.message != WM_MOUSEWHEEL && message.message != WM_MOUSEHWHEEL)
+        return false;
+    if (IsIslandWebViewWindow(message.hwnd)) return false;
+    // XAML's input site receives real pointer input even over a browser
+    // sibling. Deliver it to the native child under the screen-space position.
+    POINT position{static_cast<short>(LOWORD(message.lParam)), static_cast<short>(HIWORD(message.lParam))};
+    HWND target = WindowFromPoint(position);
+    POINTER_INFO info{};
+    if (mousePointer) {
+        if (!GetPointerInfo(LOWORD(message.wParam), &info) || info.pointerType != PT_MOUSE) return false;
+        if (dragPointer == info.pointerId && IsIslandWebViewWindow(dragTarget)) target = dragTarget;
+    }
+    if (!IsIslandWebViewWindow(target)) return false;
+    WPARAM buttons = LOWORD(message.wParam);
+    if (pointer || mousePointer) {
+        buttons = 0;
+        if (GetKeyState(VK_SHIFT) < 0) buttons |= MK_SHIFT;
+        if (GetKeyState(VK_CONTROL) < 0) buttons |= MK_CONTROL;
+        if (GetKeyState(VK_LBUTTON) < 0) buttons |= MK_LBUTTON;
+        if (GetKeyState(VK_RBUTTON) < 0) buttons |= MK_RBUTTON;
+        if (GetKeyState(VK_MBUTTON) < 0) buttons |= MK_MBUTTON;
+    }
+    if (mousePointer) {
+        UINT mouse = WM_MOUSEMOVE;
+        switch (info.ButtonChangeType) {
+        case POINTER_CHANGE_FIRSTBUTTON_DOWN:
+            mouse = WM_LBUTTONDOWN;
+            break;
+        case POINTER_CHANGE_FIRSTBUTTON_UP:
+            mouse = WM_LBUTTONUP;
+            break;
+        case POINTER_CHANGE_SECONDBUTTON_DOWN:
+            mouse = WM_RBUTTONDOWN;
+            break;
+        case POINTER_CHANGE_SECONDBUTTON_UP:
+            mouse = WM_RBUTTONUP;
+            break;
+        case POINTER_CHANGE_THIRDBUTTON_DOWN:
+            mouse = WM_MBUTTONDOWN;
+            break;
+        case POINTER_CHANGE_THIRDBUTTON_UP:
+            mouse = WM_MBUTTONUP;
+            break;
+        case POINTER_CHANGE_FOURTHBUTTON_DOWN:
+        case POINTER_CHANGE_FIFTHBUTTON_DOWN:
+            mouse = WM_XBUTTONDOWN;
+            break;
+        case POINTER_CHANGE_FOURTHBUTTON_UP:
+        case POINTER_CHANGE_FIFTHBUTTON_UP:
+            mouse = WM_XBUTTONUP;
+            break;
+        default:
+            break;
+        }
+        if (info.pointerFlags & POINTER_FLAG_FIRSTBUTTON) buttons |= MK_LBUTTON;
+        if (info.pointerFlags & POINTER_FLAG_SECONDBUTTON) buttons |= MK_RBUTTON;
+        if (info.pointerFlags & POINTER_FLAG_THIRDBUTTON) buttons |= MK_MBUTTON;
+        if (mouse == WM_XBUTTONDOWN || mouse == WM_XBUTTONUP)
+            buttons = MAKEWPARAM(buttons, info.ButtonChangeType == POINTER_CHANGE_FOURTHBUTTON_DOWN ||
+                                                  info.ButtonChangeType == POINTER_CHANGE_FOURTHBUTTON_UP
+                                              ? XBUTTON1
+                                              : XBUTTON2);
+        if (message.message == WM_POINTERDOWN) {
+            dragTarget = target;
+            dragPointer = info.pointerId;
+        } else if (message.message == WM_POINTERUP || (info.pointerFlags & POINTER_FLAG_CANCELED)) {
+            dragTarget = nullptr;
+            dragPointer = 0;
+        }
+        ScreenToClient(target, &position);
+        return PostMessageW(target, mouse, buttons, MAKELPARAM(position.x, position.y)) != FALSE;
+    }
+    const UINT wheel =
+        message.message == WM_POINTERHWHEEL || message.message == WM_MOUSEHWHEEL ? WM_MOUSEHWHEEL : WM_MOUSEWHEEL;
+    return PostMessageW(target, wheel, MAKEWPARAM(buttons, HIWORD(message.wParam)), message.lParam) != FALSE;
 }
 }

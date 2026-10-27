@@ -25,12 +25,15 @@ HRESULT QueueElementLoaded(IInspectable* value);
 HRESULT DeliverElementLoaded(IInspectable* object);
 HRESULT CurrentApplication(ABI::Windows::UI::Xaml::IApplication** value);
 inline std::map<ABI::Windows::UI::Xaml::IFrameworkElement*, std::function<HRESULT()>>& LoadedCallbacks() {
-    static std::map<ABI::Windows::UI::Xaml::IFrameworkElement*, std::function<HRESULT()>> callbacks;
-    return callbacks;
+    // Global windows can release their elements during DLL teardown, after
+    // function-local statics would have been destroyed. Keep the registry alive
+    // so those elements can still unregister their non-owning callbacks.
+    static auto* callbacks = new std::map<ABI::Windows::UI::Xaml::IFrameworkElement*, std::function<HRESULT()>>;
+    return *callbacks;
 }
 inline std::map<ABI::Windows::UI::Xaml::IFrameworkElement*, std::function<HRESULT()>>& SizeCallbacks() {
-    static std::map<ABI::Windows::UI::Xaml::IFrameworkElement*, std::function<HRESULT()>> callbacks;
-    return callbacks;
+    static auto* callbacks = new std::map<ABI::Windows::UI::Xaml::IFrameworkElement*, std::function<HRESULT()>>;
+    return *callbacks;
 }
 // Raises SizeChanged on loaded elements whose host-sized layout changed.
 HRESULT RaiseElementSizeChanged();
