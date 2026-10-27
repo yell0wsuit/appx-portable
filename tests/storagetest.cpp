@@ -108,6 +108,28 @@ bool CheckPackagedFileUri(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**)) {
     UINT64 size = 0;
     return SUCCEEDED(access->get_Size(&size)) && size == sizeof(payload) - 1;
 }
+// settings["lastArticle"] is an ApplicationDataCompositeValue {Title: "mind", Index: 7}.
+static int CheckComposite(ABI::Windows::Foundation::Collections::IMap<HSTRING, IInspectable*>* map, int code) {
+    ComPtr<IInspectable> object, value;
+    ComPtr<ABI::Windows::Foundation::Collections::IMap<HSTRING, IInspectable*>> composite;
+    ComPtr<ABI::Windows::Foundation::IPropertyValue> property;
+    HString name, title;
+    if (FAILED(map->Lookup(HStringReference(L"lastArticle").Get(), &object)) ||
+        FAILED(object->GetRuntimeClassName(name.GetAddressOf())) ||
+        wcscmp(name.GetRawBuffer(nullptr), L"Windows.Storage.ApplicationDataCompositeValue") != 0 ||
+        FAILED(object.As(&composite)))
+        return code;
+    UINT32 size = 0;
+    INT32 index = 0;
+    if (FAILED(composite->get_Size(&size)) || size != 2) return code + 1;
+    if (FAILED(composite->Lookup(HStringReference(L"Title").Get(), &value)) || FAILED(value.As(&property)) ||
+        FAILED(property->GetString(title.GetAddressOf())) || wcscmp(title.GetRawBuffer(nullptr), L"mind") != 0)
+        return code + 2;
+    if (FAILED(composite->Lookup(HStringReference(L"Index").Get(), &value)) || FAILED(value.As(&property)) ||
+        FAILED(property->GetInt32(&index)) || index != 7)
+        return code + 3;
+    return 0;
+}
 int main(int argc, char** argv) {
     RoInitialize(RO_INIT_MULTITHREADED);
     const char* mode = argc > 1 ? argv[1] : "";
@@ -201,7 +223,26 @@ int main(int argc, char** argv) {
             if (FAILED(props->CreateDouble(42.0, &value)) ||
                 FAILED(map->Insert(HStringReference(L"volume").Get(), value.Get(), &replaced)))
                 return 92;
+            // A composite value (OALD stores its last opened article as one).
+            ComPtr<IInspectable> object;
+            ComPtr<ABI::Windows::Foundation::Collections::IMap<HSTRING, IInspectable*>> composite;
+            if (FAILED(RoActivateInstance(HStringReference(L"Windows.Storage.ApplicationDataCompositeValue").Get(),
+                                          &object)) ||
+                FAILED(object.As(&composite)))
+                return 95;
+            if (FAILED(props->CreateString(HStringReference(L"mind").Get(), &value)) ||
+                FAILED(composite->Insert(HStringReference(L"Title").Get(), value.Get(), &replaced)) ||
+                FAILED(props->CreateInt32(7, &value)) ||
+                FAILED(composite->Insert(HStringReference(L"Index").Get(), value.Get(), &replaced)) ||
+                FAILED(map->Insert(HStringReference(L"lastArticle").Get(), object.Get(), &replaced)))
+                return 96;
+            // Settings store a copy: changing the composite afterwards changes nothing stored.
+            if (FAILED(props->CreateInt32(8, &value)) ||
+                FAILED(composite->Insert(HStringReference(L"Index").Get(), value.Get(), &replaced)))
+                return 97;
+            if (int failure = CheckComposite(map.Get(), 98)) return failure;
         } else {
+            if (int failure = CheckComposite(map.Get(), 98)) return failure;
             ComPtr<IInspectable> value;
             ComPtr<ABI::Windows::Foundation::IPropertyValue> property;
             INT32 score = 0;
