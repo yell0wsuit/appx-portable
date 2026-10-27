@@ -745,9 +745,6 @@ KNOWN_PATCHES = {
     ("Disney.WheresMyMickey", "1.1.0.30"): KnownPatch(
         "wheresmymickey", ("patch.py",), "WheresMyMickey.Windows8.exe"
     ),
-    ("Ubisoft.RaymanFiestaRunWindows10Edition", "1.0.23.0"): KnownPatch(
-        "raymanwin10", ("patch.py", "CustomTitleBar.xaml"), ""
-    ),
 }
 
 

@@ -5,6 +5,8 @@
 #include "registry.h"
 #include "islands/islands.h"
 #include "package/package.h"
+#include "package/resources.h"
+#include "xbf.h"
 #include "element.h"
 #include "compat/win10/xaml.h"
 #include <shlwapi.h>
@@ -93,6 +95,54 @@ static HRESULT ConnectSourceXaml(ABI::Windows::UI::Xaml::Markup::IComponentConne
         if (FAILED(hr)) return hr;
     }
     return hr == S_FALSE ? S_OK : hr;
+}
+static HRESULT ConnectCompiledXaml(ABI::Windows::UI::Xaml::Markup::IComponentConnector* connector,
+                                   IFrameworkElement* element, const std::wstring& filename) {
+    auto path = std::filesystem::path(filename);
+    if (_wcsicmp(path.extension().c_str(), L".xaml") != 0) return S_FALSE;
+    path.replace_extension(L".xbf");
+    ComPtr<IStream> stream;
+    auto hr = OpenPackageResource(CurrentPackage(), path.wstring(), &stream);
+    if (hr != S_OK) return hr;
+    std::vector<XbfConnection> connections;
+    hr = ReadXbfConnections(stream.Get(), connections);
+    if (FAILED(hr)) {
+        Log("FAIL", "XBF connection metadata unsupported %ls hr=%08lx", path.c_str(), hr);
+        return hr;
+    }
+    std::vector<ComPtr<IInspectable>> targets;
+    for (const auto& entry : connections) {
+        ComPtr<IInspectable> target;
+        if (entry.root) {
+            // Native caption roots are the game's composed UserControl.
+            if (entry.type != L"UserControl") return E_NOTIMPL;
+            hr = element->QueryInterface(IID_PPV_ARGS(&target));
+        } else {
+            hr = MakeWin10XamlElement(entry.type.c_str(), &target);
+        }
+        if (hr != S_OK) return FAILED(hr) ? hr : E_NOTIMPL;
+        if (entry.collapsed) {
+            ComPtr<IUIElement> ui;
+            hr = target.As(&ui);
+            if (SUCCEEDED(hr)) hr = ui->put_Visibility(Visibility_Collapsed);
+            if (FAILED(hr)) return hr;
+        }
+        targets.push_back(std::move(target));
+    }
+    ComPtr<INamedElementRegistry> names;
+    hr = element->QueryInterface(IID_PPV_ARGS(&names));
+    if (FAILED(hr)) return hr;
+    for (size_t i = 0; i < connections.size(); ++i) {
+        const auto& entry = connections[i];
+        if (!entry.name.empty()) {
+            hr = names->RegisterName(Wrappers::HStringReference(entry.name.c_str()).Get(), targets[i].Get());
+            if (FAILED(hr)) return hr;
+        }
+        hr = connector->Connect(entry.id, targets[i].Get());
+        if (FAILED(hr)) return hr;
+    }
+    Log("TRACE", "XBF connected %ls: %zu original connection IDs", path.c_str(), connections.size());
+    return S_OK;
 }
 static ComPtr<IApplication> current;
 HRESULT CurrentApplication(IApplication** value) {
@@ -277,6 +327,11 @@ public:
                             WindowsDeleteString(text);
                             return hr;
                         }
+                    }
+                    if (!movie && !directX) hr = ConnectCompiledXaml(connector.Get(), element.Get(), path);
+                    if (hr != S_FALSE) {
+                        WindowsDeleteString(text);
+                        return hr;
                     }
                 }
             }

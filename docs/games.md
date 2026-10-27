@@ -11,6 +11,6 @@
 | Where's My Perry?                    | `9WZDNCRDCTFF` | 1.5.1.1     | x86  |                 | ✅ Playable    |                                                             |
 | Where's My Mickey? XL                | `9WZDNCRFJCV7` | 1.1.0.30    | x86  |                 | 🩹 Needs patch | [AMPS startup EXE patch](../patch/wheresmymickey/README.md) |
 | Microsoft Sudoku (2018)              | `9WZDNCRFHV60` | 1.7.10190.0 | x86  | Yes             | 🩹 Needs patch | [Video-preloader asset patch](../patch/mssudoku/README.md)  |
-| Rayman Fiesta Run Windows 10 Edition | `9NBLGGH59M6B` | 1.0.23.0    | x64  |                 | 🩹 Needs patch | [Caption bindings patch](../patch/raymanwin10/README.md)    |
+| Rayman Fiesta Run Windows 10 Edition | `9NBLGGH59M6B` | 1.0.23.0    | x64  |                 | ✅ Playable    | [Original embedded caption](xbf.md)    |
 
 `installappx.py` applies a game's patch automatically when it recognizes the exact package and version.

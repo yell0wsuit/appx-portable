@@ -36,7 +36,7 @@ The installer changes no game file except through a known game's patch. Game-spe
 | Leo's Fortune                        | 1.1.0.9     | x86  | ✅ Playable    |
 | Where's My Mickey?                   | 1.1.0.30    | x86  | 🩹 Needs patch |
 | Microsoft Sudoku (2018)              | 1.7.10190.0 | x86  | 🩹 Needs patch |
-| Rayman Fiesta Run Windows 10 Edition | 1.0.23.0    | x64  | 🩹 Needs patch |
+| Rayman Fiesta Run Windows 10 Edition | 1.0.23.0    | x64  | ✅ Playable    |
 
 For more tested games and the Store package IDs, please see [tested games](docs/games.md).
 
