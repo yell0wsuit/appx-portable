@@ -50,6 +50,7 @@ static HRESULT GetReal(const wchar_t* name, REFIID iid, void** out) {
 }
 // ---- island state --------------------------------------------------------------
 static HWND islandWindow;
+HWND IslandWindow() noexcept { return islandWindow; }
 static ComPtr<Hosting::IWindowsXamlManager> xamlManager;
 static ComPtr<Hosting::IDesktopWindowXamlSource> xamlSource;
 static ComPtr<IDesktopWindowXamlSourceNative2> xamlNative;

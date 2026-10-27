@@ -544,6 +544,11 @@ def stage_runtime(
             )
     for name in names:
         replace_file(build / name, game / name)
+    # The WebView2 static loader's redistribution notice travels with the DLL.
+    # Older releases/local builds do not have this dependency.
+    notice = build / "WebView2-LICENSE.txt"
+    if notice.is_file():
+        replace_file(notice, game / notice.name)
     return names
 
 
