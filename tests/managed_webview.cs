@@ -26,7 +26,23 @@ sealed class WebViewApp : Application, IXamlMetadataProvider {
     private WebView web;
     private DispatcherTimer timeout;
     private bool ready, package;
-#if SCROLL
+#if CLIP
+    private Border clip;
+    [DllImport("user32.dll")] static extern int GetWindowRgnBox(IntPtr window, out Rect rect);
+    static IntPtr BrowserHost(IntPtr host) {
+        IntPtr browser = IntPtr.Zero;
+        EnumChildWindows(host, (window, unused) => {
+            var name = new System.Text.StringBuilder(128);
+            GetClassName(window, name, name.Capacity);
+            if (name.ToString() != "AppxPortableWebView") return true;
+            browser = window;
+            return false;
+        }, IntPtr.Zero);
+        if (browser == IntPtr.Zero) throw new Exception("WebView browser host missing");
+        return browser;
+    }
+#endif
+#if SCROLL || CLIP
     delegate bool EnumWindow(IntPtr window, IntPtr parameter);
     [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] struct Point { public int X, Y; }
@@ -91,7 +107,13 @@ sealed class WebViewApp : Application, IXamlMetadataProvider {
         // A transparent browser must retain this authored light backdrop.
         grid.Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 240, 245, 250));
 #endif
+#if CLIP
+        // A narrower ancestor clips the element, as a narrowed SettingsFlyout does.
+        clip = new Border { Width = 200, Height = 340, HorizontalAlignment = HorizontalAlignment.Left, Child = web };
+        grid.Children.Add(clip);
+#else
         grid.Children.Add(web);
+#endif
         File.WriteAllText("webview-local.js", "function echo(s){return s;} window.external.notify('ready');");
 #if SCROLL
         File.WriteAllText("webview-local.js", "function echo(s){return s;}" +
@@ -116,7 +138,30 @@ sealed class WebViewApp : Application, IXamlMetadataProvider {
             string text = web.InvokeScript("echo", new[] { "quote\" slash\\ newline\n\u263a" });
 #pragma warning restore 618
             if (text != "quote\" slash\\ newline\n\u263a") throw new Exception("InvokeScript result: " + text);
-#if SCROLL
+#if CLIP
+            // The 500-wide element shows only the border's 200 less its 20 margin.
+            var browserHost = BrowserHost(Host());
+            Rect bounds, region;
+            if (!GetWindowRect(browserHost, out bounds)) throw new Exception("Cannot locate WebView browser host");
+            double scale = (bounds.Right - bounds.Left) / web.Width;
+            if (GetWindowRgnBox(browserHost, out region) != 2) throw new Exception("Narrower ancestor did not clip the browser host");
+            if (region.Left != 0 || Math.Abs(region.Right - 180 * scale) > 2 || Math.Abs(region.Bottom - 300 * scale) > 2)
+                throw new Exception("Browser clip " + region.Left + ".." + region.Right + " x " + region.Bottom + " at scale " + scale);
+            // A removed WebView is suspended, and resumes when called into.
+            clip.Child = null;
+            var resume = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            resume.Tick += (sender, unused) => {
+                resume.Stop();
+#pragma warning disable 618
+                string again = web.InvokeScript("echo", new[] { "resumed" });
+#pragma warning restore 618
+                if (again != "resumed") throw new Exception("InvokeScript after suspension: " + again);
+                clip.Child = web;
+                ready = true;
+                web.Navigate(new Uri("ms-appx-web:///webview-local.html"));
+            };
+            resume.Start();
+#elif SCROLL
             var host = Host();
             Rect rect;
             if (!GetWindowRect(host, out rect) ||

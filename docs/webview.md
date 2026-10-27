@@ -40,7 +40,13 @@ Transparent backgrounds use the nearest opaque panel/border brush, or the system
 window color when none is present; gradients and images are not composited through
 these native hosts.
 The controller follows the element's layout, rasterization scale, tree
-attachment, and ancestor visibility. Its browser profile lives in `Local/WebView2`
+attachment, and ancestor visibility. A window region limits the host to the
+part of the element its ancestors show, such as a ScrollViewer viewport or a
+panel narrower than the element, for both drawing and input; Canvas and Popup
+ancestors do not clip, as in XAML. A WebView removed from the tree keeps its
+page and script state, as on Windows, but its browser is suspended until the
+element returns or the game navigates or calls a script. The controller is
+closed when the game releases the WebView. Its browser profile lives in `Local/WebView2`
 under the configured save folder. Browser notifications dispatch back through XAML
 before invoking game handlers, allowing the legacy synchronous script API to pump
 messages without reentering a WebView2 callback. Script calls time out after ten
@@ -81,6 +87,9 @@ wheel events and mouse buttons/motion to the browser under the pointer, retainin
 the drag target until release. Real mouse-wheel and scrollbar-drag input were
 also checked in PEU. This opt-in test needs an
 interactive desktop and runs separately from other tests that open windows.
+`managed_webview_clip` places a WebView inside a narrower Border and checks the
+host's window region, then removes the element, checks that synchronous script
+resumes the suspended browser, and returns it to navigate.
 
 ```powershell
 cmake -S . -B build/ci-fix-x86 -DAPPX_TEST_WEBVIEW2=ON
@@ -105,9 +114,10 @@ PEU's own HTML disables text selection; that restriction is preserved.
 - `IWebView2` APIs (`InvokeScriptAsync`, NavigationCompleted and other modern
   events), WebViewBrush snapshots, and unsupported legacy members return
   E_NOINTERFACE/E_NOTIMPL. This is a compatibility subset, not a full replacement.
-- HWND airspace places web content above overlapping XAML. Ancestor clip regions,
-  transformed/rotated elements, popup layering, and XAML focus traversal need a
-  composition-controller implementation for full fidelity.
+- HWND airspace places web content above overlapping XAML. Rectangular ancestor
+  clips are applied, but transformed/rotated elements, animations (the browser
+  appears in place while a SettingsFlyout slides in), popup layering, and XAML
+  focus traversal need a composition-controller implementation for full fidelity.
 - Remote URI allowlists, ms-local-stream and relative URLs inside HTML supplied
   to NavigateToString are not implemented.
 

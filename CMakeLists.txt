@@ -358,6 +358,14 @@ if(NOT CMAKE_CROSSCOMPILING)
         "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview-scroll"
         -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
       set_tests_properties(managed_webview_scroll PROPERTIES TIMEOUT 60 LABELS "managed-clr;webview2" RUN_SERIAL TRUE)
+      add_test(NAME managed_webview_clip COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:CLIP"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_webview.cs"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview-clip"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_webview_clip PROPERTIES TIMEOUT 60 LABELS "managed-clr;webview2")
     endif()
     add_test(NAME managed_settings COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SETTINGS"

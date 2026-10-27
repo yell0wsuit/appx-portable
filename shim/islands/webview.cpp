@@ -9,6 +9,7 @@
 #include <WebView2.h>
 #include <windows.data.json.h>
 #include <windows.ui.xaml.media.h>
+#include <windows.ui.xaml.controls.primitives.h>
 #include <windows.storage.h>
 #include <wrl/event.h>
 #include <memory>
@@ -210,6 +211,8 @@ class WebView final : public Controls::IWebView, public IIslandWebView {
     // Chromium's private window classes or reparenting XAML's bridge.
     HWND window_ = nullptr;
     COLORREF windowBackground_ = CLR_INVALID;
+    RECT clip_{};
+    bool clipped_ = false;
     ComPtr<Foundation::IUriRuntimeClass> source_;
     EventSource<Controls::INotifyEventHandler> notify_;
     EventSource<Xaml::Navigation::ILoadCompletedEventHandler> loaded_;
@@ -256,6 +259,41 @@ class WebView final : public Controls::IWebView, public IIslandWebView {
         auto hr = dispatcher->RunAsync(ABI::Windows::UI::Core::CoreDispatcherPriority_Normal, callback.Get(), &action);
         if (FAILED(hr)) Log("FAIL", "WebView2 event dispatch failed hr=%08lx", hr);
     }
+    // A window region clips the host and its browser children, for painting
+    // and for WindowFromPoint input routing alike. Unchanged regions are not
+    // reapplied: layout passes are frequent and a new region repaints.
+    void Clip(const RECT& clip, LONG width, LONG height) {
+        const bool whole = clip.left <= 0 && clip.top <= 0 && clip.right >= width && clip.bottom >= height;
+        if (whole ? !clipped_ : clipped_ && EqualRect(&clip, &clip_)) return;
+        HRGN region = whole ? nullptr : CreateRectRgn(clip.left, clip.top, clip.right, clip.bottom);
+        if (!whole && !region) return;
+        // On success the window owns the region.
+        if (!SetWindowRgn(window_, region, TRUE)) {
+            if (region) DeleteObject(region);
+            return;
+        }
+        clipped_ = !whole;
+        clip_ = clip;
+    }
+    // A removed WebView keeps its page and script state, as on Windows. Its
+    // renderer is suspended until the element returns or the game calls in.
+    void Suspend() {
+        ComPtr<ICoreWebView2_3> browser;
+        if (!browser_ || FAILED(browser_.As(&browser))) return;
+        auto done = Callback<ICoreWebView2TrySuspendCompletedHandler>([](HRESULT hr, BOOL suspended) -> HRESULT {
+            Log("TRACE", "WebView2 suspend hr=%08lx suspended=%d", hr, suspended);
+            return S_OK;
+        });
+        const auto hr = browser->TrySuspend(done.Get());
+        if (FAILED(hr)) Log("TRACE", "WebView2 suspend unavailable hr=%08lx", hr);
+    }
+    void Resume() {
+        ComPtr<ICoreWebView2_3> browser;
+        BOOL suspended = FALSE;
+        if (browser_ && SUCCEEDED(browser_.As(&browser)) && SUCCEEDED(browser->get_IsSuspended(&suspended)) &&
+            suspended)
+            browser->Resume();
+    }
     void UpdateBounds() {
         if (!controller_ || !window_) return;
         ComPtr<Xaml::IFrameworkElement> element;
@@ -284,6 +322,10 @@ class WebView final : public Controls::IWebView, public IIslandWebView {
         bool opaqueBackground = background_.A == 255;
         COLORREF background =
             opaqueBackground ? RGB(background_.R, background_.G, background_.B) : GetSysColor(COLOR_WINDOW);
+        // An HWND is not clipped by XAML either: keep the part of the element
+        // its ancestors show, such as a narrowed SettingsFlyout or a
+        // ScrollViewer viewport. Canvas and Popup do not clip their children.
+        double clipLeft = origin.X, clipTop = origin.Y, clipRight = origin.X + width, clipBottom = origin.Y + height;
         if (visible &&
             SUCCEEDED(OsGetActivationFactory(HStringReference(L"Windows.UI.Xaml.Media.VisualTreeHelper").Get(),
                                              IID_PPV_ARGS(&tree))) &&
@@ -293,6 +335,21 @@ class WebView final : public Controls::IWebView, public IIslandWebView {
                 if (SUCCEEDED(ancestor.As(&parentUi))) {
                     parentUi->get_Visibility(&visibility);
                     visible = visibility == Xaml::Visibility_Visible;
+                }
+                ComPtr<Controls::ICanvas> canvas;
+                ComPtr<Controls::Primitives::IPopup> popup;
+                ComPtr<Xaml::IFrameworkElement> frame;
+                ComPtr<Xaml::Media::IGeneralTransform> toRoot;
+                Foundation::Point corner{};
+                double frameWidth = 0, frameHeight = 0;
+                if (visible && parentUi && FAILED(ancestor.As(&canvas)) && FAILED(ancestor.As(&popup)) &&
+                    SUCCEEDED(ancestor.As(&frame)) && SUCCEEDED(parentUi->TransformToVisual(nullptr, &toRoot)) &&
+                    SUCCEEDED(toRoot->TransformPoint({}, &corner)) && SUCCEEDED(frame->get_ActualWidth(&frameWidth)) &&
+                    SUCCEEDED(frame->get_ActualHeight(&frameHeight))) {
+                    clipLeft = (std::max)(clipLeft, static_cast<double>(corner.X));
+                    clipTop = (std::max)(clipTop, static_cast<double>(corner.Y));
+                    clipRight = (std::min)(clipRight, corner.X + frameWidth);
+                    clipBottom = (std::min)(clipBottom, corner.Y + frameHeight);
                 }
                 // A native HWND cannot expose the island's backdrop through
                 // browser transparency. Resolve the nearest opaque XAML brush.
@@ -327,11 +384,19 @@ class WebView final : public Controls::IWebView, public IIslandWebView {
                     {255, GetRValue(background), GetGValue(background), GetBValue(background)});
             if (FAILED(colorHr)) Log("FAIL", "WebView background failed hr=%08lx", colorHr);
         }
+        // In host pixels, relative to the element's own origin.
+        const RECT clip{static_cast<LONG>(std::lround((clipLeft - origin.X) * scale)),
+                        static_cast<LONG>(std::lround((clipTop - origin.Y) * scale)),
+                        static_cast<LONG>(std::lround((clipRight - origin.X) * scale)),
+                        static_cast<LONG>(std::lround((clipBottom - origin.Y) * scale))};
+        if (clip.right <= clip.left || clip.bottom <= clip.top) visible = false;
         if (visible) {
             RECT bounds{static_cast<LONG>(std::lround(origin.X * scale)),
                         static_cast<LONG>(std::lround(origin.Y * scale)),
                         static_cast<LONG>(std::lround((origin.X + width) * scale)),
                         static_cast<LONG>(std::lround((origin.Y + height) * scale))};
+            Clip(clip, bounds.right - bounds.left, bounds.bottom - bounds.top);
+            Resume(); // after a suspension that completed while it was being re-added
             SetWindowPos(window_, HWND_TOP, bounds.left, bounds.top, bounds.right - bounds.left,
                          bounds.bottom - bounds.top, SWP_NOACTIVATE | SWP_SHOWWINDOW);
             controller_->put_Bounds({0, 0, bounds.right - bounds.left, bounds.bottom - bounds.top});
@@ -343,6 +408,7 @@ class WebView final : public Controls::IWebView, public IIslandWebView {
     HRESULT NavigatePending() {
         if (!ready_ || !pending_) return S_OK;
         pending_ = false;
+        Resume();
         return pendingHtml_ ? browser_->NavigateToString(navigation_.c_str()) : browser_->Navigate(navigation_.c_str());
     }
     HRESULT Connect(ICoreWebView2Controller* controller) {
@@ -521,6 +587,7 @@ public:
             if (life && life->owner) {
                 life->owner->attached_ = true;
                 life->owner->Start();
+                life->owner->Resume();
                 life->owner->UpdateBounds();
             }
             return S_OK;
@@ -529,7 +596,9 @@ public:
             auto life = weak.lock();
             if (life && life->owner) {
                 life->owner->attached_ = false;
+                // Hiding makes the browser invisible, which suspension requires.
                 life->owner->UpdateBounds();
+                life->owner->Suspend();
             }
             return S_OK;
         });
@@ -687,6 +756,7 @@ public:
                 result->done = true;
                 return S_OK;
             });
+        Resume();
         auto hr = browser_->ExecuteScript(expression.c_str(), complete.Get());
         if (FAILED(hr)) return hr;
         const auto deadline = GetTickCount64() + 10000;
