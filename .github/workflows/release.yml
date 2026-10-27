@@ -38,10 +38,26 @@ jobs:
             GH_REPO: ${{ github.repository }}
         outputs:
             tag: ${{ steps.version.outputs.tag }}
+            release: ${{ steps.check.outputs.release }}
 
         steps:
+            - name: Check for releasable commits
+              id: check
+              env:
+                  COMMITS: ${{ toJSON(github.event.commits) }}
+              run: |
+                  # Manual runs always release; pushes need a feat, fix, perf or refactor commit, or any breaking (!) one.
+                  $release = $env:GITHUB_EVENT_NAME -eq 'workflow_dispatch'
+                  if (-not $release) {
+                    $messages = @(($env:COMMITS | ConvertFrom-Json).message)
+                    $release = [bool]($messages -match '^((feat|fix|perf|refactor)(\(.+\))?!?|\w+(\(.+\))?!):')
+                  }
+                  "release=$($release.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+                  if (-not $release) { Write-Host 'No releasable commits; skipping release.' }
+
             - name: Determine release version
               id: version
+              if: steps.check.outputs.release == 'true'
               run: |
                   $date = [DateTime]::UtcNow
                   # SemVer numeric components cannot have leading zeroes.
@@ -64,6 +80,7 @@ jobs:
     build:
         name: build (${{ matrix.architecture }})
         needs: version
+        if: needs.version.outputs.release == 'true'
         runs-on: windows-latest
         timeout-minutes: 30
         strategy:
