@@ -6,7 +6,8 @@ The runtime shares its app lifecycle, desktop host, storage, COM objects, and gr
 
 Architecture is separate from package generation. Build the same shared runtime for x86 or x64; import-table hooks and diagnostics use the process architecture. x86 proxies retain their inline assembly, while x64 proxies use generated MASM thunks that preserve argument registers and stack arguments. The x86 combase hotpatch is never attempted on x64.
 
-Game-specific asset workarounds belong under `patch/`. Rayman Windows 10 reads its
-original embedded caption through the [PRI/XBF connection loader](xbf.md); its
-old source-caption patch is retained only for older runtimes and restoration.
+Game-specific asset workarounds belong under `patch/`. Rayman Windows 10 keeps its
+source-caption fallback in normal installations. Its alternative
+[PRI/XBF connection loader](xbf.md) uses undocumented resource-manager interfaces
+that still need Windows 10 validation.
 Keep game data and Microsoft runtime binaries out of the repository.

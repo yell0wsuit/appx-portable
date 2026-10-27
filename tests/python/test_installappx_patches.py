@@ -135,8 +135,19 @@ class PatchTests(unittest.TestCase):
         self.assertEqual(self.web.requested, [f'{folder}/patch.py'])
         self.assertEqual(pathlib.Path(self.record.read_text()), self.game)
 
-    def test_rayman_uses_original_embedded_caption(self):
+    def test_rayman_installs_loose_caption_fallback(self):
+        folder = f'{RAW}/v1/patch/raymanwin10'
+        self.web.pages.update({f'{folder}/patch.py': RECORDING_PATCH,
+                               f'{folder}/CustomTitleBar.xaml': b'<UserControl />'})
         manifest = self.manifest('Ubisoft.RaymanFiestaRunWindows10Edition', '1.0.23.0')
+        output = installer.apply_known_patch(manifest, self.game, 'v1', None)
+        self.assertIn('patched', output)
+        self.assertEqual(sorted(self.web.requested),
+                         sorted([f'{folder}/patch.py', f'{folder}/CustomTitleBar.xaml']))
+        self.assertEqual(pathlib.Path(self.record.read_text()), self.game)
+
+    def test_rayman_fallback_only_for_verified_version(self):
+        manifest = self.manifest('Ubisoft.RaymanFiestaRunWindows10Edition', '1.0.24.0')
         self.assertIsNone(installer.apply_known_patch(manifest, self.game, 'v1', None))
         self.assertEqual(self.web.requested, [])
 

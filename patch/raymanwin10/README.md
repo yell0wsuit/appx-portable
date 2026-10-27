@@ -4,15 +4,18 @@ Version 1.0.23.0 is a native x64 UWP game. Use an **x64** appx-portable build an
 
 Download the [Microsoft-signed x64 VCLibs 140 package hosted by VideoLAN](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x64/Microsoft.VCLibs.x64.14.00.appx) and give it to `installappx.py` when it asks (or with `--vclibs`). This is version `14.0.25426.0`, which meets this game's manifest minimum of `14.0.22929.0`. Its SHA-256 is `9f8c11f71e8629413d55f55449d7f875def9492d0c64e9d7bcf13beddf69e872`.
 
-The current runtime reads the original caption XBF directly from `resources.pri`;
-this workaround is retained for older runtimes and for restoring previously
-patched installations. See [embedded compiled XAML](../../docs/xbf.md).
+The runtime can read the original caption XBF directly from `resources.pri`, but
+that path uses undocumented Windows resource-manager interfaces verified only on
+the tested Windows 11 build. Windows 10 compatibility has not been validated.
+The installer therefore retains this loose-caption fallback for version 1.0.23.0.
+The loader reads it first, avoiding the embedded-resource interfaces entirely.
+See [embedded compiled XAML](../../docs/xbf.md).
 The host's desktop caption and F11/Alt+Enter provide the visible window controls.
 The custom caption's decorative controls are not rendered.
 
-`installappx.py` no longer applies this patch. The commands below check, reapply,
-or restore the legacy workaround by hand. With the current runtime, use
-`--restore` to remove a previously added caption file.
+`installappx.py` applies this patch automatically for this exact version. The
+commands below check, reapply, or restore it by hand. Keep the fallback for normal
+use; `--restore` is useful when explicitly testing the embedded-XBF path.
 
 With the game closed, run from the repository root:
 

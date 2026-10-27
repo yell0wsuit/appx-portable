@@ -1,8 +1,8 @@
 # Embedded compiled XAML
 
 The native portable XAML backend can bind controls from a package's original XBF
-2.0/2.1 resources. Rayman Fiesta Run Windows 10 Edition 1.0.23.0 uses this path for
-its custom caption; it no longer needs a replacement `CustomTitleBar.xaml`.
+2.0/2.1 resources. Rayman Fiesta Run Windows 10 Edition 1.0.23.0 can use this path
+for its custom caption when no loose `CustomTitleBar.xaml` is present.
 
 `OpenPackageResource` tries a loose file first, then asks Windows' native MRT
 resource manager to resolve `Files/<relative path>` in the package's
@@ -13,8 +13,14 @@ the native stream borrows the PRI mapping. Package files are never rewritten.
 This uses native COM resource-manager interfaces, not the similarly named WinRT
 interfaces. Their IIDs and method order were checked against Microsoft's matching
 `MrmCoreR.pdb` public symbols. No instruction addresses or decompiled
-implementation are used. These interfaces are undocumented; interface activation
-or lookup failures are returned to the caller on unsupported systems.
+implementation are used. These interfaces are undocumented and have been verified
+only on the tested Windows 11 build, not Windows 10. Interface activation or
+lookup failures are returned to the caller on unsupported systems.
+
+The installer therefore keeps Rayman's [loose-caption fallback](../patch/raymanwin10/README.md)
+for version 1.0.23.0. `LoadComponent` loads that source XAML before attempting any
+embedded-XBF read, so the default installation does not depend on these native
+MRT interfaces. Retain this fallback until Windows 10 compatibility is validated.
 
 The XBF reader validates section sizes, metadata tables, constants, scopes, names,
 and connection IDs before returning a binding plan. `Application.LoadComponent`
