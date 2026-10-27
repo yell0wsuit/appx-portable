@@ -188,11 +188,17 @@ void FreeArrayResult(IPropertyValue* value, void* bytes) {
         return;
     CoTaskMemFree(bytes);
 }
-HRESULT Encode(IInspectable* object, Entry& entry) {
+std::string RecordText(const Entry& entry);
+constexpr wchar_t CompositeClass[] = L"Windows.Storage.ApplicationDataCompositeValue";
+// A composite value is a record of type Composite whose value is the array of
+// its own records, in key order so that equal composites encode equally.
+// Composites hold property values only, as on Windows.
+HRESULT EncodeComposite(IInspectable* object, Entry& entry, bool nested);
+HRESULT Encode(IInspectable* object, Entry& entry, bool nested = false) {
     if (!object) return E_INVALIDARG;
     ComPtr<IPropertyValue> value;
     auto hr = object->QueryInterface(IID_PPV_ARGS(&value));
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr)) return EncodeComposite(object, entry, nested);
     PropertyType type{};
     hr = value->get_Type(&type);
     if (FAILED(hr)) return hr;
@@ -268,8 +274,67 @@ HRESULT Encode(IInspectable* object, Entry& entry) {
     }
     return hr;
 }
+HRESULT EncodeComposite(IInspectable* object, Entry& entry, bool nested) {
+    HString name;
+    auto hr = object->GetRuntimeClassName(name.GetAddressOf());
+    if (FAILED(hr)) return hr;
+    if (nested || wcscmp(name.GetRawBuffer(nullptr), CompositeClass) != 0) return E_INVALIDARG;
+    ComPtr<IIterable<Pair*>> pairs;
+    ComPtr<IIterator<Pair*>> it;
+    hr = object->QueryInterface(IID_PPV_ARGS(&pairs));
+    if (SUCCEEDED(hr)) hr = pairs->First(&it);
+    if (FAILED(hr)) return hr;
+    std::map<std::wstring, Entry> members;
+    boolean more{};
+    for (hr = it->get_HasCurrent(&more); SUCCEEDED(hr) && more; hr = it->MoveNext(&more)) {
+        ComPtr<Pair> pair;
+        HString key;
+        ComPtr<IInspectable> member;
+        hr = it->get_Current(&pair);
+        if (SUCCEEDED(hr)) hr = pair->get_Key(key.GetAddressOf());
+        if (SUCCEEDED(hr)) hr = pair->get_Value(&member);
+        Entry inner;
+        if (SUCCEEDED(hr)) hr = Encode(member.Get(), inner, true);
+        if (FAILED(hr)) return hr;
+        inner.key = String(key.Get());
+        members.insert_or_assign(inner.key, std::move(inner));
+    }
+    if (FAILED(hr)) return hr;
+    std::string text = "[";
+    for (const auto& [key, inner] : members) text += (text.size() > 1 ? "," : "") + RecordText(inner);
+    text += "]";
+    entry.type = L"Composite";
+    entry.value.assign(text.begin(), text.end()); // RecordText escapes to ASCII
+    return S_OK;
+}
 HRESULT Decode(IPropertyValueStatics* props, const Entry& entry, IInspectable** result) {
     *result = nullptr;
+    if (entry.type == L"Composite") {
+        std::string text;
+        for (wchar_t c : entry.value) {
+            if (c >= 128) return E_INVALIDARG;
+            text += static_cast<char>(c);
+        }
+        std::vector<Entry> members;
+        if (!Reader(text).Entries(members)) return E_INVALIDARG;
+        ComPtr<IInspectable> object;
+        ComPtr<Map> composite;
+        auto hr = RoActivateInstance(HStringReference(CompositeClass).Get(), &object);
+        if (SUCCEEDED(hr)) hr = object.As(&composite);
+        for (const auto& member : members) {
+            if (FAILED(hr)) return hr;
+            if (member.type == L"Composite") return E_INVALIDARG;
+            ComPtr<IInspectable> value;
+            HString key;
+            boolean replaced{};
+            hr = Decode(props, member, &value);
+            if (SUCCEEDED(hr)) hr = key.Set(member.key.data(), static_cast<UINT32>(member.key.size()));
+            if (SUCCEEDED(hr)) hr = composite->Insert(key.Get(), value.Get(), &replaced);
+        }
+        if (FAILED(hr)) return hr;
+        *result = object.Detach();
+        return S_OK;
+    }
     if (entry.type == L"String") {
         HString text;
         auto hr = text.Set(entry.value.data(), static_cast<UINT32>(entry.value.size()));
@@ -646,6 +711,17 @@ public:
             auto hr = Encode(value, entry);
             if (FAILED(hr)) return hr;
             entry.key = String(key);
+            // Settings hold a copy of a composite, so later changes to the
+            // caller's object do not reach the stored value.
+            ComPtr<IInspectable> copy;
+            if (entry.type == L"Composite") {
+                ComPtr<IPropertyValueStatics> props;
+                hr = RoGetActivationFactory(HStringReference(L"Windows.Foundation.PropertyValue").Get(),
+                                            IID_PPV_ARGS(&props));
+                if (SUCCEEDED(hr)) hr = Decode(props.Get(), entry, &copy);
+                if (FAILED(hr)) return hr;
+                value = copy.Get();
+            }
             {
                 std::lock_guard<std::mutex> lock(state_->mutex_);
                 // An equal value is already persisted. It still replaces the
