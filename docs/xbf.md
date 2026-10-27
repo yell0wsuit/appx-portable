@@ -30,10 +30,11 @@ controls. Deferred streams, custom runtime data, unsupported connected types and
 unrecognized instructions fail explicitly. Existing DirectX/media-page bindings
 keep their current loading path.
 
-PEU uses XBF v1 and real system XAML in Islands mode. It still needs its current
-WebView type patch. Removing that patch requires a separate way to substitute the
-WebView while constructing its original visual tree; this native connection
-reader does not supply that capability.
+PEU uses XBF v1 and real system XAML in Islands mode. A separate
+[WebView memory adapter](webview.md) substitutes its type name while retaining
+the original compiled node stream and leaving package files unchanged. System
+XAML constructs that full visual tree; this native connection reader is not
+used for PEU.
 
 `xbftest` exercises valid bindings, all truncation points, duplicate IDs,
 unsupported instructions, invalid metadata, and loose-resource lookup. When the

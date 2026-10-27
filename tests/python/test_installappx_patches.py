@@ -128,15 +128,20 @@ class PatchTests(unittest.TestCase):
         self.assertEqual(self.web.requested, [])
 
     def test_downloaded_patch_uses_tag(self):
-        folder = f'{RAW}/v1/patch/peu'
+        folder = f'{RAW}/v1/patch/bejeweled'
         self.web.pages.update({f'{folder}/patch.py': RECORDING_PATCH})
-        manifest = self.manifest('OxfordUniversityPress.PracticalEnglishUsage', '1.0.6.9953')
+        manifest = self.manifest('PopCap.BejweledLIVE', '4.0.0.10')
         installer.apply_known_patch(manifest, self.game, 'v1', None)
         self.assertEqual(self.web.requested, [f'{folder}/patch.py'])
         self.assertEqual(pathlib.Path(self.record.read_text()), self.game)
 
     def test_rayman_uses_original_embedded_caption(self):
         manifest = self.manifest('Ubisoft.RaymanFiestaRunWindows10Edition', '1.0.23.0')
+        self.assertIsNone(installer.apply_known_patch(manifest, self.game, 'v1', None))
+        self.assertEqual(self.web.requested, [])
+
+    def test_peu_uses_original_compiled_webviews(self):
+        manifest = self.manifest('OxfordUniversityPress.PracticalEnglishUsage', '1.0.6.9953')
         self.assertIsNone(installer.apply_known_patch(manifest, self.game, 'v1', None))
         self.assertEqual(self.web.requested, [])
 

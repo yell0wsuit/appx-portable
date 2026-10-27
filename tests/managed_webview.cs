@@ -6,6 +6,19 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Markup;
 
+#if COMPILED
+sealed class OriginalWebViewPage : UserControl, IComponentConnector {
+    public WebView Browser;
+    public void Connect(int id, object target) {
+        if (id == 2) Browser = (WebView)target;
+        else if (id != 1) throw new Exception("Unexpected original XBF connection");
+    }
+    public OriginalWebViewPage() {
+        Application.LoadComponent(this,new Uri("ms-appx:///WebViewFixture.xaml"));
+    }
+}
+#endif
+
 sealed class WebViewApp : Application, IXamlMetadataProvider {
     public IXamlType GetXamlType(Type type) { return null; }
     public IXamlType GetXamlType(string name) { return null; }
@@ -59,7 +72,12 @@ sealed class WebViewApp : Application, IXamlMetadataProvider {
     }
 #endif
     protected override void OnLaunched(LaunchActivatedEventArgs args) {
-#if MARKUP
+#if COMPILED
+        var page = new OriginalWebViewPage();
+        web = page.Browser;
+        page.Content = null;
+        if(web == null) throw new Exception("Original XBF WebView was not connected");
+#elif MARKUP
         web = (WebView)XamlReader.Load(
             "<p:PortableWebView xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' " +
             "xmlns:p='using:Windows.UI.Xaml.Controls' Name='articleView' IsRightTapEnabled='False' " +

@@ -12,14 +12,23 @@ Static interfaces are forwarded to Windows. Package URLs in navigation and HTML
 (`ms-appx-web:///` and `ms-appx:///`) map to a WebView2 virtual host serving the
 package folder. Returned local event URIs use `ms-appx-web:///`.
 
-Practical English Usage 1.0.6.9953's markup-created WebViews are supported through
-the [installer patch](../patch/peu/README.md). It retargets only native WebView type
-references in four XBF v1 files to `Windows.UI.Xaml.Controls.PortableWebView`.
-The shim extends the application's metadata provider for that type, describes its
-Grid base to XAML, and activates the existing COM stand-in. The parser therefore
+Practical English Usage 1.0.6.9953's markup-created WebViews work with their
+original XBF files. An Islands-only adapter replaces the native `WebView` type
+name with the same-length `AppxWeb` alias in a private memory mapping before
+Windows parses it. Only read-only mappings of XBF v1 files inside the package
+folder qualify. The mapping retains every file size, table offset, node byte,
+connection ID and source location; no package file is written. Strings shared
+with document text or unrelated metadata are rejected rather than changed.
+The shim extends the application's metadata provider for that alias, describes
+its Grid base to XAML, and activates the existing COM stand-in. The parser therefore
 sets inherited properties, registers names, and connects events normally. Its
 `DefaultBackgroundColor` markup property maps to WebView2's controller color;
 other metadata requests pass through to the application's original provider.
+The adapter hooks Windows XAML's `MapViewOfFile` import by symbol name; it does
+not patch instructions or depend on OS-specific instruction addresses. Systems
+using a different resource-loading path need additional support. The older
+`PortableWebView` alias remains supported for previously patched installations;
+the [legacy patch tool](../patch/peu/README.md) can restore their original files.
 
 Each controller has a dedicated native host beside the XAML island. Its position
 and z-order are updated together so XAML cannot paint over browser content or
@@ -57,8 +66,13 @@ from a notification handler, and LoadCompleted.
 `managed_webview_markup_contract` checks parsed namescopes, CLR casts, inherited
 properties, and color conversion without loading the browser runtime. With
 `APPX_TEST_WEBVIEW2=ON`, `managed_webview_markup` repeats the browser integration
-test using a parser-created element. Python tests exercise the XBF rewrite,
-input/output validation, idempotence, and restore using synthetic assets.
+test using a parser-created element. `xbfwebviewtest` checks the memory adapter,
+every truncation point, unchanged node bytes, repeated adaptation, and ambiguous
+string reuse. `managed_webview_xbf_contract` loads original compiled markup
+repeatedly, checking connections, properties, CLR casts, namescope, and unchanged
+package bytes without requiring WebView2. The opt-in `managed_webview_xbf` checks
+rendered pixels, scrolling, navigation and notifications through that same path.
+Python tests retain validation and restore coverage for the legacy patch tool.
 `managed_webview_scroll` verifies browser hit testing after host resizing and
 checks displayed marker/background pixels before posting a wheel message
 through the host pump and checking that the document actually scrolled. XAML's
@@ -78,15 +92,16 @@ OALD 2.6.21.9713's Help page was exercised in an isolated installation: the HTML
 renders and sends its `loaded` notification. Its `BaseArticleComponent.WebViewBrush`
 getter has no callers in the executable's IL; snapshot brushes are deferred.
 PEU's MainPage, index/welcome HTML, and following an index link to an article were
-also verified in a fresh isolated installation.
+also verified with original XBF assets. All four original WebView-containing
+files were checked against the adapter; their hashes remained unchanged.
 PEU's own HTML disables text selection; that restriction is preserved.
 
 ## Remaining work
 
-- Other packages' markup-created WebViews need an XBF patch or equivalent markup
-  rewrite. The PEU patch is restricted to its verified version and file hashes;
-  XBF v2 and WebView-specific markup properties beyond background color are not
-  implemented.
+- Runtime markup substitution currently covers loose XBF v1 files with an
+  exclusively used native WebView type-name string. Embedded PRI WebViews,
+  XBF v2, ambiguous shared strings, and WebView-specific markup properties
+  beyond background color are not implemented.
 - `IWebView2` APIs (`InvokeScriptAsync`, NavigationCompleted and other modern
   events), WebViewBrush snapshots, and unsupported legacy members return
   E_NOINTERFACE/E_NOTIMPL. This is a compatibility subset, not a full replacement.

@@ -735,9 +735,6 @@ class KnownPatch:
 
 # Patches in patch/<folder>, for the exact package identity and version each supports.
 KNOWN_PATCHES = {
-    ("OxfordUniversityPress.PracticalEnglishUsage", "1.0.6.9953"): KnownPatch(
-        "peu", ("patch.py",), ""
-    ),
     ("PopCap.BejweledLIVE", "4.0.0.10"): KnownPatch("bejeweled", ("patch.py",), ""),
     ("Microsoft.MicrosoftSudoku", "1.7.10190.0"): KnownPatch(
         "mssudoku", ("patch.py",), ""

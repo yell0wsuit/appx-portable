@@ -8,7 +8,7 @@ assets are included here.
 
 | Patch | Status |
 | --- | --- |
-| [Practical English Usage](peu/README.md) | 1.0.6.9953 x86: portable WebView markup; main page and article HTML verified |
+| [Practical English Usage](peu/README.md) | Legacy WebView markup workaround; current runtimes adapt original XBF in memory and no longer apply the asset patch |
 | [Rayman Fiesta Run Windows 10](raymanwin10/README.md) | Legacy source-caption workaround; current runtimes read the original embedded XBF and no longer apply it |
 | [Bejeweled LIVE](bejeweled/README.md) | Bejeweled LIVE 4.0.0.10 x86: declares the original dark theme before static brushes load; settings labels verified |
 | [Where's My Mickey?](wheresmymickey/README.md) | Where's My Mickey? 1.1.0.30: intro and gameplay work with the current runtime; first level completed with three stars |
