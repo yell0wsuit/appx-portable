@@ -19,6 +19,7 @@ public:
     }
 };
 class Dispatcher final : public RuntimeClass<RuntimeClassFlags<WinRt>, ICoreDispatcher, FtmBase> {
+    APPX_LOG_MISSING_INTERFACES("CoreDispatcher")
     InspectableClass(L"Windows.UI.Core.CoreDispatcher", BaseTrust);
     DWORD thread_;
     DWORD Owner() const { return thread_ ? thread_ : HostThread(); }
@@ -62,6 +63,10 @@ public:
                 Dispatch(message);
             }
         } else {
+            // ProcessOneAndAllPending sleeps until the first event, as on
+            // Windows: game loops call it while hidden instead of drawing.
+            if (options == CoreProcessEventsOption_ProcessOneAndAllPending)
+                MsgWaitForMultipleObjectsEx(0, nullptr, INFINITE, QS_ALLINPUT, MWMO_ALERTABLE | MWMO_INPUTAVAILABLE);
             while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
                 if (message.message == WM_QUIT) {
                     PostQuitMessage(static_cast<int>(message.wParam));

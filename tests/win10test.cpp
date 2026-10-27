@@ -10,6 +10,7 @@
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
+#include <thread>
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::UI::Core;
@@ -108,6 +109,20 @@ int main() {
     CHECK(SUCCEEDED(dispatcher->RunAsync(CoreDispatcherPriority_Normal, work.Get(), &action)));
     CHECK(!ran);
     CHECK(SUCCEEDED(dispatcher->ProcessEvents(CoreProcessEventsOption_ProcessAllIfPresent)) && ran);
+    // With nothing queued, ProcessOneAndAllPending waits for the next event
+    // rather than returning at once: a few calls, not a busy loop.
+    ran = false;
+    std::thread later([&] {
+        Sleep(50);
+        ComPtr<ABI::Windows::Foundation::IAsyncAction> queued;
+        CHECK(SUCCEEDED(dispatcher->RunAsync(CoreDispatcherPriority_Normal, work.Get(), &queued)));
+    });
+    unsigned calls{};
+    while (!ran && calls < 1000 &&
+           SUCCEEDED(dispatcher->ProcessEvents(CoreProcessEventsOption_ProcessOneAndAllPending)))
+        ++calls;
+    later.join();
+    CHECK(ran && calls < 10);
     printf("win10test: %d failure(s)\n", failures);
     return failures ? 1 : 0;
 }
