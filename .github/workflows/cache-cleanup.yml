@@ -1,0 +1,23 @@
+name: Clean up PR caches
+
+# A pull request's caches can only be restored by that pull request, so they
+# are dead weight once it closes. pull_request_target grants the write token
+# fork pull requests need; it is safe because nothing is checked out.
+on:
+    pull_request_target:
+        types: [closed]
+
+permissions:
+    actions: write
+
+jobs:
+    cleanup:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - name: Delete caches
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  REF: refs/pull/${{ github.event.pull_request.number }}/merge
+              run: gh cache delete --all --ref "$REF" --succeed-on-no-caches
