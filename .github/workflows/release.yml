@@ -89,7 +89,7 @@ jobs:
 
         steps:
             - name: Check out source
-              uses: actions/checkout@v6
+              uses: actions/checkout@v7
               with:
                   persist-credentials: false
 
@@ -129,7 +129,7 @@ jobs:
                   Compress-Archive -LiteralPath $assets -DestinationPath "build/appx-portable-$env:RELEASE_TAG-$env:ARCHITECTURE.zip" -CompressionLevel Optimal -Force
 
             - name: Upload package
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: release-${{ matrix.architecture }}
                   path: build/appx-portable-*.zip
@@ -147,12 +147,12 @@ jobs:
 
         steps:
             - name: Check out source
-              uses: actions/checkout@v6
+              uses: actions/checkout@v7
               with:
                   persist-credentials: false
 
             - name: Download packages
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v8
               with:
                   pattern: release-*
                   path: build
