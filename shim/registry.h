@@ -5,8 +5,9 @@ extern "C" HRESULT WINAPI ShimGetFactory(HSTRING name, IActivationFactory** fact
 namespace appx {
 // How a shim class relates to the Windows class of the same name.
 enum class ShimPolicy {
-    Replace,     // the shim's class serves the game in place of Windows'
-    FillMissing, // Windows' class when it has one; the shim's fills in where it is missing (Wine)
+    Replace,       // the shim's class serves the game in place of Windows'
+    FillMissing,   // Windows' class when it has one; the shim's fills in where it is missing (Wine)
+    ReplaceForAll, // as Replace, and for Windows' own callers too: Windows' class needs an app container
 };
 // XAML Islands mode uses system XAML and its own island classes, so there only
 // the classes registered with InIslands replace Windows'.

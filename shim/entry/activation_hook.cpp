@@ -52,7 +52,10 @@ static HRESULT PackageFactory(HSTRING name, IActivationFactory** factory) {
 // The combase hotpatch also sees Windows' own activations (media, input,
 // XAML internals); those must keep getting the real classes. Only callers in
 // the game folder, and the shim itself, are served shim classes, as with the
-// import-table hook.
+// import-table hook, except classes that Windows itself cannot create
+// outside an app container (ShimPolicy::ReplaceForAll). Windows' callers
+// reach the shim only through the hotpatch; the import-table fallback
+// covers the game folder alone.
 static bool FromGame(void* returnAddress) noexcept {
     static std::mutex mutex;
     static std::vector<std::pair<HMODULE, bool>> known;
@@ -112,13 +115,17 @@ static HRESULT GetFactoryFor(HSTRING name, REFIID iid, void** out, bool game) no
     LogActivation(name, iid, hr);
     return hr;
 }
+static bool Serve(HSTRING name, void* returnAddress) noexcept {
+    return FromGame(returnAddress) ||
+           GetShimPolicy(WindowsGetStringRawBuffer(name, nullptr)) == ShimPolicy::ReplaceForAll;
+}
 static HRESULT WINAPI GetFactory(HSTRING name, REFIID iid, void** out) noexcept {
-    return GetFactoryFor(name, iid, out, FromGame(_ReturnAddress()));
+    return GetFactoryFor(name, iid, out, Serve(name, _ReturnAddress()));
 }
 static HRESULT WINAPI Activate(HSTRING name, IInspectable** out) noexcept {
     if (!out) return E_POINTER;
     *out = nullptr;
-    if (!FromGame(_ReturnAddress())) return originalActivate(name, out);
+    if (!Serve(name, _ReturnAddress())) return originalActivate(name, out);
     Microsoft::WRL::ComPtr<IActivationFactory> factory;
     HRESULT hr = GetFactoryFor(name, __uuidof(IActivationFactory), &factory, true);
     if (SUCCEEDED(hr)) hr = factory->ActivateInstance(out);
