@@ -21,10 +21,22 @@ fi
 # deliberately irrelevant: all three consumers of the private ABI ship together.
 version=11.18
 sha256=c6282f6d4daecf11f3ab9f9a2b6c598f67be7e28c363ba2cae8a3c44b611e7a4
-for tool in /opt/homebrew/opt/bison/bin/bison /opt/homebrew/opt/llvm/bin/clang /opt/homebrew/opt/lld/bin/lld-link; do
-  [[ -x "$tool" ]] || { echo "Missing $tool: brew install bison llvm lld" >&2; exit 1; }
-done
-export PATH="/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/opt/lld/bin:$PATH"
+if [[ $(uname) == Darwin ]]; then
+  for tool in /opt/homebrew/opt/bison/bin/bison /opt/homebrew/opt/llvm/bin/clang /opt/homebrew/opt/lld/bin/lld-link; do
+    [[ -x "$tool" ]] || { echo "Missing $tool: brew install bison llvm lld" >&2; exit 1; }
+  done
+  export PATH="/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/llvm/bin:/opt/homebrew/opt/lld/bin:$PATH"
+  # The Wine bundle is x86_64 macOS code, so the build tools run under Rosetta.
+  host=(arch -x86_64)
+  host_cc='clang -arch x86_64'
+else
+  # CI builds on x86_64 Linux; the PE DLLs are the same for any host.
+  for tool in bison flex clang lld-link llvm-strip; do
+    command -v "$tool" > /dev/null || { echo "Missing $tool: apt install bison flex clang lld llvm" >&2; exit 1; }
+  done
+  host=()
+  host_cc=gcc
+fi
 
 work="$root/local/wine-src"
 tarball="$work/wine-$version.tar.xz"
@@ -35,7 +47,8 @@ if [[ ! -f "$tarball" ]]; then
   curl -fL -o "$tarball.part" "https://dl.winehq.org/wine/source/$series/wine-$version.tar.xz"
   mv "$tarball.part" "$tarball"
 fi
-echo "$sha256  $tarball" | shasum -a 256 -c - > /dev/null || { echo "Checksum mismatch: $tarball" >&2; exit 1; }
+if command -v sha256sum > /dev/null; then sum=(sha256sum); else sum=(shasum -a 256); fi
+echo "$sha256  $tarball" | "${sum[@]}" -c - > /dev/null || { echo "Checksum mismatch: $tarball" >&2; exit 1; }
 
 # A fresh, patched source tree every time; the object tree is reused.
 source="$work/wine-$version"
@@ -45,16 +58,15 @@ patch -d "$source" -p1 --quiet < "$root/wine/wined3d.patch"
 objects="$work/build-$version"
 mkdir -p "$objects"
 cd "$objects"
-# The Wine bundle is x86_64 macOS code, so configure under Rosetta; only the
-# PE side of wined3d is built, with clang as the Windows compiler. A relative
-# source path keeps the home folder out of the DLL's messages.
+# Only the PE side of wined3d is built, with clang as the Windows compiler. A
+# relative source path keeps the home folder out of the DLL's messages.
 if [[ ! -f Makefile ]]; then
-  arch -x86_64 "../wine-$version/configure" --enable-archs=i386,x86_64 --without-mingw \
+  ${host[@]+"${host[@]}"} "../wine-$version/configure" --enable-archs=i386,x86_64 --without-mingw \
     --without-freetype --without-gnutls --without-x --without-vulkan --without-opencl --without-pcap \
     --without-sdl --without-gstreamer --without-cups --without-sane --without-usb --without-v4l2 \
     --without-krb5 --without-netapi --without-gphoto --without-pulse --without-alsa --without-oss \
     --without-capi --without-dbus --without-inotify --without-ffmpeg --without-wayland --without-coreaudio \
-    CC='clang -arch x86_64' i386_CC=clang x86_64_CC=clang > configure.log 2>&1 \
+    CC="$host_cc" i386_CC=clang x86_64_CC=clang > configure.log 2>&1 \
     || { tail -20 configure.log >&2; exit 1; }
 fi
 
@@ -66,7 +78,7 @@ for architecture in "${architectures[@]}"; do
   build=${2:-"$root/build/macos-$architecture"}
   mkdir -p "$build"
   build=$(cd "$build" && pwd)
-  arch -x86_64 make -j"$(sysctl -n hw.ncpu)" "dlls/wined3d/$pe/wined3d.dll" \
+  ${host[@]+"${host[@]}"} make -j"$(getconf _NPROCESSORS_ONLN)" "dlls/wined3d/$pe/wined3d.dll" \
     "dlls/d3d11/$pe/d3d11.dll" "dlls/dxgi/$pe/dxgi.dll" > "make-$architecture.log" 2>&1 \
     || { tail -20 "make-$architecture.log" >&2; exit 1; }
 

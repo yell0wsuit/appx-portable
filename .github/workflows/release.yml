@@ -11,6 +11,7 @@ on:
             - 'scripts/**'
             - 'installappx.py'
             - 'patch/**'
+            - 'wine/**'
             - 'CMakeLists.txt'
             - 'CMakePresets.json'
             - '.github/workflows/release.yml'
@@ -136,8 +137,13 @@ jobs:
                   path: build/appx-portable-*.zip
                   if-no-files-found: error
 
+    wine-graphics:
+        needs: version
+        if: needs.version.outputs.release == 'true'
+        uses: ./.github/workflows/wine-graphics.yml
+
     publish:
-        needs: [version, build]
+        needs: [version, build, wine-graphics]
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -159,11 +165,33 @@ jobs:
                   path: build
                   merge-multiple: true
 
+            - name: Download Wine graphics
+              uses: actions/download-artifact@v8
+              with:
+                  name: wine-graphics
+                  path: build/wine
+
+            - name: Package Wine graphics
+              env:
+                  RELEASE_TAG: ${{ needs.version.outputs.tag }}
+              run: |
+                  # installappx.py unpacks these under Wine only; see scripts/build-wined3d.sh.
+                  foreach ($architecture in @('x86', 'x64')) {
+                    $files = foreach ($name in @('d3d11.dll', 'dxgi.dll', 'wined3d.dll', 'wine-graphics.json')) { "build/wine/wine-$architecture/$name" }
+                    foreach ($file in $files) {
+                      if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing Wine graphics file: $file" }
+                    }
+                    Compress-Archive -LiteralPath $files -DestinationPath "build/appx-portable-$env:RELEASE_TAG-wine-$architecture.zip" -CompressionLevel Optimal -Force
+                  }
+
             - name: Publish release
               env:
                   RELEASE_TAG: ${{ needs.version.outputs.tag }}
               run: |
-                  $archives = foreach ($architecture in @('x86', 'x64')) { "build/appx-portable-$env:RELEASE_TAG-$architecture.zip" }
+                  $archives = foreach ($architecture in @('x86', 'x64')) {
+                    "build/appx-portable-$env:RELEASE_TAG-$architecture.zip"
+                    "build/appx-portable-$env:RELEASE_TAG-wine-$architecture.zip"
+                  }
                   # installappx.py is published beside the zips: players download only it.
                   gh release create $env:RELEASE_TAG @archives installappx.py --target $env:GITHUB_SHA --title $env:RELEASE_TAG --generate-notes --latest
                   if ($LASTEXITCODE -ne 0) { throw 'Failed to publish release.' }

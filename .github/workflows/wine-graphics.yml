@@ -1,0 +1,70 @@
+name: Wine graphics
+
+# Builds the patched D3D11/DXGI/WineD3D stack (scripts/build-wined3d.sh) that
+# Wine on macOS needs. The DLLs are Windows binaries, so Linux builds them;
+# the release workflow calls this and publishes them beside the runtime zips.
+on:
+    pull_request:
+        paths:
+            - 'wine/**'
+            - 'scripts/build-wined3d.sh'
+            - '.github/workflows/wine-graphics.yml'
+    workflow_dispatch:
+    workflow_call:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: wine-graphics-${{ github.ref }}-${{ github.event_name }}
+    # A newer push supersedes a pull request's run; a release run always finishes.
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+    run:
+        shell: bash
+
+jobs:
+    build:
+        name: build (wine graphics)
+        if: ${{ !github.event.repository.fork }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+
+        steps:
+            - name: Check out source
+              uses: actions/checkout@v7
+              with:
+                  persist-credentials: false
+
+            - name: Install build tools
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y --no-install-recommends bison flex gcc make clang lld llvm
+
+            - name: Build
+              run: |
+                  bash scripts/build-wined3d.sh x86 build/wine-x86
+                  bash scripts/build-wined3d.sh x64 build/wine-x64
+
+            - name: Check architectures
+              run: |
+                  # PE machine field: 0x14c for x86, 0x8664 for x64.
+                  python3 -I - <<'CHECK'
+                  import pathlib, struct, sys
+                  for arch, machine in (('x86', 0x14C), ('x64', 0x8664)):
+                      for name in ('d3d11.dll', 'dxgi.dll', 'wined3d.dll'):
+                          data = pathlib.Path(f'build/wine-{arch}/{name}').read_bytes()
+                          offset = struct.unpack_from('<I', data, 0x3C)[0]
+                          if data[offset:offset + 4] != b'PE\0\0' or struct.unpack_from('<H', data, offset + 4)[0] != machine:
+                              sys.exit(f'build/wine-{arch}/{name} is not {arch}')
+                  CHECK
+
+            - name: Upload stack
+              uses: actions/upload-artifact@v7
+              with:
+                  name: wine-graphics
+                  path: |
+                      build/wine-x86/
+                      build/wine-x64/
+                  if-no-files-found: error
