@@ -125,18 +125,39 @@ class MacOSDependencyTests(unittest.TestCase):
                     installer.extract_tar_xz(tar_xz(entries), destination)
         self.assertFalse((self.base / "escape").exists())
 
+    def serve_gstreamer(self, versions, data, sha256=None):
+        """Serve a GStreamer release listing, and the newest stable version's pkg and checksum."""
+        base = installer.GSTREAMER_RELEASES
+        pages = {base: "".join(f'<a href="{v}/">{v}/</a>' for v in versions).encode()}
+        pages[base + "1.30.2/gstreamer-1.0-1.30.2-universal.pkg"] = data
+        pages[base + "1.30.2/gstreamer-1.0-1.30.2-universal.pkg.sha256sum"] = (
+            f"{sha256 or hashlib.sha256(data).hexdigest()}  gstreamer-1.0-1.30.2-universal.pkg\n".encode()
+        )
+        fetch = mock.patch.object(installer, "fetch", side_effect=lambda url, instead="": pages[url])
+        fetch.start()
+        self.addCleanup(fetch.stop)
+
+    def test_latest_stable_gstreamer(self):
+        # Odd minor versions are development releases; 1.30.10 sorts after 1.30.2.
+        self.serve_gstreamer(["1.28.8", "1.30.2", "1.31.1", "1.30.10", "0.99.0"], b"")
+        self.assertEqual(installer.latest_gstreamer(), "1.30.10")
+
     def test_gstreamer_installs_with_sudo_installer(self):
-        url = "https://example.invalid/gstreamer.pkg"
-        data = b"pkg"
-        with mock.patch.object(installer, "GSTREAMER", (url, hashlib.sha256(data).hexdigest())), mock.patch.object(
-            installer, "fetch", return_value=data
-        ), mock.patch.object(installer.subprocess, "run") as run:
+        self.serve_gstreamer(["1.28.8", "1.29.2", "1.30.2"], b"pkg")
+        with mock.patch.object(installer.subprocess, "run") as run:
             run.return_value.returncode = 0
             installer.install_gstreamer()
         command = run.call_args.args[0]
         self.assertEqual(command[:3], ["/usr/bin/sudo", "/usr/sbin/installer", "-pkg"])
-        self.assertTrue(command[3].endswith("gstreamer.pkg"))
+        self.assertTrue(command[3].endswith("gstreamer-1.0-1.30.2-universal.pkg"))
         self.assertEqual(command[4:], ["-target", "/"])
+
+    def test_gstreamer_checksum_mismatch_is_refused(self):
+        self.serve_gstreamer(["1.30.2"], b"pkg", sha256="0" * 64)
+        with mock.patch.object(installer.subprocess, "run") as run:
+            with self.assertRaisesRegex(installer.InstallError, "SHA-256"):
+                installer.install_gstreamer()
+        run.assert_not_called()
 
     def test_failed_gstreamer_install_only_warns(self):
         (self.app / "Contents/Resources/wine/bin").mkdir(parents=True)

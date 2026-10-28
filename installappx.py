@@ -1030,12 +1030,9 @@ WINE_DEVEL = (
     "aa0ea4c82e636ae7bca2076387cb0a5affa26509ad13f119ecd0d62bd7ba6f82",
 )
 WINE_DEVEL_APP = Path.home() / "Applications" / "Wine Devel.app"
-# The GStreamer runtime Wine's Media Foundation loads for audio and video;
-# Wine 11.18 is built against the 1.28 series.
-GSTREAMER = (
-    "https://gstreamer.freedesktop.org/data/pkg/osx/1.28.8/gstreamer-1.0-1.28.8-universal.pkg",
-    "d371ab04a7632713626836c2fc234e863cc98484c74c473eba99b0fbd9b3a3fe",
-)
+# The GStreamer runtime Wine's Media Foundation loads for audio and video.
+# Wine 11.18 is built against 1.28; later 1.x releases keep its ABI.
+GSTREAMER_RELEASES = "https://gstreamer.freedesktop.org/data/pkg/osx/"
 GSTREAMER_FRAMEWORK = Path("/Library/Frameworks/GStreamer.framework")
 
 
@@ -1109,13 +1106,32 @@ def install_wine_devel() -> None:
     print(f"Installed {WINE_DEVEL_APP}")
 
 
+def latest_gstreamer() -> str:
+    """The newest stable GStreamer 1.x for macOS; odd minor versions are development ones."""
+    listing = fetch(GSTREAMER_RELEASES, "install it yourself").decode("utf-8", "replace")
+    versions = {
+        tuple(int(part) for part in match)
+        for match in re.findall(r'href="(1)\.(\d+)\.(\d+)/"', listing)
+    }
+    stable = [version for version in versions if version[1] % 2 == 0]
+    if not stable:
+        raise InstallError(f"No GStreamer release found at {GSTREAMER_RELEASES}.")
+    return ".".join(str(part) for part in max(stable))
+
+
 def install_gstreamer() -> None:
-    """Download the GStreamer runtime and install it with sudo installer."""
-    url, sha256 = GSTREAMER
-    print(f"Downloading GStreamer ({url.rsplit('/', 1)[-1]})")
-    data = download_verified(url, sha256)
+    """Download the newest stable GStreamer runtime and install it with sudo installer."""
+    version = latest_gstreamer()
+    name = f"gstreamer-1.0-{version}-universal.pkg"
+    url = f"{GSTREAMER_RELEASES}{version}/{name}"
+    # The checksum published beside it catches a corrupt or truncated download.
+    published = fetch(url + ".sha256sum", "install it yourself").decode("ascii", "replace").split()
+    if not published or not re.fullmatch(r"[0-9a-f]{64}", published[0]):
+        raise InstallError(f"{url}.sha256sum is not a SHA-256 checksum.")
+    print(f"Downloading GStreamer {version} ({name})")
+    data = download_verified(url, published[0])
     with tempfile.TemporaryDirectory(prefix="installappx-gstreamer-") as temporary:
-        package = Path(temporary) / url.rsplit("/", 1)[-1]
+        package = Path(temporary) / name
         package.write_bytes(data)
         result = subprocess.run(
             ["/usr/bin/sudo", "/usr/sbin/installer", "-pkg", str(package), "-target", "/"]
@@ -1158,7 +1174,7 @@ def add_macos_dependencies(args, ask: Callable[[str], str]) -> None:
         else:
             print("Install Wine, or set WINE to your Wine executable, before starting the game.")
     if not GSTREAMER_FRAMEWORK.is_dir():
-        hint = f"install {GSTREAMER[0]}"
+        hint = "install the macOS runtime from https://gstreamer.freedesktop.org/download/"
         if args.yes:
             print(f"Warning: games that play audio or video under Wine need GStreamer; {hint}")
         elif agreed(

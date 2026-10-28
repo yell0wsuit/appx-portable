@@ -51,18 +51,19 @@ Use `build\windows-x64` for an x64 game. From a repository checkout, the install
 
 ## macOS / Wine (experimental)
 
-Run the installer with the package, then the launcher it writes:
+Run the installer with the package:
 
 ```sh
 python3 installappx.py '/path/to/game.appxbundle'
-'/path/to/Example.Game/00_click2startme.sh'
 ```
+
+Then double-click `00_click2startme.command` in the game folder, which starts the game from Terminal. On Linux the launcher is `00_click2startme.sh`.
 
 On macOS the installer also sets up what Wine needs, when it is missing:
 
 - **Wine Devel** (Gcenx's 11.18 build, about 190 MB), downloaded into `~/Applications` after checking its SHA-256. This needs no administrator password, so `--yes` installs it too.
 - **Rosetta 2**, on Apple silicon, to run Wine's Intel code.
-- **GStreamer** 1.28, which Wine needs for games that play audio or video through Media Foundation. The installer checks the pinned runtime `.pkg` and installs it into `/Library/Frameworks` with `sudo installer`. The first launch after installing it is slow while GStreamer builds its plugin cache.
+- **GStreamer**, which Wine needs for games that play audio or video through Media Foundation. The installer downloads the newest stable runtime `.pkg` from [gstreamer.freedesktop.org](https://gstreamer.freedesktop.org/download/), checks it against the checksum published beside it, and installs it into `/Library/Frameworks` with `sudo installer`. The first launch after installing it is slow while GStreamer builds its plugin cache.
 
 Rosetta 2 and GStreamer ask for your administrator password, so the installer asks before either, and `--yes` only prints how to install them.
 
