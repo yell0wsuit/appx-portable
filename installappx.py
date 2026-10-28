@@ -14,12 +14,14 @@ import http.client
 import io
 import json
 import os
+import platform
 import re
 import shlex
 import shutil
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.error
 import urllib.parse
@@ -720,8 +722,12 @@ def resolve_release(tag: Optional[str]) -> str:
         raise InstallError("Could not read the latest release from GitHub.") from error
 
 
-def download_runtime(tag: str, architecture: str, folder: Path) -> Path:
-    """Download and unpack appx-portable-<tag>-<architecture>.zip into folder."""
+def download_runtime(
+    tag: str, architecture: str, folder: Path, wine: bool = False
+) -> Path:
+    """Download and unpack appx-portable-<tag>-<architecture>.zip into folder.
+
+    Under Wine, the release's patched graphics stack is unpacked beside it."""
     try:
         release = json.loads(
             fetch(f"https://api.github.com/repos/{REPOSITORY}/releases/tags/{tag}")
@@ -737,8 +743,22 @@ def download_runtime(tag: str, architecture: str, folder: Path) -> Path:
         raise InstallError(f"Release {tag} has no {name}.")
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
+    unpack_release_zip(name, fetch(assets[name]), folder)
+    graphics = f"appx-portable-{tag}-wine-{architecture}.zip"
+    if wine and graphics in assets:
+        unpack_release_zip(graphics, fetch(assets[graphics]), folder)
+    elif wine:
+        print(
+            f"Warning: release {tag} has no Wine graphics stack; games may render black."
+            " Build one with scripts/build-wined3d.sh and pass --build."
+        )
+    return folder
+
+
+def unpack_release_zip(name: str, data: bytes, folder: Path) -> None:
+    """Unpack the plain files of a release zip into folder."""
     try:
-        with zipfile.ZipFile(io.BytesIO(fetch(assets[name]))) as archive:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for entry in archive.namelist():
                 # The release zip holds plain DLLs; anything in a folder is ignored.
                 if (
@@ -749,7 +769,6 @@ def download_runtime(tag: str, architecture: str, folder: Path) -> Path:
                     (folder / entry).write_bytes(archive.read(entry))
     except zipfile.BadZipFile as error:
         raise InstallError(f"{name} is not a readable zip.") from error
-    return folder
 
 
 @dataclass
@@ -997,6 +1016,155 @@ def write_launcher(game: Path, executable: str, windows: bool) -> Path:
     return path
 
 
+# macOS: what Wine needs
+
+# Gcenx's Wine Devel build; the Wine launcher finds it in ~/Applications.
+WINE_DEVEL = (
+    "https://github.com/Gcenx/macOS_Wine_builds/releases/download/11.18/wine-devel-11.18-osx64.tar.xz",
+    "aa0ea4c82e636ae7bca2076387cb0a5affa26509ad13f119ecd0d62bd7ba6f82",
+)
+WINE_DEVEL_APP = Path.home() / "Applications" / "Wine Devel.app"
+# The GStreamer runtime Wine's Media Foundation loads for audio and video;
+# Wine 11.18 is built against the 1.28 series.
+GSTREAMER = (
+    "https://gstreamer.freedesktop.org/data/pkg/osx/1.28.8/gstreamer-1.0-1.28.8-universal.pkg",
+    "d371ab04a7632713626836c2fc234e863cc98484c74c473eba99b0fbd9b3a3fe",
+)
+GSTREAMER_FRAMEWORK = Path("/Library/Frameworks/GStreamer.framework")
+
+
+def wine_installed() -> bool:
+    """Whether the Wine launcher finds Wine: WINE, wine on PATH, or Wine Devel."""
+    if os.environ.get("WINE"):
+        return os.access(os.environ["WINE"], os.X_OK)
+    wine = WINE_DEVEL_APP / "Contents" / "Resources" / "wine" / "bin" / "wine"
+    return bool(shutil.which("wine")) or os.access(wine, os.X_OK)
+
+
+def needs_rosetta() -> bool:
+    """Whether this Mac lacks Rosetta 2, which runs Wine's Intel code."""
+    if platform.machine() != "arm64":
+        return False
+    result = subprocess.run(
+        ["/usr/bin/arch", "-x86_64", "/usr/bin/true"], capture_output=True
+    )
+    return result.returncode != 0
+
+
+def download_verified(url: str, sha256: str) -> bytes:
+    """Download url, refusing data whose SHA-256 is not the pinned one."""
+    data = fetch(url, "install it yourself")
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise InstallError(f"{url} does not have the expected SHA-256 {sha256}.")
+    return data
+
+
+def extract_tar_xz(data: bytes, destination: Path) -> None:
+    """Unpack a .tar.xz into destination, refusing entries that would land outside it."""
+    root = Path(destination).resolve()
+
+    def inside(path: Path) -> bool:
+        return path == root or root in path.parents
+
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:xz") as archive:
+        members = archive.getmembers()
+        for member in members:
+            target = (root / member.name).resolve()
+            if member.issym():
+                link = (target.parent / member.linkname).resolve()
+            elif member.islnk():
+                link = (root / member.linkname).resolve()
+            else:
+                link = target
+            if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
+                raise InstallError(f"Refusing {member.name}: not a file, folder or link.")
+            if not inside(target) or not inside(link):
+                raise InstallError(f"Refusing {member.name}: it leaves {root}.")
+        if hasattr(tarfile, "data_filter"):
+            # Checked above; "tar" keeps permissions and the bundle's own links.
+            archive.extractall(root, members, filter="tar")
+        else:
+            archive.extractall(root, members)
+
+
+def install_wine_devel() -> None:
+    """Download Wine Devel and unpack it into ~/Applications."""
+    url, sha256 = WINE_DEVEL
+    print(f"Downloading Wine Devel ({url.rsplit('/', 1)[-1]}, about 190 MB)")
+    data = download_verified(url, sha256)
+    WINE_DEVEL_APP.parent.mkdir(parents=True, exist_ok=True)
+    # Unpacked beside its destination and moved, so a failure leaves no half app.
+    with tempfile.TemporaryDirectory(dir=WINE_DEVEL_APP.parent) as temporary:
+        extract_tar_xz(data, Path(temporary))
+        app = Path(temporary) / WINE_DEVEL_APP.name
+        if not app.is_dir():
+            raise InstallError(f"{url} has no {WINE_DEVEL_APP.name}.")
+        os.replace(app, WINE_DEVEL_APP)
+    print(f"Installed {WINE_DEVEL_APP}")
+
+
+def install_gstreamer() -> None:
+    """Download the GStreamer runtime and install it with sudo installer."""
+    url, sha256 = GSTREAMER
+    print(f"Downloading GStreamer ({url.rsplit('/', 1)[-1]})")
+    data = download_verified(url, sha256)
+    with tempfile.TemporaryDirectory(prefix="installappx-gstreamer-") as temporary:
+        package = Path(temporary) / url.rsplit("/", 1)[-1]
+        package.write_bytes(data)
+        result = subprocess.run(
+            ["/usr/bin/sudo", "/usr/sbin/installer", "-pkg", str(package), "-target", "/"]
+        )
+    if result.returncode != 0:
+        raise InstallError("GStreamer was not installed.")
+
+
+def install_rosetta() -> None:
+    """Install Rosetta 2 with sudo softwareupdate."""
+    result = subprocess.run(
+        ["/usr/bin/sudo", "/usr/sbin/softwareupdate", "--install-rosetta", "--agree-to-license"]
+    )
+    if result.returncode != 0:
+        raise InstallError("Rosetta 2 was not installed.")
+
+
+def add_macos_dependencies(args, ask: Callable[[str], str]) -> None:
+    """Offer what Wine on macOS needs and lacks: Rosetta 2, Wine Devel and GStreamer.
+
+    Wine Devel needs no administrator; --yes installs it. The others need sudo,
+    so --yes only says how to install them."""
+
+    def agreed(question: str) -> bool:
+        return ask(question).strip().lower() not in ("n", "no")
+
+    if needs_rosetta():
+        if args.yes:
+            print("Warning: Wine needs Rosetta 2: softwareupdate --install-rosetta")
+        elif agreed(
+            "Wine needs Rosetta 2. Install it, accepting Apple's license"
+            " (asks for your administrator password)? [Y/n]: "
+        ):
+            install_rosetta()
+    if not wine_installed():
+        if args.yes or agreed(
+            f"Wine is not installed. Download Wine Devel into {WINE_DEVEL_APP.parent}? [Y/n]: "
+        ):
+            install_wine_devel()
+        else:
+            print("Install Wine, or set WINE to your Wine executable, before starting the game.")
+    if not GSTREAMER_FRAMEWORK.is_dir():
+        hint = f"install {GSTREAMER[0]}"
+        if args.yes:
+            print(f"Warning: games that play audio or video under Wine need GStreamer; {hint}")
+        elif agreed(
+            "Games that play audio or video under Wine need GStreamer. Install it"
+            " (asks for your administrator password)? [Y/n]: "
+        ):
+            try:
+                install_gstreamer()
+            except InstallError as error:
+                print(f"Warning: {error} To install it later, {hint}")
+
+
 # Command line
 
 STORE_ANSWERS = {"0": "none", "1": "trial", "2": "iap", "3": "both"}
@@ -1188,23 +1356,19 @@ def add_missing_vclibs(
 
 def stage_dlls(args, game: Path, architecture: str, managed: bool) -> Optional[str]:
     """Copy the runtime from --build or the release; returns the release tag used."""
+    wine = sys.platform != "win32"
     if args.build:
-        stage_runtime(
-            absolute(args.build),
-            game,
-            architecture,
-            managed,
-            wine=sys.platform != "win32",
-        )
+        stage_runtime(absolute(args.build), game, architecture, managed, wine=wine)
         return args.release
     tag = resolve_release(args.release)
     print(f"Downloading Appx Portable {tag} ({architecture})")
     with tempfile.TemporaryDirectory(prefix="installappx-runtime-") as temporary:
         stage_runtime(
-            download_runtime(tag, architecture, Path(temporary)),
+            download_runtime(tag, architecture, Path(temporary), wine=wine),
             game,
             architecture,
             managed,
+            wine=wine,
         )
     return tag
 
@@ -1262,6 +1426,8 @@ def install(args, ask: Callable[[str], str]) -> int:
         launch = str(
             write_launcher(destination, launch, windows=sys.platform == "win32")
         )
+    if sys.platform == "darwin":
+        add_macos_dependencies(args, ask)
     warning = path_warning(
         destination, [str(p) for p in destination.rglob("*") if p.is_file()]
     )
