@@ -55,7 +55,7 @@
   },
   "pointer_device.h": {
     "header": "windows.devices.input.h",
-    "interfaces": ["ABI::Windows::Devices::Input::IPointerDevice", "ABI::Windows::Devices::Input::ITouchCapabilities"]
+    "interfaces": ["ABI::Windows::Devices::Input::IPointerDevice", "ABI::Windows::Devices::Input::ITouchCapabilities", "ABI::Windows::Devices::Input::IKeyboardCapabilities", "ABI::Windows::Devices::Input::IMouseCapabilities"]
   },
   "coreapp.h": {
     "header": "windows.applicationmodel.core.h",

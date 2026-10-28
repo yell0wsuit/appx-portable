@@ -60,6 +60,23 @@ int main() {
     UINT32 contacts{};
     CHECK(touch && SUCCEEDED(touch->get_TouchPresent(&touchPresent)) && SUCCEEDED(touch->get_Contacts(&contacts)) &&
           (touchPresent != 0) == (contacts > 0));
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Input.KeyboardCapabilities").Get(), &factory)));
+    ComPtr<IInspectable> keyboardObject;
+    ComPtr<ABI::Windows::Devices::Input::IKeyboardCapabilities> keyboard;
+    INT32 keyboardPresent{};
+    CHECK(SUCCEEDED(factory->ActivateInstance(&keyboardObject)) && SUCCEEDED(keyboardObject.As(&keyboard)) &&
+          SUCCEEDED(keyboard->get_KeyboardPresent(&keyboardPresent)) && keyboardPresent);
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Input.MouseCapabilities").Get(), &factory)));
+    ComPtr<IInspectable> mouseObject;
+    ComPtr<ABI::Windows::Devices::Input::IMouseCapabilities> mouse;
+    INT32 mousePresent = -1;
+    UINT32 buttons{};
+    CHECK(SUCCEEDED(factory->ActivateInstance(&mouseObject)) && SUCCEEDED(mouseObject.As(&mouse)) &&
+          SUCCEEDED(mouse->get_MousePresent(&mousePresent)) && SUCCEEDED(mouse->get_NumberOfButtons(&buttons)) &&
+          (mousePresent == 0 || buttons > 0));
+    HString capabilitiesName;
+    CHECK(SUCCEEDED(mouseObject->GetRuntimeClassName(capabilitiesName.GetAddressOf())) &&
+          wcscmp(capabilitiesName.GetRawBuffer(nullptr), L"Windows.Devices.Input.MouseCapabilities") == 0);
     CHECK(SUCCEEDED(get(HStringReference(L"Windows.ApplicationModel.Core.CoreApplication").Get(), &factory)));
     ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplication> app;
     CHECK(SUCCEEDED(factory.As(&app)));
