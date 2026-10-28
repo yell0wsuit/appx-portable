@@ -123,9 +123,11 @@ static void WaitUntil(LONGLONG deadline, LONGLONG frequency) {
         QueryPerformanceCounter(&now);
     } while (now.QuadPart < deadline);
 }
-// Holds each game present to its 60 Hz slot; see PaceFrame.
+// Holds each game present to its slot at [options] FrameRate (60 unless set;
+// 0 for no cap); see PaceFrame.
 static void PacePresent(IDXGISwapChain* swap, UINT flags) {
-    if ((flags & DXGI_PRESENT_TEST) || !Redirected(swap)) return;
+    const unsigned rate = GetOptions().frameRate;
+    if (!rate || (flags & DXGI_PRESENT_TEST) || !Redirected(swap)) return;
     static const LONGLONG frequency = [] {
         LARGE_INTEGER value;
         QueryPerformanceFrequency(&value);
@@ -136,7 +138,7 @@ static void PacePresent(IDXGISwapChain* swap, UINT flags) {
     if (FAILED(swap->GetPrivateData(paceTag, &size, &next)) || size != sizeof(next)) next = 0;
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
-    const LONGLONG wait = PaceFrame(now.QuadPart, frequency / 60, next);
+    const LONGLONG wait = PaceFrame(now.QuadPart, frequency / rate, next);
     swap->SetPrivateData(paceTag, sizeof(next), &next);
     if (wait > 0) WaitUntil(now.QuadPart + wait, frequency);
 }

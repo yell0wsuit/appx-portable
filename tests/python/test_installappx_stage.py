@@ -178,6 +178,7 @@ class SettingsTests(unittest.TestCase):
         text = self.ini.read_text()
         self.assertIn('SaveLocation=game', text)
         self.assertIn('[options]', text)
+        self.assertIn('FrameRate=60', text)
         self.assertEqual(installer.read_store(self.game), 'none')
         expected = {'none': (False, False), 'trial': (True, False), 'iap': (False, True), 'both': (True, True)}
         for store, values in expected.items():

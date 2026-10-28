@@ -33,6 +33,13 @@ bool Setting(const wchar_t* variable, const wchar_t* key, const std::wstring& in
     if (GetEnvironmentVariableW(variable, nullptr, 0) > 0) return Environment(variable, L"1");
     return GetPrivateProfileIntW(L"options", key, 0, ini.c_str()) != 0;
 }
+// The frame cap from the environment, else the ini; missing means 60.
+unsigned FrameRate(const std::wstring& ini) {
+    wchar_t value[16]{};
+    const auto length = GetEnvironmentVariableW(L"APPX_PORTABLE_FRAME_RATE", value, 16);
+    if (length > 0 && length < 16) return static_cast<unsigned>(wcstoul(value, nullptr, 10));
+    return GetPrivateProfileIntW(L"options", L"FrameRate", 60, ini.c_str());
+}
 // kernel32 only: first use can be inside DllMain.
 std::wstring SettingsFile() {
     std::wstring path(MAX_PATH, L'\0');
@@ -52,6 +59,7 @@ Options Parse() {
     const auto ini = SettingsFile();
     options.unlockTrial = Setting(L"APPX_PORTABLE_UNLOCK_TRIAL", L"UnlockTrial", ini);
     options.stubIap = Setting(L"APPX_PORTABLE_STUB_IAP", L"StubIap", ini);
+    options.frameRate = FrameRate(ini);
     bool program = true;
     ForEachWord(GetCommandLineW(), [&](const std::wstring& word) {
         if (program) {

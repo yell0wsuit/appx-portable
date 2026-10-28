@@ -604,6 +604,9 @@ SaveLocation=game
 ;   StubIap      complete in-app purchases locally, without the Store
 UnlockTrial=0
 StubIap=0
+; Most Store games run at the 60 frames a second they were made for; 0 removes
+; the cap, which suits games that keep their speed at higher frame rates.
+FrameRate=60
 """
 STORE_CHOICES = {
     "none": (False, False),
