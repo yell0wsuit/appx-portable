@@ -13,14 +13,23 @@ the native stream borrows the PRI mapping. Package files are never rewritten.
 This uses native COM resource-manager interfaces, not the similarly named WinRT
 interfaces. Their IIDs and method order were checked against Microsoft's matching
 `MrmCoreR.pdb` public symbols. No instruction addresses or decompiled
-implementation are used. These interfaces are undocumented and have been verified
-only on the tested Windows 11 build, not Windows 10. Interface activation or
-lookup failures are returned to the caller on unsupported systems.
+implementation are used. These interfaces are undocumented. The embedded-caption
+path has been tested locally on Windows 11 and successfully tested by the user
+on a Windows 10 Pro 22H2 laptop (OS build 19045.7807) on 2026-10-28, with the
+version and build confirmed by a Windows Specifications screenshot.
+Interface activation or lookup failures are returned to the caller on
+unsupported systems.
 
 The installer therefore keeps Rayman's [loose-caption fallback](../patch/raymanwin10/README.md)
 for version 1.0.23.0. `LoadComponent` loads that source XAML before attempting any
 embedded-XBF read, so the default installation does not depend on these native
-MRT interfaces. Retain this fallback until Windows 10 compatibility is validated.
+MRT interfaces. The fallback remains the default compatibility route; the
+successful tests establish support for those tested configurations.
+
+For the Windows 10 test, the user copied `local/rayman-win10-patchless`, which
+omits `CustomTitleBar.xaml`, and reported that patchless operation works. The
+provided screenshot (`Screenshot 2026-10-28 112637.png`) shows Rayman inside a
+level with its pause menu open on the Windows 10 desktop.
 
 The XBF reader validates section sizes, metadata tables, constants, scopes, names,
 and connection IDs before returning a binding plan. `Application.LoadComponent`

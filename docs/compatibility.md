@@ -8,6 +8,7 @@ Architecture is separate from package generation. Build the same shared runtime 
 
 Game-specific asset workarounds belong under `patch/`. Rayman Windows 10 keeps its
 source-caption fallback in normal installations. Its alternative
-[PRI/XBF connection loader](xbf.md) uses undocumented resource-manager interfaces
-that still need Windows 10 validation.
+[PRI/XBF connection loader](xbf.md) has passed local Windows 11 testing and a
+user-reported Windows 10 Pro 22H2 laptop test (OS build 19045.7807).
+The interfaces remain undocumented, so the installer retains the loose fallback.
 Keep game data and Microsoft runtime binaries out of the repository.
