@@ -1,4 +1,4 @@
-# Tested apps
+# Game compatibility
 
 | Game                                 | Package ID     | Version     | Arch | `appx-host.exe` | Status         | Notes                                                       |
 | ------------------------------------ | -------------- | ----------- | ---- | --------------- | -------------- | ----------------------------------------------------------- |
@@ -13,6 +13,6 @@
 | Microsoft Sudoku (2018)              | `9WZDNCRFHV60` | 1.7.10190.0 | x86  | Yes             | 🩹 Needs patch | [Video-preloader asset patch](../patch/mssudoku/README.md)  |
 | Rayman Fiesta Run Windows 10 Edition | `9NBLGGH59M6B` | 1.0.23.0    | x64  |                 | 🩹 Needs patch | [Caption fallback](../patch/raymanwin10/README.md)          |
 
-`appx-host.exe` indicates that the game is managed XAML.
+A **Yes** under `appx-host.exe` marks a managed (.NET) game, which starts through `appx-host.exe`; see [managed games](islands.md). Managed games do not run under Wine yet.
 
 `installappx.py` applies a game's patch automatically when it recognizes the exact package and version.
