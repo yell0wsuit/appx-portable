@@ -23,6 +23,12 @@ else()
   set(CMAKE_SYSTEM_PROCESSOR x86)
   set(APPX_XWIN_TARGET i686-pc-windows-msvc)
   set(APPX_XWIN_LIBS x86)
+  # Clang supports no coroutines on the 32-bit Microsoft ABI, so it leaves
+  # __cpp_impl_coroutine undefined and C++/WinRT falls back to the STL's
+  # <experimental/coroutine>, which rejects Clang. The shim includes C++/WinRT
+  # but writes no coroutines: take the C++20 header, and fail the build if one
+  # is ever written rather than miscompile it.
+  set(APPX_XWIN_FLAGS "/D__cpp_impl_coroutine=201902L /clang:-Werror=coroutines-unsupported-target")
 endif()
 set(CMAKE_CXX_COMPILER "${LLVM_ROOT}/bin/clang-cl")
 set(CMAKE_CXX_COMPILER_TARGET ${APPX_XWIN_TARGET})
@@ -33,6 +39,6 @@ else()
 endif()
 set(CMAKE_AR "${LLVM_ROOT}/bin/llvm-lib")
 set(CMAKE_RC_COMPILER "${LLVM_ROOT}/bin/llvm-rc")
-set(CMAKE_CXX_FLAGS_INIT "--target=${APPX_XWIN_TARGET} /imsvc\"${XWIN_ROOT}/crt/include\" /imsvc\"${XWIN_ROOT}/sdk/include/ucrt\" /imsvc\"${XWIN_ROOT}/sdk/include/shared\" /imsvc\"${XWIN_ROOT}/sdk/include/um\" /imsvc\"${XWIN_ROOT}/sdk/include/winrt\" /imsvc\"${XWIN_ROOT}/sdk/include/cppwinrt\"")
+set(CMAKE_CXX_FLAGS_INIT "--target=${APPX_XWIN_TARGET} ${APPX_XWIN_FLAGS} /imsvc\"${XWIN_ROOT}/crt/include\" /imsvc\"${XWIN_ROOT}/sdk/include/ucrt\" /imsvc\"${XWIN_ROOT}/sdk/include/shared\" /imsvc\"${XWIN_ROOT}/sdk/include/um\" /imsvc\"${XWIN_ROOT}/sdk/include/winrt\" /imsvc\"${XWIN_ROOT}/sdk/include/cppwinrt\"")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "/libpath:\"${XWIN_ROOT}/crt/lib/${APPX_XWIN_LIBS}\" /libpath:\"${XWIN_ROOT}/sdk/lib/ucrt/${APPX_XWIN_LIBS}\" /libpath:\"${XWIN_ROOT}/sdk/lib/um/${APPX_XWIN_LIBS}\"")
 set(CMAKE_SHARED_LINKER_FLAGS_INIT "${CMAKE_EXE_LINKER_FLAGS_INIT}")
