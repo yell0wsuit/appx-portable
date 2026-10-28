@@ -43,3 +43,4 @@ __pycache__/
 *.pyc
 *.log
 appx-frame.bmp
+/.xwin-cache
