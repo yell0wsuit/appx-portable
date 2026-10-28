@@ -124,6 +124,39 @@ int main() {
             HStringReference(L"24HourClock").Get(), HStringReference(L"UTC").Get(), &zoned)) ||
         FAILED(zoned.As(&zone)) || FAILED(zone->GetTimeZone(zoneId.GetAddressOf())))
         return 36;
+    // A UTC calendar reads UTC fields whatever this machine's zone is.
+    SYSTEMTIME noon{2020, 1, 3, 1, 12, 0, 0, 0};
+    FILETIME noonTicks{};
+    INT32 utcHour{};
+    if (!SystemTimeToFileTime(&noon, &noonTicks) ||
+        FAILED(zoned->SetDateTime({static_cast<INT64>(noonTicks.dwHighDateTime) << 32 | noonTicks.dwLowDateTime})) ||
+        FAILED(zoned->get_Hour(&utcHour)) || utcHour != 12) {
+        printf("FAIL UTC calendar hour %d\n", utcHour);
+        return 37;
+    }
+    // Formatting and ranges at 2020-01-01 12:00 UTC; Leo's Fortune sets the numeral system.
+    auto text = [](HRESULT hr, HString& value, const wchar_t* expected) {
+        return SUCCEEDED(hr) && (expected ? wcscmp(value.GetRawBuffer(nullptr), expected) == 0
+                                          : WindowsGetStringLen(value.Get()) > 0);
+    };
+    HString numerals, monthText, dayText, yearText, hourText, monthName, dayName;
+    INT32 months{};
+    ComPtr<ABI::Windows::Foundation::Collections::IVectorView<HSTRING>> calendarLanguages;
+    unsigned languageCount{};
+    if (FAILED(zoned->put_NumeralSystem(HStringReference(L"Latn").Get())) ||
+        !text(zoned->get_NumeralSystem(numerals.GetAddressOf()), numerals, L"Latn") ||
+        !text(zoned->MonthAsPaddedNumericString(2, monthText.GetAddressOf()), monthText, L"01") ||
+        !text(zoned->DayAsPaddedString(2, dayText.GetAddressOf()), dayText, L"01") ||
+        !text(zoned->YearAsTruncatedString(2, yearText.GetAddressOf()), yearText, L"20") ||
+        !text(zoned->HourAsPaddedString(2, hourText.GetAddressOf()), hourText, L"12") ||
+        !text(zoned->MonthAsFullString(monthName.GetAddressOf()), monthName, nullptr) ||
+        !text(zoned->DayOfWeekAsFullString(dayName.GetAddressOf()), dayName, nullptr) ||
+        FAILED(zoned->get_NumberOfMonthsInThisYear(&months)) || months != 12 ||
+        FAILED(zoned->get_Languages(&calendarLanguages)) || FAILED(calendarLanguages->get_Size(&languageCount)) ||
+        languageCount == 0) {
+        puts("FAIL calendar formatting");
+        return 38;
+    }
     puts("platformtest: 0 failure(s)");
     return 0;
 }

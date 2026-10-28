@@ -89,7 +89,10 @@
   "globalization.h": {
     "header": "windows.globalization.h",
     "interfaces": [
-      "ABI::Windows::Globalization::ICalendar"
+      "ABI::Windows::Globalization::ICalendar",
+      "ABI::Windows::Globalization::ICalendarFactory",
+      "ABI::Windows::Globalization::ICalendarFactory2",
+      "ABI::Windows::Globalization::ITimeZoneOnCalendar"
     ]
   },
   "http.h": {
