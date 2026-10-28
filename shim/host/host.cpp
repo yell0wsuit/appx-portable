@@ -53,6 +53,20 @@ static LRESULT CALLBACK SurfaceProc(HWND hwnd, UINT message, WPARAM wparam, LPAR
     if (message == WM_ERASEBKGND) return 1;
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
+// Wine's Mac driver keeps a window see-through, title bar included, until the
+// window itself draws. Games draw only in child surfaces, which often exist
+// before the window is first shown, so the clipped background erase draws
+// nothing. Paint the client area beneath them instead, on Wine only.
+static void PaintUnderSurfaces(HWND hwnd) {
+    static const bool wine = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != nullptr;
+    if (!wine) return;
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    if (HDC dc = GetDCEx(hwnd, nullptr, DCX_CACHE)) { // no DCX_CLIPCHILDREN: the surfaces' area too
+        FillRect(dc, &client, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+        ReleaseDC(hwnd, dc);
+    }
+}
 static HWND CreateSurfaceOnHostThread() {
     RECT client{};
     GetClientRect(window, &client);
@@ -188,6 +202,9 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
         return 0;
     }
     if (message == CreateSurfaceMessage) return reinterpret_cast<LRESULT>(CreateSurfaceOnHostThread());
+    if ((message == WM_WINDOWPOSCHANGED && (reinterpret_cast<WINDOWPOS*>(lparam)->flags & SWP_SHOWWINDOW)) ||
+        (message == WM_SIZE && wparam != SIZE_MINIMIZED))
+        PaintUnderSurfaces(hwnd);
     // The class cursor is the arrow; over the game, show the game's choice.
     if (message == WM_SETCURSOR && LOWORD(lparam) == HTCLIENT) {
         SetCursor(HostCursor());
@@ -297,9 +314,6 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     cls.hInstance = GetModuleHandleW(nullptr);
     cls.lpszClassName = L"AppxPortableWindow";
     cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    // Wine's Mac driver keeps a window see-through, title bar included, until
-    // the window itself draws. Games draw only in child surfaces, so let the
-    // background paint the client area once, before they cover it.
     cls.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     if (!RegisterClassW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
         return HRESULT_FROM_WIN32(GetLastError());
