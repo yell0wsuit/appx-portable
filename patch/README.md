@@ -8,7 +8,8 @@ assets are included here.
 
 | Patch | Status |
 | --- | --- |
-| [Rayman Fiesta Run Windows 10](raymanwin10/README.md) | 1.0.23.0 x64: source caption bindings; portable world map and mouse entry into a level verified |
+| [Practical English Usage](peu/README.md) | Legacy WebView markup workaround; current runtimes adapt original XBF in memory and no longer apply the asset patch |
+| [Rayman Fiesta Run Windows 10](raymanwin10/README.md) | 1.0.23.0 x64: installer keeps loose caption bindings; the alternative embedded-PRI path has passed Windows 11 and user-reported Windows 10 testing |
 | [Bejeweled LIVE](bejeweled/README.md) | Bejeweled LIVE 4.0.0.10 x86: declares the original dark theme before static brushes load; settings labels verified |
 | [Where's My Mickey?](wheresmymickey/README.md) | Where's My Mickey? 1.1.0.30: intro and gameplay work with the current runtime; first level completed with three stars |
 | [Microsoft Sudoku](mssudoku/README.md) | Microsoft Sudoku 1.7.10190.0 x86: closes the incompatible video-loading popup; menu, Very Easy tutorial dismissal, and number entry verified |

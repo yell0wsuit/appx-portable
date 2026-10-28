@@ -544,6 +544,11 @@ def stage_runtime(
             )
     for name in names:
         replace_file(build / name, game / name)
+    # The WebView2 static loader's redistribution notice travels with the DLL.
+    # Older releases/local builds do not have this dependency.
+    notice = build / "WebView2-LICENSE.txt"
+    if notice.is_file():
+        replace_file(notice, game / notice.name)
     return names
 
 
@@ -737,6 +742,8 @@ KNOWN_PATCHES = {
     ("Disney.WheresMyMickey", "1.1.0.30"): KnownPatch(
         "wheresmymickey", ("patch.py",), "WheresMyMickey.Windows8.exe"
     ),
+    # Keep the loose caption as the default compatibility route. Embedded PRI
+    # has passed Windows 11 and user Windows 10 tests but uses undocumented APIs.
     ("Ubisoft.RaymanFiestaRunWindows10Edition", "1.0.23.0"): KnownPatch(
         "raymanwin10", ("patch.py", "CustomTitleBar.xaml"), ""
     ),

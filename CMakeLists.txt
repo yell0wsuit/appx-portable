@@ -17,6 +17,7 @@ else()
 endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(APPX_TEST_WEBVIEW2 "Run WebView2 integration tests (requires the Evergreen runtime)" OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
 add_compile_definitions(UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0603)
@@ -40,10 +41,11 @@ add_custom_target(appxportable_version
 add_executable(shimtest tests/shimtest.cpp)
 target_link_libraries(shimtest PRIVATE runtimeobject ole32)
 if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
-  add_library(appxportable SHARED shim/registry.cpp shim/compat/win10/titlebar.cpp shim/compat/win10/input.cpp shim/compat/win10/xaml.cpp shim/compat/win10/memory.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/search.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp ${APPX_EXPORTS} shim/version.rc)
+  add_library(appxportable SHARED shim/registry.cpp shim/compat/win10/titlebar.cpp shim/compat/win10/input.cpp shim/compat/win10/xaml.cpp shim/compat/win10/memory.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/islands/webview.cpp shim/islands/webview_markup.cpp shim/islands/xbf_loader.cpp shim/xaml/xbf_webview.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/package/resources.cpp shim/xaml/xbf.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/search.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp ${APPX_EXPORTS} shim/version.rc)
   target_include_directories(appxportable PRIVATE shim "${APPX_GENERATED}")
   add_dependencies(appxportable appxportable_version)
   target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
+  include(cmake/webview2.cmake)
   # One proxy per system DLL a game imports from its folder (see scripts/gen_proxy.py).
   set(APPX_PROXIES d3dcompiler_47 XAudio2_8 XAudio2_9 DWrite)
   foreach(proxy IN LISTS APPX_PROXIES)
@@ -65,6 +67,20 @@ add_executable(platformtest tests/platformtest.cpp)
 target_link_libraries(platformtest PRIVATE runtimeobject ole32)
 add_executable(proxytest tests/proxytest.cpp)
 enable_testing()
+add_executable(xbftest tests/xbftest.cpp shim/xaml/xbf.cpp shim/package/resources.cpp)
+target_include_directories(xbftest PRIVATE shim)
+target_link_libraries(xbftest PRIVATE ole32 shlwapi)
+add_test(NAME xbftest COMMAND xbftest)
+add_executable(xbfwebviewtest tests/xbfwebviewtest.cpp shim/xaml/xbf_webview.cpp)
+target_include_directories(xbfwebviewtest PRIVATE shim)
+add_test(NAME xbfwebviewtest COMMAND xbfwebviewtest)
+find_program(APPX_MAKEPRI makepri HINTS
+  "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/bin/${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}/x64")
+if(APPX_MAKEPRI)
+  add_test(NAME xbf_pri COMMAND "${CMAKE_COMMAND}" "-DTEST=$<TARGET_FILE:xbftest>"
+    "-DMAKEPRI=${APPX_MAKEPRI}" "-DFIXTURE=${CMAKE_BINARY_DIR}/xbf-pri-fixture"
+    -P "${CMAKE_SOURCE_DIR}/tests/xbf_pri.cmake")
+endif()
 add_executable(assettest tests/assettest.cpp shim/host/assets.cpp)
 target_include_directories(assettest PRIVATE shim)
 add_executable(packagetest tests/packagetest.cpp shim/package/package.cpp)
@@ -137,6 +153,15 @@ add_executable(searchtest tests/searchtest.cpp host/managed.manifest)
 target_link_libraries(searchtest PRIVATE runtimeobject ole32)
 add_test(NAME searchtest COMMAND searchtest)
 set_tests_properties(searchtest PROPERTIES TIMEOUT 60)
+if(CMAKE_SIZEOF_VOID_P EQUAL 4 AND NOT CMAKE_CROSSCOMPILING)
+  add_executable(webviewtest tests/webviewtest.cpp host/managed.manifest)
+  target_link_libraries(webviewtest PRIVATE runtimeobject ole32)
+  add_test(NAME webviewtest COMMAND "${CMAKE_COMMAND}"
+    "-DTEST=$<TARGET_FILE:webviewtest>" "-DSHIM=$<TARGET_FILE:appxportable>"
+    "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DFIXTURE=${CMAKE_BINARY_DIR}/webview-contract"
+    -P "${CMAKE_SOURCE_DIR}/tests/webview_contract.cmake")
+  set_tests_properties(webviewtest PROPERTIES TIMEOUT 60)
+endif()
 
 if(WIN32)
   add_test(NAME islands_toasttest COMMAND "${CMAKE_COMMAND}"
@@ -280,6 +305,68 @@ if(NOT CMAKE_CROSSCOMPILING)
     PATHS "$ENV{WindowsSdkDir}/UnionMetadata/$ENV{WindowsSDKVersion}" NO_DEFAULT_PATH)
   set(APPX_FRAMEWORK_FACADES "$ENV{ProgramFiles\(x86\)}/Reference Assemblies/Microsoft/Framework/.NETFramework/v4.8/Facades")
   if(APPX_WINDOWS_METADATA AND EXISTS "${APPX_FRAMEWORK_FACADES}/System.Runtime.dll")
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+      add_test(NAME managed_webview_xbf_contract COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:XBF"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_webview_xbf.cs"
+        "-DXBF_BUILDER=$<TARGET_FILE:xbfwebviewtest>"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview-xbf-contract"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_webview_xbf_contract PROPERTIES TIMEOUT 60 LABELS managed-clr)
+      add_test(NAME managed_webview_markup_contract COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:MARKUP"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_webview_markup.cs"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview-markup-contract"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_webview_markup_contract PROPERTIES TIMEOUT 60 LABELS managed-clr)
+    endif()
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4 AND APPX_TEST_WEBVIEW2)
+      add_test(NAME managed_webview_xbf COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:COMPILED,SCROLL"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_webview.cs"
+        "-DXBF_BUILDER=$<TARGET_FILE:xbfwebviewtest>"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview-xbf"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_webview_xbf PROPERTIES TIMEOUT 60 LABELS "managed-clr;webview2" RUN_SERIAL TRUE)
+      add_test(NAME managed_webview COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:WEBVIEW"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_webview.cs"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_webview PROPERTIES TIMEOUT 60 LABELS "managed-clr;webview2")
+      add_test(NAME managed_webview_markup COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:MARKUP"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_webview.cs"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview-markup"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_webview_markup PROPERTIES TIMEOUT 60 LABELS "managed-clr;webview2")
+      add_test(NAME managed_webview_scroll COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:MARKUP,SCROLL"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_webview.cs"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview-scroll"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_webview_scroll PROPERTIES TIMEOUT 60 LABELS "managed-clr;webview2" RUN_SERIAL TRUE)
+      add_test(NAME managed_webview_clip COMMAND "${CMAKE_COMMAND}"
+        "-DCSC=${APPX_CSC}" "-DDEFINE=/define:CLIP"
+        "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
+        "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_webview.cs"
+        "-DSHIM=$<TARGET_FILE:appxportable>" "-DHOST=${CMAKE_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+        "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-webview-clip"
+        -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
+      set_tests_properties(managed_webview_clip PROPERTIES TIMEOUT 60 LABELS "managed-clr;webview2")
+    endif()
     add_test(NAME managed_settings COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:SETTINGS"
       "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
@@ -326,7 +413,7 @@ set_tests_properties(containers_write containers_read PROPERTIES
 add_library(appx_pch OBJECT shim/pch.cpp)
 target_precompile_headers(appx_pch PRIVATE shim/pch.h)
 get_property(appx_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
-list(REMOVE_ITEM appx_targets ${APPX_PROXIES} xamlsettingstest searchtest)
+list(REMOVE_ITEM appx_targets ${APPX_PROXIES} xamlsettingstest searchtest webviewtest)
 foreach(target IN LISTS appx_targets)
   get_target_property(type ${target} TYPE)
   if(type STREQUAL "EXECUTABLE" OR type STREQUAL "SHARED_LIBRARY")

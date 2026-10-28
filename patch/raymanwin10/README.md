@@ -4,9 +4,20 @@ Version 1.0.23.0 is a native x64 UWP game. Use an **x64** appx-portable build an
 
 Download the [Microsoft-signed x64 VCLibs 140 package hosted by VideoLAN](https://download.videolan.org/pub/videolan/vlc-winrt/3.0.3/VLC.Universal_3.0.3.0_ARM_Test/Dependencies/x64/Microsoft.VCLibs.x64.14.00.appx) and give it to `installappx.py` when it asks (or with `--vclibs`). This is version `14.0.25426.0`, which meets this game's manifest minimum of `14.0.22929.0`. Its SHA-256 is `9f8c11f71e8629413d55f55449d7f875def9492d0c64e9d7bcf13beddf69e872`.
 
-The package embeds its caption XAML in `resources.pri`. Until the portable loader can read embedded XBF, this patch supplies source caption bindings with the same connection IDs. The host's desktop caption and F11/Alt+Enter provide the visible window controls. The custom caption's decorative controls are not rendered. No game executable or PRI bytes are changed.
+The runtime can read the original caption XBF directly from `resources.pri`, but
+that path uses undocumented Windows resource-manager interfaces. It has been
+tested locally on Windows 11 and successfully tested by the user on a Windows 10
+Pro 22H2 laptop (OS build 19045.7807) on 2026-10-28, including entry into a level.
+The installer retains this loose-caption fallback as
+the default compatibility route for version 1.0.23.0.
+The loader reads it first, avoiding the embedded-resource interfaces entirely.
+See [embedded compiled XAML](../../docs/xbf.md).
+The host's desktop caption and F11/Alt+Enter provide the visible window controls.
+The custom caption's decorative controls are not rendered.
 
-`installappx.py` applies this patch automatically for this exact version. The commands below check, reapply, or restore it by hand.
+`installappx.py` applies this patch automatically for this exact version. The
+commands below check, reapply, or restore it by hand. Keep the fallback for normal
+use; `--restore` is useful when explicitly testing the embedded-XBF path.
 
 With the game closed, run from the repository root:
 
