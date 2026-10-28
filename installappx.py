@@ -5,7 +5,8 @@
 Give it a .appxbundle, a .appx, or an extracted package folder. It extracts the
 game, adds the Visual C++ runtime the game needs, downloads the matching Appx
 Portable release, applies the patch for a known game, and can write a
-00_click2startme launcher. Run it without arguments to be asked for each step.
+00_click2startme launcher (.bat on Windows, .command on macOS, .sh elsewhere).
+Run it without arguments to be asked for each step.
 """
 
 import argparse
@@ -1001,8 +1002,13 @@ def launch_executable(executable: str, managed: bool) -> str:
     return "appx-host.exe" if managed else executable
 
 
-def write_launcher(game: Path, executable: str, windows: bool) -> Path:
-    """Write 00_click2startme.bat (CRLF) or .sh (executable) into game."""
+def write_launcher(
+    game: Path, executable: str, windows: bool, macos: bool = False
+) -> Path:
+    """Write 00_click2startme.bat (CRLF), or the executable Wine launcher into game.
+
+    Finder opens a .sh in an editor even when it is executable, but runs a
+    .command in Terminal, so macOS gets 00_click2startme.command."""
     if windows:
         path = Path(game) / (LAUNCHER + ".bat")
         text = BAT_LAUNCHER.format(
@@ -1010,7 +1016,7 @@ def write_launcher(game: Path, executable: str, windows: bool) -> Path:
         )
         path.write_bytes(text.replace("\n", "\r\n").encode())
     else:
-        path = Path(game) / (LAUNCHER + ".sh")
+        path = Path(game) / (LAUNCHER + (".command" if macos else ".sh"))
         path.write_bytes(SH_LAUNCHER.format(exe=shlex.quote(executable)).encode())
         path.chmod(0o755)
     return path
@@ -1424,7 +1430,12 @@ def install(args, ask: Callable[[str], str]) -> int:
         launcher = answer.strip().lower() not in ("n", "no")
     if launcher:
         launch = str(
-            write_launcher(destination, launch, windows=sys.platform == "win32")
+            write_launcher(
+                destination,
+                launch,
+                windows=sys.platform == "win32",
+                macos=sys.platform == "darwin",
+            )
         )
     if sys.platform == "darwin":
         add_macos_dependencies(args, ask)

@@ -10,7 +10,7 @@ Rerun [`installappx.py`](../README.md#quickstart) so the game folder has the cur
 C:\Games\MyGame\Game.exe --unlock-trial
 ```
 
-On macOS / Wine, `/path/to/game/00_click2startme.sh --unlock-trial` passes the switch through.
+On macOS / Wine, `/path/to/game/00_click2startme.command --unlock-trial` (`.sh` on Linux) passes the switch through.
 
 For double-click launches, set it in `appx-portable.ini` beside the game executable (`installappx.py` writes this when you choose to unlock the trial):
 

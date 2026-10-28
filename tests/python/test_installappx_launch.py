@@ -156,6 +156,13 @@ class LauncherTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_macos_launcher_is_a_command_file(self):
+        # Finder opens a .sh in an editor; it runs an executable .command in Terminal.
+        path = installer.write_launcher(self.game, "Game.exe", windows=False, macos=True)
+        self.assertEqual(path.name, "00_click2startme.command")
+        self.assertTrue(os.access(path, os.X_OK))
+        self.assertIn('"$wine" Game.exe', path.read_text())
+
     def test_sh_launcher_runs_wine_from_the_game_folder(self):
         if not BASH:
             self.skipTest("needs bash on a POSIX host")

@@ -21,7 +21,7 @@ from installappx_fixtures import (
 )
 
 installer = load_installer()
-LAUNCHER = "00_click2startme.bat" if sys.platform == "win32" else "00_click2startme.sh"
+LAUNCHER = "00_click2startme." + {"win32": "bat", "darwin": "command"}.get(sys.platform, "sh")
 
 
 class Answers:
