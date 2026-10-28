@@ -2,6 +2,7 @@
 #include "islands/islands.h"
 #include "log.h"
 #include "package/package.h"
+#include "platform/mf_stream.h"
 #include <roapi.h>
 #include <psapi.h>
 #include <intrin.h>
@@ -201,6 +202,9 @@ static void PatchModule(HMODULE module, bool activation) noexcept {
             if (OnWine() && strcmp(name, "RoUnregisterForApartmentShutdown") == 0)
                 hook = reinterpret_cast<void*>(&UnregisterForApartmentShutdown);
             if (OnWine() && strcmp(name, "RoTransformError") == 0) hook = reinterpret_cast<void*>(&TransformError);
+            if (OnWine() && _stricmp(reinterpret_cast<const char*>(base + imports->Name), "mfplat.dll") == 0 &&
+                strcmp(name, "MFCreateMFByteStreamOnStreamEx") == 0)
+                hook = reinterpret_cast<void*>(&CreateMFByteStreamOnStreamEx);
             if (!hook) continue;
             DWORD old;
             if (!VirtualProtect(&slots->u1.Function, sizeof(void*), PAGE_READWRITE, &old)) continue;
