@@ -1000,6 +1000,14 @@ exit "$status"
 """
 
 
+# Why a managed game installed for Wine will not start; see docs/islands.md.
+MANAGED_UNDER_WINE = (
+    "managed (.NET) games do not run under Wine yet. They use XAML Islands, and"
+    " Wine has no Windows.UI.Xaml; on macOS, Wine's .NET also hangs in 32-bit"
+    " programs such as appx-host.exe."
+)
+
+
 def launch_executable(executable: str, managed: bool) -> str:
     """What starts the game: appx-host.exe, beside it, for managed games."""
     return "appx-host.exe" if managed else executable
@@ -1489,6 +1497,8 @@ def install(args, ask: Callable[[str], str]) -> int:
         )
     if sys.platform == "darwin":
         add_macos_dependencies(args, ask)
+    if managed and sys.platform != "win32":
+        print(f"Warning: {MANAGED_UNDER_WINE}")
     warning = path_warning(
         destination, [str(p) for p in destination.rglob("*") if p.is_file()]
     )

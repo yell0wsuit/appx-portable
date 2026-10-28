@@ -69,4 +69,6 @@ Rosetta 2 and GStreamer ask for your administrator password, so the installer as
 
 The release includes a [patched Wine graphics stack](building.md#wine-graphics-macos) beside the DLLs, which the installer adds under Wine; without it most games render black on macOS. With a local build, [cross-compile](building.md#macos-cross-compilation) with the preset matching the game's architecture, run `scripts/build-wined3d.sh`, and pass `--build build/macos-x86` or `--build build/macos-x64`.
 
+Managed (.NET) games, which run through `appx-host.exe`, do not work under Wine yet; see [managed games under Wine](islands.md#wine).
+
 The launcher uses `wine` from your `PATH`, or Wine Devel in `~/Applications`; set `WINE` to use another, and `WINEPREFIX` for a separate prefix. Wine launches always write a log.

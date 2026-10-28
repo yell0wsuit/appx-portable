@@ -399,6 +399,11 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(code, 0, self.stderr.getvalue())
         self.assertIn("appx-host.exe", (self.dest / LAUNCHER).read_text())
+        # Under Wine the install still completes, but says the game will not start.
+        self.assertEqual(
+            "do not run under Wine" in self.stdout.getvalue(),
+            sys.platform != "win32",
+        )
 
     def test_desktop_copy_flag(self):
         package = appx(
