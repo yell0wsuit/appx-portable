@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <roapi.h>
+#include <roerrorapi.h>
 #include <windows.system.threading.h>
 #include <windows.ui.core.h>
 #include <wrl.h>
@@ -40,6 +41,10 @@ int main() {
     auto get = reinterpret_cast<GetFactory>(GetProcAddress(dll, "ShimGetFactory"));
     CHECK(get != nullptr);
     if (!get) return 1;
+    // Wine's combase aborts in these stubs; the shim patches this folder's
+    // imports of them, so reaching the next check is the test.
+    RoTransformError(E_FAIL, E_NOTIMPL, nullptr);
+    CHECK(SUCCEEDED(RoUnregisterForApartmentShutdown(nullptr)) || !GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version"));
     ComPtr<IActivationFactory> factory;
     CHECK(get(HStringReference(L"Unknown.Class").Get(), &factory) == CLASS_E_CLASSNOTAVAILABLE);
     CHECK(factory == nullptr);

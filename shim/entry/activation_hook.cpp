@@ -160,9 +160,24 @@ static void* Hotpatch(HMODULE module, const char* name, void* hook) noexcept {
 #endif
 }
 
-// Fallback (Wine builds without hotpatch prologues): redirect the imports of
-// every module in the game folder, which covers the game and its VC runtime.
-static void PatchModule(HMODULE module) noexcept {
+// Wine 11 exports these as stubs that abort the process when called.
+// RoRegisterForApartmentShutdown hands out a dummy cookie and never calls
+// back, so vccorlib's unregistration on every normal exit has nothing to undo.
+static HRESULT WINAPI UnregisterForApartmentShutdown(APARTMENT_SHUTDOWN_REGISTRATION_COOKIE) noexcept {
+    return S_OK;
+}
+// C++/CX catch handlers report a rethrown HRESULT here. Like Wine's own
+// RoOriginateError, report that no debugger took the error.
+static BOOL WINAPI TransformError(HRESULT, HRESULT, HSTRING) noexcept { return FALSE; }
+static bool OnWine() noexcept {
+    static const bool wine = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != nullptr;
+    return wine;
+}
+
+// Redirect the imports of every module in the game folder, which covers the
+// game and its VC runtime: the activation calls as a fallback for Wine builds
+// without hotpatch prologues, and Wine's aborting stubs whenever on Wine.
+static void PatchModule(HMODULE module, bool activation) noexcept {
     if (!module) return;
     auto* base = reinterpret_cast<BYTE*>(module);
     auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
@@ -179,11 +194,13 @@ static void PatchModule(HMODULE module) noexcept {
         for (; names->u1.AddressOfData; ++names, ++slots) {
             if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;
             auto* symbol = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(base + names->u1.AddressOfData);
+            const char* name = reinterpret_cast<char*>(symbol->Name);
             void* hook = nullptr;
-            if (strcmp(reinterpret_cast<char*>(symbol->Name), "RoGetActivationFactory") == 0)
-                hook = reinterpret_cast<void*>(&GetFactory);
-            if (strcmp(reinterpret_cast<char*>(symbol->Name), "RoActivateInstance") == 0)
-                hook = reinterpret_cast<void*>(&Activate);
+            if (activation && strcmp(name, "RoGetActivationFactory") == 0) hook = reinterpret_cast<void*>(&GetFactory);
+            if (activation && strcmp(name, "RoActivateInstance") == 0) hook = reinterpret_cast<void*>(&Activate);
+            if (OnWine() && strcmp(name, "RoUnregisterForApartmentShutdown") == 0)
+                hook = reinterpret_cast<void*>(&UnregisterForApartmentShutdown);
+            if (OnWine() && strcmp(name, "RoTransformError") == 0) hook = reinterpret_cast<void*>(&TransformError);
             if (!hook) continue;
             DWORD old;
             if (!VirtualProtect(&slots->u1.Function, sizeof(void*), PAGE_READWRITE, &old)) continue;
@@ -193,7 +210,7 @@ static void PatchModule(HMODULE module) noexcept {
         }
     }
 }
-static void PatchGameModules() noexcept {
+static void PatchGameModules(bool activation) noexcept {
     wchar_t game[MAX_PATH]{};
     if (!GetModuleFileNameW(nullptr, game, MAX_PATH)) return;
     *wcsrchr(game, L'\\') = L'\0';
@@ -210,7 +227,7 @@ static void PatchGameModules() noexcept {
     for (HMODULE module : modules) {
         wchar_t path[MAX_PATH]{};
         if (module == self || !GetModuleFileNameW(module, path, MAX_PATH)) continue;
-        if (_wcsnicmp(path, game, prefix) == 0 && path[prefix] == L'\\') PatchModule(module);
+        if (_wcsnicmp(path, game, prefix) == 0 && path[prefix] == L'\\') PatchModule(module, activation);
     }
 }
 void InstallActivationHook() noexcept {
@@ -222,9 +239,10 @@ void InstallActivationHook() noexcept {
         if (auto* activate = Hotpatch(combase, "RoActivateInstance", reinterpret_cast<void*>(&Activate)))
             originalActivate = reinterpret_cast<ActivateCall>(activate);
         Log("INFO", "activation hook: combase hotpatch");
+        if (OnWine()) PatchGameModules(false);
         return;
     }
-    PatchGameModules();
+    PatchGameModules(true);
     Log("INFO", "activation hook: import tables of game modules");
 }
 }
