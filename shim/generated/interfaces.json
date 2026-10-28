@@ -38,13 +38,24 @@
     "header": "windows.system.h",
     "interfaces": ["ABI::Windows::System::IMemoryManagerStatics"]
   },
+  "xaml_data.h": {
+    "header": "windows.ui.xaml.data.h",
+    "interfaces": [
+      "ABI::Windows::UI::Xaml::Data::IPropertyChangedEventArgs",
+      "ABI::Windows::UI::Xaml::Data::IPropertyChangedEventArgsFactory"
+    ]
+  },
+  "win10_metadata.h": {
+    "header": "windows.foundation.metadata.h",
+    "interfaces": ["ABI::Windows::Foundation::Metadata::IApiInformationStatics"]
+  },
   "win10_input.h": {
     "header": "windows.ui.core.h",
     "interfaces": ["ABI::Windows::UI::Core::ICoreInputSourceBase", "ABI::Windows::UI::Core::ICorePointerInputSource"]
   },
   "pointer_device.h": {
     "header": "windows.devices.input.h",
-    "interfaces": ["ABI::Windows::Devices::Input::IPointerDevice"]
+    "interfaces": ["ABI::Windows::Devices::Input::IPointerDevice", "ABI::Windows::Devices::Input::ITouchCapabilities"]
   },
   "coreapp.h": {
     "header": "windows.applicationmodel.core.h",

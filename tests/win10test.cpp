@@ -2,6 +2,7 @@
 #undef GetCurrentTime
 #include <roapi.h>
 #include <windows.system.h>
+#include <windows.foundation.metadata.h>
 #include <windows.applicationmodel.core.h>
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.core.h>
@@ -38,6 +39,27 @@ int main() {
     CHECK(SUCCEEDED(memory->get_AppMemoryUsage(&usage)) && usage > 0);
     CHECK(SUCCEEDED(memory->get_AppMemoryUsageLimit(&limit)) && limit > 0);
     CHECK(memory->get_AppMemoryUsageLimit(nullptr) == E_POINTER);
+    // Answered by Windows, or by the shim where Wine stubs it with E_NOTIMPL.
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Foundation.Metadata.ApiInformation").Get(), &factory)));
+    ComPtr<ABI::Windows::Foundation::Metadata::IApiInformationStatics> api;
+    CHECK(SUCCEEDED(factory.As(&api)));
+    if (!api) return 1;
+    boolean present = true;
+    CHECK(SUCCEEDED(api->IsTypePresent(HStringReference(L"Appx.Portable.NoSuchType").Get(), &present)) && !present);
+    CHECK(SUCCEEDED(api->IsTypePresent(HStringReference(L"Windows.Phone.UI.Input.HardwareButtons").Get(), &present)));
+    CHECK(SUCCEEDED(api->IsMethodPresent(HStringReference(L"Windows.System.MemoryManager").Get(),
+                                         HStringReference(L"NoSuchMethod").Get(), &present)) &&
+          !present);
+    CHECK(api->IsTypePresent(HStringReference(L"Windows.System.MemoryManager").Get(), nullptr) == E_POINTER);
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Input.TouchCapabilities").Get(), &factory)));
+    ComPtr<IInspectable> touchObject;
+    CHECK(SUCCEEDED(factory->ActivateInstance(&touchObject)));
+    ComPtr<ABI::Windows::Devices::Input::ITouchCapabilities> touch;
+    CHECK(touchObject && SUCCEEDED(touchObject.As(&touch)));
+    INT32 touchPresent = -1;
+    UINT32 contacts{};
+    CHECK(touch && SUCCEEDED(touch->get_TouchPresent(&touchPresent)) && SUCCEEDED(touch->get_Contacts(&contacts)) &&
+          (touchPresent != 0) == (contacts > 0));
     CHECK(SUCCEEDED(get(HStringReference(L"Windows.ApplicationModel.Core.CoreApplication").Get(), &factory)));
     ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplication> app;
     CHECK(SUCCEEDED(factory.As(&app)));

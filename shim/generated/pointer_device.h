@@ -34,4 +34,16 @@ struct __declspec(uuid("93c9bafc-ebcb-467e-82c6-276feae36b5a")) DefaultIPointerD
   }
 };
 }
+namespace ABI::Windows::Devices::Input {
+struct __declspec(uuid("20dd55f9-13f1-46c8-9285-2c05fa3eda6f")) DefaultITouchCapabilities : public ABI::Windows::Devices::Input::ITouchCapabilities {
+  HRESULT STDMETHODCALLTYPE get_TouchPresent(INT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::ITouchCapabilities::get_TouchPresent");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_Contacts(UINT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::ITouchCapabilities::get_Contacts");
+    return E_NOTIMPL;
+  }
+};
+}
 #pragma warning(pop)
