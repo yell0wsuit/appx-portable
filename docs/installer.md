@@ -51,11 +51,16 @@ Use `build\windows-x64` for an x64 game. From a repository checkout, the install
 
 ## macOS / Wine (experimental)
 
-[Cross-compile](building.md#macos-cross-compilation), then install and launch:
+[Cross-compile](building.md#macos-cross-compilation) with the preset matching the game's architecture, build the [Wine graphics stack](building.md#wine-graphics-macos) into the same folder, then install and launch:
 
 ```sh
+scripts/build-wined3d.sh
 python3 installappx.py '/path/to/game.appxbundle' --build build/macos-x86
 '/path/to/Example.Game/00_click2startme.sh'
 ```
+
+Use `--build build/macos-x64` for an x64 game. Without the graphics stack, most games render black under Wine on macOS.
+
+Games that play audio or video through Media Foundation need Wine's GStreamer backend, which loads the GStreamer runtime from `/Library/Frameworks/GStreamer.framework`. Install the universal runtime `.pkg` from [gstreamer.freedesktop.org](https://gstreamer.freedesktop.org/download/), using the 1.28 series for Wine 11.18. The first launch after installing it is slow while GStreamer builds its plugin cache.
 
 The launcher uses `wine` from your `PATH`, or Wine Devel in `~/Applications`; set `WINE` to use another, and `WINEPREFIX` for a separate prefix. Wine launches always write a log.

@@ -53,18 +53,33 @@ Install CMake, Ninja, LLVM, LLD, and xwin. With Homebrew:
 brew install cmake ninja llvm lld xwin
 ```
 
-From the repository root, download the Windows SDK and CRT, then build:
+From the repository root, download the Windows SDK and CRT for both architectures, then build:
 
 ```sh
-xwin --accept-license --arch x86 splat --output .sdk
+xwin --accept-license --arch x86,x86_64 splat --output .sdk
 cmake --preset macos-x86
 cmake --build --preset macos-x86
 python3 -m unittest discover -s tests/python
 ```
 
-The xwin command accepts Microsoft's SDK license. Outputs are in `build/macos-x86`; these are Windows binaries and require Wine to run. Gameplay under Wine remains experimental.
+Use the `macos-x64` preset the same way for x64 games. The xwin command accepts Microsoft's SDK license. Outputs are in `build/macos-x86` or `build/macos-x64`; these are Windows binaries and require Wine to run. Gameplay under Wine remains experimental.
 
 The toolchain defaults to LLVM in `/opt/homebrew/opt/llvm` and SDK files in `.sdk`. Set `LLVM_ROOT` and `XWIN_ROOT` if yours are elsewhere. See the [Wine setup instructions](installer.md#macos--wine-experimental) to launch.
+
+### Wine graphics (macOS)
+
+macOS stops at OpenGL 4.1, so Wine's WineD3D caps every Direct3D 11 device at feature level 9_3, even for games that ask for 11_x. At 9_x, WineD3D runs only legacy shader code that Wine's compiler never emits, and the GL backend never receives the game's D3D11 constants for it, so games render black. [`wine/wined3d.patch`](../wine/wined3d.patch), taken from ctr2-uwp-shim, instead runs the SM4 code and supplies OpenGL integer-conversion fallbacks for macOS.
+
+Build the matched D3D11/DXGI/WineD3D stack with:
+
+```sh
+brew install bison llvm lld
+scripts/build-wined3d.sh
+```
+
+The script downloads checksum-pinned Wine 11.18 source into `local/wine-src`, applies the patch, and builds `d3d11.dll`, `dxgi.dll`, and `wined3d.dll` for both architectures into `build/macos-x86` and `build/macos-x64`. Pass `x86` or `x64` to build one, and a folder after it to build elsewhere. Each folder gets a `wine-graphics.json` recording the DLLs' SHA-256 hashes. The first build takes a few minutes and uses Rosetta for the x86_64 build tools.
+
+`installappx.py --build` stages the stack beside the game when it installs under Wine and the folder has `wine-graphics.json`, refusing DLLs that do not match it. The Wine launcher loads the three DLLs as native overrides whenever they are beside the game; delete them to use Wine's own. The source pin identifies the stack being built, not the Wine version you must install; it was tested on Wine 11.18.
 
 ## Development tools
 

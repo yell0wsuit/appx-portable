@@ -29,4 +29,6 @@ Use `--check` to inspect without writing. The patch accepts only this package's 
 
 Launch `RFRXAML.exe` in the staged folder. Verified: portable startup, world-map rendering, mouse entry into a level, keyboard controls, drag scrolling, and maximize/restore. Keyboard and dragging were also confirmed during interactive testing. Level completion, touch input, and save restoration are unverified. Online services remain unavailable.
 
+Under Wine on macOS (Wine Devel 11.18), a `macos-x64` build with the [Wine graphics stack](../../docs/building.md#wine-graphics-macos) and the GStreamer runtime ([macOS / Wine](../../docs/installer.md#macos--wine-experimental)) reaches the title screen. Without the graphics stack it renders black, and without GStreamer its sound effects fail to load and rendering stops. Input and gameplay under Wine are unverified.
+
 To undo the caption patch, run it again with `--restore` while the game is closed; it removes only the file this patch added.
