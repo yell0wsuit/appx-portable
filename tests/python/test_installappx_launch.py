@@ -177,6 +177,33 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(pathlib.Path(folder).resolve(), self.game.resolve())
         self.assertEqual(arguments, "Game.exe --log --unlock-trial")
 
+    def test_sh_launcher_loads_the_staged_graphics_stack(self):
+        if not BASH:
+            self.skipTest("needs bash on a POSIX host")
+        fake = self.game / "fake-wine"
+        fake.write_text(
+            '#!/bin/sh\n[ "$1" = reg ] && exit 0\necho "$WINEDLLOVERRIDES" > overrides.txt\n'
+        )
+        fake.chmod(0o755)
+        path = installer.write_launcher(self.game, "Game.exe", windows=False)
+
+        def overrides():
+            result = subprocess.run(
+                [BASH, str(path)],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "WINE": str(fake), "WINEDLLOVERRIDES": "mine=b"},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return (self.game / "overrides.txt").read_text().strip()
+
+        self.assertNotIn("wined3d", overrides())
+        for name in installer.WINE_GRAPHICS:
+            (self.game / name).write_bytes(b"")
+        text = overrides()
+        self.assertIn(";d3d11,dxgi,wined3d=n;", text)
+        self.assertTrue(text.endswith(";mine=b"), text)
+
 
 if __name__ == "__main__":
     unittest.main()

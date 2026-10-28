@@ -504,6 +504,10 @@ def download_vclibs(dependency: str, game: Path, architecture: str) -> None:
 
 # System DLLs games import from their folder; each loads appxportable.dll.
 PROXIES = ("d3dcompiler_47.dll", "XAudio2_8.dll", "DWrite.dll")
+# The patched Wine graphics stack from scripts/build-wined3d.sh, with the
+# manifest naming the hashes of DLLs built together.
+WINE_GRAPHICS = ("d3d11.dll", "dxgi.dll", "wined3d.dll")
+WINE_GRAPHICS_MANIFEST = "wine-graphics.json"
 
 
 def replace_file(source: Path, target: Path) -> None:
@@ -520,10 +524,28 @@ def replace_file(source: Path, target: Path) -> None:
             os.unlink(temporary)
 
 
+def check_wine_graphics(build: Path) -> None:
+    """Refuse a Wine graphics stack whose DLLs were not built together."""
+    path = build / WINE_GRAPHICS_MANIFEST
+    try:
+        hashes = json.loads(path.read_text())["sha256"]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise InstallError(f"Unreadable {path}: {error}") from error
+    for name in WINE_GRAPHICS:
+        if not (build / name).is_file():
+            raise InstallError(f"Build output missing: {build / name}")
+        if hashlib.sha256((build / name).read_bytes()).hexdigest() != hashes.get(name):
+            raise InstallError(
+                f"{build / name} does not match {path}; rerun scripts/build-wined3d.sh."
+            )
+
+
 def stage_runtime(
-    build: Path, game: Path, architecture: str, managed: bool
+    build: Path, game: Path, architecture: str, managed: bool, wine: bool = False
 ) -> List[str]:
-    """Copy the shim, the proxies and, for managed games, appx-host.exe into game."""
+    """Copy the shim, the proxies and, for managed games, appx-host.exe into game.
+
+    Under Wine, a build's patched graphics stack goes beside them too."""
     if managed and architecture == "x64":
         raise InstallError(
             "Managed x64 games are not supported; managed hosting is x86 only."
@@ -534,6 +556,10 @@ def stage_runtime(
         names.append("XAudio2_9.dll")
     if managed:
         names.append("appx-host.exe")
+    graphics = wine and (build / WINE_GRAPHICS_MANIFEST).is_file()
+    if graphics:
+        check_wine_graphics(build)
+        names.extend(WINE_GRAPHICS)
     for name in names:
         if not (build / name).is_file():
             raise InstallError(f"Build output missing: {build / name}")
@@ -542,6 +568,8 @@ def stage_runtime(
             raise InstallError(
                 f"{build / name} is {actual}, but the game is {architecture}."
             )
+    if graphics:
+        names.append(WINE_GRAPHICS_MANIFEST)
     for name in names:
         replace_file(build / name, game / name)
     # The WebView2 static loader's redistribution notice travels with the DLL.
@@ -921,7 +949,11 @@ flags=(--log "$@")
 export WINEDEBUG=${{WINEDEBUG:--all}}
 export MVK_CONFIG_LOG_LEVEL=${{MVK_CONFIG_LOG_LEVEL:-0}}
 # The proxies load the shim; the VC runtimes are the package's own (VCLibs 110, 120, 140).
-export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8,xaudio2_9,dwrite=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n${{WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}}"
+# The patched graphics stack from scripts/build-wined3d.sh replaces Wine's
+# when installed; delete its three DLLs to use Wine's own.
+graphics=
+[[ -f d3d11.dll && -f dxgi.dll && -f wined3d.dll ]] && graphics=';d3d11,dxgi,wined3d=n'
+export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8,xaudio2_9,dwrite=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n$graphics${{WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}}"
 wine=${{WINE:-$(command -v wine || echo "$HOME/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine")}}
 [[ -x "$wine" ]] || {{ echo 'Install Wine, or set WINE to your Wine executable.' >&2; exit 1; }}
 # A crash otherwise opens Wine's crash dialog, which keeps the process alive
@@ -1157,7 +1189,13 @@ def add_missing_vclibs(
 def stage_dlls(args, game: Path, architecture: str, managed: bool) -> Optional[str]:
     """Copy the runtime from --build or the release; returns the release tag used."""
     if args.build:
-        stage_runtime(absolute(args.build), game, architecture, managed)
+        stage_runtime(
+            absolute(args.build),
+            game,
+            architecture,
+            managed,
+            wine=sys.platform != "win32",
+        )
         return args.release
     tag = resolve_release(args.release)
     print(f"Downloading Appx Portable {tag} ({architecture})")
