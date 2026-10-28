@@ -5,7 +5,9 @@
 #include <windows.foundation.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
+#include <robuffer.h>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <string>
 using namespace Microsoft::WRL;
@@ -68,6 +70,32 @@ HRESULT WaitForOperation(IInspectable* operation) {
     } while (GetTickCount64() < deadline);
     return status == ABI::Windows::Foundation::AsyncStatus::Completed ? S_OK : E_FAIL;
 }
+// A test-owned buffer: Wine has no Windows.Storage.Streams.Buffer to create one.
+class TestBuffer final : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>, ABI::Windows::Storage::Streams::IBuffer,
+                                             ::Windows::Storage::Streams::IBufferByteAccess> {
+    InspectableClass(L"Windows.Storage.Streams.Buffer", BaseTrust);
+    byte bytes_[64]{};
+    UINT32 length_ = 0;
+
+public:
+    HRESULT STDMETHODCALLTYPE get_Capacity(UINT32* value) override {
+        *value = sizeof(bytes_);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Length(UINT32* value) override {
+        *value = length_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_Length(UINT32 value) override {
+        if (value > sizeof(bytes_)) return E_INVALIDARG;
+        length_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE Buffer(byte** value) override {
+        *value = bytes_;
+        return S_OK;
+    }
+};
 bool CheckPackagedFileUri(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**)) {
     // Native audio engines open music through StorageFile, using ms-appx URIs.
     // Exercise the factory registration and a real asynchronous stream open.
@@ -106,7 +134,26 @@ bool CheckPackagedFileUri(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**)) {
     ComPtr<ABI::Windows::Storage::Streams::IRandomAccessStream> access;
     if (FAILED(opening->GetResults(&stream)) || FAILED(stream.As(&access))) return false;
     UINT64 size = 0;
-    return SUCCEEDED(access->get_Size(&size)) && size == sizeof(payload) - 1;
+    if (FAILED(access->get_Size(&size)) || size != sizeof(payload) - 1) return false;
+    // The bytes come back through ReadAsync, from the position Seek sets.
+    ComPtr<ABI::Windows::Storage::Streams::IInputStream> input;
+    auto buffer = Make<TestBuffer>();
+    ComPtr<ABI::Windows::Foundation::IAsyncOperationWithProgress<ABI::Windows::Storage::Streams::IBuffer*, UINT32>> read;
+    ComPtr<ABI::Windows::Storage::Streams::IBuffer> filled;
+    UINT32 length = 0;
+    byte* bytes = nullptr;
+    ComPtr<::Windows::Storage::Streams::IBufferByteAccess> access2;
+    if (FAILED(access->Seek(9)) || FAILED(stream.As(&input)) ||
+        FAILED(input->ReadAsync(buffer.Get(), 32, ABI::Windows::Storage::Streams::InputStreamOptions_None, &read)) ||
+        FAILED(WaitForOperation(read.Get())) || FAILED(read->GetResults(&filled)) ||
+        FAILED(filled->get_Length(&length)) || FAILED(filled.As(&access2)) || FAILED(access2->Buffer(&bytes)) ||
+        length != sizeof(payload) - 1 - 9 || memcmp(bytes, payload + 9, length) != 0)
+        return false;
+    // A missing file completes the lookup with an error, as on Windows.
+    ComPtr<__FIAsyncOperation_1_Windows__CStorage__CStorageFile> missing;
+    const auto absent = (ExeDirectory() / L"storage-uri-test" / L"absent.bin").wstring();
+    return SUCCEEDED(files->GetFileFromPathAsync(HStringReference(absent.c_str()).Get(), &missing)) &&
+           FAILED(WaitForOperation(missing.Get()));
 }
 // settings["lastArticle"] is an ApplicationDataCompositeValue {Title: "mind", Index: 7}.
 static int CheckComposite(ABI::Windows::Foundation::Collections::IMap<HSTRING, IInspectable*>* map, int code) {

@@ -410,7 +410,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE
     GetFileFromPathAsync(HSTRING path, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
-        return real_ ? real_->GetFileFromPathAsync(path, operation) : E_NOTIMPL;
+        return real_ ? real_->GetFileFromPathAsync(path, operation) : PathFileAsync(path, operation);
     }
     HRESULT STDMETHODCALLTYPE
     GetFileFromApplicationUriAsync(ABI::Windows::Foundation::IUriRuntimeClass* uri,

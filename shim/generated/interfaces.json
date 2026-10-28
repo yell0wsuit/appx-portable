@@ -169,6 +169,7 @@
       "ABI::Windows::Storage::IApplicationData",
       "ABI::Windows::Storage::IStorageFolder",
       "ABI::Windows::Storage::IStorageItem",
+      "ABI::Windows::Storage::IStorageFile",
       "ABI::Windows::Storage::IApplicationDataContainer"
     ]
   },
