@@ -77,9 +77,9 @@ brew install bison llvm lld
 scripts/build-wined3d.sh
 ```
 
-The script downloads checksum-pinned Wine 11.18 source into `local/wine-src`, applies the patch, and builds `d3d11.dll`, `dxgi.dll`, and `wined3d.dll` for both architectures into `build/macos-x86` and `build/macos-x64`. Pass `x86` or `x64` to build one, and a folder after it to build elsewhere. Each folder gets a `wine-graphics.json` recording the DLLs' SHA-256 hashes. The first build takes a few minutes and uses Rosetta for the x86_64 build tools.
+The script runs on macOS or x86_64 Linux (`apt install bison flex clang lld llvm`). It downloads checksum-pinned Wine 11.18 source into `local/wine-src`, applies the patch, and builds `d3d11.dll`, `dxgi.dll`, and `wined3d.dll` for both architectures into `build/macos-x86` and `build/macos-x64`. Pass `x86` or `x64` to build one, and a folder after it to build elsewhere. Each folder gets a `wine-graphics.json` recording the DLLs' SHA-256 hashes. The first build takes a few minutes and uses Rosetta for the x86_64 build tools. The [Wine graphics workflow](../.github/workflows/wine-graphics.yml) builds both on Linux for pull requests that change the patch or script, and each release publishes them as `appx-portable-<tag>-wine-<arch>.zip`.
 
-`installappx.py --build` stages the stack beside the game when it installs under Wine and the folder has `wine-graphics.json`, refusing DLLs that do not match it. The Wine launcher loads the three DLLs as native overrides whenever they are beside the game; delete them to use Wine's own. The source pin identifies the stack being built, not the Wine version you must install; it was tested on Wine 11.18.
+`installappx.py` stages the stack beside the game when it installs under Wine: from the release, or from a `--build` folder that has `wine-graphics.json`, refusing DLLs that do not match it. The Wine launcher loads the three DLLs as native overrides whenever they are beside the game; delete them to use Wine's own. The source pin identifies the stack being built, not the Wine version you must install; it was tested on Wine 11.18.
 
 ## Development tools
 

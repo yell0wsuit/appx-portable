@@ -44,7 +44,7 @@ For more tested games and the Store package IDs, please see [tested games](docs/
 
 - **Windows:** managed XAML games need Windows 10 version 1903 or later and the .NET Framework 4.x.
 - **Python 3.8 or later**, for the installer and the game patches; see [installing Python](docs/installer.md#python). [Manual installation](docs/manual-install.md) needs no Python.
-- **macOS / Wine (experimental):** Wine and `python3`.
+- **macOS / Wine (experimental):** `python3`. The installer offers to set up Wine Devel, Rosetta 2 and GStreamer; see [macOS / Wine](docs/installer.md#macos--wine-experimental).
 
 ## Quickstart
 

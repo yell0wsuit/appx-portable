@@ -51,16 +51,21 @@ Use `build\windows-x64` for an x64 game. From a repository checkout, the install
 
 ## macOS / Wine (experimental)
 
-[Cross-compile](building.md#macos-cross-compilation) with the preset matching the game's architecture, build the [Wine graphics stack](building.md#wine-graphics-macos) into the same folder, then install and launch:
+Run the installer with the package, then the launcher it writes:
 
 ```sh
-scripts/build-wined3d.sh
-python3 installappx.py '/path/to/game.appxbundle' --build build/macos-x86
+python3 installappx.py '/path/to/game.appxbundle'
 '/path/to/Example.Game/00_click2startme.sh'
 ```
 
-Use `--build build/macos-x64` for an x64 game. Without the graphics stack, most games render black under Wine on macOS.
+On macOS the installer also sets up what Wine needs, when it is missing:
 
-Games that play audio or video through Media Foundation need Wine's GStreamer backend, which loads the GStreamer runtime from `/Library/Frameworks/GStreamer.framework`. Install the universal runtime `.pkg` from [gstreamer.freedesktop.org](https://gstreamer.freedesktop.org/download/), using the 1.28 series for Wine 11.18. The first launch after installing it is slow while GStreamer builds its plugin cache.
+- **Wine Devel** (Gcenx's 11.18 build, about 190 MB), downloaded into `~/Applications` after checking its SHA-256. This needs no administrator password, so `--yes` installs it too.
+- **Rosetta 2**, on Apple silicon, to run Wine's Intel code.
+- **GStreamer** 1.28, which Wine needs for games that play audio or video through Media Foundation. The installer checks the pinned runtime `.pkg` and installs it into `/Library/Frameworks` with `sudo installer`. The first launch after installing it is slow while GStreamer builds its plugin cache.
+
+Rosetta 2 and GStreamer ask for your administrator password, so the installer asks before either, and `--yes` only prints how to install them.
+
+The release includes a [patched Wine graphics stack](building.md#wine-graphics-macos) beside the DLLs, which the installer adds under Wine; without it most games render black on macOS. With a local build, [cross-compile](building.md#macos-cross-compilation) with the preset matching the game's architecture, run `scripts/build-wined3d.sh`, and pass `--build build/macos-x86` or `--build build/macos-x64`.
 
 The launcher uses `wine` from your `PATH`, or Wine Devel in `~/Applications`; set `WINE` to use another, and `WINEPREFIX` for a separate prefix. Wine launches always write a log.
