@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import hashlib
 import io
+import os
 import pathlib
 import tarfile
 import tempfile
@@ -98,7 +99,8 @@ class MacOSDependencyTests(unittest.TestCase):
 
     def test_present_dependencies_are_left_alone(self):
         (self.base / "GStreamer.framework").mkdir()
-        wine = self.base / "wine"
+        # shutil.which only finds a PATHEXT name on Windows, where CI runs this.
+        wine = self.base / ("wine.exe" if os.name == "nt" else "wine")
         wine.write_text("#!/bin/sh\n")
         wine.chmod(0o755)
         with mock.patch.object(installer, "fetch") as fetch:
