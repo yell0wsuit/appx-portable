@@ -258,4 +258,37 @@ void InstallActivationHook() noexcept {
     PatchGameModules(true);
     Log("INFO", "activation hook: import tables of game modules");
 }
+// .NET Native executables are forwarding stubs. Load their companion DLL only
+// after the shim, then patch its imports before calling the native entry point.
+// In particular, x64's import-table hook must cover SharedLibrary.dll, which
+// was not loaded when the shim attached to the launcher.
+extern "C" int __cdecl ShimRunNativeApplication() noexcept {
+    try {
+        auto hr = RoInitialize(RO_INIT_SINGLETHREADED);
+        if (FAILED(hr)) return hr;
+        SetNativeXamlMode();
+        const auto& package = CurrentPackage();
+        std::filesystem::path relative(package.executable);
+        if (relative.empty() || relative.has_root_path()) return E_INVALIDARG;
+        for (const auto& part : relative)
+            if (part == L"..") return E_INVALIDARG;
+        relative.replace_extension(L".dll");
+        auto path = package.directory / relative;
+        auto module = LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+        if (!module) {
+            hr = HRESULT_FROM_WIN32(GetLastError());
+            Log("FAIL", ".NET Native: loading %ls hr=%08lx", path.c_str(), hr);
+            return hr;
+        }
+        auto entry = reinterpret_cast<int(__cdecl*)()>(GetProcAddress(module, "RHBinder__ShimExeMain"));
+        if (!entry) return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+        PatchGameModules(true);
+        Log("INFO", ".NET Native: starting %ls on STA", relative.c_str());
+        return entry();
+    } catch (const std::bad_alloc&) {
+        return E_OUTOFMEMORY;
+    } catch (...) {
+        return E_FAIL;
+    }
+}
 }

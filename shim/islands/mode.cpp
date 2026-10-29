@@ -3,10 +3,12 @@
 #include <fstream>
 #include <atomic>
 static std::atomic<bool> managedCoreWindow{false};
+static std::atomic<bool> nativeXaml{false};
 // The managed launcher selects this before invoking an MTA game entry point.
 // Keep CLR detection separate: CoreWindow games still need activation hooks.
 extern "C" void __cdecl ShimSetManagedCoreWindowMode() noexcept { managedCoreWindow = true; }
 namespace appx {
+void SetNativeXamlMode() noexcept { nativeXaml = true; }
 bool ManagedMode() noexcept {
     static const bool managed = [] {
         try {
@@ -30,5 +32,5 @@ bool ManagedMode() noexcept {
     }();
     return managed;
 }
-bool IslandsMode() noexcept { return ManagedMode() && !managedCoreWindow.load(); }
+bool IslandsMode() noexcept { return nativeXaml.load() || (ManagedMode() && !managedCoreWindow.load()); }
 }

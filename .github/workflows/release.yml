@@ -112,6 +112,7 @@ jobs:
                     "$build/XAudio2_8.dll"
                     "$build/XAudio2_9.dll"
                     "$build/DWrite.dll"
+                      "$build/appx-native-host.exe"
                   )
                   # The x64 release supports native UWP games; CLR hosting is x86 only.
                   if ($env:ARCHITECTURE -eq 'x86') { $assets += "$build/appx-host.exe" }

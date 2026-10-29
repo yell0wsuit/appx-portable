@@ -112,6 +112,13 @@ int wmain(int argc, wchar_t** argv) {
         CHECK(SUCCEEDED(window->Activate()));
         boolean fullscreen = false;
         CHECK(SUCCEEDED(view3->get_IsFullScreenMode(&fullscreen)));
+        if (!fullscreen) {
+            CHECK(SUCCEEDED(view3->SetPreferredMinSize({640, 480})));
+            MINMAXINFO limits{};
+            SendMessageW(host, WM_GETMINMAXINFO, 0, reinterpret_cast<LPARAM>(&limits));
+            CHECK(limits.ptMinTrackSize.x >= 640 && limits.ptMinTrackSize.y >= 480);
+            CHECK(SUCCEEDED(view3->SetPreferredMinSize({0, 0})));
+        }
         if (action == L"write") {
             CHECK(SUCCEEDED(view3->ExitFullScreenMode()));
             ShowWindow(host, SW_RESTORE);

@@ -46,6 +46,16 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
   add_dependencies(appxportable appxportable_version)
   target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
   include(cmake/webview2.cmake)
+  add_executable(appx-native-host WIN32 host/native.cpp host/managed.manifest)
+  target_link_libraries(appx-native-host PRIVATE appxportable)
+  add_library(nativeappfixture SHARED tests/native_application.cpp tests/native_application.def)
+  target_link_libraries(nativeappfixture PRIVATE runtimeobject ole32)
+  add_test(NAME native_application_host COMMAND "${CMAKE_COMMAND}"
+    "-DTEST_DLL=$<TARGET_FILE:nativeappfixture>" "-DHOST=$<TARGET_FILE:appx-native-host>"
+    "-DSHIM=$<TARGET_FILE:appxportable>" "-DARCH=${APPX_HOST_ARCH}"
+    "-DFIXTURE=${CMAKE_BINARY_DIR}/native-application-fixture"
+    -P "${CMAKE_SOURCE_DIR}/tests/native_application.cmake")
+  set_tests_properties(native_application_host PROPERTIES TIMEOUT 30)
   # One proxy per system DLL a game imports from its folder (see scripts/gen_proxy.py).
   set(APPX_PROXIES d3dcompiler_47 XAudio2_8 XAudio2_9 DWrite)
   foreach(proxy IN LISTS APPX_PROXIES)

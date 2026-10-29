@@ -45,6 +45,9 @@ int main() {
     if (FAILED(view2->get_DesiredBoundsMode(&mode)) || mode != ApplicationViewBoundsMode_UseCoreWindow) return 11;
     ComPtr<IApplicationView3> view3;
     if (FAILED(view.As(&view3))) return 12;
+    if (FAILED(view3->SetPreferredMinSize({640, 480})) || view3->SetPreferredMinSize({-1, 480}) != E_INVALIDARG ||
+        FAILED(view3->SetPreferredMinSize({0, 0})))
+        return 23;
     success = true;
     if (FAILED(view3->TryEnterFullScreenMode(&success)) || success) return 13;
     if (FAILED(view3->get_IsFullScreenMode(&fullscreen)) || fullscreen || FAILED(view3->ExitFullScreenMode()))

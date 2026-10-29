@@ -139,6 +139,12 @@ public:
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE ExitFullScreenMode() override { return HostWindow() ? SetHostFullscreen(false) : S_OK; }
+    HRESULT STDMETHODCALLTYPE SetPreferredMinSize(ABI::Windows::Foundation::Size size) override {
+        if (!std::isfinite(size.Width) || !std::isfinite(size.Height) || size.Width < 0 || size.Height < 0)
+            return E_INVALIDARG;
+        SetHostMinimumSize(size.Width, size.Height);
+        return S_OK;
+    }
 };
 class ViewFactory final
     : public Factory<DefaultIApplicationViewStatics, DefaultIApplicationViewStatics2, IApplicationViewStatics3> {
