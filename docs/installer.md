@@ -22,7 +22,7 @@ Every question has a command-line option, so an install can run without any prom
 | Option                           | Does                                                       |
 | -------------------------------- | ---------------------------------------------------------- |
 | `--dest <folder>`                | Install into this folder                                   |
-| `--vclibs <.appx or folder>`     | A VCLibs package; repeat it for several                    |
+| `--dependencies <.appx or folder>` | A VCLibs or .NET Native dependency; repeat it for several |
 | `--store none\|trial\|iap\|both` | Store overrides to turn on                                 |
 | `--launcher`, `--no-launcher`    | Write the launcher or not (the default is to write it)     |
 | `--build <folder>`               | Use these DLLs instead of downloading a release            |
@@ -38,6 +38,8 @@ Run it again on the same folder to update after a new release: it replaces the g
 ## Without the launcher
 
 Double-click the game's executable itself (`appx-host.exe` for managed games; the `.desktop.exe` copy on Windows 8/8.1). The Store options in `appx-portable.ini` apply either way.
+
+.NET Native XAML games such as Deus Ex GO start through `appx-native-host.exe` on Windows. The installer detects the forwarding executable and stages this launcher automatically. It uses dependencies supplied with `--dependencies`, matching installed Windows packages, or the [.NET Native dependency release](https://github.com/yell0wsuit/vclibs-appx/releases/tag/v2), in that order. Downloads are checked against pinned SHA-256 hashes. The supported packages are .NET Native Framework 1.3 and Runtime 1.4.
 
 ## Use your own build
 

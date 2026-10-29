@@ -143,6 +143,16 @@ def architecture_of(path: Path) -> str:
     return ARCHITECTURES[machine]
 
 
+def native_compiled_application(executable: Path) -> bool:
+    """A .NET Native forwarding EXE imports its companion native assembly."""
+    companion = executable.with_suffix(".dll")
+    return (
+        companion.name.lower() in pe_imports(executable)
+        and companion.is_file()
+        and bool({"sharedlibrary.dll", "mrt100_app.dll"} & set(pe_imports(companion)))
+    )
+
+
 # Package manifest
 
 
@@ -540,7 +550,7 @@ def add_vclibs(dependency: str, source: Path, game: Path, architecture: str) -> 
 def download_vclibs(dependency: str, game: Path, architecture: str) -> None:
     """Add one dependency's DLLs from its pinned package in VCLIBS_RELEASE."""
     name, sha256 = VCLIBS_PACKAGES[(dependency, architecture)]
-    data = fetch(VCLIBS_RELEASE + name, "pass it with --vclibs")
+    data = fetch(VCLIBS_RELEASE + name, "pass it with --dependencies")
     if hashlib.sha256(data).hexdigest() != sha256:
         raise InstallError(
             f"{VCLIBS_RELEASE + name} does not have the expected SHA-256 {sha256}."
@@ -549,6 +559,142 @@ def download_vclibs(dependency: str, game: Path, architecture: str) -> None:
         package = Path(temporary) / name
         package.write_bytes(data)
         add_vclibs(dependency, package, game, architecture)
+
+
+# .NET Native frameworks, supplied by the player or an installed package.
+NATIVE_FRAMEWORKS = {
+    "Microsoft.NET.Native.Framework.1.3": ("SharedLibrary.dll",),
+    "Microsoft.NET.Native.Runtime.1.4": ("mrt100_app.dll", "clrcompression.dll"),
+}
+NATIVE_RELEASE = "https://github.com/yell0wsuit/vclibs-appx/releases/download/v2/"
+NATIVE_PACKAGES = {
+    ("Microsoft.NET.Native.Framework.1.3", "x86"): (
+        "Microsoft.NET.Native.Framework.1.3_1.3.24211.0_x86__8wekyb3d8bbwe.appx",
+        "03360086ecb34c84f4277fb273523c8d9a9229ea8506952e62267d1b1f0102ef",
+    ),
+    ("Microsoft.NET.Native.Framework.1.3", "x64"): (
+        "Microsoft.NET.Native.Framework.1.3_1.3.24211.0_x64__8wekyb3d8bbwe.appx",
+        "f956d085df3132aa3df3048acef088836c1fb0f2b47a1af3d08cfc3f56ffc849",
+    ),
+    ("Microsoft.NET.Native.Runtime.1.4", "x86"): (
+        "Microsoft.NET.Native.Runtime.1.4_1.4.24201.0_x86__8wekyb3d8bbwe.appx",
+        "39b2cb3559c17bd50b2da905d2c16d95155b6ae43f70299f74a0ea94ba6fb35f",
+    ),
+    ("Microsoft.NET.Native.Runtime.1.4", "x64"): (
+        "Microsoft.NET.Native.Runtime.1.4_1.4.24201.0_x64__8wekyb3d8bbwe.appx",
+        "b7abb5b5dedd4d6c2d2a635dbff39656a0edcaec7d216debaaea5914c9d454f4",
+    ),
+}
+
+
+def installed_native_frameworks() -> List[Path]:
+    """Ask Windows for readable framework folders belonging to this user."""
+    if sys.platform != "win32":
+        return []
+    script = (
+        "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding; "
+        "Get-AppxPackage -Name 'Microsoft.NET.Native.*' | "
+        "Select-Object -ExpandProperty InstallLocation | ConvertTo-Json -Compress"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=30,
+            check=True,
+        )
+        locations = json.loads(result.stdout) if result.stdout.strip() else []
+        return [Path(p) for p in ([locations] if isinstance(locations, str) else locations)]
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return []
+
+
+def add_native_framework(
+    dependency: str, source: Path, game: Path, architecture: str
+) -> None:
+    """Add a matching .NET Native framework, preserving package-owned DLLs."""
+    names = NATIVE_FRAMEWORKS[dependency]
+    with tempfile.TemporaryDirectory(prefix="installappx-native-") as temporary:
+        folder = source
+        if source.is_file():
+            folder = Path(temporary)
+            try:
+                with zipfile.ZipFile(source) as archive:
+                    (folder / "AppxManifest.xml").write_bytes(
+                        archive.read("AppxManifest.xml")
+                    )
+                    wanted = {name.lower(): name for name in names}
+                    for entry in archive.namelist():
+                        if entry.lower() in wanted:
+                            (folder / wanted[entry.lower()]).write_bytes(
+                                archive.read(entry)
+                            )
+            except (zipfile.BadZipFile, KeyError) as error:
+                raise InstallError(f"Not a framework .appx: {source}") from error
+        try:
+            root = ElementTree.fromstring((folder / "AppxManifest.xml").read_bytes())
+            identity = next(e for e in root.iter() if local_name(e) == "Identity")
+            if (
+                identity.get("Name") != dependency
+                or identity.get("ProcessorArchitecture", "").lower() != architecture
+            ):
+                raise InstallError(f"{source} is not {dependency} ({architecture}).")
+        except (OSError, ElementTree.ParseError, StopIteration) as error:
+            raise InstallError(f"Unreadable framework manifest: {source}") from error
+        for name in names:
+            path = folder / name
+            if not path.is_file() or architecture_of(path) != architecture:
+                raise InstallError(f"{source} lacks {name} ({architecture}).")
+        for name in names:
+            if not (game / name).is_file():
+                replace_file(folder / name, game / name)
+
+
+def download_native_framework(dependency: str, game: Path, architecture: str) -> None:
+    """Download a pinned .NET Native package and verify it before staging."""
+    name, expected = NATIVE_PACKAGES[(dependency, architecture)]
+    url = NATIVE_RELEASE + name
+    data = fetch(url, "pass it with --dependencies")
+    if hashlib.sha256(data).hexdigest() != expected:
+        raise InstallError(f"{url} does not have the expected SHA-256 {expected}.")
+    with tempfile.TemporaryDirectory(prefix="installappx-native-download-") as temporary:
+        package = Path(temporary) / name
+        package.write_bytes(data)
+        add_native_framework(dependency, package, game, architecture)
+
+
+def add_native_frameworks(
+    manifest: Manifest, game: Path, architecture: str, sources: List[str]
+) -> None:
+    """Stage the native runtime dependencies before writing a usable launcher."""
+    missing = [
+        dependency
+        for dependency in manifest.dependencies
+        if dependency in NATIVE_FRAMEWORKS
+        and not all((game / name).is_file() for name in NATIVE_FRAMEWORKS[dependency])
+    ]
+    if not missing:
+        return
+    candidates = [absolute(source) for source in sources] + installed_native_frameworks()
+    for dependency in missing:
+        for candidate in candidates:
+            try:
+                add_native_framework(dependency, candidate, game, architecture)
+                print(f"Added {dependency} ({architecture}) from {candidate}")
+                break
+            except (InstallError, OSError):
+                continue
+        else:
+            print(f"Downloading {dependency} ({architecture})")
+            try:
+                download_native_framework(dependency, game, architecture)
+            except InstallError as error:
+                raise InstallError(
+                    f"{error} Missing {dependency} ({architecture})."
+                    " Pass its .appx or installed folder with --dependencies."
+                ) from error
 
 
 # Appx Portable runtime
@@ -592,9 +738,14 @@ def check_wine_graphics(build: Path) -> None:
 
 
 def stage_runtime(
-    build: Path, game: Path, architecture: str, managed: bool, wine: bool = False
+    build: Path,
+    game: Path,
+    architecture: str,
+    managed: bool,
+    wine: bool = False,
+    native_compiled: bool = False,
 ) -> List[str]:
-    """Copy the shim, the proxies and, for managed games, appx-host.exe into game.
+    """Copy the shim, proxies and the selected CLR or .NET Native host into game.
 
     Under Wine, a build's patched graphics stack goes beside them too."""
     if managed and architecture == "x64":
@@ -607,6 +758,10 @@ def stage_runtime(
         names.append("XAudio2_9.dll")
     if managed:
         names.append("appx-host.exe")
+    if native_compiled:
+        if wine:
+            raise InstallError(".NET Native XAML hosting requires Windows.")
+        names.append("appx-native-host.exe")
     graphics = wine and (build / WINE_GRAPHICS_MANIFEST).is_file()
     if graphics:
         check_wine_graphics(build)
@@ -1110,8 +1265,12 @@ def plays_media(game: Path, executable: Path) -> bool:
     return False
 
 
-def launch_executable(executable: str, managed: bool) -> str:
-    """What starts the game: appx-host.exe, beside it, for managed games."""
+def launch_executable(
+    executable: str, managed: bool, native_compiled: bool = False
+) -> str:
+    """Select the desktop CLR host, .NET Native host, or game's executable."""
+    if native_compiled:
+        return "appx-native-host.exe"
     return "appx-host.exe" if managed else executable
 
 
@@ -1387,10 +1546,10 @@ def parse_arguments(argv: List[str]):
         "--dest", help="folder to install the game in (default: beside the package)"
     )
     parser.add_argument(
-        "--vclibs",
+        "--dependencies",
         action="append",
         default=[],
-        help="VCLibs .appx or folder; repeat for several",
+        help="dependency .appx or folder (VCLibs or .NET Native); repeat for several",
     )
     parser.add_argument(
         "--build",
@@ -1502,9 +1661,9 @@ def try_vclibs(
 def add_missing_vclibs(
     args, ask: Callable[[str], str], manifest: Manifest, game: Path, architecture: str
 ) -> None:
-    """Add each VCLibs dependency the game lacks: --vclibs, download, then ask."""
+    """Add each VCLibs dependency the game lacks: --dependencies, download, then ask."""
     for dependency in missing_vclibs(manifest, game):
-        refused = try_vclibs(dependency, args.vclibs, game, architecture)
+        refused = try_vclibs(dependency, args.dependencies, game, architecture)
         if dependency in missing_vclibs(manifest, game):
             print(f"Downloading {dependency} ({architecture})")
             try:
@@ -1514,7 +1673,7 @@ def add_missing_vclibs(
         link = VCLIBS_DOWNLOADS[(dependency, architecture)]
         missing = f"Missing {dependency} ({architecture}). Download: {link}."
         if args.yes and dependency in missing_vclibs(manifest, game):
-            raise InstallError(" ".join(refused + [missing, "Pass it with --vclibs."]))
+            raise InstallError(" ".join(refused + [missing, "Pass it with --dependencies."]))
         while dependency in missing_vclibs(manifest, game):
             for message in refused:
                 print(message)
@@ -1525,11 +1684,16 @@ def add_missing_vclibs(
             refused = try_vclibs(dependency, [answer], game, architecture)
 
 
-def stage_dlls(args, game: Path, architecture: str, managed: bool) -> Optional[str]:
+def stage_dlls(
+    args, game: Path, architecture: str, managed: bool, native_compiled: bool = False
+) -> Optional[str]:
     """Copy the runtime from --build or the release; returns the release tag used."""
     wine = sys.platform != "win32"
     if args.build:
-        stage_runtime(absolute(args.build), game, architecture, managed, wine=wine)
+        stage_runtime(
+            absolute(args.build), game, architecture, managed,
+            wine=wine, native_compiled=native_compiled,
+        )
         return args.release
     tag = resolve_release(args.release)
     print(f"Downloading Appx Portable {tag} ({architecture})")
@@ -1540,6 +1704,7 @@ def stage_dlls(args, game: Path, architecture: str, managed: bool) -> Optional[s
             architecture,
             managed,
             wine=wine,
+            native_compiled=native_compiled,
         )
     return tag
 
@@ -1581,12 +1746,18 @@ def install(args, ask: Callable[[str], str]) -> int:
     executable = destination / manifest.executable
     architecture = architecture_of(executable)
     managed = pe_info(executable).managed
+    native_compiled = native_compiled_application(executable)
+    if native_compiled and sys.platform != "win32":
+        raise InstallError(".NET Native XAML hosting requires Windows.")
     add_missing_vclibs(args, ask, manifest, destination, architecture)
-    tag = stage_dlls(args, destination, architecture, managed)
+    add_native_frameworks(manifest, destination, architecture, args.dependencies)
+    tag = stage_dlls(args, destination, architecture, managed, native_compiled)
     if not args.no_patch:
         patch_known_game(manifest, destination, tag)
-    launch = launch_executable(manifest.executable, managed)
-    if not managed and (args.desktop_copy or needs_desktop_copy()):
+    launch = launch_executable(manifest.executable, managed, native_compiled)
+    if not managed and not native_compiled and (
+        args.desktop_copy or needs_desktop_copy()
+    ):
         launch = make_desktop_copy(destination, manifest.executable)
     write_settings(destination, choose_store(args, ask, destination))
     launcher = args.launcher

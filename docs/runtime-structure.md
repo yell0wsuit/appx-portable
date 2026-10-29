@@ -6,6 +6,8 @@ The runtime shares its app lifecycle, desktop host, storage, COM objects, and gr
 
 Architecture is separate from package generation. Build the same shared runtime for x86 or x64; import-table hooks and diagnostics use the process architecture. x86 proxies retain their inline assembly, while x64 proxies use generated MASM thunks that preserve argument registers and stack arguments. The x86 combase hotpatch is never attempted on x64.
 
+`appx-native-host.exe` hosts .NET Native XAML applications on Windows. It loads the shim before the game's companion native DLL, installs activation hooks for that DLL and its framework dependencies, and calls `RHBinder__ShimExeMain` on an STA thread. This uses XAML Islands without loading the desktop CLR. The normal `appx-host.exe` continues to host CLR assemblies.
+
 Game-specific asset workarounds belong under `patch/`. Rayman Windows 10 keeps its
 source-caption fallback in normal installations. Its alternative
 [PRI/XBF connection loader](xbf.md) has passed local Windows 11 testing and a
