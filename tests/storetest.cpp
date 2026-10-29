@@ -83,6 +83,13 @@ int main(int argc, char** argv) {
         FAILED(networkFactory.As(&network)) || network->GetInternetConnectionProfile(nullptr) != E_POINTER ||
         FAILED(network->GetInternetConnectionProfile(&profile)) || bool(profile) != stub)
         return 41;
+    // Local network facts come from Windows. Unity's .NET networking asks for
+    // host names on a worker thread and ends the game when that fails.
+    ComPtr<__FIVectorView_1_Windows__CNetworking__CHostName> hostNames;
+    ComPtr<__FIVectorView_1_Windows__CNetworking__CConnectivity__CConnectionProfile> profiles;
+    if (FAILED(network->GetHostNames(&hostNames)) || !hostNames || FAILED(network->GetConnectionProfiles(&profiles)) ||
+        !profiles)
+        return 66;
     if (stub) {
         ABI::Windows::Networking::Connectivity::NetworkConnectivityLevel level{};
         if (FAILED(profile->GetNetworkConnectivityLevel(&level)) ||
