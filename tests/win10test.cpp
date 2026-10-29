@@ -27,6 +27,16 @@ static int failures;
     } while (0)
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
+    // Ask the OS before loading the shim, whose activation hook would answer instead.
+    // Windows has its own view of an unknown namespace; Wine stubs it with E_NOTIMPL.
+    HRESULT osUnknownHr = E_NOTIMPL;
+    boolean osUnknownPresent = false;
+    {
+        ComPtr<ABI::Windows::Foundation::Metadata::IApiInformationStatics> os;
+        if (SUCCEEDED(RoGetActivationFactory(HStringReference(L"Windows.Foundation.Metadata.ApiInformation").Get(),
+                                             IID_PPV_ARGS(&os))))
+            osUnknownHr = os->IsTypePresent(HStringReference(L"Appx.Portable.NoSuchType").Get(), &osUnknownPresent);
+    }
     auto dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
@@ -45,7 +55,11 @@ int main() {
     CHECK(SUCCEEDED(factory.As(&api)));
     if (!api) return 1;
     boolean present = true;
-    CHECK(SUCCEEDED(api->IsTypePresent(HStringReference(L"Appx.Portable.NoSuchType").Get(), &present)) && !present);
+    HRESULT unknownHr = api->IsTypePresent(HStringReference(L"Appx.Portable.NoSuchType").Get(), &present);
+    if (osUnknownHr == E_NOTIMPL)
+        CHECK(SUCCEEDED(unknownHr) && !present);
+    else
+        CHECK(unknownHr == osUnknownHr && (FAILED(unknownHr) || present == osUnknownPresent));
     CHECK(SUCCEEDED(api->IsTypePresent(HStringReference(L"Windows.Phone.UI.Input.HardwareButtons").Get(), &present)));
     CHECK(SUCCEEDED(api->IsMethodPresent(HStringReference(L"Windows.System.MemoryManager").Get(),
                                          HStringReference(L"NoSuchMethod").Get(), &present)) &&
