@@ -20,7 +20,8 @@ HEADER_IIDS = {
     "IApplication": "74b861a1-7487-46a9-9a6e-c78b512726c5", "IApplicationStatics": "06499997-f7b4-45fe-b763-7577d1d3cb4a",
     "IApplicationFactory": "93bbe361-be5a-4ee3-b4a3-95118dc97a89", "IApplicationOverrides": "25f99ff7-9347-459a-9fac-b2d0e11c1a0f",
     "IApplicationInitializationCallback": "b6351c55-c284-46e4-8310-fb0967fab76f",
-    "IApplicationInitializationCallbackParams": "751b792e-5772-4488-8b87-f547faa64474"}
+    "IApplicationInitializationCallbackParams": "751b792e-5772-4488-8b87-f547faa64474",
+    "IActivatedEventArgs": "cf651713-cd08-4fd8-b697-a281b6544e2e"}
 HEADER_SLOTS = [
     "Windows.ApplicationModel.IPackageStatics::get_Current, slot 6", "Windows.ApplicationModel.IPackage::get_Id, slot 6",
     "Windows.ApplicationModel.IPackageId::get_Name, slot 6", "Windows.ApplicationModel.IPackageId::get_Architecture, slot 8",
@@ -28,9 +29,13 @@ HEADER_SLOTS = [
     "Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs::get_Arguments, slot 6",
     "Windows.UI.Xaml.IApplicationFactory::CreateInstance, slot 6", "Windows.UI.Xaml.IApplicationStatics::get_Current, slot 6",
     "Windows.UI.Xaml.IApplicationStatics::Start, slot 7", "Windows.UI.Xaml.IApplication::Exit, slot 17",
-    "Windows.UI.Xaml.IApplicationOverrides::OnLaunched, slot 7"]
-# The delegate is IUnknown-based: Invoke is its only method, at slot 3.
-HEADER_DELEGATE = 'NativeInterface(new global::System.Guid("b6351c55-c284-46e4-8310-fb0967fab76f"), false, invoke)'
+    "Windows.UI.Xaml.IApplicationOverrides::OnLaunched, slot 7", "Windows.UI.Xaml.IApplicationOverrides::OnActivated, slot 6",
+    "Windows.ApplicationModel.Activation.IActivatedEventArgs::get_Kind, slot 6",
+    "Windows.ApplicationModel.Activation.IActivatedEventArgs::get_PreviousExecutionState, slot 7",
+    "Windows.UI.Xaml.IApplication::add_Suspending, slot 13", "Windows.UI.Xaml.IApplication::remove_Suspending, slot 14"]
+# Delegates are IUnknown-based: Invoke is their only method, at slot 3.
+HEADER_DELEGATES = ['NativeInterface(new global::System.Guid("' + iid + '"), false, invoke)'
+                    for iid in ("b6351c55-c284-46e4-8310-fb0967fab76f", "23429465-e36a-40e2-b139-a4704602a6e1")]
 
 
 def main():
@@ -157,7 +162,7 @@ def main():
         text = generated.read_text(encoding="utf-8")
         missing = [name for name, iid in HEADER_IIDS.items() if 'System.Guid("' + iid + '")' not in text]
         missing += [slot for slot in HEADER_SLOTS if "// " + slot + "\n" not in text]
-        missing += [] if HEADER_DELEGATE in text else [HEADER_DELEGATE]
+        missing += [delegate for delegate in HEADER_DELEGATES if delegate not in text]
         results.append(dict(case="header-values", missing=missing, passed=not missing))
         require(not missing, "generated IIDs or slots differ from the SDK headers: " + ", ".join(missing))
         projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", generated], ["/target:library"])
@@ -197,6 +202,9 @@ def main():
         shutil.copyfile(output / "application-winrt.exe", app / application.name)
         shutil.copyfile(projection, app / "Windows.dll")
         run("application-launch", [application.name], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
+        launch = (output / "application-launch.log").read_text(errors="replace")
+        require("PASS: Suspending raised on the managed App" in launch and "UNUSED HANDLER" not in launch,
+                "Suspending must reach the subscribed handler and not the removed one")
         run("application-exception", [application.name, "throw"], cwd=app, marker="PASS: OnLaunched exception crossed the native boundary; callback released")
         unimplemented = compile_file("unimplemented.exe", [repo / "tests/winrt_projection/unimplemented.cs"], ["/r:" + windows(reference)])
         run("mark-unimplemented", [marker.name, unimplemented.name, "unimplemented-winrt.exe"], marker="flags=WindowsRuntime")

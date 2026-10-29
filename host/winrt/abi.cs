@@ -1,11 +1,26 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace AppxPortable.WinRT
 {
+    // Implemented by every generated wrapper of a native object.
+    internal interface INativeWrapper
+    {
+        NativeObject Native { get; }
+    }
+
     // Explicit ABI calls avoid the CLR's WinRT metadata/projection machinery.
     // Callers initialize their COM apartment, as the game host already does.
+    // An object argument of no selected type.
+    internal sealed class InspectableObject : INativeWrapper
+    {
+        private readonly NativeObject native;
+        internal InspectableObject(NativeObject value) { native = value; }
+        NativeObject INativeWrapper.Native { get { return native; } }
+    }
+
     internal sealed class NativeObject : SafeHandle
     {
         [DllImport("appxportable.dll", CallingConvention = CallingConvention.StdCall)]
@@ -23,10 +38,16 @@ namespace AppxPortable.WinRT
         private delegate int Invoke0(IntPtr self);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int Invoke1(IntPtr self, IntPtr argument);
+        // EventRegistrationToken is the ABI's 64-bit token, out and by value.
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int AddCall(IntPtr self, IntPtr handler, out EventRegistrationToken token);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int RemoveCall(IntPtr self, EventRegistrationToken token);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int ComposeCall(IntPtr self, IntPtr outer, out IntPtr inner, out IntPtr value);
 
         private static readonly Guid unknown = new Guid("00000000-0000-0000-c000-000000000046");
+        private static readonly Guid inspectable = new Guid("af86e2e0-b12d-4c6a-9c5a-d7aa65101e90");
         private static readonly object gate = new object();
         // IUnknown identity -> wrapper, so one native object has one managed wrapper.
         private static readonly Dictionary<IntPtr, WeakReference> wrappers = new Dictionary<IntPtr, WeakReference>();
@@ -98,6 +119,25 @@ namespace AppxPortable.WinRT
                 catch { owned.Dispose(); throw; }
             }
         }
+
+        // The native object behind a projected argument. Managed implementations of
+        // WinRT interfaces need their own native identity, which is not built yet.
+        internal static NativeObject Of(object value)
+        {
+            if (value == null) return null;
+            var wrapper = value as INativeWrapper;
+            if (wrapper == null) throw new NotSupportedException("Managed " + value.GetType().FullName + " cannot be passed to native code yet");
+            return wrapper.Native;
+        }
+
+        // An object argument: the managed object behind it, or a generic wrapper.
+        internal static object Inspectable(NativeObject value)
+        {
+            return Wrap<object>(value, inspectable, v => new InspectableObject(v));
+        }
+
+        // IInspectable::GetRuntimeClassName, slot 4.
+        internal string RuntimeClassName() { return String(4); }
 
         internal NativeObject QueryInterface(Guid iid)
         {
@@ -174,6 +214,22 @@ namespace AppxPortable.WinRT
         {
             if (argument == null) { Call(slot, IntPtr.Zero); return; }
             using (var held = new Access(argument)) Call(slot, held.Self);
+        }
+
+        internal EventRegistrationToken AddHandler(int slot, IntPtr handler)
+        {
+            using (var call = new Access(this))
+            {
+                EventRegistrationToken token;
+                Errors.Check(call.Method<AddCall>(slot)(call.Self, handler, out token));
+                return token;
+            }
+        }
+
+        internal void RemoveHandler(int slot, EventRegistrationToken token)
+        {
+            using (var call = new Access(this))
+                Errors.Check(call.Method<RemoveCall>(slot)(call.Self, token));
         }
 
         // A composable factory's CreateInstance(outer, out inner): returns the
