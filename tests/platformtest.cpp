@@ -5,9 +5,11 @@
 #include <windows.ui.input.h>
 #include <windows.foundation.diagnostics.h>
 #include <windows.globalization.h>
+#include <windows.media.devices.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
+#include <string>
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::Graphics::Display;
@@ -156,6 +158,21 @@ int main() {
         languageCount == 0) {
         puts("FAIL calendar formatting");
         return 38;
+    }
+    // FMOD's Store build asks for the render selector before it opens a device
+    // and plays nothing without one; Where's My Water then ended in its levels.
+    ComPtr<ABI::Windows::Media::Devices::IMediaDeviceStatics> media;
+    HString selector;
+    if (FAILED(get(HStringReference(L"Windows.Media.Devices.MediaDevice").Get(), &factory)) ||
+        FAILED(factory.As(&media)) || FAILED(media->GetAudioRenderSelector(selector.GetAddressOf()))) {
+        puts("FAIL audio render selector");
+        return 39;
+    }
+    std::wstring query(WindowsGetStringRawBuffer(selector.Get(), nullptr));
+    for (auto& c : query) c = towupper(c);
+    if (query.find(L"{E6327CAD-DCEC-4949-AE8A-991E976A79D2}") == std::wstring::npos) {
+        printf("FAIL audio render selector %ls\n", WindowsGetStringRawBuffer(selector.Get(), nullptr));
+        return 40;
     }
     puts("platformtest: 0 failure(s)");
     return 0;
