@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
@@ -154,13 +155,30 @@ internal static class WinrtProjectionCompleter
         {
             method.Attributes |= MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.NewSlot;
             owner.Methods.Add(method);
+            // Projection types implementing the interface need a body for it, or they fail to load.
+            foreach (TypeDefinition implementer in projection.Types.Where(t => t.Interfaces.Any(i => i.InterfaceType.FullName == owner.FullName)))
+            {
+                if (owner.HasGenericParameters) throw new NotSupportedException("Generic interface member on a projection type: " + owner.FullName);
+                var implementation = new MethodDefinition(owner.FullName + "." + method.Name, MethodAttributes.Private | MethodAttributes.Final |
+                    MethodAttributes.Virtual | MethodAttributes.HideBySig | MethodAttributes.NewSlot, method.ReturnType);
+                foreach (ParameterDefinition parameter in method.Parameters)
+                    implementation.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType));
+                implementation.Overrides.Add(method);
+                Throw(implementation, owner.FullName + "." + reference.Name);
+                implementer.Methods.Add(implementation);
+            }
             return;
         }
+        Throw(method, owner.FullName + "." + reference.Name);
+        owner.Methods.Add(method);
+    }
+
+    private static void Throw(MethodDefinition method, string name)
+    {
         ILProcessor il = method.Body.GetILProcessor();
-        il.Emit(OpCodes.Ldstr, owner.FullName + "." + reference.Name);
+        il.Emit(OpCodes.Ldstr, name);
         il.Emit(OpCodes.Newobj, notImplemented);
         il.Emit(OpCodes.Throw);
-        owner.Methods.Add(method);
     }
 
     private static int Main(string[] args)
@@ -170,8 +188,11 @@ internal static class WinrtProjectionCompleter
             if (args.Length < 4) throw new ArgumentException("complete METADATA_DIRECTORY PROJECTION_IN PROJECTION_OUT CONSUMER...");
             foreach (string path in Directory.GetFiles(args[0], "*.winmd").OrderBy(p => p, StringComparer.Ordinal))
             {
-                ModuleDefinition module = ModuleDefinition.ReadModule(path, new ReaderParameters {
-                    ApplyWindowsRuntimeProjections = false, InMemory = true });
+                ModuleDefinition module = ModuleDefinition.ReadModule(path, new ReaderParameters
+                {
+                    ApplyWindowsRuntimeProjections = false,
+                    InMemory = true
+                });
                 modules.Add(module);
                 foreach (TypeDefinition type in module.Types.Where(t => t.Name != "<Module>"))
                 {
@@ -186,8 +207,11 @@ internal static class WinrtProjectionCompleter
             int before = projection.Types.Count;
             foreach (string path in args.Skip(3))
             {
-                ModuleDefinition consumer = ModuleDefinition.ReadModule(path, new ReaderParameters {
-                    ApplyWindowsRuntimeProjections = false, InMemory = true });
+                ModuleDefinition consumer = ModuleDefinition.ReadModule(path, new ReaderParameters
+                {
+                    ApplyWindowsRuntimeProjections = false,
+                    InMemory = true
+                });
                 modules.Add(consumer);
                 foreach (TypeReference type in consumer.GetTypeReferences().Where(t => !t.IsNested && IsWindows(t)))
                     Ensure(type.FullName);
