@@ -322,7 +322,7 @@ static int LaunchHosted(const std::filesystem::path& executable) {
     PROCESS_INFORMATION process{};
     SetEnvironmentVariableW(L"APPX_PORTABLE_HOSTED", L"1");
     const BOOL created = CreateProcessW(executable.c_str(), line.data(), nullptr, nullptr, FALSE, CREATE_SUSPENDED,
-                                       nullptr, executable.parent_path().c_str(), &startup, &process);
+                                        nullptr, executable.parent_path().c_str(), &startup, &process);
     DWORD error = GetLastError();
     SetEnvironmentVariableW(L"APPX_PORTABLE_HOSTED", nullptr);
     if (!created) {
@@ -366,7 +366,8 @@ extern "C" int __cdecl ShimRunNativeApplication() noexcept {
         for (const auto& part : relative)
             if (part == L"..") return E_INVALIDARG;
         auto path = package.directory / std::filesystem::path(relative).replace_extension(L".dll");
-        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) return LaunchHosted(package.directory / relative);
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+            return LaunchHosted(package.directory / relative);
         auto hr = RoInitialize(RO_INIT_SINGLETHREADED);
         if (FAILED(hr)) return hr;
         SetNativeXamlMode();

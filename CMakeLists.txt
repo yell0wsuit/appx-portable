@@ -240,6 +240,9 @@ add_store_settings_test(unlocked_ini "[options]\\nUnlockTrial=1"
     "--unset=APPX_PORTABLE_UNLOCK_TRIAL|APPX_PORTABLE_STUB_IAP=0" --expect-unlocked)
 add_store_settings_test(stub_iap_ini "[options]\\nStubIap=1"
     "--unset=APPX_PORTABLE_STUB_IAP|APPX_PORTABLE_UNLOCK_TRIAL=0" --expect-stub-iap)
+add_store_settings_test(stub_iap_products_ini "[options]\\nStubIap=1\\nStubIapProducts=test.pack, test.hints,test.pack"
+    "--unset=APPX_PORTABLE_STUB_IAP|--unset=APPX_PORTABLE_STUB_IAP_PRODUCTS|APPX_PORTABLE_UNLOCK_TRIAL=0"
+    "--expect-stub-iap --expect-catalog")
 add_store_settings_test(ini_env_off "[options]\\nUnlockTrial=1\\nStubIap=1"
     "APPX_PORTABLE_UNLOCK_TRIAL=0|APPX_PORTABLE_STUB_IAP=0" "")
 add_store_settings_test(ini_absent_section "[storage]\\nSaveLocation=game"

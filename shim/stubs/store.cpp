@@ -78,6 +78,67 @@ public:
         return iterator ? iterator.CopyTo(value) : E_OUTOFMEMORY;
     }
 };
+using UnfulfilledIterable = __FIIterable_1_Windows__CApplicationModel__CStore__CUnfulfilledConsumable;
+using UnfulfilledIterator = __FIIterator_1_Windows__CApplicationModel__CStore__CUnfulfilledConsumable;
+class EmptyUnfulfilledIterator final : public RuntimeClass<RuntimeClassFlags<WinRt>, UnfulfilledIterator, FtmBase> {
+    InspectableClass(L"Windows.Foundation.Collections.IIterator`1", BaseTrust);
+
+public:
+    HRESULT STDMETHODCALLTYPE get_Current(IUnfulfilledConsumable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return E_BOUNDS;
+    }
+    HRESULT STDMETHODCALLTYPE get_HasCurrent(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE MoveNext(boolean* value) override { return get_HasCurrent(value); }
+    HRESULT STDMETHODCALLTYPE GetMany(UINT32 capacity, IUnfulfilledConsumable** values, UINT32* actual) override {
+        if (!actual) return E_POINTER;
+        *actual = 0;
+        if (capacity && !values) return E_POINTER;
+        return S_OK;
+    }
+};
+// Stub purchases are fulfilled when the game reports them, or forgotten when
+// it exits, so none is ever left unfulfilled.
+class EmptyUnfulfilledView final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, UnfulfilledView, UnfulfilledIterable, FtmBase> {
+    InspectableClass(L"Windows.Foundation.Collections.IVectorView`1", BaseTrust);
+
+public:
+    HRESULT STDMETHODCALLTYPE GetAt(UINT32, IUnfulfilledConsumable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return E_BOUNDS;
+    }
+    HRESULT STDMETHODCALLTYPE get_Size(UINT32* value) override {
+        if (!value) return E_POINTER;
+        *value = 0;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE IndexOf(IUnfulfilledConsumable*, UINT32* index, boolean* found) override {
+        if (!index || !found) return E_POINTER;
+        *index = 0;
+        *found = false;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetMany(UINT32, UINT32 capacity, IUnfulfilledConsumable** values,
+                                      UINT32* actual) override {
+        if (!actual) return E_POINTER;
+        *actual = 0;
+        if (capacity && !values) return E_POINTER;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE First(UnfulfilledIterator** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto iterator = Make<EmptyUnfulfilledIterator>();
+        return iterator ? iterator.CopyTo(value) : E_OUTOFMEMORY;
+    }
+};
 HRESULT MakeStubProductMap(ProductMap** value);
 class OfflineLicense final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultILicenseInformation, FtmBase> {
     InspectableClass(L"Windows.ApplicationModel.Store.LicenseInformation", BaseTrust);
@@ -122,7 +183,9 @@ const ComPtr<OfflineLicense>& StoreLicense() {
     }();
     return license;
 }
-template <class RuntimeType, class AbiType = RuntimeType> HRESULT OfflineError(IAsyncOperation<RuntimeType>** value) {
+template <class RuntimeType, class AbiType = RuntimeType>
+HRESULT OfflineError(IAsyncOperation<RuntimeType>** value, const char* call) {
+    Log("TRACE", "Store: %s offline", call);
     if (!value) return E_POINTER;
     *value = nullptr;
     auto operation = Make<ErrorOperation<RuntimeType, AbiType>>(E_ACCESSDENIED);
@@ -133,6 +196,7 @@ using ListingPair = __FIKeyValuePair_2_HSTRING_Windows__CApplicationModel__CStor
 using ListingIterable = __FIIterable_1___FIKeyValuePair_2_HSTRING_Windows__CApplicationModel__CStore__CProductListing;
 using ListingIterator = __FIIterator_1___FIKeyValuePair_2_HSTRING_Windows__CApplicationModel__CStore__CProductListing;
 class StubProductListing final : public RuntimeClass<RuntimeClassFlags<WinRt>, IProductListing, FtmBase> {
+    APPX_LOG_MISSING_INTERFACES("ProductListing")
     InspectableClass(L"Windows.ApplicationModel.Store.ProductListing", BaseTrust);
     std::wstring id_;
 
@@ -209,6 +273,25 @@ std::vector<std::wstring> DiscoverStubCatalog() {
         for (auto& product : products)
             if (std::find(ids.begin(), ids.end(), product) == ids.end()) ids.push_back(std::move(product));
     }
+    // Games without a catalog, such as Unity IAP ones, list only what the
+    // listing offers; StubIapProducts names their products.
+    const auto& configured = GetOptions().stubIapProducts;
+    size_t added = 0;
+    for (size_t start = 0; start < configured.size();) {
+        const auto separator = configured.find_first_of(L", ;\t", start);
+        std::wstring product =
+            configured.substr(start, separator == std::wstring::npos ? std::wstring::npos : separator - start);
+        if (!product.empty() && std::find(ids.begin(), ids.end(), product) == ids.end()) {
+            ids.push_back(std::move(product));
+            ++added;
+        }
+        if (separator == std::wstring::npos) break;
+        start = separator + 1;
+    }
+    if (added) Log("info", "Store: stub IAP products from StubIapProducts (%zu)", added);
+    if (ids.empty())
+        Log("info", "Store: stub IAP listing is empty; name the game's product IDs in appx-portable.ini, "
+                    "[options] StubIapProducts=");
     return ids;
 }
 const std::vector<std::wstring>& ReadStubCatalog() {
@@ -263,6 +346,7 @@ void RecordStubPurchase(HSTRING product) {
     if (inserted && StoreLicense()) StoreLicense()->NotifyChanged();
 }
 class StubListing final : public RuntimeClass<RuntimeClassFlags<WinRt>, IListingInformation, FtmBase> {
+    APPX_LOG_MISSING_INTERFACES("ListingInformation")
     InspectableClass(L"Windows.ApplicationModel.Store.ListingInformation", BaseTrust);
 
 public:
@@ -287,7 +371,8 @@ public:
     }
 };
 // Purchase results never claim to carry a Store signature.
-// A local receipt for legacy callers that treat an empty result as cancellation.
+// A local receipt for callers that treat an empty result as cancellation or
+// read the purchased product from it.
 // The marker and absence of a signature distinguish this from a Store receipt.
 HRESULT StubReceipt(HSTRING product, std::wstring& receipt) {
     GUID transaction{};
@@ -330,9 +415,11 @@ class StubPurchaseResults final : public RuntimeClass<RuntimeClassFlags<WinRt>, 
     InspectableClass(L"Windows.ApplicationModel.Store.PurchaseResults", BaseTrust);
     GUID transaction_{};
     Microsoft::WRL::Wrappers::HString offer_;
+    std::wstring receipt_;
 
 public:
-    explicit StubPurchaseResults(GUID transaction) : transaction_(transaction) {}
+    StubPurchaseResults(GUID transaction, std::wstring receipt)
+        : transaction_(transaction), receipt_(std::move(receipt)) {}
     HRESULT SetOffer(HSTRING offer) { return offer_.Set(offer); }
     HRESULT STDMETHODCALLTYPE get_Status(ProductPurchaseStatus* value) override {
         if (!value) return E_POINTER;
@@ -344,11 +431,9 @@ public:
         *value = transaction_;
         return S_OK;
     }
-    HRESULT STDMETHODCALLTYPE get_ReceiptXml(HSTRING* value) override {
-        if (!value) return E_POINTER;
-        *value = nullptr;
-        return S_OK;
-    }
+    // Games read the purchased product from it (Human Anatomy Atlas unlocks
+    // only when its ProductReceipt names the product).
+    HRESULT STDMETHODCALLTYPE get_ReceiptXml(HSTRING* value) override { return store::CopyString(receipt_, value); }
     HRESULT STDMETHODCALLTYPE get_OfferId(HSTRING* value) override {
         if (!value) return E_POINTER;
         return offer_.CopyTo(value);
@@ -366,7 +451,10 @@ HRESULT StubPurchase(HSTRING product, HSTRING offer, IAsyncOperation<PurchaseRes
     GUID transaction{};
     auto hr = CoCreateGuid(&transaction);
     if (FAILED(hr)) return hr;
-    auto result = Make<StubPurchaseResults>(transaction);
+    std::wstring receipt;
+    hr = StubReceipt(product, receipt);
+    if (FAILED(hr)) return hr;
+    auto result = Make<StubPurchaseResults>(transaction, std::move(receipt));
     if (!result) return E_OUTOFMEMORY;
     hr = result->SetOffer(offer);
     if (FAILED(hr)) return hr;
@@ -388,11 +476,11 @@ public:
         return license ? license.CopyTo(value) : E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE RequestAppPurchaseAsync(boolean, IAsyncOperation<HSTRING>** value) override {
-        return OfflineError(value);
+        return OfflineError(value, "RequestAppPurchaseAsync");
     }
     HRESULT STDMETHODCALLTYPE RequestProductPurchaseAsync(HSTRING product, boolean includeReceipt,
                                                           IAsyncOperation<HSTRING>** value) override {
-        if (!GetOptions().stubIap) return OfflineError(value);
+        if (!GetOptions().stubIap) return OfflineError(value, "RequestProductPurchaseAsync");
         if (!value) return E_POINTER;
         Log("info", "Store: stub IAP purchase succeeded product=%ls includeReceipt=%u",
             WindowsGetStringRawBuffer(product, nullptr), static_cast<unsigned>(includeReceipt));
@@ -408,13 +496,14 @@ public:
         return completed;
     }
     HRESULT STDMETHODCALLTYPE GetAppReceiptAsync(IAsyncOperation<HSTRING>** value) override {
-        return OfflineError(value);
+        return OfflineError(value, "GetAppReceiptAsync");
     }
     HRESULT STDMETHODCALLTYPE GetProductReceiptAsync(HSTRING, IAsyncOperation<HSTRING>** value) override {
-        return OfflineError(value);
+        return OfflineError(value, "GetProductReceiptAsync");
     }
     HRESULT STDMETHODCALLTYPE LoadListingInformationAsync(IAsyncOperation<ListingInformation*>** value) override {
-        if (!GetOptions().stubIap) return OfflineError<ListingInformation*, IListingInformation*>(value);
+        if (!GetOptions().stubIap)
+            return OfflineError<ListingInformation*, IListingInformation*>(value, "LoadListingInformationAsync");
         if (!value) return E_POINTER;
         *value = nullptr;
         auto listing = Make<StubListing>();
@@ -425,7 +514,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE ReportConsumableFulfillmentAsync(HSTRING product, GUID,
                                                                IAsyncOperation<FulfillmentResult>** value) override {
-        if (!GetOptions().stubIap) return OfflineError(value);
+        if (!GetOptions().stubIap) return OfflineError(value, "ReportConsumableFulfillmentAsync");
         Log("info", "Store: stub IAP fulfillment succeeded product=%ls", WindowsGetStringRawBuffer(product, nullptr));
         return StubSuccess<FulfillmentResult>(value, [](FulfillmentResult* out) {
             *out = FulfillmentResult_Succeeded;
@@ -435,16 +524,23 @@ public:
     HRESULT STDMETHODCALLTYPE
     RequestProductPurchaseWithResultsAsync(HSTRING product, IAsyncOperation<PurchaseResults*>** value) override {
         if (GetOptions().stubIap) return StubPurchase(product, nullptr, value);
-        return OfflineError<PurchaseResults*, IPurchaseResults*>(value);
+        return OfflineError<PurchaseResults*, IPurchaseResults*>(value, "RequestProductPurchaseWithResultsAsync");
     }
     HRESULT STDMETHODCALLTYPE
     RequestProductPurchaseWithDisplayPropertiesAsync(HSTRING product, HSTRING offer, IProductPurchaseDisplayProperties*,
                                                      IAsyncOperation<PurchaseResults*>** value) override {
         if (GetOptions().stubIap) return StubPurchase(product, offer, value);
-        return OfflineError<PurchaseResults*, IPurchaseResults*>(value);
+        return OfflineError<PurchaseResults*, IPurchaseResults*>(value,
+                                                                 "RequestProductPurchaseWithDisplayPropertiesAsync");
     }
     HRESULT STDMETHODCALLTYPE GetUnfulfilledConsumablesAsync(IAsyncOperation<UnfulfilledView*>** value) override {
-        return OfflineError(value);
+        // Unity IAP asks for these before it reads the listing, and stops there on failure.
+        if (GetOptions().stubIap)
+            return StubSuccess<UnfulfilledView*>(value, [](UnfulfilledView** out) {
+                auto view = Make<EmptyUnfulfilledView>();
+                return view ? view.CopyTo(out) : E_OUTOFMEMORY;
+            });
+        return OfflineError(value, "GetUnfulfilledConsumablesAsync");
     }
 };
 }

@@ -223,9 +223,16 @@ int main(int argc, char** argv) {
         GUID id{};
         if (FAILED(result->get_Status(&purchased)) || purchased != ProductPurchaseStatus_Succeeded ||
             FAILED(result->get_TransactionId(&id)) || IsEqualGUID(id, GUID_NULL) ||
-            FAILED(result->get_ReceiptXml(receipt.GetAddressOf())) || receipt.Length() ||
             result->get_Status(nullptr) != E_POINTER || results->GetResults(nullptr) != E_POINTER)
             return 38;
+        // Games read the purchased product from the receipt (Human Anatomy
+        // Atlas unlocks by its ProductReceipt). It stays marked and unsigned.
+        if (FAILED(result->get_ReceiptXml(receipt.GetAddressOf())) ||
+            !wcsstr(receipt.GetRawBuffer(nullptr), L"<ProductReceipt ") ||
+            !wcsstr(receipt.GetRawBuffer(nullptr), L"ProductId=\"anything\"") ||
+            !wcsstr(receipt.GetRawBuffer(nullptr), L"appxportable:Stub=\"true\"") ||
+            wcsstr(receipt.GetRawBuffer(nullptr), L"<Signature"))
+            return 64;
         if (FAILED(consumables->RequestProductPurchaseWithDisplayPropertiesAsync(
                 HStringReference(L"anything").Get(), HStringReference(L"offer").Get(), nullptr, &results)) ||
             FAILED(results->GetResults(&result)) || FAILED(result->get_OfferId(receipt.GetAddressOf())) ||
@@ -356,6 +363,15 @@ int main(int argc, char** argv) {
                  wcsstr(stubReceipt.GetRawBuffer(nullptr), L"<Signature")))
         return 62;
     if (!stub && stubReceipt.Length()) return 63;
+    // Unity IAP asks for unfulfilled consumables before it reads the listing,
+    // and stops when that fails. Stub purchases leave none unfulfilled.
+    ComPtr<IAsyncOperation<__FIVectorView_1_Windows__CApplicationModel__CStore__CUnfulfilledConsumable*>> unfulfilled;
+    ComPtr<__FIVectorView_1_Windows__CApplicationModel__CStore__CUnfulfilledConsumable> pendingConsumables;
+    UINT32 unfulfilledCount = 99;
+    if (FAILED(consumables->GetUnfulfilledConsumablesAsync(&unfulfilled)) ||
+        SUCCEEDED(unfulfilled->GetResults(&pendingConsumables)) != stub ||
+        (stub && (FAILED(pendingConsumables->get_Size(&unfulfilledCount)) || unfulfilledCount != 0)))
+        return 65;
     if (argc > 2 && strcmp(argv[2], "--expect-host") == 0) {
         using namespace ABI::Windows::UI::Xaml;
         ComPtr<IActivationFactory> applicationFactory;

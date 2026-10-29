@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 namespace appx {
 // Switches read once from the game's command line, each with an environment
 // variable equivalent for scripts and tests. All are off by default. The two
@@ -13,12 +14,15 @@ namespace appx {
 //   --passthrough   activate the OS classes and only log           APPX_PORTABLE_MODE=trace
 //   --stub-iap      complete in-app purchases locally             APPX_PORTABLE_STUB_IAP=1
 //   --unlock-trial  report an active, full base-app license        APPX_PORTABLE_UNLOCK_TRIAL=1
+// [options] StubIapProducts=id1,id2 names products for the stub IAP listing of
+// a game without a bundled catalog; APPX_PORTABLE_STUB_IAP_PRODUCTS wins over it.
 // appx-native-host.exe sets APPX_PORTABLE_HOSTED=1 for a game it starts with
 // the shim loaded; the shim clears it so the game's own children do not see it.
 struct Options {
     bool log = false, trace = false, capture = false, diagnostics = false, passthrough = false;
     bool unlockTrial = false, stubIap = false, hosted = false;
     unsigned frameRate = 60;
+    std::wstring stubIapProducts;
 };
 const Options& GetOptions() noexcept;
 }

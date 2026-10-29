@@ -861,6 +861,9 @@ SaveLocation=game
 ;   StubIap      complete in-app purchases locally, without the Store
 UnlockTrial=0
 StubIap=0
+; With StubIap, games that ship no product catalog (such as Unity IAP games) find
+; no products unless their IDs are listed here, separated by commas; for example
+; StubIapProducts=com.example.levels,com.example.coins
 ; Most Store games run at the 60 frames a second they were made for; 0 removes
 ; the cap, which suits games that keep their speed at higher frame rates.
 FrameRate=60
