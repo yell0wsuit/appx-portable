@@ -161,6 +161,13 @@ add_test(NAME islands_view_contract COMMAND "${CMAKE_COMMAND}"
   "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-view-fixture"
   -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 set_tests_properties(islands_view_contract PROPERTIES TIMEOUT 60 LABELS managed-clr)
+add_test(NAME islands_hardware_contract COMMAND "${CMAKE_COMMAND}"
+  "-DTEST_EXE=$<TARGET_FILE:hardwaretest>"
+  "-DSHIM=$<TARGET_FILE:appxportable>"
+  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+  "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-hardware-fixture"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
+set_tests_properties(islands_hardware_contract PROPERTIES TIMEOUT 60 LABELS managed-clr)
 set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 60)
 add_executable(searchtest tests/searchtest.cpp host/managed.manifest)
 target_link_libraries(searchtest PRIVATE runtimeobject ole32)
@@ -309,6 +316,12 @@ if(NOT CMAKE_CROSSCOMPILING)
     "-DSHIM=$<TARGET_FILE:appxportable>" "-DFIXTURE=${CMAKE_BINARY_DIR}/xbox11-fixture"
     -P "${CMAKE_SOURCE_DIR}/tests/xbox11_runtime.cmake")
   set_tests_properties(xbox11_standins PROPERTIES TIMEOUT 60)
+  add_test(NAME xbox20_standins COMMAND "${CMAKE_COMMAND}"
+    "-DCSC=${APPX_CSC}" "-DTEST_EXE=$<TARGET_FILE:standintest>"
+    "-DSHIM=$<TARGET_FILE:appxportable>" "-DFIXTURE=${CMAKE_BINARY_DIR}/xbox20-fixture"
+    "-DSDK_VERSION=2.0.0.0" "-DTEST_ARGS=--modern-user"
+    -P "${CMAKE_SOURCE_DIR}/tests/xbox11_runtime.cmake")
+  set_tests_properties(xbox20_standins PROPERTIES TIMEOUT 60)
   foreach(mode COREWINDOW XAML)
     add_test(NAME managed_host_${mode} COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"

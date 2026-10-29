@@ -79,5 +79,6 @@ HRESULT MakeHardwareFactory(IActivationFactory** value) {
     auto factory = Make<HardwareFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
-const ShimClass hardwareClass{L"Windows.System.Profile.HardwareIdentification", MakeHardwareFactory};
+const ShimClass hardwareClass{L"Windows.System.Profile.HardwareIdentification", MakeHardwareFactory,
+                              ShimPolicy::Replace, InIslands};
 }
