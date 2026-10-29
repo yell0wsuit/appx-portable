@@ -14,29 +14,27 @@ using namespace Microsoft::WRL;
 namespace appx {
 namespace {
 MIDL_INTERFACE("39AEA9EF-AACA-5971-72C7-29FE81EA8EF0")
-IClientClass : public IInspectable {
-    virtual HRESULT STDMETHODCALLTYPE BeginRequest(IInspectable* request) = 0;
-};
+IClientClass : public IInspectable { virtual HRESULT STDMETHODCALLTYPE BeginRequest(IInspectable * request) = 0; };
 MIDL_INTERFACE("D34558D3-8600-520E-66A2-A6F79EFE120D")
 IRequestClass : public IInspectable {
     virtual HRESULT STDMETHODCALLTYPE AddHeader(HSTRING header) = 0;
-    virtual HRESULT STDMETHODCALLTYPE get_ContentBody(UINT32* size, BYTE** value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE get_RequestMethod(HSTRING* value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE get_Url(HSTRING* value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetResponse(IInspectable** value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE IsComplete(boolean* value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE put_ContentBody(UINT32 size, BYTE* value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_ContentBody(UINT32 * size, BYTE * *value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_RequestMethod(HSTRING * value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_Url(HSTRING * value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetResponse(IInspectable * *value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE IsComplete(boolean * value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE put_ContentBody(UINT32 size, BYTE * value) = 0;
     virtual HRESULT STDMETHODCALLTYPE put_RequestMethod(HSTRING value) = 0;
     virtual HRESULT STDMETHODCALLTYPE put_Url(HSTRING value) = 0;
     virtual HRESULT STDMETHODCALLTYPE Submit() = 0;
 };
 MIDL_INTERFACE("858A05E2-947E-5551-6068-745B8DC97278")
 IResponseClass : public IInspectable {
-    virtual HRESULT STDMETHODCALLTYPE get_IsSuccessfulResponse(boolean* value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE get_ResponseBody(UINT32* size, BYTE** value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE get_ResponseCode(INT32* value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_IsSuccessfulResponse(boolean * value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_ResponseBody(UINT32 * size, BYTE * *value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_ResponseCode(INT32 * value) = 0;
     virtual HRESULT STDMETHODCALLTYPE put_IsSuccessfulResponse(boolean value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE put_ResponseBody(UINT32 size, BYTE* value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE put_ResponseBody(UINT32 size, BYTE * value) = 0;
     virtual HRESULT STDMETHODCALLTYPE put_ResponseCode(INT32 value) = 0;
 };
 // WinRT byte arrays out: the callee allocates with CoTaskMemAlloc.
@@ -149,7 +147,7 @@ public:
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE Submit() override {
-        auto response = Make<Response>();  // unsuccessful, code 0, empty
+        auto response = Make<Response>(); // unsuccessful, code 0, empty
         if (!response) return E_OUTOFMEMORY;
         std::lock_guard<std::mutex> lock(mutex_);
         Log("TRACE", "HttpClientCSharp offline: %ls %ls not sent", method_.c_str(), url_.c_str());
@@ -182,10 +180,14 @@ HRESULT MakeHttpClientCSharpFactory(const wchar_t* name, IActivationFactory** va
     if (!value) return E_POINTER;
     *value = nullptr;
     ComPtr<IActivationFactory> factory;
-    if (wcscmp(name, L"HttpClientCSharp.Request") == 0) factory = Make<ConstructFactory<Request>>(name);
-    else if (wcscmp(name, L"HttpClientCSharp.Response") == 0) factory = Make<ConstructFactory<Response>>(name);
-    else if (wcscmp(name, L"HttpClientCSharp.Client") == 0) factory = Make<ConstructFactory<Client>>(name);
-    else return REGDB_E_CLASSNOTREG;
+    if (wcscmp(name, L"HttpClientCSharp.Request") == 0)
+        factory = Make<ConstructFactory<Request>>(name);
+    else if (wcscmp(name, L"HttpClientCSharp.Response") == 0)
+        factory = Make<ConstructFactory<Response>>(name);
+    else if (wcscmp(name, L"HttpClientCSharp.Client") == 0)
+        factory = Make<ConstructFactory<Client>>(name);
+    else
+        return REGDB_E_CLASSNOTREG;
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
 const ShimClass httpClientCSharpClass{L"HttpClientCSharp.", MakeHttpClientCSharpFactory};

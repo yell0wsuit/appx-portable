@@ -38,13 +38,13 @@ The installer changes no game file except through a known game's patch. Game-spe
 | Microsoft Sudoku (2018)              | 1.7.10190.0 | x86  | 🩹 Needs patch |
 | Rayman Fiesta Run Windows 10 Edition | 1.0.23.0    | x64  | 🩹 Needs patch |
 
-For more tested games and the Store package IDs, please see [tested games](docs/games.md).
+For more tested games and the Store package IDs, please see [game compatibility](docs/compatibility.md).
 
 ## Requirements
 
 - **Windows:** managed XAML games need Windows 10 version 1903 or later and the .NET Framework 4.x.
 - **Python 3.8 or later**, for the installer and the game patches; see [installing Python](docs/installer.md#python). [Manual installation](docs/manual-install.md) needs no Python.
-- **macOS / Wine (experimental):** Wine and `python3`.
+- **macOS / Wine (experimental):** `python3`. The installer offers to set up Wine Devel, Rosetta 2 and GStreamer; see [macOS / Wine](docs/installer.md#macos--wine-experimental).
 
 ## Quickstart
 
@@ -65,7 +65,7 @@ The installer downloads the Visual C++ runtime and the Appx Portable DLLs the ga
 
 ## Documentation
 
-- [Tested games](docs/games.md)
+- [Game compatibility](docs/compatibility.md)
 - [Installer guide](docs/installer.md)
 - [Manual installation](docs/manual-install.md)
 - [Saves and window settings](docs/configuration.md)
@@ -74,7 +74,7 @@ The installer downloads the Visual C++ runtime and the Appx Portable DLLs the ga
 - [Game patches](patch/README.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [How it works](docs/how-it-works.md)
-- [Building](docs/building.md) and [compatibility structure](docs/compatibility.md)
+- [Building](docs/building.md) and [runtime structure](docs/runtime-structure.md)
 
 ## License
 

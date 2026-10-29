@@ -53,6 +53,43 @@ static LRESULT CALLBACK SurfaceProc(HWND hwnd, UINT message, WPARAM wparam, LPAR
     if (message == WM_ERASEBKGND) return 1;
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
+// Wine's Mac driver keeps a window see-through, title bar included, until the
+// window itself draws. Games draw only in child surfaces, which often exist
+// before the window is first shown, so the clipped background erase draws
+// nothing. Paint the client area beneath them instead, on Wine only.
+static void PaintUnderSurfaces(HWND hwnd) {
+    static const bool wine = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != nullptr;
+    if (!wine) return;
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    if (HDC dc = GetDCEx(hwnd, nullptr, DCX_CACHE)) { // no DCX_CLIPCHILDREN: the surfaces' area too
+        FillRect(dc, &client, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+        ReleaseDC(hwnd, dc);
+    }
+}
+// PPL resumes a task's continuation on the thread that started the task by
+// calling into that thread's COM context from a thread-pool thread. Wine makes
+// the call over RPC, and its single-threaded apartments take RPC calls only
+// once they have marshaled something or waited in CoWaitForMultipleHandles;
+// the view thread's message loop does neither, so the call failed with
+// RPC_S_SERVER_UNAVAILABLE. Making an agile reference opens the apartment.
+static void AcceptCallsFromOtherApartments() {
+    static const bool wine = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != nullptr;
+    if (!wine) return;
+    using GetAgileReference = HRESULT(WINAPI*)(AgileReferenceOptions, REFIID, IUnknown*, IAgileReference**);
+    const auto get =
+        reinterpret_cast<GetAgileReference>(GetProcAddress(GetModuleHandleW(L"combase.dll"), "RoGetAgileReference"));
+    IUnknown* context{};
+    IAgileReference* reference{};
+    // Delayed: nothing is marshaled now; the reference is dropped right away.
+    const HRESULT hr = !get ? E_NOTIMPL
+                       : FAILED(CoGetObjectContext(IID_PPV_ARGS(&context)))
+                           ? CO_E_NOTINITIALIZED
+                           : get(AGILEREFERENCE_DELAYEDMARSHAL, __uuidof(IUnknown), context, &reference);
+    if (reference) reference->Release();
+    if (context) context->Release();
+    if (FAILED(hr)) Log("FAIL", "view thread cannot take calls from other apartments hr=%08lx", hr);
+}
 static HWND CreateSurfaceOnHostThread() {
     RECT client{};
     GetClientRect(window, &client);
@@ -188,6 +225,9 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
         return 0;
     }
     if (message == CreateSurfaceMessage) return reinterpret_cast<LRESULT>(CreateSurfaceOnHostThread());
+    if ((message == WM_WINDOWPOSCHANGED && (reinterpret_cast<WINDOWPOS*>(lparam)->flags & SWP_SHOWWINDOW)) ||
+        (message == WM_SIZE && wparam != SIZE_MINIMIZED))
+        PaintUnderSurfaces(hwnd);
     // The class cursor is the arrow; over the game, show the game's choice.
     if (message == WM_SETCURSOR && LOWORD(lparam) == HTCLIENT) {
         SetCursor(HostCursor());
@@ -292,11 +332,13 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     }
     if (decoded) Log("INFO", "decoded %u percent-encoded package file names", decoded);
     thread = GetCurrentThreadId();
+    AcceptCallsFromOtherApartments();
     WNDCLASSW cls{};
     cls.lpfnWndProc = WindowProc;
     cls.hInstance = GetModuleHandleW(nullptr);
     cls.lpszClassName = L"AppxPortableWindow";
     cls.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    cls.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     if (!RegisterClassW(&cls) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
         return HRESULT_FROM_WIN32(GetLastError());
     WNDCLASSW surface{};
@@ -307,9 +349,9 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         return HRESULT_FROM_WIN32(GetLastError());
     RECT rect{0, 0, 1024, 768};
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
-    window = CreateWindowExW(0, cls.lpszClassName, HostTitle().c_str(),
-                             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-                             rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, cls.hInstance, nullptr);
+    window = CreateWindowExW(0, cls.lpszClassName, HostTitle().c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+                             CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr,
+                             nullptr, cls.hInstance, nullptr);
     if (!window) return HRESULT_FROM_WIN32(GetLastError());
     if (IslandsMode()) {
         auto menu = GetSystemMenu(window, FALSE);
@@ -317,10 +359,10 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_SEPARATOR, 0, nullptr);
     }
     const auto& package = CurrentPackage();
-    const auto logo = package.smallLogo.empty() ? std::filesystem::path{}
-                                                : ResolvePackageFile(package, package.smallLogo);
-    HICON smallIcon = logo.empty() ? nullptr
-                                   : LoadGameIcon(logo, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
+    const auto logo =
+        package.smallLogo.empty() ? std::filesystem::path{} : ResolvePackageFile(package, package.smallLogo);
+    HICON smallIcon =
+        logo.empty() ? nullptr : LoadGameIcon(logo, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
     HICON largeIcon =
         logo.empty() ? nullptr : LoadGameIcon(logo, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON));
     if (!logo.empty() && !smallIcon) Log("TRACE", "window icon: cannot load %ls", logo.c_str());

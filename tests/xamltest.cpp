@@ -4,6 +4,7 @@
 #include <windows.ui.xaml.h>
 #include <windows.ui.core.h>
 #include <windows.ui.xaml.controls.h>
+#include <windows.ui.xaml.data.h>
 #include <windows.ui.input.h>
 #include <windows.ui.xaml.media.dxinterop.h>
 #include <vector>
@@ -93,6 +94,19 @@ int main() {
     innerIdentity.Reset();
     app.Reset();
     CHECK(outer->Release() == 0);
+    {
+        ComPtr<IActivationFactory> argsFactory;
+        CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.Xaml.Data.PropertyChangedEventArgs").Get(), &argsFactory)));
+        ComPtr<ABI::Windows::UI::Xaml::Data::IPropertyChangedEventArgsFactory> argsCompose;
+        CHECK(argsFactory && SUCCEEDED(argsFactory.As(&argsCompose)));
+        ComPtr<ABI::Windows::UI::Xaml::Data::IPropertyChangedEventArgs> args;
+        ComPtr<IInspectable> argsInner;
+        if (argsCompose)
+            CHECK(SUCCEEDED(argsCompose->CreateInstance(HStringReference(L"Title").Get(), nullptr, &argsInner, &args)));
+        HString property;
+        CHECK(args && SUCCEEDED(args->get_PropertyName(property.GetAddressOf())) &&
+              wcscmp(property.GetRawBuffer(nullptr), L"Title") == 0);
+    }
     ComPtr<IApplicationStatics> statics;
     CHECK(SUCCEEDED(factory.As(&statics)));
     if (!statics) return 1;

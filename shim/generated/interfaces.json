@@ -38,13 +38,24 @@
     "header": "windows.system.h",
     "interfaces": ["ABI::Windows::System::IMemoryManagerStatics"]
   },
+  "xaml_data.h": {
+    "header": "windows.ui.xaml.data.h",
+    "interfaces": [
+      "ABI::Windows::UI::Xaml::Data::IPropertyChangedEventArgs",
+      "ABI::Windows::UI::Xaml::Data::IPropertyChangedEventArgsFactory"
+    ]
+  },
+  "win10_metadata.h": {
+    "header": "windows.foundation.metadata.h",
+    "interfaces": ["ABI::Windows::Foundation::Metadata::IApiInformationStatics"]
+  },
   "win10_input.h": {
     "header": "windows.ui.core.h",
     "interfaces": ["ABI::Windows::UI::Core::ICoreInputSourceBase", "ABI::Windows::UI::Core::ICorePointerInputSource"]
   },
   "pointer_device.h": {
     "header": "windows.devices.input.h",
-    "interfaces": ["ABI::Windows::Devices::Input::IPointerDevice"]
+    "interfaces": ["ABI::Windows::Devices::Input::IPointerDevice", "ABI::Windows::Devices::Input::ITouchCapabilities", "ABI::Windows::Devices::Input::IKeyboardCapabilities", "ABI::Windows::Devices::Input::IMouseCapabilities"]
   },
   "coreapp.h": {
     "header": "windows.applicationmodel.core.h",
@@ -78,7 +89,10 @@
   "globalization.h": {
     "header": "windows.globalization.h",
     "interfaces": [
-      "ABI::Windows::Globalization::ICalendar"
+      "ABI::Windows::Globalization::ICalendar",
+      "ABI::Windows::Globalization::ICalendarFactory",
+      "ABI::Windows::Globalization::ICalendarFactory2",
+      "ABI::Windows::Globalization::ITimeZoneOnCalendar"
     ]
   },
   "http.h": {
@@ -155,6 +169,7 @@
       "ABI::Windows::Storage::IApplicationData",
       "ABI::Windows::Storage::IStorageFolder",
       "ABI::Windows::Storage::IStorageItem",
+      "ABI::Windows::Storage::IStorageFile",
       "ABI::Windows::Storage::IApplicationDataContainer"
     ]
   },
@@ -223,6 +238,14 @@
       "ABI::Windows::Data::Xml::Dom::IXmlText",
       "ABI::Windows::Data::Xml::Dom::IXmlCharacterData",
       "ABI::Windows::Data::Xml::Dom::IXmlNodeList"
+    ]
+  },
+  "device_enumeration.h": {
+    "header": "windows.devices.enumeration.h",
+    "interfaces": [
+      "ABI::Windows::Devices::Enumeration::IDeviceInformationStatics",
+      "ABI::Windows::Devices::Enumeration::IDeviceInformation",
+      "ABI::Windows::Devices::Enumeration::IDeviceWatcher"
     ]
   }
 }

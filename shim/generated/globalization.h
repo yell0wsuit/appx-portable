@@ -402,4 +402,44 @@ struct __declspec(uuid("ca30221d-86d9-40fb-a26b-d44eb7cf08ea")) DefaultICalendar
   }
 };
 }
+namespace ABI::Windows::Globalization {
+struct __declspec(uuid("83f58412-e56b-4c75-a66e-0f63d57758a6")) DefaultICalendarFactory : public ABI::Windows::Globalization::ICalendarFactory {
+  HRESULT STDMETHODCALLTYPE CreateCalendarDefaultCalendarAndClock(__FIIterable_1_HSTRING* languages, ABI::Windows::Globalization::ICalendar** result) override {
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendarFactory::CreateCalendarDefaultCalendarAndClock");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE CreateCalendar(__FIIterable_1_HSTRING* languages, HSTRING calendar, HSTRING clock, ABI::Windows::Globalization::ICalendar** result) override {
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendarFactory::CreateCalendar");
+    return E_NOTIMPL;
+  }
+};
+}
+namespace ABI::Windows::Globalization {
+struct __declspec(uuid("b44b378c-ca7e-4590-9e72-ea2bec1a5115")) DefaultICalendarFactory2 : public ABI::Windows::Globalization::ICalendarFactory2 {
+  HRESULT STDMETHODCALLTYPE CreateCalendarWithTimeZone(__FIIterable_1_HSTRING* languages, HSTRING calendar, HSTRING clock, HSTRING timeZoneId, ABI::Windows::Globalization::ICalendar** result) override {
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ICalendarFactory2::CreateCalendarWithTimeZone");
+    return E_NOTIMPL;
+  }
+};
+}
+namespace ABI::Windows::Globalization {
+struct __declspec(uuid("bb3c25e5-46cf-4317-a3f5-02621ad54478")) DefaultITimeZoneOnCalendar : public ABI::Windows::Globalization::ITimeZoneOnCalendar {
+  HRESULT STDMETHODCALLTYPE GetTimeZone(HSTRING* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ITimeZoneOnCalendar::GetTimeZone");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE ChangeTimeZone(HSTRING timeZoneId) override {
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ITimeZoneOnCalendar::ChangeTimeZone");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE TimeZoneAsFullString(HSTRING* result) override {
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ITimeZoneOnCalendar::TimeZoneAsFullString");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE TimeZoneAsString(INT32 idealLength, HSTRING* result) override {
+    appx::Log("UNIMPL", "ABI::Windows::Globalization::ITimeZoneOnCalendar::TimeZoneAsString");
+    return E_NOTIMPL;
+  }
+};
+}
 #pragma warning(pop)

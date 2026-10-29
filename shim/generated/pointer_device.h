@@ -34,4 +34,48 @@ struct __declspec(uuid("93c9bafc-ebcb-467e-82c6-276feae36b5a")) DefaultIPointerD
   }
 };
 }
+namespace ABI::Windows::Devices::Input {
+struct __declspec(uuid("20dd55f9-13f1-46c8-9285-2c05fa3eda6f")) DefaultITouchCapabilities : public ABI::Windows::Devices::Input::ITouchCapabilities {
+  HRESULT STDMETHODCALLTYPE get_TouchPresent(INT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::ITouchCapabilities::get_TouchPresent");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_Contacts(UINT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::ITouchCapabilities::get_Contacts");
+    return E_NOTIMPL;
+  }
+};
+}
+namespace ABI::Windows::Devices::Input {
+struct __declspec(uuid("3a3f9b56-6798-4bbc-833e-0f34b17c65ff")) DefaultIKeyboardCapabilities : public ABI::Windows::Devices::Input::IKeyboardCapabilities {
+  HRESULT STDMETHODCALLTYPE get_KeyboardPresent(INT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::IKeyboardCapabilities::get_KeyboardPresent");
+    return E_NOTIMPL;
+  }
+};
+}
+namespace ABI::Windows::Devices::Input {
+struct __declspec(uuid("bca5e023-7dd9-4b6b-9a92-55d43cb38f73")) DefaultIMouseCapabilities : public ABI::Windows::Devices::Input::IMouseCapabilities {
+  HRESULT STDMETHODCALLTYPE get_MousePresent(INT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::IMouseCapabilities::get_MousePresent");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_VerticalWheelPresent(INT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::IMouseCapabilities::get_VerticalWheelPresent");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_HorizontalWheelPresent(INT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::IMouseCapabilities::get_HorizontalWheelPresent");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_SwapButtons(INT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::IMouseCapabilities::get_SwapButtons");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_NumberOfButtons(UINT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Devices::Input::IMouseCapabilities::get_NumberOfButtons");
+    return E_NOTIMPL;
+  }
+};
+}
 #pragma warning(pop)

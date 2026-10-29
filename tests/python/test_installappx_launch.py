@@ -156,6 +156,80 @@ class LauncherTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_macos_launcher_is_a_command_file(self):
+        # Finder opens a .sh in an editor; it runs an executable .command in Terminal.
+        path = installer.write_launcher(self.game, "Game.exe", windows=False, macos=True)
+        self.assertEqual(path.name, "00_click2startme.command")
+        self.assertTrue(os.access(path, os.X_OK))
+        self.assertIn('"$wine" Game.exe', path.read_text())
+
+    def test_macos_launcher_picks_the_vulkan_renderer(self):
+        if not BASH:
+            self.skipTest("needs bash on a POSIX host")
+        fake = self.game / "fake-wine"
+        fake.write_text(
+            '#!/bin/sh\n[ "$1" = reg ] && exit 0\necho "${WINE_D3D_CONFIG-unset}" > d3d-config.txt\n'
+        )
+        fake.chmod(0o755)
+
+        def config(macos, **env):
+            path = installer.write_launcher(
+                self.game, "Game.exe", windows=False, macos=macos
+            )
+            environment = {
+                k: v for k, v in os.environ.items() if k != "WINE_D3D_CONFIG"
+            }
+            environment.update(WINE=str(fake), **env)
+            result = subprocess.run(
+                [BASH, str(path)], capture_output=True, text=True, env=environment
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return (self.game / "d3d-config.txt").read_text().strip()
+
+        # Wine's own wined3d cannot run 32-bit games on MoltenVK.
+        self.assertEqual(config(True), "unset")
+        for name in ("d3d11.dll", "dxgi.dll", "wined3d.dll"):
+            (self.game / name).write_bytes(b"")
+        # MoltenVK runs the patched wined3d's Vulkan renderer on Metal; a set value wins.
+        self.assertEqual(config(True), "renderer=vulkan")
+        self.assertEqual(config(True, WINE_D3D_CONFIG="renderer=gl"), "renderer=gl")
+        self.assertEqual(config(False), "unset")
+
+    def test_media_games_are_told_apart(self):
+        # Middleware such as FMOD imports Media Foundation without playing
+        # through it; the game's own executable or a MediaElement page does.
+        (self.game / "Game.exe").write_bytes(pe(imports=("KERNEL32.dll",)))
+        (self.game / "fmod.dll").write_bytes(pe(dll=True, imports=("MFPlat.DLL",)))
+        self.assertFalse(installer.plays_media(self.game, self.game / "Game.exe"))
+        (self.game / "Game.exe").write_bytes(
+            pe(imports=("KERNEL32.dll", "MFReadWrite.dll"))
+        )
+        self.assertTrue(installer.plays_media(self.game, self.game / "Game.exe"))
+        (self.game / "Game.exe").write_bytes(pe())
+        (self.game / "Pages").mkdir()
+        (self.game / "Pages" / "Video.xbf").write_bytes(
+            b"\0\0" + "MediaElement".encode("utf-16-le")
+        )
+        self.assertTrue(installer.plays_media(self.game, self.game / "Game.exe"))
+
+    def test_macos_media_launcher_prepares_gstreamer(self):
+        def text(macos, media):
+            return installer.write_launcher(
+                self.game, "Game.exe", windows=False, macos=macos, media=media
+            ).read_text()
+
+        self.assertIn("gst-inspect-1.0", text(True, True))
+        self.assertNotIn("gst-inspect-1.0", text(True, False))
+        self.assertNotIn("gst-inspect-1.0", text(False, True))
+        if BASH:
+            path = installer.write_launcher(
+                self.game, "Game.exe", windows=False, macos=True, media=True
+            )
+            result = subprocess.run(
+                [BASH, "-n", str(path)], capture_output=True, text=True
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_sh_launcher_runs_wine_from_the_game_folder(self):
         if not BASH:
             self.skipTest("needs bash on a POSIX host")
@@ -176,6 +250,33 @@ class LauncherTests(unittest.TestCase):
         folder, arguments = (self.game / "wine-call.txt").read_text().strip().split("|")
         self.assertEqual(pathlib.Path(folder).resolve(), self.game.resolve())
         self.assertEqual(arguments, "Game.exe --log --unlock-trial")
+
+    def test_sh_launcher_loads_the_staged_graphics_stack(self):
+        if not BASH:
+            self.skipTest("needs bash on a POSIX host")
+        fake = self.game / "fake-wine"
+        fake.write_text(
+            '#!/bin/sh\n[ "$1" = reg ] && exit 0\necho "$WINEDLLOVERRIDES" > overrides.txt\n'
+        )
+        fake.chmod(0o755)
+        path = installer.write_launcher(self.game, "Game.exe", windows=False)
+
+        def overrides():
+            result = subprocess.run(
+                [BASH, str(path)],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "WINE": str(fake), "WINEDLLOVERRIDES": "mine=b"},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return (self.game / "overrides.txt").read_text().strip()
+
+        self.assertNotIn("wined3d", overrides())
+        for name in installer.WINE_GRAPHICS:
+            (self.game / name).write_bytes(b"")
+        text = overrides()
+        self.assertIn(";d3d11,dxgi,wined3d=n;", text)
+        self.assertTrue(text.endswith(";mine=b"), text)
 
 
 if __name__ == "__main__":

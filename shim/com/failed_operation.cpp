@@ -13,7 +13,7 @@ struct OperationAbi : IInspectable {
     virtual HRESULT STDMETHODCALLTYPE GetResults(void* results) = 0;
 };
 using InvokeCall = HRESULT(STDMETHODCALLTYPE*)(IUnknown* handler, IInspectable* operation,
-                                              ABI::Windows::Foundation::AsyncStatus status);
+                                               ABI::Windows::Foundation::AsyncStatus status);
 class FailedOperation final : public OperationAbi, public ABI::Windows::Foundation::IAsyncInfo {
     std::atomic<ULONG> refs_{1};
     const GUID iid_;
@@ -77,8 +77,9 @@ public:
             if (handler) handler->AddRef();
         }
         // IAsyncOperationCompletedHandler<T>::Invoke follows IUnknown.
-        if (handler) reinterpret_cast<InvokeCall>((*reinterpret_cast<void***>(handler))[3])(
-            handler, Operation(), ABI::Windows::Foundation::AsyncStatus::Error);
+        if (handler)
+            reinterpret_cast<InvokeCall>((*reinterpret_cast<void***>(handler))[3])(
+                handler, Operation(), ABI::Windows::Foundation::AsyncStatus::Error);
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_Completed(IUnknown** handler) override {

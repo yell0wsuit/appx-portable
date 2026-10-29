@@ -30,8 +30,8 @@ std::optional<std::wstring> DecodePackageName(const std::wstring& name) {
         bytes.append(utf8, length);
     }
     if (!escaped) return std::nullopt;
-    const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), static_cast<int>(bytes.size()),
-                                           nullptr, 0);
+    const int length =
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), static_cast<int>(bytes.size()), nullptr, 0);
     if (length <= 0) return std::nullopt;
     std::wstring decoded(length, L'\0');
     MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, bytes.data(), static_cast<int>(bytes.size()), decoded.data(),
@@ -46,7 +46,7 @@ HRESULT DecodePackageNames(const std::filesystem::path& gameDirectory, unsigned*
     try {
         std::vector<std::filesystem::path> encoded;
         std::error_code error;
-        if (!std::filesystem::is_directory(gameDirectory, error)) return S_OK;  // nothing to decode
+        if (!std::filesystem::is_directory(gameDirectory, error)) return S_OK; // nothing to decode
         std::filesystem::recursive_directory_iterator it(gameDirectory, error), end;
         for (; !error && it != end; it.increment(error)) {
             const auto& path = it->path();

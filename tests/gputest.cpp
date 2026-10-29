@@ -66,6 +66,11 @@ int main() {
                     if (SUCCEEDED(gpu) && (stored._11 != 0.5f || stored._22 != 0.5f)) gpu = E_UNEXPECTED;
                     if (FAILED(gpu)) printf("gputest: matrix transform hr=%08lx\n", gpu);
                 }
+                // The Windows 8 DirectX template throws when this fails; Wine stubs it.
+                if (SUCCEEDED(gpu)) {
+                    gpu = swap->SetRotation(DXGI_MODE_ROTATION_IDENTITY);
+                    if (FAILED(gpu)) printf("gputest: rotation hr=%08lx\n", gpu);
+                }
                 ComPtr<ID3D11Texture2D> back;
                 if (SUCCEEDED(gpu)) gpu = swap->GetBuffer(0, IID_PPV_ARGS(&back));
                 ComPtr<ID3D11RenderTargetView> target;

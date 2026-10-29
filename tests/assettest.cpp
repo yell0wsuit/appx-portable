@@ -29,8 +29,8 @@ int main() {
     CHECK(!appx::DecodePackageName(L"%C3.txt"));   // truncated UTF-8
     CHECK(!appx::DecodePackageName(L"%2E%2E"));    // ".."
 
-    const auto root = std::filesystem::current_path() /
-                      (L"asset-test-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64()));
+    const auto root = std::filesystem::current_path() / (L"asset-test-" + std::to_wstring(GetCurrentProcessId()) +
+                                                         L"-" + std::to_wstring(GetTickCount64()));
     CHECK(SUCCEEDED(appx::DecodePackageNames(root))); // No game assets beside most test executables.
     CHECK(!std::filesystem::exists(root));
     const auto maps = root / L"Assets" / L"assets" / L"maps";

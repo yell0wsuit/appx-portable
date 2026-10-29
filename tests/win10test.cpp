@@ -2,10 +2,12 @@
 #undef GetCurrentTime
 #include <roapi.h>
 #include <windows.system.h>
+#include <windows.foundation.metadata.h>
 #include <windows.applicationmodel.core.h>
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.core.h>
 #include <windows.devices.input.h>
+#include <windows.devices.sensors.h>
 #include <wrl.h>
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
@@ -26,6 +28,16 @@ static int failures;
     } while (0)
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
+    // Ask the OS before loading the shim, whose activation hook would answer instead.
+    // Windows has its own view of an unknown namespace; Wine stubs it with E_NOTIMPL.
+    HRESULT osUnknownHr = E_NOTIMPL;
+    boolean osUnknownPresent = false;
+    {
+        ComPtr<ABI::Windows::Foundation::Metadata::IApiInformationStatics> os;
+        if (SUCCEEDED(RoGetActivationFactory(HStringReference(L"Windows.Foundation.Metadata.ApiInformation").Get(),
+                                             IID_PPV_ARGS(&os))))
+            osUnknownHr = os->IsTypePresent(HStringReference(L"Appx.Portable.NoSuchType").Get(), &osUnknownPresent);
+    }
     auto dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
@@ -38,6 +50,54 @@ int main() {
     CHECK(SUCCEEDED(memory->get_AppMemoryUsage(&usage)) && usage > 0);
     CHECK(SUCCEEDED(memory->get_AppMemoryUsageLimit(&limit)) && limit > 0);
     CHECK(memory->get_AppMemoryUsageLimit(nullptr) == E_POINTER);
+    // Answered by Windows, or by the shim where Wine stubs it with E_NOTIMPL.
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Foundation.Metadata.ApiInformation").Get(), &factory)));
+    ComPtr<ABI::Windows::Foundation::Metadata::IApiInformationStatics> api;
+    CHECK(SUCCEEDED(factory.As(&api)));
+    if (!api) return 1;
+    boolean present = true;
+    HRESULT unknownHr = api->IsTypePresent(HStringReference(L"Appx.Portable.NoSuchType").Get(), &present);
+    if (osUnknownHr == E_NOTIMPL)
+        CHECK(SUCCEEDED(unknownHr) && !present);
+    else
+        CHECK(unknownHr == osUnknownHr && (FAILED(unknownHr) || present == osUnknownPresent));
+    CHECK(SUCCEEDED(api->IsTypePresent(HStringReference(L"Windows.Phone.UI.Input.HardwareButtons").Get(), &present)));
+    CHECK(SUCCEEDED(api->IsMethodPresent(HStringReference(L"Windows.System.MemoryManager").Get(),
+                                         HStringReference(L"NoSuchMethod").Get(), &present)) &&
+          !present);
+    CHECK(api->IsTypePresent(HStringReference(L"Windows.System.MemoryManager").Get(), nullptr) == E_POINTER);
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Input.TouchCapabilities").Get(), &factory)));
+    ComPtr<IInspectable> touchObject;
+    CHECK(SUCCEEDED(factory->ActivateInstance(&touchObject)));
+    ComPtr<ABI::Windows::Devices::Input::ITouchCapabilities> touch;
+    CHECK(touchObject && SUCCEEDED(touchObject.As(&touch)));
+    INT32 touchPresent = -1;
+    UINT32 contacts{};
+    CHECK(touch && SUCCEEDED(touch->get_TouchPresent(&touchPresent)) && SUCCEEDED(touch->get_Contacts(&contacts)) &&
+          (touchPresent != 0) == (contacts > 0));
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Input.KeyboardCapabilities").Get(), &factory)));
+    ComPtr<IInspectable> keyboardObject;
+    ComPtr<ABI::Windows::Devices::Input::IKeyboardCapabilities> keyboard;
+    INT32 keyboardPresent{};
+    CHECK(SUCCEEDED(factory->ActivateInstance(&keyboardObject)) && SUCCEEDED(keyboardObject.As(&keyboard)) &&
+          SUCCEEDED(keyboard->get_KeyboardPresent(&keyboardPresent)) && keyboardPresent);
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Input.MouseCapabilities").Get(), &factory)));
+    ComPtr<IInspectable> mouseObject;
+    ComPtr<ABI::Windows::Devices::Input::IMouseCapabilities> mouse;
+    INT32 mousePresent = -1;
+    UINT32 buttons{};
+    CHECK(SUCCEEDED(factory->ActivateInstance(&mouseObject)) && SUCCEEDED(mouseObject.As(&mouse)) &&
+          SUCCEEDED(mouse->get_MousePresent(&mousePresent)) && SUCCEEDED(mouse->get_NumberOfButtons(&buttons)) &&
+          (mousePresent == 0 || buttons > 0));
+    HString capabilitiesName;
+    CHECK(SUCCEEDED(mouseObject->GetRuntimeClassName(capabilitiesName.GetAddressOf())) &&
+          wcscmp(capabilitiesName.GetRawBuffer(nullptr), L"Windows.Devices.Input.MouseCapabilities") == 0);
+    // Where's My Water asks for the accelerometer while making its page; no
+    // sensor is a null default, not a failure.
+    ComPtr<ABI::Windows::Devices::Sensors::IAccelerometerStatics> accelerometers;
+    ComPtr<ABI::Windows::Devices::Sensors::IAccelerometer> accelerometer;
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Sensors.Accelerometer").Get(), &factory)) &&
+          SUCCEEDED(factory.As(&accelerometers)) && SUCCEEDED(accelerometers->GetDefault(&accelerometer)));
     CHECK(SUCCEEDED(get(HStringReference(L"Windows.ApplicationModel.Core.CoreApplication").Get(), &factory)));
     ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplication> app;
     CHECK(SUCCEEDED(factory.As(&app)));

@@ -15,7 +15,7 @@ cmake --build --preset windows-x86
 
 This creates `appxportable.dll` and the proxy DLLs `d3dcompiler_47.dll`, `XAudio2_8.dll` and `DWrite.dll` in `build\windows-x86`. Pass that folder to `installappx.py` with `--build` to install a game with them; see [Use your own build](installer.md#use-your-own-build).
 
-For x64 games, use an **x64 Native Tools Command Prompt**, `cmake --preset windows-x64`, and `cmake --build --preset windows-x64`. This requires the MSVC x64 assembler and also builds the `XAudio2_9.dll` proxy. Pass `installappx.py` `--build build/windows-x64` and a matching x64 VCLibs framework. See [compatibility structure](compatibility.md) and the [embedded XBF support](xbf.md).
+For x64 games, use an **x64 Native Tools Command Prompt**, `cmake --preset windows-x64`, and `cmake --build --preset windows-x64`. This requires the MSVC x64 assembler and also builds the `XAudio2_9.dll` proxy. Pass `installappx.py` `--build build/windows-x64` and a matching x64 VCLibs framework. See [runtime structure](runtime-structure.md) and the [embedded XBF support](xbf.md).
 
 GitHub Actions builds and tests each architecture in its own job, with Ninja and a ccache compiler cache, and publishes `appx-portable-<version>-x86.zip` and `appx-portable-<version>-x64.zip` together. Both ZIPs contain the runtime and all four proxy DLLs. The x86 ZIP also contains `appx-host.exe`; x64 currently supports native games only, so its ZIP omits the CLR host. `installappx.py` downloads the Microsoft VCLibs packages from [yell0wsuit/vclibs-appx](https://github.com/yell0wsuit/vclibs-appx/releases/latest).
 
@@ -53,18 +53,33 @@ Install CMake, Ninja, LLVM, LLD, and xwin. With Homebrew:
 brew install cmake ninja llvm lld xwin
 ```
 
-From the repository root, download the Windows SDK and CRT, then build:
+From the repository root, download the Windows SDK and CRT for both architectures, then build:
 
 ```sh
-xwin --accept-license --arch x86 splat --output .sdk
+xwin --accept-license --arch x86,x86_64 splat --output .sdk
 cmake --preset macos-x86
 cmake --build --preset macos-x86
 python3 -m unittest discover -s tests/python
 ```
 
-The xwin command accepts Microsoft's SDK license. Outputs are in `build/macos-x86`; these are Windows binaries and require Wine to run. Gameplay under Wine remains experimental.
+Use the `macos-x64` preset the same way for x64 games. The xwin command accepts Microsoft's SDK license. Outputs are in `build/macos-x86` or `build/macos-x64`; these are Windows binaries and require Wine to run. Gameplay under Wine remains experimental.
 
 The toolchain defaults to LLVM in `/opt/homebrew/opt/llvm` and SDK files in `.sdk`. Set `LLVM_ROOT` and `XWIN_ROOT` if yours are elsewhere. See the [Wine setup instructions](installer.md#macos--wine-experimental) to launch.
+
+### Wine graphics (macOS)
+
+The launcher runs WineD3D's Vulkan renderer, which MoltenVK runs on Metal; set `WINE_D3D_CONFIG=renderer=gl` to use its OpenGL renderer instead. Neither reaches Direct3D 11 feature level 10: macOS stops at OpenGL 4.1, and Metal has no geometry shaders, so WineD3D caps every device at 9_3, even for games that ask for 11_x. At 9_x, WineD3D runs only legacy shader code that Wine's compiler never emits, and never receives the game's D3D11 constants for it, so games render black. [`wine/wined3d.patch`](../wine/wined3d.patch) instead runs the SM4 code and supplies OpenGL integer-conversion fallbacks for macOS, both taken from ctr2-uwp-shim. Wine's Direct2D asks D3D11 for a feature level 10_0 context state, which the capped device cannot give, so games that draw with Direct2D never started; the patch gives such a context state the device's own level. In a 32-bit game, Wine marks every Vulkan buffer and image as imported host memory, which MoltenVK refuses; on MoltenVK the patch leaves that mark out. Wine's own WineD3D therefore cannot run 32-bit games on Vulkan, and the launcher uses Vulkan only when the patched stack is beside the game.
+
+Build the matched D3D11/DXGI/WineD3D stack with:
+
+```sh
+brew install bison llvm lld
+scripts/build-wined3d.sh
+```
+
+The script runs on macOS or x86_64 Linux (`apt install bison flex clang lld llvm`). It downloads checksum-pinned Wine 11.18 source into `local/wine-src`, applies the patch, and builds `d3d11.dll`, `dxgi.dll`, and `wined3d.dll` for both architectures into `build/macos-x86` and `build/macos-x64`. Pass `x86` or `x64` to build one, and a folder after it to build elsewhere. Each folder gets a `wine-graphics.json` recording the DLLs' SHA-256 hashes. The first build takes a few minutes and uses Rosetta for the x86_64 build tools. The [Wine graphics workflow](../.github/workflows/wine-graphics.yml) builds both on Linux for pull requests that change the patch or script, and each release publishes them as `appx-portable-<tag>-wine-<arch>.zip`.
+
+`installappx.py` stages the stack beside the game when it installs under Wine: from the release, or from a `--build` folder that has `wine-graphics.json`, refusing DLLs that do not match it. The Wine launcher loads the three DLLs as native overrides whenever they are beside the game; delete them to use Wine's own. The source pin identifies the stack being built, not the Wine version you must install; it was tested on Wine 11.18.
 
 ## Development tools
 

@@ -24,4 +24,15 @@ Press **F11** or **Alt+Enter** to toggle borderless fullscreen. Window size, pos
 
 ## Store options
 
+## Frame rate
+
+`appx-portable.ini` caps the game at 60 frames a second by default:
+
+```ini
+[options]
+FrameRate=60
+```
+
+Most Store games advance one fixed step per frame and expect 60. Without the cap, they run too fast on a faster display, and under Wine on macOS, which does not wait for the display. Set `FrameRate=0` to remove the cap for a game that keeps its speed at any frame rate, or another number for a different cap. The `APPX_PORTABLE_FRAME_RATE` environment variable overrides the file. Restart the game after a change.
+
 `appx-portable.ini` also holds the Store overrides; see [trial override](trial-mode.md) and [offline in-app purchases](stub-iap.md).

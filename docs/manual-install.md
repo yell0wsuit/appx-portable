@@ -40,7 +40,7 @@ Download `appx-portable-<version>-x86.zip` (or `-x64.zip` for an x64 game) from 
 
 Saves go to `SaveData` beside the game, and the Store overrides are off. To change either, create `appx-portable.ini` beside the game; see [saves and window settings](configuration.md), [trial override](trial-mode.md) and [offline in-app purchases](stub-iap.md).
 
-Games marked 🩹 in [tested games](games.md) need their patch from [`patch/`](../patch/README.md), run with Python. On Windows 8/8.1, the game needs a desktop copy of its executable; `installappx.py --desktop-copy` makes it (see [Troubleshooting](troubleshooting.md)).
+Games marked 🩹 in [game compatibility](compatibility.md) need their patch from [`patch/`](../patch/README.md), run with Python. On Windows 8/8.1, the game needs a desktop copy of its executable; `installappx.py --desktop-copy` makes it (see [Troubleshooting](troubleshooting.md)).
 
 ## 5. Play
 

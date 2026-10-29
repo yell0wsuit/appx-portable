@@ -15,9 +15,11 @@ def load_installer():
     return module
 
 
-def pe(machine=0x14C, managed=False, dll=False, appcontainer=False):
-    """A PE32 (x86) or PE32+ (x64) image header, as the loader and setup read it."""
-    data = bytearray(512)
+def pe(machine=0x14C, managed=False, dll=False, appcontainer=False, imports=()):
+    """A PE32 (x86) or PE32+ (x64) image header, as the loader and setup read it.
+
+    imports go in an import directory inside the headers, where RVAs are file offsets."""
+    data = bytearray(1024 if imports else 512)
     data[:2] = b'MZ'
     struct.pack_into('<I', data, 0x3C, 0x80)
     data[0x80:0x84] = b'PE\0\0'
@@ -30,6 +32,14 @@ def pe(machine=0x14C, managed=False, dll=False, appcontainer=False):
     if managed:
         # The CLR runtime header is data directory 14.
         struct.pack_into('<I', data, 0x98 + (112 if plus else 96) + 14 * 8, 0x2000)
+    if imports:
+        struct.pack_into('<I', data, 0x98 + 60, len(data))  # SizeOfHeaders
+        struct.pack_into('<II', data, 0x98 + (112 if plus else 96) + 8, 0x200, 20 * (len(imports) + 1))
+        name = 0x300
+        for index, dll_name in enumerate(imports):
+            struct.pack_into('<I', data, 0x200 + 20 * index + 12, name)
+            data[name:name + len(dll_name)] = dll_name.encode()
+            name += len(dll_name) + 1
     return bytes(data)
 
 

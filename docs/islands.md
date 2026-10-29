@@ -92,4 +92,13 @@ This game also needs the explicit [video-preloader asset workaround](../patch/ms
 
 The host uses the system WindowsXamlManager and DesktopWindowXamlSource APIs. Microsoft's [hosting guidance](https://learn.microsoft.com/en-us/windows/uwp/xaml-islands/using-the-xaml-hosting-api) and [native samples](https://github.com/microsoft/Xaml-Islands-Samples) are the reference for the island itself. Legacy CoreWindow, package, and Store compatibility still require this repository's bridge; the standard host does not provide an installed Windows 8 app environment.
 
-Requires Windows 10 1903 or later and desktop .NET Framework 4.x. Wine and touch/pen input are unverified. Xbox services remain offline. Managed exceptions and first-chance diagnostics are written to `managed.log`; use `--log` or `--trace` for the native shim log. The synchronization context currently records uncaught posted exceptions rather than routing them through XAML's `Application.UnhandledException` event.
+Requires Windows 10 1903 or later and desktop .NET Framework 4.x. Touch/pen input is unverified. Xbox services remain offline. Managed exceptions and first-chance diagnostics are written to `managed.log`; use `--log` or `--trace` for the native shim log. The synchronization context currently records uncaught posted exceptions rather than routing them through XAML's `Application.UnhandledException` event.
+
+## Wine
+
+Managed games do not run under Wine yet, and `installappx.py` warns when it installs one there. Two gaps block them, both in Wine rather than in appx-portable:
+
+- XAML Islands hosts the game in Windows' own XAML. Wine 11.18's `windows.ui.xaml.dll` implements none of the `Windows.UI.Xaml` classes, such as `DesktopWindowXamlSource` or the controls, only helpers like `Uri` and `PropertySet`.
+- On macOS, wine-mono 11.3.0 under Wine Devel 11.18 hangs at full CPU in any 32-bit .NET program, right after loading `mscorlib`. 64-bit .NET programs run. `appx-host.exe` is 32-bit because CLR hosting is x86 only.
+
+Tested with Bejeweled LIVE 4.0.0.10 on Wine Devel 11.18 (macOS, Apple silicon): `appx-host.exe` never reaches the shim. Native games, which use the portable XAML backend, are unaffected.

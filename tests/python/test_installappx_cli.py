@@ -1,6 +1,7 @@
 import contextlib
 import hashlib
 import io
+import json
 import os
 import pathlib
 import sys
@@ -20,7 +21,7 @@ from installappx_fixtures import (
 )
 
 installer = load_installer()
-LAUNCHER = "00_click2startme.bat" if sys.platform == "win32" else "00_click2startme.sh"
+LAUNCHER = "00_click2startme." + {"win32": "bat", "darwin": "command"}.get(sys.platform, "sh")
 
 
 class Answers:
@@ -73,6 +74,10 @@ class CliTests(unittest.TestCase):
         replacement = mock.patch.object(installer, "fetch", self.web)
         replacement.start()
         self.addCleanup(replacement.stop)
+        # What this Mac has installed must not change an install (tests/python/test_installappx_macos.py).
+        macos = mock.patch.object(installer, "add_macos_dependencies")
+        macos.start()
+        self.addCleanup(macos.stop)
 
     def serve_vclibs(self, data, sha256=None):
         """Serve data as the release's x86 VCLibs 120, pinned to sha256 (default: its own)."""
@@ -318,8 +323,9 @@ class CliTests(unittest.TestCase):
         apply.assert_not_called()
 
     def test_downloads_runtime_without_build(self):
-        def download(tag, architecture, folder):
+        def download(tag, architecture, folder, wine=False):
             self.assertEqual((tag, architecture), ("v9", "x86"))
+            self.assertEqual(wine, sys.platform != "win32")
             return build_folder(folder)
 
         with mock.patch.object(
@@ -343,6 +349,40 @@ class CliTests(unittest.TestCase):
         resolve.assert_called_once_with("v9")
         self.assertTrue((self.dest / "appxportable.dll").is_file())
 
+    def serve_release(self, tag, zips):
+        """Serve release tag on GitHub with zips, a {name: {entry: bytes}} map."""
+        base = "https://example.invalid/"
+        assets = []
+        for name, entries in zips.items():
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w") as archive:
+                for entry, data in entries.items():
+                    archive.writestr(entry, data)
+            self.web.pages[base + name] = buffer.getvalue()
+            assets.append({"name": name, "browser_download_url": base + name})
+        url = f"https://api.github.com/repos/{installer.REPOSITORY}/releases/tags/{tag}"
+        self.web.pages[url] = json.dumps({"assets": assets}).encode()
+
+    def test_release_wine_graphics_only_under_wine(self):
+        self.serve_release("v9", {
+            "appx-portable-v9-x64.zip": {"appxportable.dll": b"shim"},
+            "appx-portable-v9-wine-x64.zip": {"wined3d.dll": b"gl", "wine-graphics.json": b"{}"},
+        })
+        for wine in (False, True):
+            with self.subTest(wine=wine):
+                folder = self.base / f"runtime-{wine}"
+                installer.download_runtime("v9", "x64", folder, wine=wine)
+                self.assertEqual((folder / "appxportable.dll").read_bytes(), b"shim")
+                self.assertEqual((folder / "wined3d.dll").is_file(), wine)
+                self.assertEqual((folder / "wine-graphics.json").is_file(), wine)
+
+    def test_release_without_wine_graphics_warns(self):
+        self.serve_release("v8", {"appx-portable-v8-x64.zip": {"appxportable.dll": b"shim"}})
+        with contextlib.redirect_stdout(self.stdout):
+            installer.download_runtime("v8", "x64", self.base / "runtime", wine=True)
+        self.assertIn("no Wine graphics stack", self.stdout.getvalue())
+        self.assertTrue((self.base / "runtime" / "appxportable.dll").is_file())
+
     def test_managed_game_launches_host(self):
         package = appx(self.base / "managed.appx", game_files(managed=True))
         code = self.main(
@@ -359,6 +399,11 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(code, 0, self.stderr.getvalue())
         self.assertIn("appx-host.exe", (self.dest / LAUNCHER).read_text())
+        # Under Wine the install still completes, but says the game will not start.
+        self.assertEqual(
+            "do not run under Wine" in self.stdout.getvalue(),
+            sys.platform != "win32",
+        )
 
     def test_desktop_copy_flag(self):
         package = appx(

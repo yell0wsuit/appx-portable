@@ -2,6 +2,7 @@
 #include "islands/islands.h"
 #include "log.h"
 #include "package/package.h"
+#include "platform/mf_stream.h"
 #include <roapi.h>
 #include <psapi.h>
 #include <intrin.h>
@@ -74,7 +75,7 @@ static bool FromGame(void* returnAddress) noexcept {
     if (!game && GetModuleFileNameW(module, path, MAX_PATH) && GetModuleFileNameW(nullptr, exe, MAX_PATH)) {
         if (ManagedMode() && _wcsicmp(std::filesystem::path(path).filename().c_str(), L"clr.dll") == 0) game = true;
         const size_t prefix = wcsrchr(exe, L'\\') - exe;
-        game = game || _wcsnicmp(path, exe, prefix) == 0 && path[prefix] == L'\\';
+        game = game || (_wcsnicmp(path, exe, prefix) == 0 && path[prefix] == L'\\');
     }
     try {
         known.emplace_back(module, game);
@@ -160,9 +161,28 @@ static void* Hotpatch(HMODULE module, const char* name, void* hook) noexcept {
 #endif
 }
 
-// Fallback (Wine builds without hotpatch prologues): redirect the imports of
-// every module in the game folder, which covers the game and its VC runtime.
-static void PatchModule(HMODULE module) noexcept {
+// Wine 11 exports these as stubs that abort the process when called.
+// RoRegisterForApartmentShutdown hands out a dummy cookie and never calls
+// back, so vccorlib's unregistration on every normal exit has nothing to undo.
+static HRESULT WINAPI UnregisterForApartmentShutdown(APARTMENT_SHUTDOWN_REGISTRATION_COOKIE) noexcept { return S_OK; }
+// C++/CX catch handlers report a rethrown HRESULT here. Like Wine's own
+// RoOriginateError, report that no debugger took the error.
+static BOOL WINAPI TransformError(HRESULT, HRESULT, HSTRING) noexcept { return FALSE; }
+// vccorlib110 captures the stack here for every Platform::Exception it makes
+// from an HRESULT; there is no error-reporting stack to keep it in.
+static HRESULT WINAPI CaptureErrorContext(HRESULT error) noexcept {
+    Log("TRACE", "Platform::Exception hr=%08lX", static_cast<unsigned long>(error));
+    return S_OK;
+}
+static bool OnWine() noexcept {
+    static const bool wine = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != nullptr;
+    return wine;
+}
+
+// Redirect the imports of every module in the game folder, which covers the
+// game and its VC runtime: the activation calls as a fallback for Wine builds
+// without hotpatch prologues, and Wine's aborting stubs whenever on Wine.
+static void PatchModule(HMODULE module, bool activation) noexcept {
     if (!module) return;
     auto* base = reinterpret_cast<BYTE*>(module);
     auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
@@ -179,11 +199,18 @@ static void PatchModule(HMODULE module) noexcept {
         for (; names->u1.AddressOfData; ++names, ++slots) {
             if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;
             auto* symbol = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(base + names->u1.AddressOfData);
+            const char* name = reinterpret_cast<char*>(symbol->Name);
             void* hook = nullptr;
-            if (strcmp(reinterpret_cast<char*>(symbol->Name), "RoGetActivationFactory") == 0)
-                hook = reinterpret_cast<void*>(&GetFactory);
-            if (strcmp(reinterpret_cast<char*>(symbol->Name), "RoActivateInstance") == 0)
-                hook = reinterpret_cast<void*>(&Activate);
+            if (activation && strcmp(name, "RoGetActivationFactory") == 0) hook = reinterpret_cast<void*>(&GetFactory);
+            if (activation && strcmp(name, "RoActivateInstance") == 0) hook = reinterpret_cast<void*>(&Activate);
+            if (OnWine() && strcmp(name, "RoUnregisterForApartmentShutdown") == 0)
+                hook = reinterpret_cast<void*>(&UnregisterForApartmentShutdown);
+            if (OnWine() && strcmp(name, "RoTransformError") == 0) hook = reinterpret_cast<void*>(&TransformError);
+            if (OnWine() && strcmp(name, "RoCaptureErrorContext") == 0)
+                hook = reinterpret_cast<void*>(&CaptureErrorContext);
+            if (OnWine() && _stricmp(reinterpret_cast<const char*>(base + imports->Name), "mfplat.dll") == 0 &&
+                strcmp(name, "MFCreateMFByteStreamOnStreamEx") == 0)
+                hook = reinterpret_cast<void*>(&CreateMFByteStreamOnStreamEx);
             if (!hook) continue;
             DWORD old;
             if (!VirtualProtect(&slots->u1.Function, sizeof(void*), PAGE_READWRITE, &old)) continue;
@@ -193,7 +220,7 @@ static void PatchModule(HMODULE module) noexcept {
         }
     }
 }
-static void PatchGameModules() noexcept {
+static void PatchGameModules(bool activation) noexcept {
     wchar_t game[MAX_PATH]{};
     if (!GetModuleFileNameW(nullptr, game, MAX_PATH)) return;
     *wcsrchr(game, L'\\') = L'\0';
@@ -210,8 +237,11 @@ static void PatchGameModules() noexcept {
     for (HMODULE module : modules) {
         wchar_t path[MAX_PATH]{};
         if (module == self || !GetModuleFileNameW(module, path, MAX_PATH)) continue;
-        if (_wcsnicmp(path, game, prefix) == 0 && path[prefix] == L'\\') PatchModule(module);
+        if (_wcsnicmp(path, game, prefix) == 0 && path[prefix] == L'\\') PatchModule(module, activation);
     }
+    // The shim's own WRL event sources report a failing game handler through
+    // RoTransformError; its activation calls must still reach combase.
+    if (OnWine()) PatchModule(self, false);
 }
 void InstallActivationHook() noexcept {
     HMODULE combase = GetModuleHandleW(L"combase.dll");
@@ -222,9 +252,10 @@ void InstallActivationHook() noexcept {
         if (auto* activate = Hotpatch(combase, "RoActivateInstance", reinterpret_cast<void*>(&Activate)))
             originalActivate = reinterpret_cast<ActivateCall>(activate);
         Log("INFO", "activation hook: combase hotpatch");
+        if (OnWine()) PatchGameModules(false);
         return;
     }
-    PatchGameModules();
+    PatchGameModules(true);
     Log("INFO", "activation hook: import tables of game modules");
 }
 }

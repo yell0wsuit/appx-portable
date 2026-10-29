@@ -1,4 +1,5 @@
 #include "dxgi_redirect.h"
+#include "frame_pacing.h"
 #include "host/host.h"
 #include "log.h"
 #include "options.h"
@@ -23,15 +24,19 @@ using PresentCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain*, UINT, UINT);
 using Present1Call = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain1*, UINT, UINT, const DXGI_PRESENT_PARAMETERS*);
 using SetMatrixCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain2*, const DXGI_MATRIX_3X2_F*);
 using GetMatrixCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain2*, DXGI_MATRIX_3X2_F*);
+using SetRotationCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain1*, DXGI_MODE_ROTATION);
 struct PresentHooks {
     PresentCall present;
     Present1Call present1;
+    SetRotationCall setRotation;
     SetMatrixCall setMatrix;
     GetMatrixCall getMatrix;
 };
 // Private data marking swap chains CreateForHost redirected, and their stored matrix.
 static const GUID redirectedTag = {0xa891e43b, 0x7e18, 0x4e38, {0xaa, 0xaa, 0xd7, 0x1b, 0x50, 0x0c, 0x67, 0x5f}};
 static const GUID matrixTag = {0xff0dfd5b, 0x2cb8, 0x420c, {0xb1, 0xa0, 0xa4, 0x67, 0x28, 0x6b, 0x3f, 0x86}};
+// When a redirected swap chain's next present is due; see PacePresent.
+static const GUID paceTag = {0x3e8a52c4, 0x91d7, 0x4b0f, {0x8c, 0x26, 0x5f, 0xa1, 0x7b, 0x03, 0xe9, 0x44}};
 static std::mutex presentMutex;
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization): allocation failure at DLL load is fatal anyway.
 static std::map<void**, PresentHooks> presentHooks;
@@ -92,6 +97,53 @@ static void CaptureFrame(IDXGISwapChain* swap) {
     fwrite(pixels.data(), pixels.size(), 1, file);
     fclose(file);
 }
+static bool Redirected(IUnknown* swap) {
+    ComPtr<IDXGIObject> object;
+    BOOL tag = FALSE;
+    UINT size = sizeof(tag);
+    return SUCCEEDED(swap->QueryInterface(IID_PPV_ARGS(&object))) &&
+           SUCCEEDED(object->GetPrivateData(redirectedTag, &size, &tag)) && size == sizeof(tag) && tag;
+}
+// Sleeps until QueryPerformanceCounter reaches `deadline`. Timers can wake
+// late, so sleep until a millisecond before it and spin the rest.
+static void WaitUntil(LONGLONG deadline, LONGLONG frequency) {
+    thread_local HANDLE timer = [] {
+        // CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, from Windows 10 1803.
+        HANDLE created = CreateWaitableTimerExW(nullptr, nullptr, 0x2, TIMER_ALL_ACCESS);
+        return created ? created : CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
+    }();
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    const LONGLONG sleep = (deadline - now.QuadPart) * 10000000 / frequency - 10000; // 100 ns units
+    if (timer && sleep > 0) {
+        LARGE_INTEGER due;
+        due.QuadPart = -sleep;
+        if (SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) WaitForSingleObject(timer, INFINITE);
+    }
+    do {
+        YieldProcessor();
+        QueryPerformanceCounter(&now);
+    } while (now.QuadPart < deadline);
+}
+// Holds each game present to its slot at [options] FrameRate (60 unless set;
+// 0 for no cap); see PaceFrame.
+static void PacePresent(IDXGISwapChain* swap, UINT flags) {
+    const unsigned rate = GetOptions().frameRate;
+    if (!rate || (flags & DXGI_PRESENT_TEST) || !Redirected(swap)) return;
+    static const LONGLONG frequency = [] {
+        LARGE_INTEGER value;
+        QueryPerformanceFrequency(&value);
+        return value.QuadPart;
+    }();
+    LONGLONG next = 0;
+    UINT size = sizeof(next);
+    if (FAILED(swap->GetPrivateData(paceTag, &size, &next)) || size != sizeof(next)) next = 0;
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    const LONGLONG wait = PaceFrame(now.QuadPart, frequency / rate, next);
+    swap->SetPrivateData(paceTag, sizeof(next), &next);
+    if (wait > 0) WaitUntil(now.QuadPart + wait, frequency);
+}
 static HRESULT STDMETHODCALLTYPE Present(IDXGISwapChain* swap, UINT sync, UINT flags) {
     PresentCall call;
     {
@@ -99,6 +151,7 @@ static HRESULT STDMETHODCALLTYPE Present(IDXGISwapChain* swap, UINT sync, UINT f
         call = presentHooks.at(*reinterpret_cast<void***>(swap)).present;
     }
     if (!(flags & DXGI_PRESENT_TEST)) CaptureFrame(swap);
+    PacePresent(swap, flags);
     return call(swap, sync, flags);
 }
 static HRESULT STDMETHODCALLTYPE Present1(IDXGISwapChain1* swap, UINT sync, UINT flags,
@@ -109,14 +162,8 @@ static HRESULT STDMETHODCALLTYPE Present1(IDXGISwapChain1* swap, UINT sync, UINT
         call = presentHooks.at(*reinterpret_cast<void***>(swap)).present1;
     }
     if (!(flags & DXGI_PRESENT_TEST)) CaptureFrame(swap);
+    PacePresent(swap, flags);
     return call(swap, sync, flags, params);
-}
-static bool Redirected(IUnknown* swap) {
-    ComPtr<IDXGIObject> object;
-    BOOL tag = FALSE;
-    UINT size = sizeof(tag);
-    return SUCCEEDED(swap->QueryInterface(IID_PPV_ARGS(&object))) &&
-           SUCCEEDED(object->GetPrivateData(redirectedTag, &size, &tag)) && size == sizeof(tag) && tag;
 }
 // ANGLE's SwapChainPanel path scales composition swap chains via
 // IDXGISwapChain2::SetMatrixTransform and fails surface creation on error.
@@ -150,6 +197,18 @@ static HRESULT STDMETHODCALLTYPE GetMatrix(IDXGISwapChain2* swap, DXGI_MATRIX_3X
         *matrix = DXGI_MATRIX_3X2_F{1, 0, 0, 1, 0, 0};
     return S_OK;
 }
+// The Windows 8 DirectX template sets the display's rotation right after
+// creating its swap chain and throws when that fails, which Wine's stub always
+// does. A redirected swap chain draws its HWND unrotated, so identity holds.
+static HRESULT STDMETHODCALLTYPE SetRotation(IDXGISwapChain1* swap, DXGI_MODE_ROTATION rotation) {
+    if (rotation == DXGI_MODE_ROTATION_IDENTITY && Redirected(swap)) return S_OK;
+    SetRotationCall call;
+    {
+        std::lock_guard<std::mutex> lock(presentMutex);
+        call = presentHooks.at(*reinterpret_cast<void***>(swap)).setRotation;
+    }
+    return call(swap, rotation);
+}
 static void ObserveSwapChain(IDXGISwapChain1* swap) {
     auto* table = *reinterpret_cast<void***>(swap);
     std::lock_guard<std::mutex> lock(presentMutex);
@@ -157,17 +216,19 @@ static void ObserveSwapChain(IDXGISwapChain1* swap) {
     // Matrix slots exist only in IDXGISwapChain2 and later vtables.
     ComPtr<IDXGISwapChain2> swap2;
     const bool matrix = SUCCEEDED(swap->QueryInterface(IID_PPV_ARGS(&swap2)));
-    const SIZE_T slots = matrix ? 28 : 15;
+    const SIZE_T slots = matrix ? 28 : 20;
     DWORD protection;
     if (!VirtualProtect(static_cast<void*>(table + 8), slots * sizeof(void*), PAGE_READWRITE, &protection)) return;
     presentHooks.emplace(table, PresentHooks{
                                     reinterpret_cast<PresentCall>(table[8]),
                                     reinterpret_cast<Present1Call>(table[22]),
+                                    reinterpret_cast<SetRotationCall>(table[27]),
                                     matrix ? reinterpret_cast<SetMatrixCall>(table[34]) : nullptr,
                                     matrix ? reinterpret_cast<GetMatrixCall>(table[35]) : nullptr,
                                 });
     InterlockedExchangePointer(&table[8], reinterpret_cast<void*>(&Present));
     InterlockedExchangePointer(&table[22], reinterpret_cast<void*>(&Present1));
+    InterlockedExchangePointer(&table[27], reinterpret_cast<void*>(&SetRotation));
     if (matrix) {
         InterlockedExchangePointer(&table[34], reinterpret_cast<void*>(&SetMatrix));
         InterlockedExchangePointer(&table[35], reinterpret_cast<void*>(&GetMatrix));

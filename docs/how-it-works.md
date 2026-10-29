@@ -4,4 +4,4 @@ The proxy DLLs load `appxportable.dll` while the game starts. It hooks Windows R
 
 Closing the window ends a game the way Windows 8 ends a Store app: the game is suspended, so it saves, and the process then ends. Store games never ran their own teardown on Windows, and some (Fruit Ninja, Cut the Rope 2) crash in it.
 
-See the [building guide](building.md) for compilation, tests, and code generation, and the [compatibility structure](compatibility.md) for how the runtime is organized across package generations and architectures.
+See the [building guide](building.md) for compilation, tests, and code generation, and the [runtime structure](runtime-structure.md) for how the runtime is organized across package generations and architectures.

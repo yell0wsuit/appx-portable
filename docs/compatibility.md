@@ -1,14 +1,18 @@
-# Compatibility structure
+# Game compatibility
 
-The runtime shares its app lifecycle, desktop host, storage, COM objects, and graphics redirection across supported package generations. Extend existing objects with additional documented interfaces when their behavior is compatible. Keep existing Windows 8/8.1 interfaces and their ABI layouts intact.
+| Game                                 | Package ID     | Version     | Arch | Requires `appx-host.exe` | Status         | Notes                                                       |
+| ------------------------------------ | -------------- | ----------- | ---- | ------------------------ | -------------- | ----------------------------------------------------------- |
+| Cut the Rope 2                       | `9NBLGGH0J0DC` | 1.0.0.46    | x86  |                          | ✅ Playable    |                                                             |
+| Fruit Ninja                          | `9WZDNCRFJCDR` | 1.8.1.66    | x86  |                          | ✅ Playable    |                                                             |
+| Where's My Water?                    | `9WZDNCRFJCV2` | 1.13.1.3    | x86  |                          | ✅ Playable    |                                                             |
+| Bejeweled LIVE                       | `9WZDNCRFJ14D` | 4.0.0.10    | x86  | ✓                        | ✅ Playable    |                                                             |
+| Gravity Guy                          | `9WZDNCRFHX46` | 1.0.1.2     | x86  | ✓                        | ✅ Playable    |                                                             |
+| Leo's Fortune                        | `9WZDNCRD240S` | 1.1.0.9     | x86  |                          | ✅ Playable    |                                                             |
+| Where's My Perry?                    | `9WZDNCRDCTFF` | 1.5.1.1     | x86  |                          | ✅ Playable    |                                                             |
+| Where's My Mickey? XL                | `9WZDNCRFJCV7` | 1.1.0.30    | x86  |                          | 🩹 Needs patch | [AMPS startup EXE patch](../patch/wheresmymickey/README.md) |
+| Microsoft Sudoku (2018)              | `9WZDNCRFHV60` | 1.7.10190.0 | x86  | ✓                        | 🩹 Needs patch | [Video-preloader asset patch](../patch/mssudoku/README.md)  |
+| Rayman Fiesta Run Windows 10 Edition | `9NBLGGH59M6B` | 1.0.23.0    | x64  |                          | 🩹 Needs patch | [Caption fallback](../patch/raymanwin10/README.md)          |
 
-`shim/compat/win10/` holds Windows 10 additions that require distinct behavior: independent input queues, desktop memory reporting, caption support, and extra source-XAML elements. The package reader marks Windows 10 manifests from `TargetDeviceFamily`; source-XAML extensions and the legacy `SwapChainPanel` name fallback use this marker. Windows 8/8.1 keep their existing background-panel selection.
+A ✓ under **Requires `appx-host.exe`** marks a managed (.NET) game, which starts through `appx-host.exe`; see [managed games](islands.md). Managed games do not run under Wine yet.
 
-Architecture is separate from package generation. Build the same shared runtime for x86 or x64; import-table hooks and diagnostics use the process architecture. x86 proxies retain their inline assembly, while x64 proxies use generated MASM thunks that preserve argument registers and stack arguments. The x86 combase hotpatch is never attempted on x64.
-
-Game-specific asset workarounds belong under `patch/`. Rayman Windows 10 keeps its
-source-caption fallback in normal installations. Its alternative
-[PRI/XBF connection loader](xbf.md) has passed local Windows 11 testing and a
-user-reported Windows 10 Pro 22H2 laptop test (OS build 19045.7807).
-The interfaces remain undocumented, so the installer retains the loose fallback.
-Keep game data and Microsoft runtime binaries out of the repository.
+`installappx.py` applies a game's patch automatically when it recognizes the exact package and version.

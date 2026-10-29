@@ -22,9 +22,13 @@ class CompletedOperation final
     bool assigned_ = false, closed_ = false;
     std::function<HRESULT(TResult*)> result_;
     const UINT32 id_ = NextAsyncId();
+    const bool immediate_;
 
 public:
-    explicit CompletedOperation(std::function<HRESULT(TResult*)> result) : result_(std::move(result)) {}
+    // immediate: call the handler inside put_Completed, as an operation that
+    // has already completed may, for callers that block their thread on it.
+    explicit CompletedOperation(std::function<HRESULT(TResult*)> result, bool immediate = false)
+        : result_(std::move(result)), immediate_(immediate) {}
     HRESULT STDMETHODCALLTYPE put_Completed(Handler* handler) override {
         Microsoft::WRL::ComPtr<Handler> callback(handler);
         {
@@ -44,7 +48,7 @@ public:
             // Games may create their purchase progress overlay after registering
             // completion. Deliver on a later dispatcher turn so it can be dismissed.
             // ABI-only callers without a host still receive immediate completion.
-            if (FAILED(PostHostWork(0, invoke))) invoke();
+            if (immediate_ || FAILED(PostHostWork(0, invoke))) invoke();
         }
         return S_OK;
     }

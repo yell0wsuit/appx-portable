@@ -1,3 +1,5 @@
+import hashlib
+import json
 import pathlib
 import tempfile
 import unittest
@@ -117,6 +119,43 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(installer.InstallError, 'DWrite.dll'):
             installer.stage_runtime(build, self.game, 'x86', managed=False)
 
+    def wine_graphics(self, build, machine=0x14C):
+        hashes = {}
+        for name in installer.WINE_GRAPHICS:
+            data = pe(machine, dll=True) + name.encode()
+            (build / name).write_bytes(data)
+            hashes[name] = hashlib.sha256(data).hexdigest()
+        (build / installer.WINE_GRAPHICS_MANIFEST).write_text(json.dumps({'sha256': hashes}))
+
+    def test_wine_graphics_staged_under_wine(self):
+        build = build_folder(self.base / 'build', machine=0x8664)
+        self.wine_graphics(build, machine=0x8664)
+        copied = installer.stage_runtime(build, self.game, 'x64', managed=False, wine=True)
+        for name in [*installer.WINE_GRAPHICS, installer.WINE_GRAPHICS_MANIFEST]:
+            self.assertIn(name, copied)
+            self.assertEqual((self.game / name).read_bytes(), (build / name).read_bytes())
+
+    def test_wine_graphics_not_staged_on_windows(self):
+        build = build_folder(self.base / 'build')
+        self.wine_graphics(build)
+        installer.stage_runtime(build, self.game, 'x86', managed=False, wine=False)
+        for name in [*installer.WINE_GRAPHICS, installer.WINE_GRAPHICS_MANIFEST]:
+            self.assertFalse((self.game / name).exists(), name)
+
+    def test_wine_graphics_must_match_manifest(self):
+        build = build_folder(self.base / 'build')
+        self.wine_graphics(build)
+        (build / 'dxgi.dll').write_bytes(pe(0x14C, dll=True) + b'rebuilt')
+        with self.assertRaisesRegex(installer.InstallError, 'dxgi.dll'):
+            installer.stage_runtime(build, self.game, 'x86', managed=False, wine=True)
+        self.assertFalse((self.game / 'appxportable.dll').exists())
+
+    def test_wine_graphics_architecture(self):
+        build = build_folder(self.base / 'build')
+        self.wine_graphics(build, machine=0x8664)
+        with self.assertRaisesRegex(installer.InstallError, 'wined3d.dll|d3d11.dll|dxgi.dll'):
+            installer.stage_runtime(build, self.game, 'x86', managed=False, wine=True)
+
     def test_replaces_existing_dlls(self):
         (self.game / 'appxportable.dll').write_bytes(b'old')
         installer.stage_runtime(build_folder(self.base / 'build'), self.game, 'x86', managed=False)
@@ -139,6 +178,7 @@ class SettingsTests(unittest.TestCase):
         text = self.ini.read_text()
         self.assertIn('SaveLocation=game', text)
         self.assertIn('[options]', text)
+        self.assertIn('FrameRate=60', text)
         self.assertEqual(installer.read_store(self.game), 'none')
         expected = {'none': (False, False), 'trial': (True, False), 'iap': (False, True), 'both': (True, True)}
         for store, values in expected.items():

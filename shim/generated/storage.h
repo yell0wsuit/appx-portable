@@ -151,6 +151,58 @@ struct __declspec(uuid("4207a996-ca2f-42f7-bde8-8b10457a7f30")) DefaultIStorageI
 };
 }
 namespace ABI::Windows::Storage {
+struct __declspec(uuid("fa3f6186-4214-428c-a64c-14c9ac7315ea")) DefaultIStorageFile : public ABI::Windows::Storage::IStorageFile {
+  HRESULT STDMETHODCALLTYPE get_FileType(HSTRING* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::get_FileType");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_ContentType(HSTRING* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::get_ContentType");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OpenAsync(ABI::Windows::Storage::FileAccessMode accessMode, __FIAsyncOperation_1_Windows__CStorage__CStreams__CIRandomAccessStream** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::OpenAsync");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OpenTransactedWriteAsync(__FIAsyncOperation_1_Windows__CStorage__CStorageStreamTransaction** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::OpenTransactedWriteAsync");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE CopyOverloadDefaultNameAndOptions(ABI::Windows::Storage::IStorageFolder* destinationFolder, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::CopyOverloadDefaultNameAndOptions");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE CopyOverloadDefaultOptions(ABI::Windows::Storage::IStorageFolder* destinationFolder, HSTRING desiredNewName, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::CopyOverloadDefaultOptions");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE CopyOverload(ABI::Windows::Storage::IStorageFolder* destinationFolder, HSTRING desiredNewName, ABI::Windows::Storage::NameCollisionOption option, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::CopyOverload");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE CopyAndReplaceAsync(ABI::Windows::Storage::IStorageFile* fileToReplace, ABI::Windows::Foundation::IAsyncAction** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::CopyAndReplaceAsync");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE MoveOverloadDefaultNameAndOptions(ABI::Windows::Storage::IStorageFolder* destinationFolder, ABI::Windows::Foundation::IAsyncAction** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::MoveOverloadDefaultNameAndOptions");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE MoveOverloadDefaultOptions(ABI::Windows::Storage::IStorageFolder* destinationFolder, HSTRING desiredNewName, ABI::Windows::Foundation::IAsyncAction** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::MoveOverloadDefaultOptions");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE MoveOverload(ABI::Windows::Storage::IStorageFolder* destinationFolder, HSTRING desiredNewName, ABI::Windows::Storage::NameCollisionOption option, ABI::Windows::Foundation::IAsyncAction** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::MoveOverload");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE MoveAndReplaceAsync(ABI::Windows::Storage::IStorageFile* fileToReplace, ABI::Windows::Foundation::IAsyncAction** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::IStorageFile::MoveAndReplaceAsync");
+    return E_NOTIMPL;
+  }
+};
+}
+namespace ABI::Windows::Storage {
 struct __declspec(uuid("c5aefd1e-f467-40ba-8566-ab640a441e1d")) DefaultIApplicationDataContainer : public ABI::Windows::Storage::IApplicationDataContainer {
   HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override {
     appx::Log("UNIMPL", "ABI::Windows::Storage::IApplicationDataContainer::get_Name");

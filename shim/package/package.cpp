@@ -60,8 +60,7 @@ static std::wstring LoadResource(const PackageInfo& info, const std::wstring& ur
     if (GetFileAttributesW(index.c_str()) == INVALID_FILE_ATTRIBUTES) return {};
     const auto source = L"@{" + index.wstring() + L"? " + uri + L"}";
     std::wstring value(32768, L'\0');
-    if (FAILED(SHLoadIndirectString(source.c_str(), value.data(), static_cast<UINT>(value.size()), nullptr)))
-        return {};
+    if (FAILED(SHLoadIndirectString(source.c_str(), value.data(), static_cast<UINT>(value.size()), nullptr))) return {};
     value.resize(wcsnlen(value.c_str(), value.size()));
     return value;
 }
