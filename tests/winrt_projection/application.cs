@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
+using System.Threading.Tasks;
 
 using Windows.ApplicationModel.Activation;
 using Windows.UI.Xaml;
@@ -59,6 +60,19 @@ class LaunchApp : Application
         Check(ReferenceEquals(window.Content, frame), "Window.Content returns the managed Frame");
         Check(ReferenceEquals(Window.Current, window), "one wrapper per native Window");
         window.Activate();
+        Check(SynchronizationContext.Current != null, "the view thread has a synchronization context");
+        Continue(Thread.CurrentThread.ManagedThreadId);
+    }
+
+    // An await completed on the thread pool resumes on the view thread, as XAML code expects.
+    async void Continue(int view)
+    {
+        await Task.Run(() => Thread.Sleep(10));
+        if (Thread.CurrentThread.ManagedThreadId != view)
+        {
+            Console.WriteLine("FAIL: continuation left the view thread");
+            Environment.Exit(1);
+        }
         Console.WriteLine("PASS: managed App.OnLaunched ran on the shim view thread");
         Exit();
     }

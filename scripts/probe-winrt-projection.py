@@ -37,6 +37,13 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.IWindowStatics::get_Current, slot 6", "Windows.UI.Xaml.IWindow::get_Content, slot 8",
     "Windows.UI.Xaml.IWindow::put_Content, slot 9", "Windows.UI.Xaml.IWindow::Activate, slot 20",
     "Windows.UI.Xaml.Controls.IFrameFactory::CreateInstance, slot 6"]
+# The runtime's dispatcher context calls CoreWindow and CoreDispatcher directly
+# (windows.ui.core.h): each IID and slot, and the call that uses the slot.
+HEADER_RUNTIME = [
+    "// Windows.UI.Core.ICoreWindowStatic::GetForCurrentThread, slot 6", 'Guid("4d239005-3c2a-41b1-9022-536bb9cf93b1")',
+    "statics.Object(6)", "// Windows.UI.Core.ICoreWindow::get_Dispatcher, slot 9", 'Guid("79b9d5f2-879e-4b89-b798-79e47598030c")',
+    "core.Object(9)", "// Windows.UI.Core.ICoreDispatcher::RunAsync, slot 8", "dispatcher.Call(8, 0, ",
+    "// Windows.UI.Core.IDispatchedHandler::Invoke, slot 3", 'Guid("d1f276c4-98d8-4636-bf49-eb79507548e9"), false, invoke']
 # Delegates are IUnknown-based: Invoke is their only method, at slot 3.
 HEADER_DELEGATES = ['NativeInterface(new global::System.Guid("' + iid + '"), false, invoke)'
                     for iid in ("b6351c55-c284-46e4-8310-fb0967fab76f", "23429465-e36a-40e2-b139-a4704602a6e1")]
@@ -134,17 +141,17 @@ def main():
 
     try:
         if args.runtime_case:
-            executable = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs",
+            executable = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs",
                                       repo / "tests/winrt_projection/runtime.cs"])
             run("runtime-" + args.runtime_case, [executable.name, args.runtime_case], marker="PASS: runtime " + args.runtime_case)
             return 0
-        runtime = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs",
+        runtime = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs",
                                repo / "tests/winrt_projection/runtime.cs"])
         for case in ("inspectable", "identity", "stale", "invocation", "reentrant"):
             run("runtime-" + case, [runtime.name, case], marker="PASS: runtime " + case)
         # The earlier bridge remains an independent native ownership/HRESULT check.
         bridge = compile_file("AppxPortable.WinRT.dll", [repo / "host/winrt" / name
-                              for name in ("abi.cs", "ccw.cs", "package.cs", "assembly.cs")], ["/target:library"])
+                              for name in ("abi.cs", "ccw.cs", "dispatcher.cs", "package.cs", "assembly.cs")], ["/target:library"])
         legacy = compile_file("managed-winrt-bridge.exe", [repo / "tests/managed_winrt_bridge.cs"], ["/r:" + windows(bridge)])
         folder = fixture("legacy", legacy.name, "ManagedWinrtBridgeTest", "CN=bridge-đá-💎")
         for path in (bridge, legacy):
@@ -167,9 +174,11 @@ def main():
         missing = [name for name, iid in HEADER_IIDS.items() if 'System.Guid("' + iid + '")' not in text]
         missing += [slot for slot in HEADER_SLOTS if "// " + slot + "\n" not in text]
         missing += [delegate for delegate in HEADER_DELEGATES if delegate not in text]
+        runtime_source = (repo / "host/winrt/dispatcher.cs").read_text(encoding="utf-8")
+        missing += [value for value in HEADER_RUNTIME if value not in runtime_source]
         results.append(dict(case="header-values", missing=missing, passed=not missing))
         require(not missing, "generated IIDs or slots differ from the SDK headers: " + ", ".join(missing))
-        projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", generated], ["/target:library"])
+        projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", generated], ["/target:library"])
         shutil.copyfile(projection, folder / "Windows.dll")
         run("generated-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
         invalid = [
@@ -194,7 +203,7 @@ def main():
         text = target.read_text()
         require(changed + "-37c7-4790-9980-dd7ae74e8bb2" in text, "IID did not follow metadata")
         require("native.String(7)" in text, "method slot did not follow metadata")
-        mutant = compile_file("mutant/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", target], ["/target:library"])
+        mutant = compile_file("mutant/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", target], ["/target:library"])
         try:
             shutil.copyfile(mutant, folder / "Windows.dll")
             run("changed-iid-rejected", [consumer.name], cwd=folder, succeeds=False, marker="80004002")
