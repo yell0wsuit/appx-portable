@@ -60,7 +60,17 @@ internal static class WinrtProjectionGenerator
             : Wrapper(type) + ".FromNative(" + borrowed + ")";
     }
 
-    private static string Native(string argument) { return Runtime + "NativeObject.Of(" + argument + ")"; }
+    // The interface a class or interface parameter is passed as.
+    private static string ArgumentIid(TypeReference type)
+    {
+        TypeDefinition definition = Find(type.FullName);
+        return Guid(definition.IsInterface ? definition : DefaultInterface(definition));
+    }
+
+    private static string Argument(TypeReference type, string value)
+    {
+        return Runtime + "NativeObject.Argument(" + value + ", " + ArgumentIid(type) + ")";
+    }
 
     private static string Literal(int value) { return value.ToString(CultureInfo.InvariantCulture); }
 
@@ -245,7 +255,11 @@ internal static class WinrtProjectionGenerator
             output.AppendLine("                using (var argument = " + Runtime + "ManagedObject.Hold(@" + parameter.Name + ", " + Projected(argument) + ".Interface))");
             output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ", argument.Pointer);");
         }
-        else output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ", " + Native("@" + parameter.Name) + ");");
+        else
+        {
+            output.AppendLine("                using (var argument = " + Argument(parameter.ParameterType, "@" + parameter.Name) + ")");
+            output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ", argument);");
+        }
         output.AppendLine("            }");
         output.AppendLine("        }");
     }
@@ -287,12 +301,20 @@ internal static class WinrtProjectionGenerator
     private static void Property(StringBuilder output, TypeDefinition type, string name, bool composable)
     {
         PropertyDefinition definition = type.Properties.SingleOrDefault(p => p.Name == name);
-        if (definition == null || definition.GetMethod == null || definition.SetMethod != null || definition.Parameters.Count != 0)
+        if (definition == null || definition.GetMethod == null || definition.Parameters.Count != 0)
             throw new NotSupportedException("Unsupported property: " + type.FullName + "." + name);
-        MethodDefinition getter = definition.GetMethod;
+        MethodDefinition getter = definition.GetMethod, setter = definition.SetMethod;
         TypeDefinition owner = MemberInterface(type, getter);
         int slot = Slot(owner, getter);
         output.AppendLine("        // " + owner.FullName + "::" + getter.Name + ", slot " + Literal(slot));
+        if (setter != null)
+        {
+            Parameter(setter.Parameters[0].ParameterType, type.FullName + "." + setter.Name);
+            if (IsDelegate(Find(setter.Parameters[0].ParameterType.FullName)))
+                throw new NotSupportedException("Unsupported property setter: " + type.FullName + "." + name);
+            output.AppendLine("        // " + MemberInterface(type, setter).FullName + "::" + setter.Name + ", slot " +
+                Literal(Slot(MemberInterface(type, setter), setter)));
+        }
         output.AppendLine("        public " + (getter.IsStatic ? "static " : "") + Name(getter.ReturnType) + " " + name);
         output.AppendLine("        {");
         output.AppendLine("            get");
@@ -300,6 +322,19 @@ internal static class WinrtProjectionGenerator
         string receiver = Receiver(output, type, owner, getter.IsStatic, composable);
         output.AppendLine("                    return " + Call(getter, receiver, slot) + ";");
         output.AppendLine("            }");
+        if (setter != null)
+        {
+            TypeDefinition writer = MemberInterface(type, setter);
+            output.AppendLine("            set");
+            output.AppendLine("            {");
+            output.AppendLine("                using (var invocation = " + Runtime + "Errors.Begin())");
+            output.AppendLine("                {");
+            receiver = Receiver(output, type, writer, setter.IsStatic, composable);
+            output.AppendLine("                using (var argument = " + Argument(setter.Parameters[0].ParameterType, "value") + ")");
+            output.AppendLine("                    " + receiver + ".Call(" + Literal(Slot(writer, setter)) + ", argument);");
+            output.AppendLine("                }");
+            output.AppendLine("            }");
+        }
         output.AppendLine("        }");
     }
 
@@ -374,12 +409,32 @@ internal static class WinrtProjectionGenerator
         output.AppendLine("    }");
     }
 
+    private static TypeDefinition BaseClass(TypeDefinition type)
+    {
+        if (type.BaseType == null || type.BaseType.FullName == "System.Object") return null;
+        if (!selected.Contains(type.BaseType.FullName))
+            throw new NotSupportedException("Base class not selected: " + type.FullName + " : " + type.BaseType.FullName);
+        return Find(type.BaseType.FullName);
+    }
+
+    private static IEnumerable<TypeDefinition> Chain(TypeDefinition type)
+    {
+        for (TypeDefinition current = type; current != null; current = BaseClass(current)) yield return current;
+    }
+
+    private static List<TypeDefinition> Overridables(TypeDefinition type)
+    {
+        return type.Interfaces.Where(i => Attribute(i, "Windows.Foundation.Metadata.OverridableAttribute") != null)
+            .Select(i => Find(i.InterfaceType.FullName)).ToList();
+    }
+
     private static void Class(StringBuilder output, TypeDefinition type, XmlElement surface)
     {
         CustomAttribute composition = Attribute(type, "Windows.Foundation.Metadata.ComposableAttribute");
         bool composable = composition != null;
-        if (type.BaseType == null || type.BaseType.FullName != "System.Object" || (!type.IsSealed && !composable))
+        if (type.BaseType == null || (!type.IsSealed && !composable))
             throw new NotSupportedException("Unsupported runtime class shape: " + type.FullName);
+        TypeDefinition baseClass = BaseClass(type);
         var members = new HashSet<string>(StringComparer.Ordinal);
         var overridden = new List<string>();
         bool constructor = false;
@@ -396,31 +451,61 @@ internal static class WinrtProjectionGenerator
         TypeDefinition primary = DefaultInterface(type);
         if (constructor && !composable) throw new NotSupportedException("Constructor needs a composable class: " + type.FullName);
         if (overridden.Count != 0 && !constructor) throw new InvalidDataException("Overridable without Constructor: " + type.FullName);
+        if (overridden.Count != 0 && baseClass != null) throw new NotSupportedException("Overridable on a derived class: " + type.FullName);
 
         // Overridable interfaces with a selected member are answered by the managed outer;
-        // the others keep the native behavior, and a managed override of one fails construction.
-        var overridable = type.Interfaces.Where(i => Attribute(i, "Windows.Foundation.Metadata.OverridableAttribute") != null)
-            .Select(i => Find(i.InterfaceType.FullName)).ToList();
+        // the others, across the class chain, keep the native behavior, and a managed
+        // override of one fails construction.
+        List<TypeDefinition> overridable = Overridables(type);
         foreach (string name in overridden)
             if (overridable.Count(i => i.Methods.Any(m => m.Name == name)) != 1)
                 throw new NotSupportedException("Unsupported overridable: " + type.FullName + "." + name);
         var exposed = overridable.Where(i => i.Methods.Any(m => overridden.Contains(m.Name))).ToList();
-        var unsupported = overridable.SelectMany(i => i.Methods).Select(m => m.Name).Where(n => !overridden.Contains(n)).ToList();
+        var unsupported = Chain(type).SelectMany(Overridables).SelectMany(i => i.Methods).Select(m => m.Name)
+            .Where(n => !overridden.Contains(n)).Distinct().ToList();
+        // Unsealed classes may be composed or wrap a more derived object: query per call.
+        bool query = !type.IsSealed;
+        bool root = baseClass == null;
+        string hide = root ? "" : "new ";
 
         var implemented = type.Interfaces.Select(i => i.InterfaceType.FullName).Where(interfaces.ContainsKey).ToList();
-        output.AppendLine("    public " + (type.IsSealed ? "sealed " : "") + "class " + type.Name + " : " +
-            string.Concat(implemented.Select(i => "global::" + i + ", ")) + Runtime + "INativeWrapper");
+        var bases = new List<string>();
+        if (!root) bases.Add("global::" + baseClass.FullName);
+        bases.AddRange(implemented.Select(i => "global::" + i));
+        if (root) bases.Add(Runtime + "INativeWrapper");
+        output.AppendLine("    public " + (type.IsSealed ? "sealed " : "") + "class " + type.Name +
+            (bases.Count == 0 ? "" : " : " + string.Join(", ", bases)));
         output.AppendLine("    {");
-        output.AppendLine("        internal readonly " + Runtime + "NativeObject native;");
-        output.AppendLine("        " + Runtime + "NativeObject " + Runtime + "INativeWrapper.Native { get { return native; } }");
-        if (constructor) output.AppendLine("        private readonly " + Runtime + "ManagedObject outer;");
-        output.AppendLine("        private " + type.Name + "(" + Runtime + "NativeObject value) { native = value; }");
-        output.AppendLine("        internal static " + type.Name + " FromNative(" + Runtime + "NativeObject value)");
+        if (root)
+        {
+            // The non-delegating inner of a composed object, or a native object's interface.
+            output.AppendLine("        internal " + Runtime + "NativeObject native;");
+            if (composable) output.AppendLine("        internal " + Runtime + "ManagedObject outer;");
+            output.AppendLine("        " + Runtime + "NativeObject " + Runtime + "INativeWrapper.Native { get { return native; } }");
+            output.AppendLine("        internal " + type.Name + "(" + Runtime + "NativeObject value) { native = value; }");
+            if (composable) output.AppendLine("        internal " + type.Name + "(" + Runtime + "Composing marker) { }");
+        }
+        else
+        {
+            output.AppendLine("        internal " + type.Name + "(" + Runtime + "NativeObject value) : base(value) { }");
+            output.AppendLine("        internal " + type.Name + "(" + Runtime + "Composing marker) : base(marker) { }");
+        }
+        var derived = classes.Where(c => c != type && Chain(c).Skip(1).Contains(type)).ToList();
+        output.AppendLine("        internal static " + hide + type.Name + " FromNative(" + Runtime + "NativeObject value)");
         output.AppendLine("        {");
-        output.AppendLine("            return " + Runtime + "NativeObject.Wrap<" + type.Name + ">(value, " + Guid(primary) + ", v => new " + type.Name + "(v));");
+        output.AppendLine("            return " + Runtime + "NativeObject.Wrap<" + type.Name + ">(value, " + Guid(primary) + ", v =>");
+        output.AppendLine("            {");
+        if (derived.Count != 0)
+        {
+            output.AppendLine("                string name = v.RuntimeClassName();");
+            foreach (TypeDefinition subclass in derived)
+                output.AppendLine("                if (name == \"" + subclass.FullName + "\") return global::" + subclass.FullName + ".Create(v);");
+        }
+        output.AppendLine("                return new " + type.Name + "(v);");
+        output.AppendLine("            });");
         output.AppendLine("        }");
         output.AppendLine("        // A wrapper for an identity already known to be this class; disposes value.");
-        output.AppendLine("        internal static " + type.Name + " Create(" + Runtime + "NativeObject value)");
+        output.AppendLine("        internal static " + hide + type.Name + " Create(" + Runtime + "NativeObject value)");
         output.AppendLine("        {");
         output.AppendLine("            using (value) return new " + type.Name + "(value.QueryInterface(" + Guid(primary) + "));");
         output.AppendLine("        }");
@@ -434,7 +519,8 @@ internal static class WinrtProjectionGenerator
                 throw new NotSupportedException("Unsupported composable factory: " + factory.FullName);
             int slot = Slot(factory, create[0]);
             output.AppendLine("        // " + factory.FullName + "::CreateInstance, slot " + Literal(slot));
-            output.AppendLine("        " + (kind == 2 ? "public " : "protected ") + type.Name + "()");
+            output.AppendLine("        " + (kind == 2 ? "public " : "protected ") + type.Name + "()" +
+                (root ? "" : " : base(" + Runtime + "Composing.Instance)"));
             output.AppendLine("        {");
             if (unsupported.Count != 0)
                 output.AppendLine("            " + Runtime + "ManagedObject.RequireOverrides(GetType(), typeof(" + type.Name + "), " +
@@ -488,15 +574,16 @@ internal static class WinrtProjectionGenerator
                 output.AppendLine("        protected virtual void " + method.Name + "(" + Name(parameter.ParameterType) + " @" + parameter.Name + ")");
                 output.AppendLine("        {");
                 output.AppendLine("            using (var overrides = native.QueryInterface(" + Guid(iface) + "))");
-                output.AppendLine("                overrides.Call(" + Literal(Slot(iface, method)) + ", " + Native("@" + parameter.Name) + ");");
+                output.AppendLine("            using (var argument = " + Argument(parameter.ParameterType, "@" + parameter.Name) + ")");
+                output.AppendLine("                overrides.Call(" + Literal(Slot(iface, method)) + ", argument);");
                 output.AppendLine("        }");
             }
         }
         foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
         {
-            if (member.Name == "Property") Property(output, type, member.GetAttribute("Name"), composable);
-            else if (member.Name == "Method") Method(output, type, member.GetAttribute("Name"), composable);
-            else if (member.Name == "Event") Event(output, type, member.GetAttribute("Name"), composable);
+            if (member.Name == "Property") Property(output, type, member.GetAttribute("Name"), query);
+            else if (member.Name == "Method") Method(output, type, member.GetAttribute("Name"), query);
+            else if (member.Name == "Event") Event(output, type, member.GetAttribute("Name"), query);
         }
         foreach (string name in implemented)
         {
