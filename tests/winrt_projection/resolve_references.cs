@@ -15,6 +15,8 @@ class ResolveReferences
     }
     static int Main(string[] args)
     {
+        string selected = "Windows";
+        if (args.Length > 2 && args[0] == "--assembly") { selected = args[1]; args = args.Skip(2).ToArray(); }
         var resolver = new DefaultAssemblyResolver();
         // Only the projection directory and consumer directories, never the working directory.
         foreach (string directory in resolver.GetSearchDirectories()) resolver.RemoveSearchDirectory(directory);
@@ -32,12 +34,12 @@ class ResolveReferences
             {
                 foreach (AssemblyNameReference reference in module.AssemblyReferences)
                     Console.WriteLine(module.Name + " references " + reference.FullName + " flags=" + reference.Attributes);
-                foreach (TypeReference type in module.GetTypeReferences().Where(t => Scope(t).Name == "Windows"))
+                foreach (TypeReference type in module.GetTypeReferences().Where(t => Scope(t).Name == selected))
                 {
                     ++types;
                     if (type.Resolve() == null) unresolved.Add("type " + type.FullName);
                 }
-                foreach (MemberReference member in module.GetMemberReferences().Where(m => Scope(m.DeclaringType.GetElementType()).Name == "Windows"))
+                foreach (MemberReference member in module.GetMemberReferences().Where(m => Scope(m.DeclaringType.GetElementType()).Name == selected))
                 {
                     ++members;
                     bool found;
@@ -55,7 +57,7 @@ class ResolveReferences
             }
         }
         foreach (string name in unresolved) Console.WriteLine("UNRESOLVED " + name);
-        Console.WriteLine(types + " Windows type references, " + members + " member references, " + unresolved.Count + " unresolved");
+        Console.WriteLine(types + " " + selected + " type references, " + members + " member references, " + unresolved.Count + " unresolved");
         return unresolved.Count == 0 ? 0 : 1;
     }
 }
