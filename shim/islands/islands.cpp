@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <thread>
 #include <vector>
 #include <map>
 #include <optional>
@@ -162,6 +163,10 @@ static HRESULT InitXaml(const char* where) {
         initializingXaml = true;
         hr = statics->InitializeForCurrentThread(&xamlManager);
         initializingXaml = false;
+        // Islands refuse a process whose manifest lacks maxversiontested
+        // 10.0.18362, which the installer writes beside a native XAML game.
+        if (hr == E_UNEXPECTED)
+            appx::Log("FAIL", "XAML Islands refused this process; its manifest may lack maxversiontested");
         if (SUCCEEDED(hr)) ApplyApplicationTheme();
         if (SUCCEEDED(hr) && !islandDispatcher) {
             ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> dispatcher;
@@ -622,8 +627,34 @@ bool IslandPreTranslate(MSG* message) {
     if (xamlNative) xamlNative->PreTranslateMessage(message, &handled);
     return handled != FALSE;
 }
+static HRESULT RunIslandView(IApplicationInitializationCallback* callback);
+// XAML Islands need an STA. C++/CX starts XAML from its MTA main thread, as
+// Windows then runs the view on a thread of its own; do the same.
 static HRESULT RunIsland(IApplicationInitializationCallback* callback) {
     if (!callback) return E_INVALIDARG;
+    APTTYPE type{};
+    APTTYPEQUALIFIER qualifier{};
+    const auto queried = CoGetApartmentType(&type, &qualifier);
+    if (SUCCEEDED(queried) && (type == APTTYPE_STA || type == APTTYPE_MAINSTA)) return RunIslandView(callback);
+    appx::Log("TRACE", "island view: starting an STA thread (caller apartment %d hr=%08lx)", type, queried);
+    HRESULT hr = E_FAIL;
+    ComPtr<IApplicationInitializationCallback> retained(callback);
+    try {
+        std::thread view([&] {
+            hr = RoInitialize(RO_INIT_SINGLETHREADED);
+            if (FAILED(hr)) return;
+            hr = RunIslandView(retained.Get());
+            RoUninitialize();
+        });
+        view.join();
+    } catch (const std::bad_alloc&) {
+        hr = E_OUTOFMEMORY;
+    } catch (...) {
+        hr = E_FAIL;
+    }
+    return hr;
+}
+static HRESULT RunIslandView(IApplicationInitializationCallback* callback) {
     return RunHost([&]() -> HRESULT {
         HRESULT hr = callback->Invoke(nullptr);
         if (FAILED(hr)) return hr;

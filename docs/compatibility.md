@@ -18,6 +18,6 @@
 
 A ✓ under **Requires `appx-host.exe`** marks a managed (.NET) game, which starts through `appx-host.exe`; see [managed games](islands.md). Managed games do not run under Wine yet.
 
-A ✓ under **Requires `appx-native-host.exe`** marks a .NET Native XAML game, which starts through `appx-native-host.exe` on Windows; see [installer dependencies](installer.md#without-the-launcher).
+A ✓ under **Requires `appx-native-host.exe`** marks a .NET Native XAML game or a native C++/CX XAML game that imports no proxy DLL, which starts through `appx-native-host.exe` on Windows; see [installer dependencies](installer.md#without-the-launcher). .NET Native XAML games do not run under Wine yet.
 
 `installappx.py` applies a game's patch automatically when it recognizes the exact package and version.

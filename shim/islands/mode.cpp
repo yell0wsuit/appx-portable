@@ -1,4 +1,5 @@
 #include "islands.h"
+#include "options.h"
 #include "package/package.h"
 #include <fstream>
 #include <atomic>
@@ -32,5 +33,9 @@ bool ManagedMode() noexcept {
     }();
     return managed;
 }
-bool IslandsMode() noexcept { return nativeXaml.load() || (ManagedMode() && !managedCoreWindow.load()); }
+// appx-native-host.exe starts native C++/CX XAML games, which run on real
+// Windows XAML in an island, as .NET Native games do.
+bool IslandsMode() noexcept {
+    return nativeXaml.load() || GetOptions().hosted || (ManagedMode() && !managedCoreWindow.load());
+}
 }

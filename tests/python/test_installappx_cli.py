@@ -129,6 +129,18 @@ class CliTests(unittest.TestCase):
             self.assertTrue((self.dest / name).is_file(), name)
         self.assertEqual(self.options(), (True, True))
 
+    @unittest.skipUnless(sys.platform == "win32", "native XAML hosting requires Windows")
+    def test_native_xaml_game_starts_through_native_host(self):
+        files = game_files()
+        files["App.xbf"] = b"XBF"
+        self.package = appx(self.base / "xaml.appx", files)
+        self.build.joinpath("appx-native-host.exe").write_bytes(pe())
+        code = self.main(self.scripted("--dependencies", str(self.vclibs), "--launcher"))
+        self.assertEqual(code, 0, self.stderr.getvalue())
+        self.assertTrue((self.dest / "appx-native-host.exe").is_file())
+        self.assertIn("maxversiontested", (self.dest / "Game.exe.manifest").read_text())
+        self.assertIn("appx-native-host.exe", (self.dest / LAUNCHER).read_text())
+
     def test_long_folder_warns(self):
         self.dest = self.base / ("x" * (installer.LONG_FOLDER - len(str(self.base))))
         code = self.main(self.scripted("--dependencies", str(self.vclibs)))

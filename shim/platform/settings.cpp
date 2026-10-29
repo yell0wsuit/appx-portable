@@ -677,7 +677,10 @@ public:
         if (!value) return E_POINTER;
         *value = nullptr;
         std::lock_guard<std::mutex> lock(state_->mutex_);
-        return state_->map_->Lookup(key, value);
+        // Windows returns null for a missing setting rather than failing.
+        boolean found{};
+        auto hr = state_->map_->HasKey(key, &found);
+        return SUCCEEDED(hr) && found ? state_->map_->Lookup(key, value) : hr;
     }
     HRESULT STDMETHODCALLTYPE get_Size(UINT32* value) override {
         if (!value) return E_POINTER;
@@ -706,6 +709,12 @@ public:
     HRESULT STDMETHODCALLTYPE Insert(HSTRING key, IInspectable* value, boolean* replaced) override {
         if (!replaced) return E_POINTER;
         *replaced = false;
+        // Windows removes a setting stored as null; a missing key is no error.
+        if (!value) {
+            boolean found{};
+            auto hr = HasKey(key, &found);
+            return SUCCEEDED(hr) && found ? Remove(key) : hr;
+        }
         return Guard([&]() -> HRESULT {
             Entry entry;
             auto hr = Encode(value, entry);

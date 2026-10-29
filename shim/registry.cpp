@@ -1,6 +1,7 @@
 #include "registry.h"
 #include "islands/islands.h"
 #include "log.h"
+#include "options.h"
 #include "version.h"
 #include <winstring.h>
 #include <new>
@@ -61,6 +62,8 @@ extern "C" HRESULT WINAPI DllCanUnloadNow() { return S_FALSE; }
 extern "C" void __cdecl ShimBootstrap() noexcept {}
 BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
+        // The options keep the host's mark; processes the game starts must not.
+        if (appx::GetOptions().hosted) SetEnvironmentVariableW(L"APPX_PORTABLE_HOSTED", nullptr);
         // Opens each run's log and names the build, so a log shows which DLL ran.
         wchar_t path[MAX_PATH]{};
         GetModuleFileNameW(nullptr, path, MAX_PATH);

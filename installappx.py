@@ -153,6 +153,60 @@ def native_compiled_application(executable: Path) -> bool:
     )
 
 
+def native_xaml_application(game: Path, executable: Path) -> bool:
+    """A native XAML game that would start before the shim: nothing it imports
+    from its folder, directly or through its own DLLs, is a proxy.
+
+    C++/CX Unity players are such games. Their compiled XAML is .xbf, loose or
+    named in resources.pri."""
+    proxies = {name.lower() for name in (*PROXIES, "XAudio2_9.dll")}
+    seen = set()
+    pending = [Path(executable)]
+    while pending:
+        for name in pe_imports(pending.pop()):
+            if name in proxies:
+                return False
+            local = Path(game) / name
+            if name not in seen and local.is_file():
+                seen.add(name)
+                pending.append(local)
+    if any(Path(game).rglob("*.xbf")):
+        return True
+    pri = Path(game) / "resources.pri"
+    data = pri.read_bytes() if pri.is_file() else b""
+    return b".xbf" in data or ".xbf".encode("utf-16-le") in data
+
+
+# Real XAML runs native XAML games in an island, which Windows allows only in a
+# process whose manifest declares Windows 10 1903 (10.0.18362) as tested.
+PROCESS_MANIFEST = """\
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <maxversiontested Id="10.0.18362.0"/>
+    </application>
+  </compatibility>
+</assembly>
+"""
+
+
+def write_process_manifest(game: Path, executable: str) -> Optional[str]:
+    """Write <executable>.manifest beside a native XAML game; returns a warning
+    when Windows will not read it."""
+    path = Path(game) / executable
+    path.with_name(path.name + ".manifest").write_text(PROCESS_MANIFEST, encoding="utf-8")
+    # Windows caches whether an executable has a manifest until its timestamp changes.
+    os.utime(path)
+    if b"urn:schemas-microsoft-com:asm.v1" in path.read_bytes():
+        return (
+            f"{executable} embeds its own manifest, so Windows ignores"
+            f" {path.name}.manifest and XAML may refuse to start."
+        )
+    return None
+
+
 # Package manifest
 
 
@@ -743,9 +797,9 @@ def stage_runtime(
     architecture: str,
     managed: bool,
     wine: bool = False,
-    native_compiled: bool = False,
+    native_host: bool = False,
 ) -> List[str]:
-    """Copy the shim, proxies and the selected CLR or .NET Native host into game.
+    """Copy the shim, proxies and the selected CLR or native host into game.
 
     Under Wine, a build's patched graphics stack goes beside them too."""
     if managed and architecture == "x64":
@@ -758,9 +812,9 @@ def stage_runtime(
         names.append("XAudio2_9.dll")
     if managed:
         names.append("appx-host.exe")
-    if native_compiled:
+    if native_host:
         if wine:
-            raise InstallError(".NET Native XAML hosting requires Windows.")
+            raise InstallError("Native XAML hosting requires Windows.")
         names.append("appx-native-host.exe")
     graphics = wine and (build / WINE_GRAPHICS_MANIFEST).is_file()
     if graphics:
@@ -1266,10 +1320,10 @@ def plays_media(game: Path, executable: Path) -> bool:
 
 
 def launch_executable(
-    executable: str, managed: bool, native_compiled: bool = False
+    executable: str, managed: bool, native_host: bool = False
 ) -> str:
-    """Select the desktop CLR host, .NET Native host, or game's executable."""
-    if native_compiled:
+    """Select the desktop CLR host, native host, or game's executable."""
+    if native_host:
         return "appx-native-host.exe"
     return "appx-host.exe" if managed else executable
 
@@ -1685,14 +1739,14 @@ def add_missing_vclibs(
 
 
 def stage_dlls(
-    args, game: Path, architecture: str, managed: bool, native_compiled: bool = False
+    args, game: Path, architecture: str, managed: bool, native_host: bool = False
 ) -> Optional[str]:
     """Copy the runtime from --build or the release; returns the release tag used."""
     wine = sys.platform != "win32"
     if args.build:
         stage_runtime(
             absolute(args.build), game, architecture, managed,
-            wine=wine, native_compiled=native_compiled,
+            wine=wine, native_host=native_host,
         )
         return args.release
     tag = resolve_release(args.release)
@@ -1704,7 +1758,7 @@ def stage_dlls(
             architecture,
             managed,
             wine=wine,
-            native_compiled=native_compiled,
+            native_host=native_host,
         )
     return tag
 
@@ -1747,15 +1801,23 @@ def install(args, ask: Callable[[str], str]) -> int:
     architecture = architecture_of(executable)
     managed = pe_info(executable).managed
     native_compiled = native_compiled_application(executable)
-    if native_compiled and sys.platform != "win32":
-        raise InstallError(".NET Native XAML hosting requires Windows.")
+    # .NET Native and native C++/CX XAML games both start through the native host.
+    native_host = native_compiled or (
+        not managed and native_xaml_application(destination, executable)
+    )
+    if native_host and sys.platform != "win32":
+        raise InstallError("Native XAML hosting requires Windows.")
     add_missing_vclibs(args, ask, manifest, destination, architecture)
     add_native_frameworks(manifest, destination, architecture, args.dependencies)
-    tag = stage_dlls(args, destination, architecture, managed, native_compiled)
+    tag = stage_dlls(args, destination, architecture, managed, native_host)
+    if native_host and not native_compiled:
+        warning = write_process_manifest(destination, manifest.executable)
+        if warning:
+            print(f"Warning: {warning}")
     if not args.no_patch:
         patch_known_game(manifest, destination, tag)
-    launch = launch_executable(manifest.executable, managed, native_compiled)
-    if not managed and not native_compiled and (
+    launch = launch_executable(manifest.executable, managed, native_host)
+    if not managed and not native_host and (
         args.desktop_copy or needs_desktop_copy()
     ):
         launch = make_desktop_copy(destination, manifest.executable)

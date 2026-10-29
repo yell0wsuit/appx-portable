@@ -1,4 +1,5 @@
 import hashlib
+import os
 import pathlib
 import tempfile
 import unittest
@@ -36,6 +37,38 @@ class NativeTests(unittest.TestCase):
         self.assertTrue(installer.native_compiled_application(executable))
         executable.with_suffix('.dll').write_bytes(pe(0x8664, dll=True, imports=['kernel32.dll']))
         self.assertFalse(installer.native_compiled_application(executable))
+
+    def test_native_xaml_executable_detection(self):
+        executable = self.game / 'Game.exe'
+        executable.write_bytes(pe(0x8664, imports=['vccorlib140_app.dll', 'kernel32.dll']))
+        # Without compiled XAML, the game has no Application.Start to host.
+        self.assertFalse(installer.native_xaml_application(self.game, executable))
+        self.game.joinpath('resources.pri').write_bytes(b'mrm_pri2' + 'Files/MainPage.xbf'.encode('utf-16-le'))
+        self.assertTrue(installer.native_xaml_application(self.game, executable))
+        self.game.joinpath('resources.pri').unlink()
+        self.game.joinpath('App.xbf').write_bytes(b'XBF')
+        self.assertTrue(installer.native_xaml_application(self.game, executable))
+        # A proxy the game imports, itself or through its own DLLs, loads the shim.
+        executable.write_bytes(pe(0x8664, imports=['DWrite.dll']))
+        self.assertFalse(installer.native_xaml_application(self.game, executable))
+        executable.write_bytes(pe(0x8664, imports=['Engine.dll']))
+        self.game.joinpath('Engine.dll').write_bytes(pe(0x8664, dll=True, imports=['XAudio2_9.dll']))
+        self.assertFalse(installer.native_xaml_application(self.game, executable))
+        self.game.joinpath('Engine.dll').write_bytes(pe(0x8664, dll=True, imports=['d3d11.dll']))
+        self.assertTrue(installer.native_xaml_application(self.game, executable))
+
+    def test_native_xaml_process_manifest(self):
+        executable = self.game / 'Game.exe'
+        executable.write_bytes(pe(0x8664))
+        os.utime(executable, (1_000_000_000, 1_000_000_000))
+        self.assertIsNone(installer.write_process_manifest(self.game, 'Game.exe'))
+        text = self.game.joinpath('Game.exe.manifest').read_text()
+        self.assertIn('maxversiontested Id="10.0.18362.0"', text)
+        # Windows caches an executable's manifest lookup by its timestamp.
+        self.assertGreater(executable.stat().st_mtime, 1_000_000_000)
+        # Windows ignores the file beside an executable that embeds a manifest.
+        executable.write_bytes(pe(0x8664) + b'<assembly xmlns="urn:schemas-microsoft-com:asm.v1">')
+        self.assertIn('embeds', installer.write_process_manifest(self.game, 'Game.exe'))
 
     def test_framework_folder_and_archive_preserve_game_dll(self):
         runtime = self.framework(RUNTIME)
@@ -94,13 +127,13 @@ class NativeTests(unittest.TestCase):
     def test_native_host_is_required_and_selected_without_clr_hosting(self):
         build = build_folder(self.base / 'build', machine=0x8664, host=False)
         with self.assertRaisesRegex(installer.InstallError, 'appx-native-host.exe'):
-            installer.stage_runtime(build, self.game, 'x64', managed=False, native_compiled=True)
+            installer.stage_runtime(build, self.game, 'x64', managed=False, native_host=True)
         build.joinpath('appx-native-host.exe').write_bytes(pe(0x8664))
-        installer.stage_runtime(build, self.game, 'x64', managed=False, native_compiled=True)
+        installer.stage_runtime(build, self.game, 'x64', managed=False, native_host=True)
         self.assertTrue(self.game.joinpath('appx-native-host.exe').is_file())
         self.assertEqual(installer.launch_executable('Game.exe', False, True), 'appx-native-host.exe')
         with self.assertRaisesRegex(installer.InstallError, 'requires Windows'):
-            installer.stage_runtime(build, self.game, 'x64', managed=False, wine=True, native_compiled=True)
+            installer.stage_runtime(build, self.game, 'x64', managed=False, wine=True, native_host=True)
 
 
 if __name__ == '__main__':

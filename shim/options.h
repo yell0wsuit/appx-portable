@@ -13,9 +13,11 @@ namespace appx {
 //   --passthrough   activate the OS classes and only log           APPX_PORTABLE_MODE=trace
 //   --stub-iap      complete in-app purchases locally             APPX_PORTABLE_STUB_IAP=1
 //   --unlock-trial  report an active, full base-app license        APPX_PORTABLE_UNLOCK_TRIAL=1
+// appx-native-host.exe sets APPX_PORTABLE_HOSTED=1 for a game it starts with
+// the shim loaded; the shim clears it so the game's own children do not see it.
 struct Options {
     bool log = false, trace = false, capture = false, diagnostics = false, passthrough = false;
-    bool unlockTrial = false, stubIap = false;
+    bool unlockTrial = false, stubIap = false, hosted = false;
     unsigned frameRate = 60;
 };
 const Options& GetOptions() noexcept;

@@ -8,6 +8,8 @@ Architecture is separate from package generation. Build the same shared runtime 
 
 `appx-native-host.exe` hosts .NET Native XAML applications on Windows. It loads the shim before the game's companion native DLL, installs activation hooks for that DLL and its framework dependencies, and calls `RHBinder__ShimExeMain` on an STA thread. This uses XAML Islands without loading the desktop CLR. The normal `appx-host.exe` continues to host CLR assemblies.
 
+When the package executable has no companion DLL, `appx-native-host.exe` starts it as a native C++/CX XAML game instead. Such a game imports no proxy DLL, so nothing would load the shim before its `Application::Start`, which real XAML refuses outside a package. The host creates the game process suspended and queues `LoadLibraryW` of the shim as an APC, which runs after the loader has initialized the game's imports and before its entry point. It sets `APPX_PORTABLE_HOSTED=1` for that process; the shim clears it, continues the host's log, and runs the game's XAML in an island on an STA thread of its own, since C++/CX calls `Application::Start` from its MTA main thread. The host waits for the game and exits with its exit code. In-package modules loaded later, by class activation or `LoadPackagedLibrary`, get the same import hooks as the game; `LoadPackagedLibrary` loads package-relative names from the game folder, as Windows does inside a package.
+
 Game-specific asset workarounds belong under `patch/`. Rayman Windows 10 keeps its
 source-caption fallback in normal installations. Its alternative
 [PRI/XBF connection loader](xbf.md) has passed local Windows 11 testing and a

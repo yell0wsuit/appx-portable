@@ -56,6 +56,14 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
     "-DFIXTURE=${CMAKE_BINARY_DIR}/native-application-fixture"
     -P "${CMAKE_SOURCE_DIR}/tests/native_application.cmake")
   set_tests_properties(native_application_host PROPERTIES TIMEOUT 30)
+  add_executable(nativelaunchfixture WIN32 tests/native_launch.cpp)
+  target_link_libraries(nativelaunchfixture PRIVATE runtimeobject)
+  add_test(NAME native_executable_launch COMMAND "${CMAKE_COMMAND}"
+    "-DTEST_EXE=$<TARGET_FILE:nativelaunchfixture>" "-DPLUGIN=$<TARGET_FILE:nativeappfixture>"
+    "-DHOST=$<TARGET_FILE:appx-native-host>" "-DSHIM=$<TARGET_FILE:appxportable>" "-DARCH=${APPX_HOST_ARCH}"
+    "-DFIXTURE=${CMAKE_BINARY_DIR}/native-launch-fixture"
+    -P "${CMAKE_SOURCE_DIR}/tests/native_launch.cmake")
+  set_tests_properties(native_executable_launch PROPERTIES TIMEOUT 30)
   # One proxy per system DLL a game imports from its folder (see scripts/gen_proxy.py).
   set(APPX_PROXIES d3dcompiler_47 XAudio2_8 XAudio2_9 DWrite)
   foreach(proxy IN LISTS APPX_PROXIES)
