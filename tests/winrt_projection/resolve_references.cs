@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+
 using Mono.Cecil;
 // Every Windows-scoped type and member a consumer references must resolve
 // against the projection directory, with the signature the consumer uses.
@@ -23,8 +24,11 @@ class ResolveReferences
         foreach (string path in args.Skip(1))
         {
             resolver.AddSearchDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
-            using (ModuleDefinition module = ModuleDefinition.ReadModule(path, new ReaderParameters {
-                AssemblyResolver = resolver, ApplyWindowsRuntimeProjections = false }))
+            using (ModuleDefinition module = ModuleDefinition.ReadModule(path, new ReaderParameters
+            {
+                AssemblyResolver = resolver,
+                ApplyWindowsRuntimeProjections = false
+            }))
             {
                 foreach (AssemblyNameReference reference in module.AssemblyReferences)
                     Console.WriteLine(module.Name + " references " + reference.FullName + " flags=" + reference.Attributes);

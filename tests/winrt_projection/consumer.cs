@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+
 using Windows.ApplicationModel;
 using Windows.System;
 class GeneratedProjectionTest

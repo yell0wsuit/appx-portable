@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+
 using Windows.UI.Xaml;
 // A member outside the implemented surface binds and then names itself when called.
 // Windows types stay out of Main's class and method so a binding failure is
