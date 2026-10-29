@@ -680,6 +680,17 @@ static HRESULT STDMETHODCALLTYPE AddSuspending(IApplication*, ISuspendingEventHa
 static HRESULT STDMETHODCALLTYPE RemoveSuspending(IApplication*, EventRegistrationToken token) {
     return suspending.Remove(token);
 }
+static HRESULT STDMETHODCALLTYPE ExitApplication(IApplication*) {
+    // Application.Exit is called after engines such as Unity have cleaned up.
+    // Sending visibility or suspension callbacks now reenters dead engine state.
+    if (CurrentPackage().loaded) {
+        SaveHostPlacement();
+        appx::Log("INFO", "Application.Exit: ending the process without suspension");
+        TerminateProcess(GetCurrentProcess(), 0);
+    }
+    PostMessageW(HostWindow(), WM_CLOSE, 0, 0);
+    return S_OK;
+}
 static HRESULT STDMETHODCALLTYPE RequestTheme(IApplication* application, ApplicationTheme theme) {
     if (theme != ApplicationTheme_Dark && theme != ApplicationTheme_Light) return E_INVALIDARG;
     // Constructor requests before XAML runs are applied when it starts.
@@ -704,7 +715,7 @@ void RaiseIslandSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs*
 static HRESULT CaptureSuspending(IApplication* application) {
     void** table = *reinterpret_cast<void***>(application);
     DWORD protection;
-    if (!VirtualProtect(table + 9, 6 * sizeof(void*), PAGE_READWRITE, &protection))
+    if (!VirtualProtect(table + 9, 9 * sizeof(void*), PAGE_READWRITE, &protection))
         return HRESULT_FROM_WIN32(GetLastError());
     if (!realRequestedTheme) {
         realRequestedTheme = reinterpret_cast<RequestedThemeCall>(table[10]);
@@ -714,8 +725,9 @@ static HRESULT CaptureSuspending(IApplication* application) {
     }
     InterlockedExchangePointer(table + 13, reinterpret_cast<void*>(&AddSuspending));
     InterlockedExchangePointer(table + 14, reinterpret_cast<void*>(&RemoveSuspending));
+    InterlockedExchangePointer(table + 17, reinterpret_cast<void*>(&ExitApplication));
     DWORD ignored;
-    VirtualProtect(table + 9, 6 * sizeof(void*), protection, &ignored);
+    VirtualProtect(table + 9, 9 * sizeof(void*), protection, &ignored);
     return S_OK;
 }
 // ---- Application factory wrapper ----------------------------------------------
