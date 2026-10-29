@@ -420,6 +420,45 @@ internal static class WinrtProjectionGenerator
         return members;
     }
 
+    // CLR-facing async contracts come from WinMD; they do not provide native
+    // wrappers. Each native closed generic operation needs its own ABI adapter.
+    private static string AsyncName(TypeReference type)
+    {
+        if (type is GenericParameter) return "T" + ((GenericParameter)type).Position;
+        var generic = type as GenericInstanceType;
+        if (generic != null)
+            return AsyncName(generic.ElementType) + "<" + string.Join(", ", generic.GenericArguments.Select(AsyncName)) + ">";
+        if (type.FullName == "Windows.Foundation.HResult") return "global::System.Exception";
+        if (type.FullName == "System.Void") return "void";
+        if (type.Namespace == "System" && new[] { "UInt32", "Int32", "Object" }.Contains(type.Name)) return "global::" + type.FullName;
+        if (!selected.Contains(type.FullName)) throw new NotSupportedException("Unselected async contract type: " + type.FullName);
+        return "global::" + type.FullName.Split('`')[0];
+    }
+    private static void AsyncContract(StringBuilder output, TypeDefinition type)
+    {
+        if (type.Namespace != "Windows.Foundation" || (!type.IsInterface && !IsDelegate(type)))
+            throw new NotSupportedException("Unsupported async contract: " + type.FullName);
+        string name = type.Name.Split('`')[0] + (type.HasGenericParameters ? "<" + string.Join(", ", type.GenericParameters.Select(p => "T" + p.Position)) + ">" : "");
+        if (IsDelegate(type))
+        {
+            MethodDefinition invoke = type.Methods.Single(m => m.Name == "Invoke");
+            if (invoke.ReturnType.FullName != "System.Void") throw new NotSupportedException("Async delegate return: " + type.FullName);
+            output.AppendLine("    public delegate void " + name + "(" + string.Join(", ", invoke.Parameters.Select(p => AsyncName(p.ParameterType) + " @" + p.Name)) + ");");
+            return;
+        }
+        output.AppendLine("    public interface " + name + (type.Interfaces.Count == 0 ? "" : " : " + string.Join(", ", type.Interfaces.Select(i => AsyncName(i.InterfaceType)))));
+        output.AppendLine("    {");
+        foreach (PropertyDefinition property in type.Properties)
+            output.AppendLine("        " + AsyncName(property.PropertyType) + " " + property.Name + " { " + (property.GetMethod != null ? "get; " : "") + (property.SetMethod != null ? "set; " : "") + "}");
+        foreach (MethodDefinition method in type.Methods.Where(m => !m.IsGetter && !m.IsSetter))
+        {
+            if (method.IsStatic || method.HasGenericParameters || method.Parameters.Any(p => p.ParameterType.IsByReference))
+                throw new NotSupportedException("Unsupported async method: " + method.FullName);
+            output.AppendLine("        " + AsyncName(method.ReturnType) + " " + method.Name + "(" + string.Join(", ", method.Parameters.Select(p => AsyncName(p.ParameterType) + " @" + p.Name)) + ");");
+        }
+        output.AppendLine("    }");
+    }
+
     private static string Parameterized(TypeDefinition type, params string[] arguments)
     {
         string signature = "pinterface({" + Iid(type) + "};" + string.Join(";", arguments) + ")";
@@ -807,7 +846,14 @@ internal static class WinrtProjectionGenerator
                 TypeDefinition type = Find(element.GetAttribute("Name"));
                 output.AppendLine("namespace " + type.Namespace);
                 output.AppendLine("{");
-                if (element.Name == "Enum" && type.IsEnum) Enum(output, type);
+                if (element.GetAttribute("Adapter") == "Async")
+                {
+                    if (element.HasChildNodes || (element.Name != "Interface" && element.Name != "Delegate") ||
+                        (element.Name == "Interface") != type.IsInterface)
+                        throw new NotSupportedException("Unsupported async surface: " + type.FullName);
+                    AsyncContract(output, type);
+                }
+                else if (element.Name == "Enum" && type.IsEnum) Enum(output, type);
                 else if (element.Name == "Delegate" && IsDelegate(type)) Delegate(output, type);
                 else if (element.Name == "Interface" && type.IsInterface) Interface(output, type, element);
                 else if (element.Name == "Class" && !type.IsEnum && !IsDelegate(type) && !type.IsValueType && !type.IsInterface)
