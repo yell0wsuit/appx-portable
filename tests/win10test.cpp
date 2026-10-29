@@ -7,6 +7,7 @@
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.core.h>
 #include <windows.devices.input.h>
+#include <windows.devices.sensors.h>
 #include <wrl.h>
 #include <wrl/event.h>
 #include <wrl/wrappers/corewrappers.h>
@@ -91,6 +92,12 @@ int main() {
     HString capabilitiesName;
     CHECK(SUCCEEDED(mouseObject->GetRuntimeClassName(capabilitiesName.GetAddressOf())) &&
           wcscmp(capabilitiesName.GetRawBuffer(nullptr), L"Windows.Devices.Input.MouseCapabilities") == 0);
+    // Where's My Water asks for the accelerometer while making its page; no
+    // sensor is a null default, not a failure.
+    ComPtr<ABI::Windows::Devices::Sensors::IAccelerometerStatics> accelerometers;
+    ComPtr<ABI::Windows::Devices::Sensors::IAccelerometer> accelerometer;
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Sensors.Accelerometer").Get(), &factory)) &&
+          SUCCEEDED(factory.As(&accelerometers)) && SUCCEEDED(accelerometers->GetDefault(&accelerometer)));
     CHECK(SUCCEEDED(get(HStringReference(L"Windows.ApplicationModel.Core.CoreApplication").Get(), &factory)));
     ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplication> app;
     CHECK(SUCCEEDED(factory.As(&app)));
