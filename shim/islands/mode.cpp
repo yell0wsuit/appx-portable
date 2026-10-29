@@ -33,9 +33,24 @@ bool ManagedMode() noexcept {
     }();
     return managed;
 }
+// Wine has no system XAML to host in Islands, so managed XAML games there use
+// the shim's own XAML. APPX_PORTABLE_XAML=shim or =islands overrides either default.
+static bool ShimXaml() noexcept {
+    static const bool shim = [] {
+        wchar_t value[16]{};
+        const DWORD length = GetEnvironmentVariableW(L"APPX_PORTABLE_XAML", value, ARRAYSIZE(value));
+        if (length && length < ARRAYSIZE(value)) {
+            if (!_wcsicmp(value, L"shim")) return true;
+            if (!_wcsicmp(value, L"islands")) return false;
+        }
+        return GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != nullptr;
+    }();
+    return shim;
+}
 // appx-native-host.exe starts native C++/CX XAML games, which run on real
 // Windows XAML in an island, as .NET Native games do; its CoreWindow games do not.
 bool IslandsMode() noexcept {
-    return nativeXaml.load() || GetOptions().hostedXaml || (ManagedMode() && !managedCoreWindow.load());
+    return nativeXaml.load() || GetOptions().hostedXaml ||
+           (ManagedMode() && !managedCoreWindow.load() && !ShimXaml());
 }
 }

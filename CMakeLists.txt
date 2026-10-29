@@ -275,6 +275,21 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
   target_compile_options(wine_wow64_transition PRIVATE /Oy-)
   add_test(NAME wine_wow64_transition COMMAND wine_wow64_transition)
   set_tests_properties(wine_wow64_transition PROPERTIES TIMEOUT 20 LABELS managed-clr)
+  # Generated Windows projection under an explicit Wine engine, prefix, SDK
+  # contract metadata directory and Mono.Cecil; none of these ship with games.
+  set(APPX_WINE "" CACHE FILEPATH "Wine executable for the WinRT projection probe")
+  set(APPX_WINE_PREFIX "" CACHE PATH "Isolated WINEPREFIX for the WinRT projection probe")
+  set(APPX_WINRT_METADATA "" CACHE PATH "Directory of SDK contract .winmd files")
+  set(APPX_WINRT_CECIL "" CACHE FILEPATH "Mono.Cecil.dll used only at build time")
+  if(APPX_WINE AND APPX_WINE_PREFIX AND APPX_WINRT_METADATA AND APPX_WINRT_CECIL)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME winrt_projection COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
+      --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
+      --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
+      --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
+    set_tests_properties(winrt_projection PROPERTIES TIMEOUT 600 LABELS managed-clr)
+  endif()
 endif()
 add_executable(navtest tests/navtest.cpp)
 target_link_libraries(navtest PRIVATE runtimeobject ole32)
@@ -345,6 +360,25 @@ if(NOT CMAKE_CROSSCOMPILING)
       "${APPX_HOST_SOURCE}"
     DEPENDS host/managed.cs host/managed.manifest VERBATIM)
   add_custom_target(appx_managed_host ALL DEPENDS "${CMAKE_BINARY_DIR}/appx-host.exe")
+  # Experimental explicit WinRT ABI bridge; not yet installed into games.
+  set(APPX_WINRT_SOURCES host/winrt/abi.cs host/winrt/ccw.cs host/winrt/package.cs host/winrt/assembly.cs)
+  set(APPX_WINRT_NATIVE_SOURCES)
+  foreach(source IN LISTS APPX_WINRT_SOURCES)
+    file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}/${source}" native_source)
+    list(APPEND APPX_WINRT_NATIVE_SOURCES "${native_source}")
+  endforeach()
+  add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/AppxPortable.WinRT.dll"
+    COMMAND "${APPX_CSC}" /nologo /codepage:65001 /warnaserror+ /platform:anycpu /target:library
+      /out:${CMAKE_BINARY_DIR}/AppxPortable.WinRT.dll ${APPX_WINRT_NATIVE_SOURCES}
+    DEPENDS ${APPX_WINRT_SOURCES} VERBATIM)
+  add_custom_target(appx_managed_winrt ALL DEPENDS "${CMAKE_BINARY_DIR}/AppxPortable.WinRT.dll")
+  add_test(NAME managed_winrt_bridge COMMAND "${CMAKE_COMMAND}"
+    "-DCSC=${APPX_CSC}" "-DARCH=${APPX_HOST_ARCH}"
+    "-DSOURCE=${CMAKE_SOURCE_DIR}/tests/managed_winrt_bridge.cs"
+    "-DBRIDGE=${CMAKE_BINARY_DIR}/AppxPortable.WinRT.dll" "-DSHIM=$<TARGET_FILE:appxportable>"
+    "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-winrt-bridge-fixture"
+    -P "${CMAKE_SOURCE_DIR}/tests/managed_winrt_bridge.cmake")
+  set_tests_properties(managed_winrt_bridge PROPERTIES TIMEOUT 45 LABELS managed-clr)
   add_test(NAME xbox11_standins COMMAND "${CMAKE_COMMAND}"
     "-DCSC=${APPX_CSC}" "-DTEST_EXE=$<TARGET_FILE:standintest>"
     "-DSHIM=$<TARGET_FILE:appxportable>" "-DFIXTURE=${CMAKE_BINARY_DIR}/xbox11-fixture"
