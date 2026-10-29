@@ -13,6 +13,14 @@ namespace AppxPortable.WinRT
 
     // Explicit ABI calls avoid the CLR's WinRT metadata/projection machinery.
     // Callers initialize their COM apartment, as the game host already does.
+    // Passed through a derived projected class's constructors to its root, so
+    // that only the most derived constructor composes the native object.
+    internal sealed class Composing
+    {
+        internal static readonly Composing Instance = new Composing();
+        private Composing() { }
+    }
+
     // An object argument of no selected type.
     internal sealed class InspectableObject : INativeWrapper
     {
@@ -136,6 +144,13 @@ namespace AppxPortable.WinRT
             return Wrap<object>(value, inspectable, v => new InspectableObject(v));
         }
 
+        // A projected argument as the interface the callee expects; dispose after the call.
+        internal static NativeObject Argument(object value, Guid iid)
+        {
+            NativeObject native = Of(value);
+            return native == null ? null : native.QueryInterface(iid);
+        }
+
         // IInspectable::GetRuntimeClassName, slot 4.
         internal string RuntimeClassName() { return String(4); }
 
@@ -162,13 +177,14 @@ namespace AppxPortable.WinRT
             using (NativeObject identity = QueryInterface(unknown)) return identity.handle;
         }
 
+        // A getter's object result; null is a valid WinRT value here.
         internal NativeObject Object(int slot)
         {
             using (var call = new Access(this))
             {
                 IntPtr pointer;
                 int hr = call.Method<GetPointer>(slot)(call.Self, out pointer);
-                return TakeResult(hr, pointer);
+                return hr >= 0 && pointer == IntPtr.Zero ? null : TakeResult(hr, pointer);
             }
         }
 

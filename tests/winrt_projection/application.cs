@@ -5,6 +5,7 @@ using System.Threading;
 
 using Windows.ApplicationModel.Activation;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
 // A managed Application composed over the shim's, started the way games start:
 // Application.Start(p => new App()) with OnLaunched overridden. Exit ends the
 // process after suspension, as a Store app's does, so Start returns only when
@@ -50,6 +51,14 @@ class LaunchApp : Application
         Check(activated.Kind == ActivationKind.Launch && activated.PreviousExecutionState == ApplicationExecutionState.NotRunning,
             "interface view of the launch arguments");
         Check(activations == 0, "OnActivated not called for a launch");
+        // As games start: an empty window gets a composed Frame as its content.
+        Window window = Window.Current;
+        Check(window != null && window.Content == null, "empty Window.Current");
+        var frame = new Frame();
+        window.Content = frame;
+        Check(ReferenceEquals(window.Content, frame), "Window.Content returns the managed Frame");
+        Check(ReferenceEquals(Window.Current, window), "one wrapper per native Window");
+        window.Activate();
         Console.WriteLine("PASS: managed App.OnLaunched ran on the shim view thread");
         Exit();
     }

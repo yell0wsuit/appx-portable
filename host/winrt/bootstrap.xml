@@ -29,6 +29,20 @@
     <Overridable Name="OnLaunched" />
   </Class>
   <Class Name="Windows.UI.Xaml.ApplicationInitializationCallbackParams" />
+  <Class Name="Windows.UI.Xaml.Window">
+    <Property Name="Current" />
+    <Property Name="Content" />
+    <Method Name="Activate" />
+  </Class>
+  <!-- Frame's class chain; each base is a typed wrapper until its members are needed. -->
+  <Class Name="Windows.UI.Xaml.DependencyObject" />
+  <Class Name="Windows.UI.Xaml.UIElement" />
+  <Class Name="Windows.UI.Xaml.FrameworkElement" />
+  <Class Name="Windows.UI.Xaml.Controls.Control" />
+  <Class Name="Windows.UI.Xaml.Controls.ContentControl" />
+  <Class Name="Windows.UI.Xaml.Controls.Frame">
+    <Constructor />
+  </Class>
   <Delegate Name="Windows.UI.Xaml.ApplicationInitializationCallback" />
   <!-- A typed wrapper only: its referenced members are completion stubs. -->
   <Class Name="Windows.ApplicationModel.SuspendingEventArgs" />
