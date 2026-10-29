@@ -58,7 +58,9 @@ def manifest_xml(name='Example.Game', version='1.0.0.0', arch='x86', executable=
 
 
 def game_files(machine=0x14C, managed=False, **manifest):
-    return {'AppxManifest.xml': manifest_xml(**manifest), manifest.get('executable', 'Game.exe'): pe(machine, managed)}
+    """A package whose native executable imports a proxy, as most native games do."""
+    executable = pe(machine, managed, imports=['mscoree.dll' if managed else 'DWrite.dll'])
+    return {'AppxManifest.xml': manifest_xml(**manifest), manifest.get('executable', 'Game.exe'): executable}
 
 
 def appx(path, files):

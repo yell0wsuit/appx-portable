@@ -68,7 +68,8 @@ Options Parse() {
     options.capture = Environment(L"APPX_PORTABLE_CAPTURE", L"1");
     options.diagnostics = Environment(L"APPX_PORTABLE_DIAGNOSTICS", L"1");
     options.passthrough = Environment(L"APPX_PORTABLE_MODE", L"trace");
-    options.hosted = Environment(L"APPX_PORTABLE_HOSTED", L"1");
+    options.hostedXaml = Environment(L"APPX_PORTABLE_HOSTED", L"xaml");
+    options.hosted = options.hostedXaml || Environment(L"APPX_PORTABLE_HOSTED", L"1");
     const auto ini = SettingsFile();
     options.unlockTrial = Setting(L"APPX_PORTABLE_UNLOCK_TRIAL", L"UnlockTrial", ini);
     options.stubIap = Setting(L"APPX_PORTABLE_STUB_IAP", L"StubIap", ini);

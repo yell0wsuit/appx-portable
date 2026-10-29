@@ -129,17 +129,23 @@ class CliTests(unittest.TestCase):
             self.assertTrue((self.dest / name).is_file(), name)
         self.assertEqual(self.options(), (True, True))
 
-    @unittest.skipUnless(sys.platform == "win32", "native XAML hosting requires Windows")
-    def test_native_xaml_game_starts_through_native_host(self):
-        files = game_files()
-        files["App.xbf"] = b"XBF"
-        self.package = appx(self.base / "xaml.appx", files)
-        self.build.joinpath("appx-native-host.exe").write_bytes(pe())
-        code = self.main(self.scripted("--dependencies", str(self.vclibs), "--launcher"))
-        self.assertEqual(code, 0, self.stderr.getvalue())
-        self.assertTrue((self.dest / "appx-native-host.exe").is_file())
-        self.assertIn("maxversiontested", (self.dest / "Game.exe.manifest").read_text())
-        self.assertIn("appx-native-host.exe", (self.dest / LAUNCHER).read_text())
+    @unittest.skipUnless(sys.platform == "win32", "native hosting requires Windows")
+    def test_game_without_proxy_starts_through_native_host(self):
+        # XAML games also get the manifest XAML Islands need; CoreWindow games do not.
+        for xaml in (True, False):
+            with self.subTest(xaml=xaml):
+                files = game_files()
+                files["Game.exe"] = pe(imports=["vccorlib120_app.dll"])
+                if xaml:
+                    files["App.xbf"] = b"XBF"
+                self.package = appx(self.base / f"native-{xaml}.appx", files)
+                self.dest = self.base / f"native-{xaml}"
+                self.build.joinpath("appx-native-host.exe").write_bytes(pe())
+                code = self.main(self.scripted("--dependencies", str(self.vclibs), "--launcher"))
+                self.assertEqual(code, 0, self.stderr.getvalue())
+                self.assertTrue((self.dest / "appx-native-host.exe").is_file())
+                self.assertEqual((self.dest / "Game.exe.manifest").is_file(), xaml)
+                self.assertIn("appx-native-host.exe", (self.dest / LAUNCHER).read_text())
 
     def test_long_folder_warns(self):
         self.dest = self.base / ("x" * (installer.LONG_FOLDER - len(str(self.base))))
@@ -419,7 +425,7 @@ class CliTests(unittest.TestCase):
 
     def test_desktop_copy_flag(self):
         package = appx(
-            self.base / "win8.appx", {**game_files(), "Game.exe": pe(appcontainer=True)}
+            self.base / "win8.appx", {**game_files(), "Game.exe": pe(appcontainer=True, imports=["DWrite.dll"])}
         )
         code = self.main(
             [

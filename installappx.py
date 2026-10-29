@@ -153,12 +153,11 @@ def native_compiled_application(executable: Path) -> bool:
     )
 
 
-def native_xaml_application(game: Path, executable: Path) -> bool:
-    """A native XAML game that would start before the shim: nothing it imports
-    from its folder, directly or through its own DLLs, is a proxy.
+def native_host_application(game: Path, executable: Path) -> bool:
+    """A native game that would start before the shim: nothing it imports from
+    its folder, directly or through its own DLLs, is a proxy.
 
-    C++/CX Unity players are such games. Their compiled XAML is .xbf, loose or
-    named in resources.pri."""
+    C++/CX Unity players, XAML or CoreWindow ones, are such games."""
     proxies = {name.lower() for name in (*PROXIES, "XAudio2_9.dll")}
     seen = set()
     pending = [Path(executable)]
@@ -170,6 +169,12 @@ def native_xaml_application(game: Path, executable: Path) -> bool:
             if name not in seen and local.is_file():
                 seen.add(name)
                 pending.append(local)
+    return True
+
+
+def package_has_xaml(game: Path) -> bool:
+    """Compiled XAML: .xbf files, loose or named in resources.pri. The shim's
+    native host makes the same check to choose XAML Islands over a CoreWindow."""
     if any(Path(game).rglob("*.xbf")):
         return True
     pri = Path(game) / "resources.pri"
@@ -814,7 +819,7 @@ def stage_runtime(
         names.append("appx-host.exe")
     if native_host:
         if wine:
-            raise InstallError("Native XAML hosting requires Windows.")
+            raise InstallError("Native hosting requires Windows.")
         names.append("appx-native-host.exe")
     graphics = wine and (build / WINE_GRAPHICS_MANIFEST).is_file()
     if graphics:
@@ -1804,16 +1809,18 @@ def install(args, ask: Callable[[str], str]) -> int:
     architecture = architecture_of(executable)
     managed = pe_info(executable).managed
     native_compiled = native_compiled_application(executable)
-    # .NET Native and native C++/CX XAML games both start through the native host.
+    # .NET Native games and native games that import no proxy (such as C++/CX
+    # Unity players) start through the native host.
     native_host = native_compiled or (
-        not managed and native_xaml_application(destination, executable)
+        not managed and native_host_application(destination, executable)
     )
     if native_host and sys.platform != "win32":
-        raise InstallError("Native XAML hosting requires Windows.")
+        raise InstallError("Native hosting requires Windows.")
     add_missing_vclibs(args, ask, manifest, destination, architecture)
     add_native_frameworks(manifest, destination, architecture, args.dependencies)
     tag = stage_dlls(args, destination, architecture, managed, native_host)
-    if native_host and not native_compiled:
+    # Only XAML runs in an island, which needs the manifest; CoreWindow games do not.
+    if native_host and not native_compiled and package_has_xaml(destination):
         warning = write_process_manifest(destination, manifest.executable)
         if warning:
             print(f"Warning: {warning}")

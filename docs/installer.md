@@ -37,11 +37,11 @@ Run it again on the same folder to update after a new release: it replaces the g
 
 ## Without the launcher
 
-Double-click the game's executable itself (`appx-host.exe` for managed games, `appx-native-host.exe` for native XAML games; the `.desktop.exe` copy on Windows 8/8.1). The Store options in `appx-portable.ini` apply either way.
+Double-click the game's executable itself (`appx-host.exe` for managed games, `appx-native-host.exe` for .NET Native games and native games that import no proxy; the `.desktop.exe` copy on Windows 8/8.1). The Store options in `appx-portable.ini` apply either way.
 
 .NET Native XAML games such as Deus Ex GO start through `appx-native-host.exe` on Windows. The installer detects the forwarding executable and stages this launcher automatically. It uses dependencies supplied with `--dependencies`, matching installed Windows packages, or the [.NET Native dependency release](https://github.com/yell0wsuit/vclibs-appx/releases/tag/v2), in that order. Downloads are checked against pinned SHA-256 hashes. The supported packages are .NET Native Framework 1.3 and Runtime 1.4.
 
-Native C++/CX XAML games, such as Unity games built with IL2CPP for UWP, also start through `appx-native-host.exe` on Windows when nothing they import from their folder is one of the proxy DLLs. The installer detects them by their compiled XAML (`.xbf` files, loose or in `resources.pri`). It writes `Game.exe.manifest` beside the executable, because Windows allows XAML Islands only in a process whose manifest declares Windows 10 version 1903 as tested, and updates the executable's timestamp so Windows reads the new manifest. Windows ignores that file if the executable embeds a manifest of its own; the installer then warns.
+Native games that import none of the proxy DLLs from their folder, such as Unity games built with IL2CPP for UWP, also start through `appx-native-host.exe` on Windows. XAML games among them (with compiled XAML: `.xbf` files, loose or in `resources.pri`) run in XAML Islands, and the installer writes `Game.exe.manifest` beside the executable, because Windows allows XAML Islands only in a process whose manifest declares Windows 10 version 1903 as tested, and updates the executable's timestamp so Windows reads the new manifest. Windows ignores that file if the executable embeds a manifest of its own; the installer then warns.
 
 ## Use your own build
 

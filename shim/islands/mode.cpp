@@ -34,8 +34,8 @@ bool ManagedMode() noexcept {
     return managed;
 }
 // appx-native-host.exe starts native C++/CX XAML games, which run on real
-// Windows XAML in an island, as .NET Native games do.
+// Windows XAML in an island, as .NET Native games do; its CoreWindow games do not.
 bool IslandsMode() noexcept {
-    return nativeXaml.load() || GetOptions().hosted || (ManagedMode() && !managedCoreWindow.load());
+    return nativeXaml.load() || GetOptions().hostedXaml || (ManagedMode() && !managedCoreWindow.load());
 }
 }

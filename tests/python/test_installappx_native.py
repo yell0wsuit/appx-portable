@@ -38,24 +38,28 @@ class NativeTests(unittest.TestCase):
         executable.with_suffix('.dll').write_bytes(pe(0x8664, dll=True, imports=['kernel32.dll']))
         self.assertFalse(installer.native_compiled_application(executable))
 
-    def test_native_xaml_executable_detection(self):
+    def test_native_host_executable_detection(self):
         executable = self.game / 'Game.exe'
+        # A C++/CX Unity player imports only the VC runtime and the system.
         executable.write_bytes(pe(0x8664, imports=['vccorlib140_app.dll', 'kernel32.dll']))
-        # Without compiled XAML, the game has no Application.Start to host.
-        self.assertFalse(installer.native_xaml_application(self.game, executable))
-        self.game.joinpath('resources.pri').write_bytes(b'mrm_pri2' + 'Files/MainPage.xbf'.encode('utf-16-le'))
-        self.assertTrue(installer.native_xaml_application(self.game, executable))
-        self.game.joinpath('resources.pri').unlink()
-        self.game.joinpath('App.xbf').write_bytes(b'XBF')
-        self.assertTrue(installer.native_xaml_application(self.game, executable))
+        self.assertTrue(installer.native_host_application(self.game, executable))
         # A proxy the game imports, itself or through its own DLLs, loads the shim.
         executable.write_bytes(pe(0x8664, imports=['DWrite.dll']))
-        self.assertFalse(installer.native_xaml_application(self.game, executable))
+        self.assertFalse(installer.native_host_application(self.game, executable))
         executable.write_bytes(pe(0x8664, imports=['Engine.dll']))
         self.game.joinpath('Engine.dll').write_bytes(pe(0x8664, dll=True, imports=['XAudio2_9.dll']))
-        self.assertFalse(installer.native_xaml_application(self.game, executable))
+        self.assertFalse(installer.native_host_application(self.game, executable))
         self.game.joinpath('Engine.dll').write_bytes(pe(0x8664, dll=True, imports=['d3d11.dll']))
-        self.assertTrue(installer.native_xaml_application(self.game, executable))
+        self.assertTrue(installer.native_host_application(self.game, executable))
+
+    def test_compiled_xaml_detection(self):
+        # A CoreWindow game has none; a XAML one has .xbf, loose or in resources.pri.
+        self.assertFalse(installer.package_has_xaml(self.game))
+        self.game.joinpath('resources.pri').write_bytes(b'mrm_pri2' + 'Files/MainPage.xbf'.encode('utf-16-le'))
+        self.assertTrue(installer.package_has_xaml(self.game))
+        self.game.joinpath('resources.pri').unlink()
+        self.game.joinpath('App.xbf').write_bytes(b'XBF')
+        self.assertTrue(installer.package_has_xaml(self.game))
 
     def test_native_xaml_process_manifest(self):
         executable = self.game / 'Game.exe'

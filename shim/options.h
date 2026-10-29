@@ -16,11 +16,12 @@ namespace appx {
 //   --unlock-trial  report an active, full base-app license        APPX_PORTABLE_UNLOCK_TRIAL=1
 // [options] StubIapProducts=id1,id2 names products for the stub IAP listing of
 // a game without a bundled catalog; APPX_PORTABLE_STUB_IAP_PRODUCTS wins over it.
-// appx-native-host.exe sets APPX_PORTABLE_HOSTED=1 for a game it starts with
-// the shim loaded; the shim clears it so the game's own children do not see it.
+// appx-native-host.exe sets APPX_PORTABLE_HOSTED for a game it starts with the
+// shim loaded: xaml for a XAML game, which runs in an island, 1 for a CoreWindow
+// game. The shim clears it so the game's own children do not see it.
 struct Options {
     bool log = false, trace = false, capture = false, diagnostics = false, passthrough = false;
-    bool unlockTrial = false, stubIap = false, hosted = false;
+    bool unlockTrial = false, stubIap = false, hosted = false, hostedXaml = false;
     unsigned frameRate = 60;
     std::wstring stubIapProducts;
 };

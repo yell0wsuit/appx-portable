@@ -302,11 +302,31 @@ static const wchar_t* LauncherArguments() noexcept {
     while (*text == L' ' || *text == L'\t') ++text;
     return text;
 }
-// A native C++/CX XAML game imports no proxy DLL, so nothing loads the shim
-// before its Application::Start, which real XAML refuses outside a package.
-// Start the game suspended and queue LoadLibraryW of the shim as an APC: it
-// runs once the loader has initialized the game's imports, before its entry
-// point. APPX_PORTABLE_HOSTED tells that shim it was started this way.
+// Compiled XAML, as installappx.py detects it: .xbf files, loose or named in
+// resources.pri. Such a game starts real XAML; the others run a CoreWindow.
+static bool PackageHasXaml(const std::filesystem::path& directory) {
+    std::error_code error;
+    std::filesystem::recursive_directory_iterator files(
+        directory, std::filesystem::directory_options::skip_permission_denied, error),
+        end;
+    for (; !error && files != end; files.increment(error))
+        if (_wcsicmp(files->path().extension().c_str(), L".xbf") == 0) return true;
+    HANDLE file = CreateFileW((directory / L"resources.pri").c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    std::string data(GetFileSize(file, nullptr), '\0');
+    DWORD read = 0;
+    const bool loaded = !data.empty() && ReadFile(file, data.data(), static_cast<DWORD>(data.size()), &read, nullptr);
+    CloseHandle(file);
+    data.resize(loaded ? read : 0);
+    return data.find(".xbf") != std::string::npos || data.find(std::string(".\0x\0b\0f\0", 8)) != std::string::npos;
+}
+// A native C++/CX game such as a Unity IL2CPP player may import no proxy DLL,
+// so nothing loads the shim before its Application::Start or CoreApplication::Run,
+// which Windows refuses outside a package. Start the game suspended and queue
+// LoadLibraryW of the shim as an APC: it runs once the loader has initialized
+// the game's imports, before its entry point. APPX_PORTABLE_HOSTED tells that
+// shim it was started this way, and whether the game is a XAML one.
 static int LaunchHosted(const std::filesystem::path& executable) {
     wchar_t shim[MAX_PATH]{};
     HMODULE self = nullptr;
@@ -320,13 +340,14 @@ static int LaunchHosted(const std::filesystem::path& executable) {
     STARTUPINFOW startup{sizeof startup};
     GetStartupInfoW(&startup);
     PROCESS_INFORMATION process{};
-    SetEnvironmentVariableW(L"APPX_PORTABLE_HOSTED", L"1");
+    const bool xaml = PackageHasXaml(executable.parent_path());
+    SetEnvironmentVariableW(L"APPX_PORTABLE_HOSTED", xaml ? L"xaml" : L"1");
     const BOOL created = CreateProcessW(executable.c_str(), line.data(), nullptr, nullptr, FALSE, CREATE_SUSPENDED,
                                         nullptr, executable.parent_path().c_str(), &startup, &process);
     DWORD error = GetLastError();
     SetEnvironmentVariableW(L"APPX_PORTABLE_HOSTED", nullptr);
     if (!created) {
-        Log("FAIL", "native XAML: cannot start %ls (error %lu)", executable.c_str(), error);
+        Log("FAIL", "native game: cannot start %ls (error %lu)", executable.c_str(), error);
         return HRESULT_FROM_WIN32(error);
     }
     struct Handles {
@@ -344,10 +365,11 @@ static int LaunchHosted(const std::filesystem::path& executable) {
         ResumeThread(process.hThread) == static_cast<DWORD>(-1)) {
         error = GetLastError();
         TerminateProcess(process.hProcess, ERROR_DLL_INIT_FAILED);
-        Log("FAIL", "native XAML: cannot load the shim into %ls (error %lu)", executable.c_str(), error);
+        Log("FAIL", "native game: cannot load the shim into %ls (error %lu)", executable.c_str(), error);
         return HRESULT_FROM_WIN32(error);
     }
-    Log("INFO", "native XAML: started %ls (pid %lu) with the shim", executable.c_str(), process.dwProcessId);
+    Log("INFO", "native game: started %ls (pid %lu) with the shim, %s", executable.c_str(), process.dwProcessId,
+        xaml ? "XAML in an island" : "CoreWindow");
     WaitForSingleObject(process.hProcess, INFINITE);
     DWORD code = 0;
     GetExitCodeProcess(process.hProcess, &code);
