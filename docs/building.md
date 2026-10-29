@@ -83,6 +83,16 @@ The script runs on macOS or x86_64 Linux (`apt install bison flex clang lld llvm
 
 `installappx.py` stages the stack beside the game when it installs under Wine: from the release, or from a `--build` folder that has `wine-graphics.json`, refusing DLLs that do not match it. The Wine launcher loads the three DLLs as native overrides whenever they are beside the game; delete them to use Wine's own. The source pin identifies the stack being built, not the Wine version you must install; it was tested on Wine 11.18.
 
+`rendertest` checks what a XAML renderer needs from this stack: Direct2D text and a WIC-decoded image drawn over a game's frame on its redirected composition swap chain, with the game's own D3D11 device, read back and presented. On Windows it runs with the other tests (on WARP without a GPU). Under Wine, `scripts/probe-wine-render.py` runs it from the x86 build folder with the three DLLs as native overrides and the Vulkan renderer, and keeps the presented frame as `frame.png`:
+
+```sh
+wine="$PWD/build/wine-clr/runtime/Wine Devel.app/Contents/Resources/wine/bin/wine"
+python3 scripts/probe-wine-render.py --wine "$wine" --prefix /path/to/isolated-prefix \
+  --build build/macos-x86 --output build/render-probe
+```
+
+Add `--hold-ms 4000 --screenshot` to also capture the macOS desktop while the frame is on screen; the terminal needs Screen Recording permission.
+
 For the managed x86 CLR prerequisite on Apple Silicon, see [Wine CLR runtime](wine-clr.md).
 The separate `wine-clr` workflow builds and tests a patched engine bundle; its
 core CPU module is not a per-game DLL override.
