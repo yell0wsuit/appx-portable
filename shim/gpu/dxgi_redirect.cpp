@@ -24,9 +24,11 @@ using PresentCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain*, UINT, UINT);
 using Present1Call = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain1*, UINT, UINT, const DXGI_PRESENT_PARAMETERS*);
 using SetMatrixCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain2*, const DXGI_MATRIX_3X2_F*);
 using GetMatrixCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain2*, DXGI_MATRIX_3X2_F*);
+using SetRotationCall = HRESULT(STDMETHODCALLTYPE*)(IDXGISwapChain1*, DXGI_MODE_ROTATION);
 struct PresentHooks {
     PresentCall present;
     Present1Call present1;
+    SetRotationCall setRotation;
     SetMatrixCall setMatrix;
     GetMatrixCall getMatrix;
 };
@@ -195,6 +197,18 @@ static HRESULT STDMETHODCALLTYPE GetMatrix(IDXGISwapChain2* swap, DXGI_MATRIX_3X
         *matrix = DXGI_MATRIX_3X2_F{1, 0, 0, 1, 0, 0};
     return S_OK;
 }
+// The Windows 8 DirectX template sets the display's rotation right after
+// creating its swap chain and throws when that fails, which Wine's stub always
+// does. A redirected swap chain draws its HWND unrotated, so identity holds.
+static HRESULT STDMETHODCALLTYPE SetRotation(IDXGISwapChain1* swap, DXGI_MODE_ROTATION rotation) {
+    if (rotation == DXGI_MODE_ROTATION_IDENTITY && Redirected(swap)) return S_OK;
+    SetRotationCall call;
+    {
+        std::lock_guard<std::mutex> lock(presentMutex);
+        call = presentHooks.at(*reinterpret_cast<void***>(swap)).setRotation;
+    }
+    return call(swap, rotation);
+}
 static void ObserveSwapChain(IDXGISwapChain1* swap) {
     auto* table = *reinterpret_cast<void***>(swap);
     std::lock_guard<std::mutex> lock(presentMutex);
@@ -202,17 +216,19 @@ static void ObserveSwapChain(IDXGISwapChain1* swap) {
     // Matrix slots exist only in IDXGISwapChain2 and later vtables.
     ComPtr<IDXGISwapChain2> swap2;
     const bool matrix = SUCCEEDED(swap->QueryInterface(IID_PPV_ARGS(&swap2)));
-    const SIZE_T slots = matrix ? 28 : 15;
+    const SIZE_T slots = matrix ? 28 : 20;
     DWORD protection;
     if (!VirtualProtect(static_cast<void*>(table + 8), slots * sizeof(void*), PAGE_READWRITE, &protection)) return;
     presentHooks.emplace(table, PresentHooks{
                                     reinterpret_cast<PresentCall>(table[8]),
                                     reinterpret_cast<Present1Call>(table[22]),
+                                    reinterpret_cast<SetRotationCall>(table[27]),
                                     matrix ? reinterpret_cast<SetMatrixCall>(table[34]) : nullptr,
                                     matrix ? reinterpret_cast<GetMatrixCall>(table[35]) : nullptr,
                                 });
     InterlockedExchangePointer(&table[8], reinterpret_cast<void*>(&Present));
     InterlockedExchangePointer(&table[22], reinterpret_cast<void*>(&Present1));
+    InterlockedExchangePointer(&table[27], reinterpret_cast<void*>(&SetRotation));
     if (matrix) {
         InterlockedExchangePointer(&table[34], reinterpret_cast<void*>(&SetMatrix));
         InterlockedExchangePointer(&table[35], reinterpret_cast<void*>(&GetMatrix));
