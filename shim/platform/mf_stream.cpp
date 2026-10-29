@@ -119,16 +119,16 @@ public:
         if (SUCCEEDED(hr) && result) result->QuadPart = position;
         return hr;
     }
-    HRESULT STDMETHODCALLTYPE Stat(STATSTG* value, DWORD) override {
-        if (!value) return STG_E_INVALIDPOINTER;
-        *value = {};
-        value->type = STGTY_STREAM;
-        value->grfMode = STGM_READ;
-        return source_->get_Size(&value->cbSize.QuadPart);
+    HRESULT STDMETHODCALLTYPE Stat(STATSTG* stat, DWORD) override {
+        if (!stat) return STG_E_INVALIDPOINTER;
+        *stat = {};
+        stat->type = STGTY_STREAM;
+        stat->grfMode = STGM_READ;
+        return source_->get_Size(&stat->cbSize.QuadPart);
     }
-    HRESULT STDMETHODCALLTYPE Clone(IStream** value) override {
-        if (!value) return E_POINTER;
-        *value = nullptr;
+    HRESULT STDMETHODCALLTYPE Clone(IStream** clone) override {
+        if (!clone) return E_POINTER;
+        *clone = nullptr;
         std::lock_guard<std::mutex> lock(mutex_);
         UINT64 position = 0;
         ComPtr<IRandomAccessStream> copy;
@@ -137,7 +137,7 @@ public:
         if (SUCCEEDED(hr)) hr = copy->Seek(position);
         if (FAILED(hr)) return hr;
         auto stream = Make<Stream>(copy.Get());
-        return stream ? stream.CopyTo(value) : E_OUTOFMEMORY;
+        return stream ? stream.CopyTo(clone) : E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE Write(const void*, ULONG, ULONG* written) override {
         if (written) *written = 0;

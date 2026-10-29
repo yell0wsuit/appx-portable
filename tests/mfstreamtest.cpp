@@ -27,8 +27,8 @@ public:
     Event event{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
     ComPtr<IMFAsyncResult> result;
     HRESULT STDMETHODCALLTYPE GetParameters(DWORD*, DWORD*) override { return E_NOTIMPL; }
-    HRESULT STDMETHODCALLTYPE Invoke(IMFAsyncResult* value) override {
-        result = value;
+    HRESULT STDMETHODCALLTYPE Invoke(IMFAsyncResult* asyncResult) override {
+        result = asyncResult;
         SetEvent(event.Get());
         return S_OK;
     }
