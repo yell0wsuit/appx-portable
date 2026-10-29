@@ -52,6 +52,8 @@ namespace AppxPortable.WinRT
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int RemoveCall(IntPtr self, EventRegistrationToken token);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int InvokeValue(IntPtr self, int value, IntPtr argument, out IntPtr result);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int ComposeCall(IntPtr self, IntPtr outer, out IntPtr inner, out IntPtr value);
 
         private static readonly Guid unknown = new Guid("00000000-0000-0000-c000-000000000046");
@@ -230,6 +232,17 @@ namespace AppxPortable.WinRT
         {
             if (argument == null) { Call(slot, IntPtr.Zero); return; }
             using (var held = new Access(argument)) Call(slot, held.Self);
+        }
+
+        // A call taking a 32-bit value and a pointer that returns an object.
+        internal NativeObject Call(int slot, int value, IntPtr argument)
+        {
+            using (var call = new Access(this))
+            {
+                IntPtr result;
+                int hr = call.Method<InvokeValue>(slot)(call.Self, value, argument, out result);
+                return hr >= 0 && result == IntPtr.Zero ? null : TakeResult(hr, result);
+            }
         }
 
         internal EventRegistrationToken AddHandler(int slot, IntPtr handler)

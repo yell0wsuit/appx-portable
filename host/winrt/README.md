@@ -70,6 +70,14 @@ when two threads wrap the same identity concurrently. Overridable virtuals outsi
 a managed subclass that overrides one fails construction, naming it, rather
 than never being called.
 
+`dispatcher.cs` gives the shim's view thread a synchronization context when
+native code first calls managed code there: a thread with a CoreWindow posts
+continuations through `CoreDispatcher.RunAsync`, so `await` returns to the
+view thread as XAML code expects. `Send` is unsupported, as in the CLR's WinRT
+context. An exception escaping a posted continuation is rethrown off the
+dispatcher and reaches `AppDomain.UnhandledException`, ending the app as on
+Windows.
+
 Under Wine, managed XAML games use the shim's own XAML instead of XAML Islands,
 which needs system XAML; `APPX_PORTABLE_XAML=shim` or `=islands` overrides
 either default. Windows behavior is unchanged without the variable.
@@ -93,7 +101,8 @@ collectable. Its constructor subscribes to `Suspending` through
 `WindowsRuntimeMarshal`, as compiled games do; `Exit` must raise it on the
 managed App, and not on a handler already removed. `OnLaunched` sets a new
 `Frame` as the content of `Window.Current`, which must then return that same
-managed `Frame`. Both consumers also run against the completed assembly, so
+managed `Frame`. It then awaits work finished on the thread pool, and the
+continuation must resume on the view thread. Both consumers also run against the completed assembly, so
 completion cannot replace implemented members with stubs. Configure the
 x86 cross build with `APPX_WINE`, `APPX_WINE_PREFIX`, `APPX_WINRT_METADATA`,
 and `APPX_WINRT_CECIL` to register it as the `winrt_projection` CTest. The
@@ -143,13 +152,14 @@ The game also references `System.Runtime.WindowsRuntime` and
 the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. None of these
 is projected yet.
 
-This is a foundation for managed compatibility, not a replacement for the
-game's `Windows` assembly. `DependencyProperty`, CLR-redirected types such as
-`System.Type` and `System.Uri`, managed implementations of WinRT interfaces, and dispatcher
-synchronization remain to be implemented before Bejeweled can use this path. The existing game host is unchanged; its older "XAML Islands (STA)" log label
-identifies the STA route even when the shim selects its Wine XAML backend.
-The ini override for hosting mode remains to be added; this slice only supports
-the environment override above.
+This is a foundation for managed compatibility, not a replacement for the game's
+`Windows` assembly. `DependencyProperty`, CLR-redirected types such as
+`System.Type` and `System.Uri`, and managed implementations of WinRT interfaces
+remain to be implemented before Bejeweled can use this path. The existing game
+host is unchanged; its older "XAML Islands (STA)" log label identifies the STA
+route even when the shim selects its Wine XAML backend. The ini override for
+hosting mode remains to be added; this slice only supports the environment
+override above.
 
 ApplicationData was excluded from this first slice because Wine 9.0's native
 PropertySet activation returned E_NOTIMPL, blocking the shim's settings backing

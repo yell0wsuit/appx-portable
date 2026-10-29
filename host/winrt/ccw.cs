@@ -215,7 +215,12 @@ namespace AppxPortable.WinRT
             ManagedObject managed = From(self);
             using (Errors.Callback(managed.invocation, managed.invocationBound))
             {
-                try { action(managed.target); return 0; }
+                try
+                {
+                    DispatcherContext.Install();
+                    action(managed.target);
+                    return 0;
+                }
                 catch (Exception error) { return Errors.Report(error); }
             }
         }
