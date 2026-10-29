@@ -302,6 +302,12 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
       --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
       --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
     set_tests_properties(winrt_projection PROPERTIES TIMEOUT 600 LABELS managed-clr)
+    add_test(NAME winrt_async_projection COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
+      --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
+      --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
+      --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-async-projection" --async-only)
+    set_tests_properties(winrt_async_projection PROPERTIES TIMEOUT 600 LABELS "managed-clr;async")
     add_test(NAME winrt_storage_projection COMMAND "${Python3_EXECUTABLE}"
       "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
       --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"

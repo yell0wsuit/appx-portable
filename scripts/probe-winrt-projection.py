@@ -80,6 +80,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("wine", "prefix", "metadata", "shim", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--async-only", action="store_true", help="run the focused WinRT task adapters fixture")
     parser.add_argument("--storage-only", action="store_true", help="run the focused persistent settings projection fixture")
     parser.add_argument("--xbox-only", action="store_true", help="run the focused Xbox projection fixture")
     parser.add_argument("--xbox-metadata", type=Path, help="package Microsoft.Xbox.winmd, metadata only")
@@ -90,6 +91,10 @@ def main():
     parser.add_argument("--consumer", type=Path, action="append", default=[])
     parser.add_argument("--architecture", choices=("x86", "x64"), default="x86")
     args = parser.parse_args()
+    if sum((args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
+        parser.error("focused probe modes cannot be combined")
+    if (args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
+        parser.error("focused async/storage probes cannot include game or Xbox inputs")
     if args.xbox_only and (not args.xbox_metadata or args.game):
         parser.error("--xbox-only requires --xbox-metadata and cannot launch a game")
     repo = Path(__file__).resolve().parents[1]
@@ -187,6 +192,28 @@ def main():
                 succeeds=False, marker=method)
             require(not target.exists(), "invalid collection ABI produced a usable output")
 
+    def probe_async(projection):
+        bridge = compile_file("tasks/System.Runtime.WindowsRuntime.dll", [repo / "host/winrt/task_extensions.cs"],
+                              ["/target:library", "/r:" + windows(projection)])
+        consumer = compile_file("async.exe", [repo / "tests/winrt_projection/async.cs"],
+                                ["/r:" + windows(projection), "/r:" + windows(bridge)])
+        marker = compile_file("mark-async.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
+        run("mark-async-winrt", [marker.name, windows(consumer), "async-winrt.exe"], marker="flags=WindowsRuntime")
+        signed = output / "async-bound.exe"
+        run("mark-async-runtime", [marker.name, "async-winrt.exe", windows(signed), "--runtime-reference"],
+            marker="PublicKeyToken=b77a5c561934e089")
+        folder = fixture("async", signed.name, "AsyncProjectionTest", "CN=projection")
+        for source in (signed, projection):
+            copy_owned_file(source, folder / source.name)
+        copied_bridge = folder / bridge.name
+        if copied_bridge.exists() or copied_bridge.is_symlink():
+            copied_bridge.unlink()
+        run("missing-task-runtime", [signed.name], cwd=folder, succeeds=False, marker="System.Runtime.WindowsRuntime")
+        copy_owned_file(bridge, copied_bridge)
+        run("task-adapters", [signed.name], cwd=folder,
+            marker="PASS: WinRT task adapters preserve completion, failure, cancellation, progress and ownership")
+        return bridge
+
     def probe_storage(marker, projection):
         reference = compile_file("storage-reference/Windows.dll", [repo / "tests/winrt_projection/reference.cs"], ["/target:library"])
         consumer = compile_file("storage.exe", [repo / "tests/winrt_projection/storage.cs"], ["/r:" + windows(reference)])
@@ -251,6 +278,14 @@ def main():
         return xbox_projection
 
     try:
+        if args.async_only:
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs"], ["/r:Mono.Cecil.dll"])
+            generated = output / "Windows.generated.cs"
+            run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
+            runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
+            projection = compile_file("projection/Windows.dll", runtime + [generated], ["/target:library"])
+            probe_async(projection)
+            return 0
         if args.storage_only:
             marker = compile_file("mark-reference.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
             generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs"], ["/r:Mono.Cecil.dll"])
@@ -377,11 +412,12 @@ def main():
         run("completed-abi-setter", ["application-abi.exe"], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         check_storage_metadata(generator)
         probe_storage(marker, projection)
+        task_bridge = probe_async(projection)
         xbox_projection = probe_xbox(marker, generator, completer) if args.xbox_metadata else None
         if args.game:
             source = args.game
             paths = [source / "appx-host.exe", source / "AppxManifest.xml"] + [p.resolve() for p in args.consumer]
-            paths += [source / name for name in ("appxportable.dll", "Windows.dll", "Microsoft.Xbox.dll") if (source / name).is_file()]
+            paths += [source / name for name in ("appxportable.dll", "Windows.dll", "Microsoft.Xbox.dll", "System.Runtime.WindowsRuntime.dll") if (source / name).is_file()]
             def hashes():
                 return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
             before = hashes()
@@ -392,6 +428,7 @@ def main():
             shutil.copytree(source, game, symlinks=True, ignore=shutil.ignore_patterns("*.log", ".wine-prefix"))
             copy_owned_file(shim, game / "appxportable.dll")
             copy_owned_file(completed, game / "Windows.dll")
+            copy_owned_file(task_bridge, game / task_bridge.name)
             if xbox_projection:
                 copy_owned_file(xbox_projection, game / "Microsoft.Xbox.dll")
             run("game-launch", ["appx-host.exe"], cwd=game, succeeds=False,

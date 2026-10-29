@@ -151,15 +151,16 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 `SuspensionManager` initialize its string and dictionary attached properties.
 With the Xbox bootstrap below, the game passes that assembly binding,
 `CoreWindow.GetForCurrentThread`, and native Xbox User activation. With the settings projection below, it passes ApplicationData startup and next
-fails loading `System.Runtime.WindowsRuntime` in `XboxWrapper.GetLastUserXuid`,
+loads the owned `System.Runtime.WindowsRuntime` bridge and fails resolving
+`System.IO.WindowsRuntimeStreamExtensions` in `XboxWrapper.GetLastUserXuid`,
 called by its constructor and `App.OnApplicationStarted`. No menu or game round has
 been displayed by this path.
 
-The game also references `System.Runtime.WindowsRuntime` and
-`System.Runtime.WindowsRuntime.UI.Xaml`, which Wine Mono does not provide, plus
+The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
+and `System.Runtime.WindowsRuntime.UI.Xaml`, still missing from Wine Mono, plus
 the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. The initial Xbox
-surface is projected; the other component assemblies and general async adapters
-remain pending.
+surface and managed task adapters are projected; the other component assemblies,
+native async wrappers, and stream/buffer adapters remain pending.
 
 This is a foundation for managed compatibility, not a replacement for the game's
 `Windows` assembly. Layout, source loading, rendering integration,
@@ -192,7 +193,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error "Could not load file or assembly 'System.Runtime.WindowsRuntime,"
+  --expected-game-error 'System.IO.WindowsRuntimeStreamExtensions'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -301,6 +302,37 @@ reads in a second process. Unsupported settings values fail without insertion.
 
 The managed bridge supports string, Int32, Int64, Boolean, Double, and Guid
 settings values. UInt64, arrays/composites, MapChanged events, the Containers
-read-only map, storage folders/files, and general async adapters are pending.
+read-only map, storage folders/files, and native async wrappers are pending.
 This checkpoint does not establish Windows/x64 runtime or rendered gameplay
 acceptance.
+
+## Managed WinRT task adapters
+
+The generator's `Adapter="Async"` surface emits IAsyncInfo, the four IAsync
+contracts, completion/progress delegates and AsyncStatus from SDK WinMD. It
+projects HResult to System.Exception. These are CLR-facing declarations; native
+closed generic wrappers remain separate work.
+
+`task_extensions.cs` builds an owned `System.Runtime.WindowsRuntime.dll` with
+assembly version 4.0.0.0. Its GetAwaiter/AsTask overloads consume these contracts
+using TaskCompletionSource, preserving results and errors, requesting native
+cancellation through Cancel, and forwarding progress to IProgress. Cancellation
+requests await terminal status; the adapter never closes a caller's operation.
+The signatures follow the public
+[WindowsRuntimeSystemExtensions API](https://learn.microsoft.com/en-us/dotnet/api/system.windowsruntimesystemextensions.astask?view=dotnet-uwp-10.0).
+
+Completion releases the adapter's source and result delegate references. This
+prevents a native completion CCW from retaining its own native source through
+the adapter. Cancellation-registration disposal runs off the completion callback
+to avoid deadlock when Cancel waits for completion on another thread. Task
+continuations run asynchronously and retain standard TaskAwaiter context capture.
+
+`--async-only` and `winrt_async_projection` verify completed, delayed, reentrant
+and duplicate callbacks; result/error identity; cancellation races; all four
+async shapes; progress; caller ownership; and collection after completion with
+the completion delegate still rooted. The fixture's Windows reference carries
+the WindowsRuntime flag and its System.Runtime.WindowsRuntime reference uses
+version 4.0.0.0/token b77a5c561934e089. It first fails without the bridge, then
+runs with the owned replacement. This establishes Wine Mono binding; Windows
+strong-name binding remains unverified. The bridge is only copied into isolated
+probe games. Native async ABI wrappers and stream/buffer extensions are pending.
