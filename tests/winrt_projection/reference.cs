@@ -102,3 +102,12 @@ namespace Windows.ApplicationModel.Activation
         public ApplicationExecutionState PreviousExecutionState { get { throw new global::System.NotImplementedException("Windows.ApplicationModel.Activation.LaunchActivatedEventArgs.PreviousExecutionState"); } }
     }
 }
+namespace Windows.UI.Core
+{
+    public sealed class CoreWindow
+    {
+        public static CoreWindow GetForCurrentThread() { throw new global::System.NotImplementedException("Windows.UI.Core.CoreWindow.GetForCurrentThread"); }
+        public CoreDispatcher Dispatcher { get { throw new global::System.NotImplementedException("Windows.UI.Core.CoreWindow.Dispatcher"); } }
+    }
+    public sealed class CoreDispatcher { internal CoreDispatcher() { } }
+}

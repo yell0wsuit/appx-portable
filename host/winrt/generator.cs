@@ -482,8 +482,27 @@ internal static class WinrtProjectionGenerator
             if (kind == "Constructor") constructor = true;
             if (kind == "Overridable") overridden.Add(name);
         }
+        if (type.IsAbstract && type.IsSealed)
+        {
+            if (constructor || overridden.Count != 0 || baseClass != null)
+                throw new NotSupportedException("Unsupported static class surface: " + type.FullName);
+            output.AppendLine("    public static class " + type.Name);
+            output.AppendLine("    {");
+            foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
+            {
+                string name = member.GetAttribute("Name");
+                if (member.Name == "Property" && type.Properties.Any(p => p.Name == name && p.GetMethod.IsStatic)) Property(output, type, name, false);
+                else if (member.Name == "Method" && type.Methods.Any(m => m.Name == name && m.IsStatic)) Method(output, type, name, false);
+                else throw new NotSupportedException("Unsupported static member: " + type.FullName + "." + name);
+            }
+            output.AppendLine("    }");
+            return;
+        }
         TypeDefinition primary = DefaultInterface(type);
-        if (constructor && !composable) throw new NotSupportedException("Constructor needs a composable class: " + type.FullName);
+        if (constructor && !composable && (baseClass != null || !type.Methods.Any(m => m.IsConstructor && m.Parameters.Count == 0) ||
+            !type.CustomAttributes.Any(a => a.AttributeType.FullName == "Windows.Foundation.Metadata.ActivatableAttribute" &&
+                a.ConstructorArguments[0].Type.FullName == "System.UInt32")))
+            throw new NotSupportedException("No default activation constructor: " + type.FullName);
         if (overridden.Count != 0 && !constructor) throw new InvalidDataException("Overridable without Constructor: " + type.FullName);
         if (overridden.Count != 0 && baseClass != null) throw new NotSupportedException("Overridable on a derived class: " + type.FullName);
 
@@ -543,7 +562,17 @@ internal static class WinrtProjectionGenerator
         output.AppendLine("        {");
         output.AppendLine("            using (value) return new " + type.Name + "(value.QueryInterface(" + Guid(primary) + "));");
         output.AppendLine("        }");
-        if (constructor)
+        if (constructor && !composable)
+        {
+            output.AppendLine("        // IActivationFactory::ActivateInstance, slot 6; default interface from WinMD.");
+            output.AppendLine("        public " + type.Name + "()");
+            output.AppendLine("        {");
+            output.AppendLine("            using (var factory = " + Runtime + "NativeObject.Factory(\"" + type.FullName + "\", new global::System.Guid(\"00000035-0000-0000-c000-000000000046\")))");
+            output.AppendLine("            using (var value = factory.Object(6))");
+            output.AppendLine("                native = value.QueryInterface(" + Guid(primary) + ");");
+            output.AppendLine("        }");
+        }
+        if (constructor && composable)
         {
             int kind = Convert.ToInt32(composition.ConstructorArguments[1].Value, CultureInfo.InvariantCulture);
             if (kind != 1 && kind != 2) throw new NotSupportedException("Unsupported composition type: " + type.FullName);

@@ -7,9 +7,10 @@ class MarkReference
     {
         using (AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(args[0]))
         {
+            string selected = args.Length > 3 && args[2] == "--assembly" ? args[3] : "Windows";
             foreach (AssemblyNameReference reference in assembly.MainModule.AssemblyReferences)
             {
-                if (reference.Name != "Windows") continue;
+                if (reference.Name != selected) continue;
                 reference.Attributes |= AssemblyAttributes.WindowsRuntime;
                 if (args.Length > 2 && args[2] == "--abi-setters")
                     foreach (MemberReference member in assembly.MainModule.GetMemberReferences())

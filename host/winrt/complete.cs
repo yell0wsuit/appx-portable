@@ -32,7 +32,7 @@ internal static class WinrtProjectionCompleter
         return type.Scope;
     }
 
-    private static bool IsWindows(TypeReference type) { return Scope(type).Name == "Windows"; }
+    private static bool IsProjection(TypeReference type) { return Scope(type).Name == projection.Assembly.Name.Name; }
 
     private static TypeReference Corlib(TypeReference type)
     {
@@ -122,7 +122,7 @@ internal static class WinrtProjectionCompleter
             foreach (TypeReference argument in instance.GenericArguments) result.GenericArguments.Add(Map(argument, owner, method));
             return result;
         }
-        if (type.IsNested || !IsWindows(type)) return projection.ImportReference(type);
+        if (type.IsNested || !IsProjection(type)) return projection.ImportReference(type);
         return Ensure(type.FullName);
     }
 
@@ -223,7 +223,6 @@ internal static class WinrtProjectionCompleter
             }
             projection = ModuleDefinition.ReadModule(args[1], new ReaderParameters { InMemory = true });
             modules.Add(projection);
-            if (projection.Assembly.Name.Name != "Windows") throw new InvalidDataException("Projection is not the Windows assembly");
             notImplemented = projection.ImportReference(typeof(NotImplementedException).GetConstructor(new[] { typeof(string) }));
             int before = projection.Types.Count;
             foreach (string path in args.Skip(3))
@@ -234,9 +233,9 @@ internal static class WinrtProjectionCompleter
                     InMemory = true
                 });
                 modules.Add(consumer);
-                foreach (TypeReference type in consumer.GetTypeReferences().Where(t => !t.IsNested && IsWindows(t)))
+                foreach (TypeReference type in consumer.GetTypeReferences().Where(t => !t.IsNested && IsProjection(t)))
                     Ensure(type.FullName);
-                foreach (MemberReference member in consumer.GetMemberReferences().Where(m => IsWindows(m.DeclaringType.GetElementType())))
+                foreach (MemberReference member in consumer.GetMemberReferences().Where(m => IsProjection(m.DeclaringType.GetElementType())))
                 {
                     var method = member as MethodReference;
                     if (method != null) { Complete(method); continue; }

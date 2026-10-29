@@ -59,4 +59,9 @@
   <!-- A typed wrapper only: its referenced members are completion stubs. -->
   <Class Name="Windows.ApplicationModel.SuspendingEventArgs" />
   <Delegate Name="Windows.UI.Xaml.SuspendingEventHandler" />
+  <Class Name="Windows.UI.Core.CoreWindow">
+    <Method Name="GetForCurrentThread" />
+    <Property Name="Dispatcher" />
+  </Class>
+  <Class Name="Windows.UI.Core.CoreDispatcher" />
 </Projection>
