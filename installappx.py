@@ -87,6 +87,54 @@ def pe_info(path: Path) -> PEInfo:
     return PEInfo(machine, managed, bool(characteristics & 0x2000))
 
 
+def pe_imports(path: Path) -> List[str]:
+    """The DLLs a PE image imports, lowercase; none for an image it cannot read."""
+    data = Path(path).read_bytes()
+    names: List[str] = []
+    try:
+        offset = struct.unpack_from("<I", data, 0x3C)[0]
+        if data[offset : offset + 4] != b"PE\0\0":
+            return names
+        count, size = (
+            struct.unpack_from("<H", data, offset + 6)[0],
+            struct.unpack_from("<H", data, offset + 20)[0],
+        )
+        optional = offset + 24
+        magic, headers = (
+            struct.unpack_from("<H", data, optional)[0],
+            struct.unpack_from("<I", data, optional + 60)[0],
+        )
+        # The import table is data directory 1.
+        table = struct.unpack_from(
+            "<I", data, optional + (112 if magic == 0x20B else 96) + 8
+        )[0]
+        sections = [
+            struct.unpack_from("<IIII", data, optional + size + 40 * i + 8)
+            for i in range(count)
+        ]
+
+        def file_offset(rva: int) -> Optional[int]:
+            if rva < headers:  # the headers are mapped at RVA 0
+                return rva
+            for virtual_size, address, raw_size, raw in sections:
+                if address <= rva < address + max(virtual_size, raw_size):
+                    return rva - address + raw
+            return None
+
+        descriptor = file_offset(table) if table else None
+        while descriptor is not None:
+            # The descriptor list ends with one whose name RVA is zero.
+            name_rva = struct.unpack_from("<I", data, descriptor + 12)[0]
+            name = file_offset(name_rva) if name_rva else None
+            if name is None:
+                break
+            names.append(data[name : data.index(b"\0", name)].decode("latin-1").lower())
+            descriptor += 20
+    except (struct.error, ValueError):
+        pass
+    return names
+
+
 def architecture_of(path: Path) -> str:
     """ "x86" or "x64" for a PE image; any other machine is an error."""
     machine = pe_info(path).machine
@@ -979,7 +1027,7 @@ graphics=
 {renderer}export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8,xaudio2_9,dwrite=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n$graphics${{WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}}"
 wine=${{WINE:-$(command -v wine || echo "$HOME/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine")}}
 [[ -x "$wine" ]] || {{ echo 'Install Wine, or set WINE to your Wine executable.' >&2; exit 1; }}
-# A crash otherwise opens Wine's crash dialog, which keeps the process alive
+{media}# A crash otherwise opens Wine's crash dialog, which keeps the process alive
 # until closed and stalls the relaunch below; print the backtrace and exit.
 "$wine" reg add 'HKCU\\Software\\Wine\\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f > /dev/null 2>&1 || true
 # Wine 11 WoW64 sometimes kills the process inside wined3d's first OpenGL
@@ -1007,6 +1055,23 @@ MACOS_RENDERER = """\
 """
 
 
+# macOS, for a game that plays media: GStreamer scans its plugins again after
+# it is installed or updated, about a minute while Rosetta translates them,
+# which otherwise stalls the game the first time it plays audio or video.
+MACOS_GSTREAMER = """\
+# This game plays audio or video through GStreamer, which rescans its plugins
+# after it is installed or updated. Scan here rather than mid-game; once its
+# cache is current, the check takes a moment.
+inspect=/Library/Frameworks/GStreamer.framework/Versions/1.0/bin/gst-inspect-1.0
+if [[ -x $inspect ]]; then
+  { sleep 2; echo 'Preparing GStreamer for audio and video, about a minute after it is installed or updated.' >&2; } &
+  notice=$!
+  arch -x86_64 "$inspect" > /dev/null 2>&1 || true
+  kill "$notice" 2> /dev/null || true
+fi
+"""
+
+
 # Why a managed game installed for Wine will not start; see docs/islands.md.
 MANAGED_UNDER_WINE = (
     "managed (.NET) games do not run under Wine yet. They use XAML Islands, and"
@@ -1015,13 +1080,43 @@ MANAGED_UNDER_WINE = (
 )
 
 
+# Wine plays Media Foundation and DirectShow media through GStreamer.
+MEDIA_DLLS = {
+    "mf.dll",
+    "mfplat.dll",
+    "mfplay.dll",
+    "mfreadwrite.dll",
+    "mfmediaengine.dll",
+    "quartz.dll",
+}
+
+
+def plays_media(game: Path, executable: Path) -> bool:
+    """Whether the game likely plays audio or video through Wine's GStreamer.
+
+    Its own executable importing Media Foundation or DirectShow counts, and so
+    does a XAML MediaElement; middleware such as FMOD imports Media Foundation
+    without playing through it."""
+    if MEDIA_DLLS.intersection(pe_imports(executable)):
+        return True
+    for page in game.rglob("*"):
+        if (
+            page.suffix.lower() in (".xaml", ".xbf")
+            or page.name.lower() == "resources.pri"
+        ):
+            data = page.read_bytes()
+            if b"MediaElement" in data or "MediaElement".encode("utf-16-le") in data:
+                return True
+    return False
+
+
 def launch_executable(executable: str, managed: bool) -> str:
     """What starts the game: appx-host.exe, beside it, for managed games."""
     return "appx-host.exe" if managed else executable
 
 
 def write_launcher(
-    game: Path, executable: str, windows: bool, macos: bool = False
+    game: Path, executable: str, windows: bool, macos: bool = False, media: bool = False
 ) -> Path:
     """Write 00_click2startme.bat (CRLF), or the executable Wine launcher into game.
 
@@ -1036,7 +1131,9 @@ def write_launcher(
     else:
         path = Path(game) / (LAUNCHER + (".command" if macos else ".sh"))
         text = SH_LAUNCHER.format(
-            exe=shlex.quote(executable), renderer=MACOS_RENDERER if macos else ""
+            exe=shlex.quote(executable),
+            renderer=MACOS_RENDERER if macos else "",
+            media=MACOS_GSTREAMER if macos and media else "",
         )
         path.write_bytes(text.encode())
         path.chmod(0o755)
@@ -1503,6 +1600,7 @@ def install(args, ask: Callable[[str], str]) -> int:
                 launch,
                 windows=sys.platform == "win32",
                 macos=sys.platform == "darwin",
+                media=plays_media(destination, executable),
             )
         )
     if sys.platform == "darwin":

@@ -195,6 +195,41 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(config(True, WINE_D3D_CONFIG="renderer=gl"), "renderer=gl")
         self.assertEqual(config(False), "unset")
 
+    def test_media_games_are_told_apart(self):
+        # Middleware such as FMOD imports Media Foundation without playing
+        # through it; the game's own executable or a MediaElement page does.
+        (self.game / "Game.exe").write_bytes(pe(imports=("KERNEL32.dll",)))
+        (self.game / "fmod.dll").write_bytes(pe(dll=True, imports=("MFPlat.DLL",)))
+        self.assertFalse(installer.plays_media(self.game, self.game / "Game.exe"))
+        (self.game / "Game.exe").write_bytes(
+            pe(imports=("KERNEL32.dll", "MFReadWrite.dll"))
+        )
+        self.assertTrue(installer.plays_media(self.game, self.game / "Game.exe"))
+        (self.game / "Game.exe").write_bytes(pe())
+        (self.game / "Pages").mkdir()
+        (self.game / "Pages" / "Video.xbf").write_bytes(
+            b"\0\0" + "MediaElement".encode("utf-16-le")
+        )
+        self.assertTrue(installer.plays_media(self.game, self.game / "Game.exe"))
+
+    def test_macos_media_launcher_prepares_gstreamer(self):
+        def text(macos, media):
+            return installer.write_launcher(
+                self.game, "Game.exe", windows=False, macos=macos, media=media
+            ).read_text()
+
+        self.assertIn("gst-inspect-1.0", text(True, True))
+        self.assertNotIn("gst-inspect-1.0", text(True, False))
+        self.assertNotIn("gst-inspect-1.0", text(False, True))
+        if BASH:
+            path = installer.write_launcher(
+                self.game, "Game.exe", windows=False, macos=True, media=True
+            )
+            result = subprocess.run(
+                [BASH, "-n", str(path)], capture_output=True, text=True
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_sh_launcher_runs_wine_from_the_game_folder(self):
         if not BASH:
             self.skipTest("needs bash on a POSIX host")
