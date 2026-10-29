@@ -15,6 +15,7 @@ on:
             - 'CMakeLists.txt'
             - 'CMakePresets.json'
             - '.github/workflows/release.yml'
+            - '.github/workflows/wine-clr.yml'
             - '.github/actions/**'
     workflow_dispatch:
 
@@ -143,8 +144,13 @@ jobs:
         if: needs.version.outputs.release == 'true'
         uses: ./.github/workflows/wine-graphics.yml
 
+    wine-clr:
+        needs: version
+        if: needs.version.outputs.release == 'true'
+        uses: ./.github/workflows/wine-clr.yml
+
     publish:
-        needs: [version, build, wine-graphics]
+        needs: [version, build, wine-graphics, wine-clr]
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -185,6 +191,12 @@ jobs:
                     Compress-Archive -LiteralPath $files -DestinationPath "build/appx-portable-$env:RELEASE_TAG-wine-$architecture.zip" -CompressionLevel Optimal -Force
                   }
 
+            - name: Download tested Wine CLR runtime
+              uses: actions/download-artifact@v8
+              with:
+                  name: wine-clr
+                  path: build/wine-clr
+
             - name: Publish release
               env:
                   RELEASE_TAG: ${{ needs.version.outputs.tag }}
@@ -193,6 +205,10 @@ jobs:
                     "build/appx-portable-$env:RELEASE_TAG-$architecture.zip"
                     "build/appx-portable-$env:RELEASE_TAG-wine-$architecture.zip"
                   }
+                  $archives += @(
+                    'build/wine-clr/appx-portable-wine-clr-macos.tar.xz'
+                    'build/wine-clr/appx-portable-wine-clr-sources.tar.xz'
+                  )
                   # installappx.py is published beside the zips: players download only it.
                   gh release create $env:RELEASE_TAG @archives installappx.py --target $env:GITHUB_SHA --title $env:RELEASE_TAG --generate-notes --latest
                   if ($LASTEXITCODE -ne 0) { throw 'Failed to publish release.' }

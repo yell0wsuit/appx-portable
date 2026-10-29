@@ -83,6 +83,10 @@ The script runs on macOS or x86_64 Linux (`apt install bison flex clang lld llvm
 
 `installappx.py` stages the stack beside the game when it installs under Wine: from the release, or from a `--build` folder that has `wine-graphics.json`, refusing DLLs that do not match it. The Wine launcher loads the three DLLs as native overrides whenever they are beside the game; delete them to use Wine's own. The source pin identifies the stack being built, not the Wine version you must install; it was tested on Wine 11.18.
 
+For the managed x86 CLR prerequisite on Apple Silicon, see [Wine CLR runtime](wine-clr.md).
+The separate `wine-clr` workflow builds and tests a patched engine bundle; its
+core CPU module is not a per-game DLL override.
+
 ## Development tools
 
 With LLVM installed, format and lint changed C++ files (replace `<files>` with their paths):

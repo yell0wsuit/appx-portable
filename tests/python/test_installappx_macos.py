@@ -4,6 +4,7 @@ import hashlib
 import io
 import os
 import pathlib
+import shutil
 import tarfile
 import tempfile
 import unittest
@@ -169,6 +170,137 @@ class MacOSDependencyTests(unittest.TestCase):
         with mock.patch.object(installer, "install_gstreamer", side_effect=installer.InstallError("GStreamer was not installed.")):
             _, output = self.run_setup(answers=[""])
         self.assertIn("GStreamer was not installed.", output)
+
+
+
+
+class ManagedWineRuntimeTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.base = pathlib.Path(folder.name)
+        self.root = self.base / "owned runtime"
+        self.cpu = b"wine cpu fixture"
+        self.manifest = {
+            "schema": 1,
+            "wine_version": "11.18",
+            "cpu_sha256": hashlib.sha256(self.cpu).hexdigest(),
+        }
+        import json
+        self.archive = tar_xz([
+            ("wine-clr.json", json.dumps(self.manifest).encode()),
+            ("Wine Devel.app/Contents/Resources/wine/bin/wine", b"#!/bin/sh\n"),
+            ("Wine Devel.app/Contents/Resources/wine/lib/wine/x86_64-windows/wow64cpu.dll", self.cpu),
+        ])
+        self.asset = {
+            "name": "appx-portable-wine-clr-macos.tar.xz",
+            "browser_download_url": "https://example.invalid/managed-wine.tar.xz",
+            "digest": "sha256:" + hashlib.sha256(self.archive).hexdigest(),
+        }
+        patch = mock.patch.object(installer, "WINE_CLR_ROOT", self.root, create=True)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def serve(self, asset=None, archive=None):
+        import json
+        release = json.dumps({"assets": [self.asset if asset is None else asset]}).encode()
+        return mock.patch.object(installer, "fetch", side_effect=[release, self.archive if archive is None else archive])
+
+    def test_installs_verified_release_in_owned_directory(self):
+        with self.serve():
+            wine = installer.install_managed_wine("v-test")
+        self.assertTrue(wine.is_file())
+        self.assertTrue(wine.is_relative_to(self.root))
+        self.assertTrue(os.access(wine, os.X_OK))
+        self.assertFalse((self.base / "Applications").exists())
+
+    def test_refuses_bad_archive_digest(self):
+        with self.serve(archive=b"wrong archive"):
+            with self.assertRaises(installer.InstallError):
+                installer.install_managed_wine("v-test")
+        self.assertFalse(any(self.root.glob("*/Wine Devel.app")))
+
+    def test_refuses_asset_without_digest(self):
+        asset = dict(self.asset)
+        asset.pop("digest")
+        with self.serve(asset=asset):
+            with self.assertRaises(installer.InstallError):
+                installer.install_managed_wine("v-test")
+
+    def test_reuses_verified_cache_without_downloading_archive(self):
+        with self.serve():
+            wine = installer.install_managed_wine("v-test")
+        import json
+        with mock.patch.object(installer, "fetch", return_value=json.dumps({"assets": [self.asset]}).encode()) as fetch:
+            self.assertEqual(installer.install_managed_wine("v-test"), wine)
+            self.assertEqual(fetch.call_count, 1)
+
+    def test_refuses_corrupt_cached_cpu(self):
+        with self.serve():
+            wine = installer.install_managed_wine("v-test")
+        cpu = wine.parent.parent / "lib/wine/x86_64-windows/wow64cpu.dll"
+        cpu.write_bytes(b"corrupt")
+        import json
+        with mock.patch.object(installer, "fetch", return_value=json.dumps({"assets": [self.asset]}).encode()):
+            with self.assertRaises(installer.InstallError):
+                installer.install_managed_wine("v-test")
+
+    def test_older_release_does_not_claim_patched_runtime(self):
+        with mock.patch.object(installer, "fetch", return_value=b'{"assets": []}'):
+            self.assertIsNone(installer.install_managed_wine("v-old"))
+
+    def test_managed_launcher_pins_engine_and_isolates_prefix(self):
+        game = self.base / "game"
+        game.mkdir()
+        selected = self.base / "engine with space" / "wine"
+        launcher = installer.write_launcher(game, "appx-host.exe", windows=False, macos=True, wine_runtime=selected)
+        text = launcher.read_text()
+        import shlex
+        self.assertIn("wine=${WINE:-" + shlex.quote(str(selected)) + "}", text)
+        self.assertIn('WINEPREFIX=${WINEPREFIX:-"$PWD/.wine-prefix/', text)
+        self.assertNotIn("command -v wine", text)
+
+    @unittest.skipIf(os.name == "nt" or not shutil.which("bash"), "needs bash on a POSIX host")
+    def test_launcher_rejects_a_retained_cpu_from_another_engine(self):
+        import subprocess
+        game = self.base / "game"
+        game.mkdir()
+        runtime = self.base / "runtime"
+        wine = runtime / "bin/wine"
+        wine.parent.mkdir(parents=True)
+        wine.write_text("#!/bin/sh\ntouch must-not-run\n")
+        wine.chmod(0o755)
+        cpu = runtime / "lib/wine/x86_64-windows/wow64cpu.dll"
+        cpu.parent.mkdir(parents=True)
+        cpu.write_bytes(b"patched")
+        prefix = self.base / "old-prefix"
+        retained = prefix / "drive_c/windows/system32/wow64cpu.dll"
+        retained.parent.mkdir(parents=True)
+        retained.write_bytes(b"old")
+        launcher = installer.write_launcher(game, "appx-host.exe", windows=False, macos=True, wine_runtime=wine)
+        env = dict(os.environ, WINEPREFIX=str(prefix))
+        env.pop("WINE", None)
+        result = subprocess.run(["bash", str(launcher)], env=env, cwd=game, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("different WoW64", result.stderr)
+        self.assertFalse((game / "must-not-run").exists())
+        self.assertEqual(retained.read_bytes(), b"old")
+
+    @unittest.skipIf(os.name == "nt" or not shutil.which("bash"), "needs bash on a POSIX host")
+    def test_first_owned_prefix_has_a_parent_before_wine_starts(self):
+        import subprocess
+        game = self.base / "game"
+        game.mkdir()
+        wine = self.base / "runtime/bin/wine"
+        wine.parent.mkdir(parents=True)
+        wine.write_text('#!/bin/sh\ntest -d "$(dirname "$WINEPREFIX")" || exit 21\nexit 0\n')
+        wine.chmod(0o755)
+        launcher = installer.write_launcher(game, "appx-host.exe", windows=False, macos=True, wine_runtime=wine)
+        env = dict(os.environ)
+        env.pop("WINE", None)
+        env.pop("WINEPREFIX", None)
+        result = subprocess.run(["bash", str(launcher)], env=env, cwd=game, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

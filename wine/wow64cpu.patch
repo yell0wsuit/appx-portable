@@ -1,0 +1,52 @@
+--- a/dlls/wow64cpu/cpu.c
++++ b/dlls/wow64cpu/cpu.c
+@@ -36,3 +36,4 @@
+-    BYTE  ljmp;   /* jump far, absolute indirect */
+-    BYTE  modrm;  /* address=disp32, opcode=5 */
+-    DWORD op;
++    /* Use a far return for the 32/64-bit transition under Rosetta. */
++    BYTE push_cs;
++    DWORD cs;
++    BYTE push_addr;
+@@ -40 +41 @@
+-    WORD  cs;
++    BYTE retf;
+@@ -204,0 +206 @@
++                   /* Restore the complete frame with iretq, including the decoding mode. */
+@@ -206,8 +207,0 @@
+-                   "jc .Lsyscall_32to64_return\n\t"
+-                   "movl 0xb8(%r13),%edx\n\t"   /* context->Eip */
+-                   "movl %edx,(%rsp)\n\t"
+-                   "movl 0xbc(%r13),%edx\n\t"   /* context->SegCs */
+-                   "movl %edx,4(%rsp)\n\t"
+-                   "movl 0xc4(%r13),%r14d\n\t"  /* context->Esp */
+-                   "xchgq %r14,%rsp\n\t"
+-                   "ljmp *(%r14)\n"
+@@ -257,0 +252,3 @@
++                   "pushfq\n\t"
++                   "popq %rdx\n\t"
++                   "movl %edx,0xc0(%r13)\n\t"   /* context->EFlags */
+@@ -266,8 +263 @@
+-                   "jc .Lsyscall_32to64_return\n\t"
+-                   "movl 0xb8(%r13),%edx\n\t"   /* context->Eip */
+-                   "movl %edx,(%rsp)\n\t"
+-                   "movl 0xbc(%r13),%edx\n\t"   /* context->SegCs */
+-                   "movl %edx,4(%rsp)\n\t"
+-                   "movl 0xc4(%r13),%r14d\n\t"  /* context->Esp */
+-                   "xchgq %r14,%rsp\n\t"
+-                   "ljmp *(%r14)" )
++                   "jmp .Lsyscall_32to64_return" )
+@@ -338,3 +328,3 @@
+-    thunk->syscall_thunk.ljmp  = 0xff;
+-    thunk->syscall_thunk.modrm = 0x2d;
+-    thunk->syscall_thunk.op    = PtrToUlong( &thunk->syscall_thunk.addr );
++    thunk->syscall_thunk.push_cs = 0x68;
++    thunk->syscall_thunk.push_addr = 0x68;
++    thunk->syscall_thunk.retf = 0xcb;
+@@ -344,3 +334,3 @@
+-    thunk->unix_thunk.ljmp  = 0xff;
+-    thunk->unix_thunk.modrm = 0x2d;
+-    thunk->unix_thunk.op    = PtrToUlong( &thunk->unix_thunk.addr );
++    thunk->unix_thunk.push_cs = 0x68;
++    thunk->unix_thunk.push_addr = 0x68;
++    thunk->unix_thunk.retf = 0xcb;

@@ -1,0 +1,74 @@
+name: Wine CLR runtime
+
+on:
+    pull_request:
+        paths:
+            - 'wine/wow64cpu.patch'
+            - 'scripts/*wine-clr*'
+            - 'tests/wine_clr/**'
+            - 'installappx.py'
+            - '.github/workflows/wine-clr.yml'
+    workflow_dispatch:
+    workflow_call:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: wine-clr-${{ github.ref }}-${{ github.event_name }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    build:
+        if: ${{ !github.event.repository.fork }}
+        # Exercise Rosetta on Apple Silicon, rather than only cross-compiling PE.
+        runs-on: macos-15
+        timeout-minutes: 45
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  persist-credentials: false
+            - name: Install build tools and Rosetta
+              run: |
+                  brew install bison llvm lld
+                  arch -x86_64 /usr/bin/true || softwareupdate --install-rosetta --agree-to-license
+            - name: Build patched engine component
+              run: bash scripts/build-wine-clr.sh build/wine-clr
+            - name: Package pinned Wine runtime
+              run: python3 scripts/package-wine-clr.py --build build/wine-clr
+            - name: Verify CLR on Rosetta
+              run: |
+                  python3 scripts/probe-wine-clr.py \
+                    --wine "$PWD/build/wine-clr/runtime/Wine Devel.app/Contents/Resources/wine/bin/wine" \
+                    --prefix "$RUNNER_TEMP/appx-clr-prefix" \
+                    --output "$PWD/build/wine-clr/probes"
+                  # Wrapper/codegen differences expose different transition failures.
+                  python3 scripts/probe-wine-clr.py \
+                    --wine "$PWD/build/wine-clr/runtime/Wine Devel.app/Contents/Resources/wine/bin/wine" \
+                    --prefix "$RUNNER_TEMP/appx-clr-prefix" \
+                    --output "$PWD/build/wine-clr/roslyn-probes" --compiler roslyn
+                  python3 - <<'CHECK'
+                  import hashlib, os, pathlib
+                  root = pathlib.Path('build/wine-clr')
+                  staged = root / 'wow64cpu.dll'
+                  loaded = pathlib.Path(os.environ['RUNNER_TEMP']) / 'appx-clr-prefix/drive_c/windows/system32/wow64cpu.dll'
+                  assert hashlib.sha256(staged.read_bytes()).digest() == hashlib.sha256(loaded.read_bytes()).digest()
+                  CHECK
+            - name: Upload tested runtime and corresponding source
+              uses: actions/upload-artifact@v7
+              with:
+                  name: wine-clr
+                  path: build/wine-clr/appx-portable-wine-clr-*.tar.xz
+                  if-no-files-found: error
+            - name: Upload probe evidence
+              if: always()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: wine-clr-probes
+                  path: |
+                      build/wine-clr/probes/
+                      build/wine-clr/roslyn-probes/
+                  if-no-files-found: ignore

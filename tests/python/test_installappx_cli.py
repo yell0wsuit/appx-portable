@@ -423,6 +423,23 @@ class CliTests(unittest.TestCase):
             sys.platform != "win32",
         )
 
+    def test_managed_apple_silicon_release_uses_owned_wine(self):
+        package = appx(self.base / "managed.appx", game_files(managed=True))
+        selected = self.base / "owned wine" / "wine"
+        with mock.patch.object(installer.sys, "platform", "darwin"), mock.patch.object(
+            installer.platform, "machine", return_value="arm64"
+        ), mock.patch.dict(installer.os.environ, {"WINE": ""}), mock.patch.object(
+            installer, "install_managed_wine", return_value=selected
+        ) as runtime:
+            code = self.main([str(package), "--dest", str(self.dest), "--build", str(self.build),
+                              "--release", "v-test", "--vclibs", str(self.vclibs), "--yes"])
+        self.assertEqual(code, 0, self.stderr.getvalue())
+        runtime.assert_called_once_with("v-test")
+        text = (self.dest / "00_click2startme.command").read_text()
+        self.assertIn(str(selected), text)
+        self.assertIn(".wine-prefix", text)
+        self.assertIn("fixes CLR startup only", self.stdout.getvalue())
+
     def test_desktop_copy_flag(self):
         package = appx(
             self.base / "win8.appx", {**game_files(), "Game.exe": pe(appcontainer=True, imports=["DWrite.dll"])}
