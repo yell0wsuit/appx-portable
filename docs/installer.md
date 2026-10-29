@@ -67,7 +67,7 @@ On macOS the installer also sets up what Wine needs, when it is missing:
 
 Rosetta 2 and GStreamer ask for your administrator password, so the installer asks before either, and `--yes` only prints how to install them.
 
-The release includes a [patched Wine graphics stack](building.md#wine-graphics-macos) beside the DLLs, which the installer adds under Wine; without it most games render black on macOS. With a local build, [cross-compile](building.md#macos-cross-compilation) with the preset matching the game's architecture, run `scripts/build-wined3d.sh`, and pass `--build build/macos-x86` or `--build build/macos-x64`.
+The release includes a [patched Wine graphics stack](building.md#wine-graphics-macos) beside the DLLs, which the installer adds under Wine; without it most games render black on macOS. With it, the launcher draws through Vulkan on Metal; set `WINE_D3D_CONFIG=renderer=gl` to use OpenGL instead. With a local build, [cross-compile](building.md#macos-cross-compilation) with the preset matching the game's architecture, run `scripts/build-wined3d.sh`, and pass `--build build/macos-x86` or `--build build/macos-x64`.
 
 Managed (.NET) games, which run through `appx-host.exe`, do not work under Wine yet; see [managed games under Wine](islands.md#wine).
 

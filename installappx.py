@@ -976,7 +976,7 @@ export MVK_CONFIG_LOG_LEVEL=${{MVK_CONFIG_LOG_LEVEL:-0}}
 # when installed; delete its three DLLs to use Wine's own.
 graphics=
 [[ -f d3d11.dll && -f dxgi.dll && -f wined3d.dll ]] && graphics=';d3d11,dxgi,wined3d=n'
-export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8,xaudio2_9,dwrite=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n$graphics${{WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}}"
+{renderer}export WINEDLLOVERRIDES="d3dcompiler_47,xaudio2_8,xaudio2_9,dwrite=n,b;msvcr110,msvcp110,vccorlib110,msvcr120_app,msvcp120_app,vccorlib120_app,vcruntime140_app,msvcp140_app,vccorlib140_app=n$graphics${{WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}}"
 wine=${{WINE:-$(command -v wine || echo "$HOME/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine")}}
 [[ -x "$wine" ]] || {{ echo 'Install Wine, or set WINE to your Wine executable.' >&2; exit 1; }}
 # A crash otherwise opens Wine's crash dialog, which keeps the process alive
@@ -997,6 +997,13 @@ for attempt in 1 2 3; do
   exit "$status"
 done
 exit "$status"
+"""
+# macOS: wined3d's Vulkan renderer, on Metal through MoltenVK. Its OpenGL one
+# stops at OpenGL 4.1 and often crashes in its first setup under WoW64.
+MACOS_RENDERER = """\
+# With the patched stack, Vulkan through MoltenVK, on Metal; Wine's own wined3d
+# cannot run 32-bit games there. Set WINE_D3D_CONFIG=renderer=gl for OpenGL.
+[[ -n $graphics ]] && export WINE_D3D_CONFIG=${WINE_D3D_CONFIG:-renderer=vulkan}
 """
 
 
@@ -1028,7 +1035,10 @@ def write_launcher(
         path.write_bytes(text.replace("\n", "\r\n").encode())
     else:
         path = Path(game) / (LAUNCHER + (".command" if macos else ".sh"))
-        path.write_bytes(SH_LAUNCHER.format(exe=shlex.quote(executable)).encode())
+        text = SH_LAUNCHER.format(
+            exe=shlex.quote(executable), renderer=MACOS_RENDERER if macos else ""
+        )
+        path.write_bytes(text.encode())
         path.chmod(0o755)
     return path
 

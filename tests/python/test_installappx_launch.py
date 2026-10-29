@@ -163,6 +163,38 @@ class LauncherTests(unittest.TestCase):
         self.assertTrue(os.access(path, os.X_OK))
         self.assertIn('"$wine" Game.exe', path.read_text())
 
+    def test_macos_launcher_picks_the_vulkan_renderer(self):
+        if not BASH:
+            self.skipTest("needs bash on a POSIX host")
+        fake = self.game / "fake-wine"
+        fake.write_text(
+            '#!/bin/sh\n[ "$1" = reg ] && exit 0\necho "${WINE_D3D_CONFIG-unset}" > d3d-config.txt\n'
+        )
+        fake.chmod(0o755)
+
+        def config(macos, **env):
+            path = installer.write_launcher(
+                self.game, "Game.exe", windows=False, macos=macos
+            )
+            environment = {
+                k: v for k, v in os.environ.items() if k != "WINE_D3D_CONFIG"
+            }
+            environment.update(WINE=str(fake), **env)
+            result = subprocess.run(
+                [BASH, str(path)], capture_output=True, text=True, env=environment
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return (self.game / "d3d-config.txt").read_text().strip()
+
+        # Wine's own wined3d cannot run 32-bit games on MoltenVK.
+        self.assertEqual(config(True), "unset")
+        for name in ("d3d11.dll", "dxgi.dll", "wined3d.dll"):
+            (self.game / name).write_bytes(b"")
+        # MoltenVK runs the patched wined3d's Vulkan renderer on Metal; a set value wins.
+        self.assertEqual(config(True), "renderer=vulkan")
+        self.assertEqual(config(True, WINE_D3D_CONFIG="renderer=gl"), "renderer=gl")
+        self.assertEqual(config(False), "unset")
+
     def test_sh_launcher_runs_wine_from_the_game_folder(self):
         if not BASH:
             self.skipTest("needs bash on a POSIX host")
