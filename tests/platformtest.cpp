@@ -8,6 +8,7 @@
 #include <windows.media.devices.h>
 #include <windows.devices.enumeration.h>
 #include <mmdeviceapi.h>
+#include <windows.system.threading.core.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
@@ -98,6 +99,81 @@ static int CheckAudioDevices(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**)
         return 48;
     }
     watcher->Stop();
+    return 0;
+}
+// Where's My Mickey's FMOD wakes its mixer through a SignalNotifier on a named
+// event: one call per Enable, when the event is set or the wait times out.
+static int CheckSignalNotifier(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**)) {
+    using namespace ABI::Windows::System::Threading::Core;
+    Event signal(CreateEventW(nullptr, FALSE, FALSE, L"appx-portable-platformtest-signal"));
+    Event called(CreateEventW(nullptr, FALSE, FALSE, nullptr));
+    std::atomic<int> calls{0}, timeouts{0};
+    HANDLE done = called.Get();
+    auto handler = Callback<Implements<RuntimeClassFlags<ClassicCom>, ISignalHandler, FtmBase>>(
+        [&calls, &timeouts, done](ISignalNotifier*, boolean timedOut) {
+            ++calls;
+            if (timedOut) ++timeouts;
+            SetEvent(done);
+            return S_OK;
+        });
+    ComPtr<IActivationFactory> factory;
+    ComPtr<ISignalNotifierStatics> statics;
+    ComPtr<ISignalNotifier> notifier;
+    if (!signal.IsValid() ||
+        FAILED(get(HStringReference(L"Windows.System.Threading.Core.SignalNotifier").Get(), &factory)) ||
+        FAILED(factory.As(&statics)) ||
+        FAILED(statics->AttachToEvent(HStringReference(L"appx-portable-platformtest-signal").Get(), handler.Get(),
+                                      &notifier)))
+        return 49;
+    // Nothing until enabled; then the set event calls once.
+    SetEvent(signal.Get());
+    Sleep(100);
+    if (calls != 0 || FAILED(notifier->Enable()) || WaitForSingleObject(done, 2000) != WAIT_OBJECT_0 || calls != 1 ||
+        timeouts != 0)
+        return 50;
+    SetEvent(signal.Get());
+    Sleep(100);
+    if (calls != 1 || FAILED(notifier->Enable()) || WaitForSingleObject(done, 2000) != WAIT_OBJECT_0 || calls != 2)
+        return 51;
+    notifier->Terminate();
+    ComPtr<ISignalNotifier> timed;
+    ABI::Windows::Foundation::TimeSpan timeout{50 * 10000};
+    if (FAILED(statics->AttachToEventWithTimeout(HStringReference(L"appx-portable-platformtest-signal").Get(),
+                                                 handler.Get(), timeout, &timed)) ||
+        FAILED(timed->Enable()) || WaitForSingleObject(done, 2000) != WAIT_OBJECT_0 || timeouts != 1)
+        return 52;
+    timed->Terminate();
+    // FMOD's WASAPI feeder attaches with a zero timeout, which waits for the signal.
+    ComPtr<ISignalNotifier> untimed;
+    const int before = calls;
+    if (FAILED(statics->AttachToEventWithTimeout(HStringReference(L"appx-portable-platformtest-signal").Get(),
+                                                 handler.Get(), ABI::Windows::Foundation::TimeSpan{0}, &untimed)) ||
+        FAILED(untimed->Enable()))
+        return 53;
+    Sleep(200);
+    if (calls != before) return 54;
+    SetEvent(signal.Get());
+    if (WaitForSingleObject(done, 2000) != WAIT_OBJECT_0 || calls != before + 1 || timeouts != 1) return 55;
+    untimed->Terminate();
+    // FMOD attaches a notifier for every buffer and drops it once it has fired,
+    // without Terminate; those must not pile up with their event handles.
+    DWORD handlesBefore = 0, handlesAfter = 0;
+    GetProcessHandleCount(GetCurrentProcess(), &handlesBefore);
+    for (int i = 0; i < 200; ++i) {
+        ComPtr<ISignalNotifier> once;
+        if (FAILED(statics->AttachToEvent(HStringReference(L"appx-portable-platformtest-signal").Get(), handler.Get(),
+                                          &once)) ||
+            FAILED(once->Enable()))
+            return 56;
+        SetEvent(signal.Get());
+        if (WaitForSingleObject(done, 2000) != WAIT_OBJECT_0) return 57;
+    }
+    Sleep(100);
+    GetProcessHandleCount(GetCurrentProcess(), &handlesAfter);
+    if (handlesAfter > handlesBefore + 50) {
+        printf("FAIL signal notifiers kept %lu handles\n", handlesAfter - handlesBefore);
+        return 58;
+    }
     return 0;
 }
 int main() {
@@ -262,6 +338,7 @@ int main() {
         return 40;
     }
     if (int failed = CheckAudioDevices(get, media.Get(), selector.Get())) return failed;
+    if (int failed = CheckSignalNotifier(get)) return failed;
     puts("platformtest: 0 failure(s)");
     return 0;
 }
