@@ -241,6 +241,9 @@ static void PatchGameModules(bool activation) noexcept {
         if (module == self || !GetModuleFileNameW(module, path, MAX_PATH)) continue;
         if (_wcsnicmp(path, game, prefix) == 0 && path[prefix] == L'\\') PatchModule(module, activation);
     }
+    // The shim's own WRL event sources report a failing game handler through
+    // RoTransformError; its activation calls must still reach combase.
+    if (OnWine()) PatchModule(self, false);
 }
 void InstallActivationHook() noexcept {
     HMODULE combase = GetModuleHandleW(L"combase.dll");

@@ -23,6 +23,25 @@ static int failures = 0;
         }                                                                                                              \
     } while (0)
 using GetFactory = HRESULT(WINAPI*)(HSTRING, IActivationFactory**);
+// Where `module`'s import of `wanted` points, or nullptr without one.
+static void* ImportTarget(HMODULE module, const char* wanted) {
+    auto* base = reinterpret_cast<BYTE*>(module);
+    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(base + reinterpret_cast<IMAGE_DOS_HEADER*>(base)->e_lfanew);
+    const auto& directory = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!directory.VirtualAddress) return nullptr;
+    for (auto* imports = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(base + directory.VirtualAddress); imports->Name;
+         ++imports) {
+        auto* names = reinterpret_cast<IMAGE_THUNK_DATA*>(base + imports->OriginalFirstThunk);
+        auto* slots = reinterpret_cast<IMAGE_THUNK_DATA*>(base + imports->FirstThunk);
+        for (; names->u1.AddressOfData; ++names, ++slots) {
+            if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;
+            auto* symbol = reinterpret_cast<IMAGE_IMPORT_BY_NAME*>(base + names->u1.AddressOfData);
+            if (strcmp(reinterpret_cast<char*>(symbol->Name), wanted) == 0)
+                return reinterpret_cast<void*>(slots->u1.Function);
+        }
+    }
+    return nullptr;
+}
 
 int main() {
     const auto fixedNow = appx::TimerClock::time_point(std::chrono::seconds(1));
@@ -45,6 +64,13 @@ int main() {
     // imports of them, so reaching the next check is the test.
     RoTransformError(E_FAIL, E_NOTIMPL, nullptr);
     RoCaptureErrorContext(E_FAIL);
+    // The shim's own WRL event sources report failing handlers there too.
+    if (GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version")) {
+        HMODULE target = nullptr;
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           static_cast<LPCWSTR>(ImportTarget(dll, "RoTransformError")), &target);
+        CHECK(target == dll);
+    }
     CHECK(SUCCEEDED(RoUnregisterForApartmentShutdown(nullptr)) || !GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version"));
     ComPtr<IActivationFactory> factory;
     CHECK(get(HStringReference(L"Unknown.Class").Get(), &factory) == CLASS_E_CLASSNOTAVAILABLE);
