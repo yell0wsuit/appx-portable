@@ -1,0 +1,246 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+namespace AppxPortable.WinRT
+{
+    // Explicit ABI calls avoid the CLR's WinRT metadata/projection machinery.
+    // Callers initialize their COM apartment, as the game host already does.
+    internal sealed class NativeObject : SafeHandle
+    {
+        [DllImport("appxportable.dll", CallingConvention = CallingConvention.StdCall)]
+        private static extern int ShimGetFactory(IntPtr name, out IntPtr factory);
+        [DllImport("combase.dll")]
+        private static extern IntPtr WindowsGetStringRawBuffer(IntPtr value, out uint length);
+        [DllImport("combase.dll")]
+        private static extern int WindowsDeleteString(IntPtr value);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int GetPointer(IntPtr self, out IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int GetUInt32(IntPtr self, out uint value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int Invoke0(IntPtr self);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int Invoke1(IntPtr self, IntPtr argument);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int ComposeCall(IntPtr self, IntPtr outer, out IntPtr inner, out IntPtr value);
+
+        private static readonly Guid unknown = new Guid("00000000-0000-0000-c000-000000000046");
+        private static readonly object gate = new object();
+        // IUnknown identity -> wrapper, so one native object has one managed wrapper.
+        private static readonly Dictionary<IntPtr, WeakReference> wrappers = new Dictionary<IntPtr, WeakReference>();
+
+        private NativeObject(IntPtr owned) : base(IntPtr.Zero, true) { SetHandle(owned); }
+        public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
+        protected override bool ReleaseHandle() { Marshal.Release(handle); return true; }
+
+        private static NativeObject TakeResult(int hr, IntPtr owned)
+        {
+            if (hr < 0)
+            {
+                if (owned != IntPtr.Zero) Marshal.Release(owned);
+                Errors.Check(hr);
+            }
+            if (owned == IntPtr.Zero) throw new InvalidOperationException("WinRT returned a null interface");
+            return new NativeObject(owned);
+        }
+
+        // A pointer the caller still owns, such as a callback argument.
+        internal static NativeObject Borrow(IntPtr value)
+        {
+            if (value == IntPtr.Zero) return null;
+            Marshal.AddRef(value);
+            return new NativeObject(value);
+        }
+
+        internal static NativeObject Factory(string className, Guid iid)
+        {
+            using (var name = new NativeString(className))
+            {
+                IntPtr pointer;
+                int hr = ShimGetFactory(name.Value, out pointer);
+                using (NativeObject factory = TakeResult(hr, pointer))
+                    return factory.QueryInterface(iid);
+            }
+        }
+
+        // Returns the managed object behind a native identity, the cached wrapper,
+        // or a new wrapper over iid. Disposes value.
+        internal static T Wrap<T>(NativeObject value, Guid iid, Func<NativeObject, T> create) where T : class
+        {
+            if (value == null) return null;
+            using (value)
+            {
+                IntPtr identity = value.Identity();
+                T existing = ManagedObject.Find(identity) as T;
+                if (existing != null) return existing;
+                WeakReference cached;
+                lock (gate)
+                    if (wrappers.TryGetValue(identity, out cached) && (existing = cached.Target as T) != null) return existing;
+                NativeObject owned = value.QueryInterface(iid);
+                try
+                {
+                    T created = create(owned);
+                    // Construct outside the lock: a factory may call native code
+                    // that reenters managed code on another thread.
+                    lock (gate)
+                    {
+                        if (wrappers.TryGetValue(identity, out cached) && (existing = cached.Target as T) != null)
+                        {
+                            owned.Dispose();
+                            return existing;
+                        }
+                        wrappers[identity] = new WeakReference(created);
+                    }
+                    return created;
+                }
+                catch { owned.Dispose(); throw; }
+            }
+        }
+
+        internal NativeObject QueryInterface(Guid iid)
+        {
+            using (var call = new Access(this))
+            {
+                IntPtr pointer;
+                int hr = Marshal.QueryInterface(call.Self, ref iid, out pointer);
+                return TakeResult(hr, pointer);
+            }
+        }
+
+        // Aggregation: answers an outer's QueryInterface without throwing.
+        internal int TryQueryInterface(Guid iid, out IntPtr value)
+        {
+            using (var call = new Access(this))
+                return Marshal.QueryInterface(call.Self, ref iid, out value);
+        }
+
+        // The IUnknown pointer, valid while this reference is alive.
+        internal IntPtr Identity()
+        {
+            using (NativeObject identity = QueryInterface(unknown)) return identity.handle;
+        }
+
+        internal NativeObject Object(int slot)
+        {
+            using (var call = new Access(this))
+            {
+                IntPtr pointer;
+                int hr = call.Method<GetPointer>(slot)(call.Self, out pointer);
+                return TakeResult(hr, pointer);
+            }
+        }
+
+        internal uint UInt32(int slot)
+        {
+            using (var call = new Access(this))
+            {
+                uint value;
+                Errors.Check(call.Method<GetUInt32>(slot)(call.Self, out value));
+                return value;
+            }
+        }
+
+        internal string String(int slot)
+        {
+            using (var call = new Access(this))
+            {
+                IntPtr value = IntPtr.Zero;
+                try
+                {
+                    Errors.Check(call.Method<GetPointer>(slot)(call.Self, out value));
+                    uint length;
+                    IntPtr text = WindowsGetStringRawBuffer(value, out length);
+                    return length == 0 ? string.Empty : Marshal.PtrToStringUni(text, checked((int)length));
+                }
+                finally { WindowsDeleteString(value); }
+            }
+        }
+
+        internal void Call(int slot)
+        {
+            using (var call = new Access(this))
+                Errors.Check(call.Method<Invoke0>(slot)(call.Self));
+        }
+
+        internal void Call(int slot, IntPtr argument)
+        {
+            using (var call = new Access(this))
+                Errors.Check(call.Method<Invoke1>(slot)(call.Self, argument));
+        }
+
+        internal void Call(int slot, NativeObject argument)
+        {
+            if (argument == null) { Call(slot, IntPtr.Zero); return; }
+            using (var held = new Access(argument)) Call(slot, held.Self);
+        }
+
+        // A composable factory's CreateInstance(outer, out inner): returns the
+        // non-delegating inner and releases the delegating result.
+        internal NativeObject Compose(int slot, IntPtr outer)
+        {
+            using (var call = new Access(this))
+            {
+                IntPtr inner, value;
+                int hr = call.Method<ComposeCall>(slot)(call.Self, outer, out inner, out value);
+                if (value != IntPtr.Zero) Marshal.Release(value);
+                return TakeResult(hr, inner);
+            }
+        }
+
+        // Keep the COM reference alive across vtable lookup and invocation,
+        // including when another managed thread disposes the wrapper.
+        private sealed class Access : IDisposable
+        {
+            private NativeObject owner;
+            internal readonly IntPtr Self;
+            internal Access(NativeObject owner)
+            {
+                bool held = false;
+                owner.DangerousAddRef(ref held);
+                this.owner = owner;
+                Self = owner.DangerousGetHandle();
+            }
+            internal T Method<T>(int slot) where T : class
+            {
+                IntPtr method = Marshal.ReadIntPtr(Marshal.ReadIntPtr(Self), checked(slot * IntPtr.Size));
+                return (T)(object)Marshal.GetDelegateForFunctionPointer(method, typeof(T));
+            }
+            public void Dispose()
+            {
+                if (owner == null) return;
+                owner.DangerousRelease();
+                owner = null;
+            }
+        }
+    }
+
+    internal sealed class NativeString : IDisposable
+    {
+        [DllImport("combase.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern int WindowsCreateString(string text, uint length, out IntPtr value);
+        [DllImport("combase.dll")]
+        private static extern int WindowsDeleteString(IntPtr value);
+        internal IntPtr Value { get; private set; }
+        internal NativeString(string text)
+        {
+            text = text ?? string.Empty;
+            IntPtr value;
+            Marshal.ThrowExceptionForHR(WindowsCreateString(text, (uint)text.Length, out value));
+            Value = value;
+        }
+        // Transfers ownership of the HSTRING to a native caller.
+        internal IntPtr Detach()
+        {
+            IntPtr value = Value;
+            Value = IntPtr.Zero;
+            return value;
+        }
+        public void Dispose()
+        {
+            WindowsDeleteString(Value);
+            Value = IntPtr.Zero;
+        }
+    }
+}
