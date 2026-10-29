@@ -111,3 +111,26 @@ namespace Windows.UI.Core
     }
     public sealed class CoreDispatcher { internal CoreDispatcher() { } }
 }
+namespace Windows.Foundation.Collections
+{
+    public interface IPropertySet : global::System.Collections.Generic.IDictionary<string, object> { }
+}
+namespace Windows.Storage
+{
+    public enum ApplicationDataLocality { Local = 0, Roaming = 1, Temporary = 2 }
+    public enum ApplicationDataCreateDisposition { Always = 0, Existing = 1 }
+    public sealed class ApplicationData
+    {
+        public static ApplicationData Current { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationData.Current"); } }
+        public ApplicationDataContainer LocalSettings { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationData.LocalSettings"); } }
+        public ApplicationDataContainer RoamingSettings { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationData.RoamingSettings"); } }
+    }
+    public sealed class ApplicationDataContainer
+    {
+        public string Name { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.Name"); } }
+        public ApplicationDataLocality Locality { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.Locality"); } }
+        public global::Windows.Foundation.Collections.IPropertySet Values { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.Values"); } }
+        public ApplicationDataContainer CreateContainer(string name, ApplicationDataCreateDisposition disposition) { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.CreateContainer"); }
+        public void DeleteContainer(string name) { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.DeleteContainer"); }
+    }
+}

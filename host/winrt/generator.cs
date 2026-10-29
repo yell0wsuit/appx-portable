@@ -259,6 +259,15 @@ internal static class WinrtProjectionGenerator
                 native = Runtime + "NativeTypeName.Abi";
             }
             else if (full == "System.Object") prepare = Runtime + "NativeObject.Box(" + value + ")";
+            else if (selected.Contains(full) && Find(full).IsEnum)
+            {
+                string width = Find(full).Fields.Single(f => f.Name == "value__").FieldType.FullName;
+                if (width != "System.Int32" && width != "System.UInt32") throw new NotSupportedException("Unsupported enum parameter: " + full);
+                string scalar = width == "System.Int32" ? "int" : "uint";
+                abi.Add(scalar + " " + local);
+                arguments.Add("unchecked((" + scalar + ")" + value + ")");
+                continue;
+            }
             else
             {
                 TypeDefinition definition = Parameter(parameter.ParameterType, type.FullName + "." + name);
@@ -411,9 +420,93 @@ internal static class WinrtProjectionGenerator
         return members;
     }
 
+    private static string Parameterized(TypeDefinition type, params string[] arguments)
+    {
+        string signature = "pinterface({" + Iid(type) + "};" + string.Join(";", arguments) + ")";
+        byte[] space = { 0x11, 0xf4, 0x7a, 0xd5, 0x7b, 0x73, 0x42, 0xc0, 0xab, 0xae, 0x87, 0x8b, 0x1e, 0x16, 0xad, 0xee };
+        byte[] bytes;
+        using (var hash = SHA1.Create()) bytes = hash.ComputeHash(space.Concat(Encoding.UTF8.GetBytes(signature)).ToArray());
+        bytes[6] = (byte)((bytes[6] & 0x0f) | 0x50);
+        bytes[8] = (byte)((bytes[8] & 0x3f) | 0x80);
+        return new System.Guid(unchecked((int)((uint)bytes[0] << 24 | (uint)bytes[1] << 16 | (uint)bytes[2] << 8 | bytes[3])),
+            unchecked((short)(bytes[4] << 8 | bytes[5])), unchecked((short)(bytes[6] << 8 | bytes[7])), bytes.Skip(8).Take(8).ToArray()).ToString("D");
+    }
+    private static string CollectionType(TypeReference type)
+    {
+        var parameter = type as GenericParameter;
+        if (parameter != null) return parameter.Type == GenericParameterType.Type ? "!" + parameter.Position : "unsupported";
+        var generic = type as GenericInstanceType;
+        if (generic != null) return generic.ElementType.FullName + "<" + string.Join(",", generic.GenericArguments.Select(CollectionType)) + ">";
+        return type.FullName;
+    }
+    private static void CollectionMethod(TypeDefinition type, int arity, string name, string signature)
+    {
+        var found = type.Methods.Where(m => m.Name == name).ToList();
+        string actual = found.Count == 1 ? "(" + string.Join(",", found[0].Parameters.Select(p => CollectionType(p.ParameterType))) + ")->" + CollectionType(found[0].ReturnType) : null;
+        if (!type.IsInterface || type.GenericParameters.Count != arity || found.Count != 1 || found[0].IsStatic ||
+            !found[0].HasThis || found[0].HasGenericParameters || actual != signature)
+            throw new NotSupportedException("Unsupported collection ABI: " + type.FullName + "." + name);
+    }
+    private static int NamedSlot(TypeDefinition owner, string method)
+    {
+        return Slot(owner, owner.Methods.Single(m => m.Name == method));
+    }
+    private static void DictionaryInterface(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        if (surface.GetAttribute("Adapter") != "StringObjectMap" || type.Methods.Count != 0 || surface.HasChildNodes ||
+            !type.Interfaces.Any(i => i.InterfaceType.FullName == "Windows.Foundation.Collections.IMap`2<System.String,System.Object>"))
+            throw new NotSupportedException("Unsupported dictionary adapter: " + type.FullName);
+        var map = Find("Windows.Foundation.Collections.IMap`2");
+        var iterable = Find("Windows.Foundation.Collections.IIterable`1");
+        var iterator = Find("Windows.Foundation.Collections.IIterator`1");
+        var pair = Find("Windows.Foundation.Collections.IKeyValuePair`2");
+        foreach (var contract in new[] {
+            new { Type = map, Names = new[] { "Lookup", "get_Size", "HasKey", "GetView", "Insert", "Remove", "Clear" } },
+            new { Type = iterable, Names = new[] { "First" } },
+            new { Type = iterator, Names = new[] { "get_Current", "get_HasCurrent", "MoveNext", "GetMany" } },
+            new { Type = pair, Names = new[] { "get_Key", "get_Value" } } })
+            if (!contract.Type.Methods.Select(m => m.Name).SequenceEqual(contract.Names))
+                throw new NotSupportedException("Unsupported collection ABI: " + contract.Type.FullName + " method order");
+        CollectionMethod(map, 2, "Lookup", "(!0)->!1");
+        CollectionMethod(map, 2, "get_Size", "()->System.UInt32");
+        CollectionMethod(map, 2, "HasKey", "(!0)->System.Boolean");
+        CollectionMethod(map, 2, "Insert", "(!0,!1)->System.Boolean");
+        CollectionMethod(map, 2, "Remove", "(!0)->System.Void");
+        CollectionMethod(map, 2, "Clear", "()->System.Void");
+        CollectionMethod(iterable, 1, "First", "()->Windows.Foundation.Collections.IIterator`1<!0>");
+        CollectionMethod(iterator, 1, "get_Current", "()->!0");
+        CollectionMethod(iterator, 1, "get_HasCurrent", "()->System.Boolean");
+        CollectionMethod(iterator, 1, "MoveNext", "()->System.Boolean");
+        CollectionMethod(pair, 2, "get_Key", "()->!0");
+        CollectionMethod(pair, 2, "get_Value", "()->!1");
+        string pairSignature = "pinterface({" + Iid(pair) + "};string;cinterface(IInspectable))";
+        string wrapper = type.FullName.Replace('.', '_');
+        output.AppendLine("    public interface " + type.Name + " : global::System.Collections.Generic.IDictionary<string, object> { }");
+        output.AppendLine("}");
+        output.AppendLine("namespace AppxPortable.WinRT.Projected");
+        output.AppendLine("{");
+        output.AppendLine("    internal sealed class " + wrapper + " : " + Runtime + "NativeStringObjectMap, global::" + type.FullName);
+        output.AppendLine("    {");
+        output.AppendLine("        private static readonly " + Runtime + "StringObjectMapAbi abi = new " + Runtime + "StringObjectMapAbi {");
+        output.AppendLine("            Map = new global::System.Guid(\"" + Parameterized(map, "string", "cinterface(IInspectable)") + "\"),");
+        output.AppendLine("            Iterable = new global::System.Guid(\"" + Parameterized(iterable, pairSignature) + "\"),");
+        foreach (string name in new[] { "Lookup", "Insert", "Remove", "Clear" }) output.AppendLine("            " + name + " = " + Literal(NamedSlot(map, name)) + ",");
+        output.AppendLine("            Size = " + Literal(NamedSlot(map, "get_Size")) + ", HasKey = " + Literal(NamedSlot(map, "HasKey")) + ",");
+        output.AppendLine("            First = " + Literal(NamedSlot(iterable, "First")) + ", Current = " + Literal(NamedSlot(iterator, "get_Current")) + ",");
+        output.AppendLine("            HasCurrent = " + Literal(NamedSlot(iterator, "get_HasCurrent")) + ", MoveNext = " + Literal(NamedSlot(iterator, "MoveNext")) + ",");
+        output.AppendLine("            Key = " + Literal(NamedSlot(pair, "get_Key")) + ", Value = " + Literal(NamedSlot(pair, "get_Value")) + " };");
+        output.AppendLine("        private " + wrapper + "(" + Runtime + "NativeObject value) : base(value, abi) { }");
+        output.AppendLine("        internal static global::" + type.FullName + " FromNative(" + Runtime + "NativeObject value)");
+        output.AppendLine("        {");
+        output.AppendLine("            return " + Runtime + "NativeObject.Wrap<global::" + type.FullName + ">(value, " + Guid(type) + ", v => new " + wrapper + "(v));");
+        output.AppendLine("        }");
+        output.AppendLine("    }");
+    }
+
     private static void Interface(StringBuilder output, TypeDefinition type, XmlElement surface)
     {
         if (type.HasGenericParameters) throw new NotSupportedException("Unsupported generic interface: " + type.FullName);
+        if (surface.HasAttribute("Adapter")) { DictionaryInterface(output, type, surface); return; }
         List<string> members = InterfaceMembers(type, surface);
         output.AppendLine("    public interface " + type.Name);
         output.AppendLine("    {");
