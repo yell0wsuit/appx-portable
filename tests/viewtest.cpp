@@ -9,10 +9,13 @@
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
+#include <cstring>
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::UI::ViewManagement;
-int main() {
+int main(int argc, char** argv) {
+    // The islands contract runs this too, where real XAML serves the input pane.
+    const bool islands = argc > 1 && strcmp(argv[1], "--islands") == 0;
     RoInitialize(RO_INIT_MULTITHREADED);
     auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
@@ -69,6 +72,14 @@ int main() {
     if (FAILED(launch->get_PreferredLaunchWindowingMode(&launchMode)) ||
         launchMode != ApplicationViewWindowingMode_FullScreen)
         return 22;
+    // Without a view on this thread there is no input pane, as on Windows.
+    ComPtr<IActivationFactory> paneFactory;
+    ComPtr<IInputPaneStatics> panes;
+    ComPtr<IInputPane> pane;
+    if (!islands && (FAILED(get(HStringReference(L"Windows.UI.ViewManagement.InputPane").Get(), &paneFactory)) ||
+                     FAILED(paneFactory.As(&panes)) ||
+                     panes->GetForCurrentView(&pane) != HRESULT_FROM_WIN32(ERROR_NOT_FOUND) || pane))
+        return 23;
     puts("viewtest: 0 failure(s)");
     return 0;
 }

@@ -106,6 +106,15 @@ int wmain(int argc, wchar_t** argv) {
         CHECK(SUCCEEDED(viewFactory.As(&views)));
         CHECK(SUCCEEDED(views->GetForCurrentView(&view)));
         CHECK(SUCCEEDED(view.As(&view3)));
+        // The view's input pane is the host window's (Unity's text input uses it).
+        ComPtr<IActivationFactory> paneFactory;
+        ComPtr<IInputPaneStatics> panes;
+        ComPtr<IInputPane> pane;
+        ComPtr<IInputPane2> pane2;
+        CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.ViewManagement.InputPane").Get(), &paneFactory)));
+        CHECK(SUCCEEDED(paneFactory.As(&panes)));
+        CHECK(SUCCEEDED(panes->GetForCurrentView(&pane)) && pane);
+        CHECK(pane && SUCCEEDED(pane.As(&pane2)));
         auto* host = TestWindow();
         CHECK(host);
         CHECK(!IsWindowVisible(host)); // Restore must not show the host during construction.
