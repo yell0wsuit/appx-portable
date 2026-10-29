@@ -417,7 +417,11 @@ public:
     HRESULT STDMETHODCALLTYPE GetForCurrentThread(ICoreWindow** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
-        if (!HostThread() || GetCurrentThreadId() != HostThread()) return S_OK;
+        if (!HostThread() || GetCurrentThreadId() != HostThread()) {
+            Log("TRACE", "CoreWindow.GetForCurrentThread: none on thread %lu (UI thread %lu)", GetCurrentThreadId(),
+                HostThread());
+            return S_OK;
+        }
         return MakeCoreWindow(value);
     }
 };

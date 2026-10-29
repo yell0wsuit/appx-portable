@@ -205,6 +205,16 @@ static HMODULE WINAPI PackagedLibrary(LPCWSTR name, DWORD reserved) noexcept {
         return nullptr;
     }
 }
+// C++/WinRT, as in Unity's player, looks RoGetActivationFactory up in combase
+// at run time rather than importing it. Without the combase hotpatch, such
+// lookups get the activation hooks too. An API set name loads combase itself.
+static FARPROC WINAPI ProcAddress(HMODULE module, LPCSTR name) noexcept {
+    if (module && !IS_INTRESOURCE(name) && module == GetModuleHandleW(L"combase.dll")) {
+        if (strcmp(name, "RoGetActivationFactory") == 0) return reinterpret_cast<FARPROC>(&GetFactory);
+        if (strcmp(name, "RoActivateInstance") == 0) return reinterpret_cast<FARPROC>(&Activate);
+    }
+    return GetProcAddress(module, name);
+}
 
 // Redirect the imports of every module in the game folder, which covers the
 // game and its VC runtime: the activation calls as a fallback for Wine builds
@@ -230,6 +240,7 @@ static void PatchModule(HMODULE module, bool activation) noexcept {
             void* hook = nullptr;
             if (activation && strcmp(name, "RoGetActivationFactory") == 0) hook = reinterpret_cast<void*>(&GetFactory);
             if (activation && strcmp(name, "RoActivateInstance") == 0) hook = reinterpret_cast<void*>(&Activate);
+            if (activation && strcmp(name, "GetProcAddress") == 0) hook = reinterpret_cast<void*>(&ProcAddress);
             if (strcmp(name, "LoadPackagedLibrary") == 0) hook = reinterpret_cast<void*>(&PackagedLibrary);
             if (OnWine() && strcmp(name, "RoUnregisterForApartmentShutdown") == 0)
                 hook = reinterpret_cast<void*>(&UnregisterForApartmentShutdown);
