@@ -56,6 +56,49 @@ class LaunchApp : Application
         Window window = Window.Current;
         Check(window != null && window.Content == null, "empty Window.Current");
         var frame = new Frame();
+        var property = DependencyProperty.RegisterAttached("Session", typeof(string), typeof(LaunchApp), null);
+        Check(frame.GetValue(property) == null, "attached property default");
+        Check(ReferenceEquals(frame.ReadLocalValue(property), DependencyProperty.UnsetValue), "missing local sentinel");
+        const string text = "session-đá-💎\0tail";
+        frame.SetValue(property, text);
+        Check((string)frame.GetValue(property) == text, "boxed string property round trip");
+        frame.SetValue(property, null);
+        Check(frame.ReadLocalValue(property) == null, "explicit null local value");
+        frame.ClearValue(property);
+        Check(ReferenceEquals(frame.ReadLocalValue(property), DependencyProperty.UnsetValue), "clear removes local value");
+        var count = DependencyProperty.Register("Count", typeof(int), typeof(LaunchApp), null);
+        Check((int)frame.GetValue(count) == 0, "Int32 default");
+        frame.SetValue(count, 42);
+        Check((int)frame.GetValue(count) == 42, "Int32 local value");
+        try { frame.SetValue(count, "wrong type"); throw new Exception("wrong property type accepted"); }
+        catch (ArgumentException) { }
+        frame.ClearValue(count);
+        Check((int)frame.GetValue(count) == 0, "Int32 default after clear");
+        var data = new global::System.Collections.Generic.Dictionary<string, object>();
+        var state = DependencyProperty.RegisterAttached("State", data.GetType(), typeof(LaunchApp), null);
+        frame.SetValue(state, data);
+        Check(ReferenceEquals(frame.GetValue(state), data), "managed reference property retains identity");
+        var derived = new StateDictionary();
+        frame.SetValue(state, derived);
+        Check(ReferenceEquals(frame.GetValue(state), derived), "managed reference property accepts derived values");
+        try { frame.SetValue(state, new object()); throw new Exception("wrong reference type accepted"); }
+        catch (ArgumentException) { }
+        int collecting = 1;
+        var collector = new Thread(() => { while (Interlocked.CompareExchange(ref collecting, 1, 1) == 1) { GC.Collect(); Thread.Sleep(1); } });
+        collector.Start();
+        try
+        {
+            for (int index = 0; index < 128; ++index)
+            {
+                frame.SetValue(state, new StateDictionary { { "iteration", index } });
+                var restored = (StateDictionary)frame.GetValue(state);
+                Check((int)restored["iteration"] == index, "temporary custom object survives native ownership and GC");
+            }
+        }
+        finally { Interlocked.Exchange(ref collecting, 0); collector.Join(); }
+        frame.ClearValue(state);
+        Check(frame.GetValue(state) == null, "managed reference property clears");
+        Console.WriteLine("PASS: managed dependency properties use the shim value store");
         window.Content = frame;
         Check(ReferenceEquals(window.Content, frame), "Window.Content returns the managed Frame");
         Check(ReferenceEquals(Window.Current, window), "one wrapper per native Window");
@@ -122,3 +165,5 @@ class ApplicationProjectionTest
         catch (Exception error) { Console.Error.WriteLine("0x" + error.HResult.ToString("X8") + " " + error); return 1; }
     }
 }
+
+class StateDictionary : global::System.Collections.Generic.Dictionary<string, object> { }

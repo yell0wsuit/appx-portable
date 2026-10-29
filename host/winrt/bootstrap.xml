@@ -35,7 +35,19 @@
     <Method Name="Activate" />
   </Class>
   <!-- Frame's class chain; each base is a typed wrapper until its members are needed. -->
-  <Class Name="Windows.UI.Xaml.DependencyObject" />
+  <Class Name="Windows.UI.Xaml.DependencyObject">
+    <Method Name="GetValue" />
+    <Method Name="SetValue" />
+    <Method Name="ClearValue" />
+    <Method Name="ReadLocalValue" />
+    <Method Name="GetAnimationBaseValue" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.DependencyProperty">
+    <Method Name="Register" />
+    <Method Name="RegisterAttached" />
+    <Property Name="UnsetValue" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.PropertyMetadata" />
   <Class Name="Windows.UI.Xaml.UIElement" />
   <Class Name="Windows.UI.Xaml.FrameworkElement" />
   <Class Name="Windows.UI.Xaml.Controls.Control" />

@@ -22,7 +22,11 @@ HEADER_IIDS = {
     "IApplicationInitializationCallback": "b6351c55-c284-46e4-8310-fb0967fab76f",
     "IApplicationInitializationCallbackParams": "751b792e-5772-4488-8b87-f547faa64474",
     "IActivatedEventArgs": "cf651713-cd08-4fd8-b697-a281b6544e2e", "IWindowStatics": "93328409-4ea1-4afa-83dc-0c4e73e88bb1",
-    "IWindow": "3276167d-c9f6-462d-9de2-ae4c1fd8c2e5", "IFrameFactory": "02ee93d4-448e-469e-9799-0a8a1f70f171"}
+    "IWindow": "3276167d-c9f6-462d-9de2-ae4c1fd8c2e5", "IFrameFactory": "02ee93d4-448e-469e-9799-0a8a1f70f171",
+    "IDependencyObject": "5c526665-f60e-4912-af59-5fe0680f089d",
+    "IDependencyProperty": "85b13970-9bc4-4e96-acf1-30c8fd3d55c8",
+    "IDependencyPropertyStatics": "49e5f28f-8259-4d5c-aae0-83d56dbb68d9",
+    "IPropertyMetadata": "814ef30d-8d18-448a-8644-f2cb51e70380"}
 HEADER_SLOTS = [
     "Windows.ApplicationModel.IPackageStatics::get_Current, slot 6", "Windows.ApplicationModel.IPackage::get_Id, slot 6",
     "Windows.ApplicationModel.IPackageId::get_Name, slot 6", "Windows.ApplicationModel.IPackageId::get_Architecture, slot 8",
@@ -36,7 +40,13 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.IApplication::add_Suspending, slot 13", "Windows.UI.Xaml.IApplication::remove_Suspending, slot 14",
     "Windows.UI.Xaml.IWindowStatics::get_Current, slot 6", "Windows.UI.Xaml.IWindow::get_Content, slot 8",
     "Windows.UI.Xaml.IWindow::put_Content, slot 9", "Windows.UI.Xaml.IWindow::Activate, slot 20",
-    "Windows.UI.Xaml.Controls.IFrameFactory::CreateInstance, slot 6"]
+    "Windows.UI.Xaml.Controls.IFrameFactory::CreateInstance, slot 6",
+    "Windows.UI.Xaml.IDependencyPropertyStatics::get_UnsetValue, slot 6",
+    "Windows.UI.Xaml.IDependencyPropertyStatics::Register, slot 7",
+    "Windows.UI.Xaml.IDependencyPropertyStatics::RegisterAttached, slot 8",
+    "Windows.UI.Xaml.IDependencyObject::GetValue, slot 6", "Windows.UI.Xaml.IDependencyObject::SetValue, slot 7",
+    "Windows.UI.Xaml.IDependencyObject::ClearValue, slot 8", "Windows.UI.Xaml.IDependencyObject::ReadLocalValue, slot 9",
+    "Windows.UI.Xaml.IDependencyObject::GetAnimationBaseValue, slot 10"]
 # The runtime's dispatcher context calls CoreWindow and CoreDispatcher directly
 # (windows.ui.core.h): each IID and slot, and the call that uses the slot.
 HEADER_RUNTIME = [
@@ -141,17 +151,17 @@ def main():
 
     try:
         if args.runtime_case:
-            executable = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs",
+            executable = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs",
                                       repo / "tests/winrt_projection/runtime.cs"])
             run("runtime-" + args.runtime_case, [executable.name, args.runtime_case], marker="PASS: runtime " + args.runtime_case)
             return 0
-        runtime = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs",
+        runtime = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs",
                                repo / "tests/winrt_projection/runtime.cs"])
         for case in ("inspectable", "identity", "stale", "invocation", "reentrant"):
             run("runtime-" + case, [runtime.name, case], marker="PASS: runtime " + case)
         # The earlier bridge remains an independent native ownership/HRESULT check.
         bridge = compile_file("AppxPortable.WinRT.dll", [repo / "host/winrt" / name
-                              for name in ("abi.cs", "ccw.cs", "dispatcher.cs", "package.cs", "assembly.cs")], ["/target:library"])
+                              for name in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "package.cs", "assembly.cs")], ["/target:library"])
         legacy = compile_file("managed-winrt-bridge.exe", [repo / "tests/managed_winrt_bridge.cs"], ["/r:" + windows(bridge)])
         folder = fixture("legacy", legacy.name, "ManagedWinrtBridgeTest", "CN=bridge-đá-💎")
         for path in (bridge, legacy):
@@ -178,7 +188,7 @@ def main():
         missing += [value for value in HEADER_RUNTIME if value not in runtime_source]
         results.append(dict(case="header-values", missing=missing, passed=not missing))
         require(not missing, "generated IIDs or slots differ from the SDK headers: " + ", ".join(missing))
-        projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", generated], ["/target:library"])
+        projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", generated], ["/target:library"])
         shutil.copyfile(projection, folder / "Windows.dll")
         run("generated-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
         invalid = [
@@ -203,7 +213,7 @@ def main():
         text = target.read_text()
         require(changed + "-37c7-4790-9980-dd7ae74e8bb2" in text, "IID did not follow metadata")
         require("native.String(7)" in text, "method slot did not follow metadata")
-        mutant = compile_file("mutant/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", target], ["/target:library"])
+        mutant = compile_file("mutant/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", target], ["/target:library"])
         try:
             shutil.copyfile(mutant, folder / "Windows.dll")
             run("changed-iid-rejected", [consumer.name], cwd=folder, succeeds=False, marker="80004002")
@@ -216,8 +226,13 @@ def main():
         shutil.copyfile(projection, app / "Windows.dll")
         run("application-launch", [application.name], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         launch = (output / "application-launch.log").read_text(errors="replace")
+        require("PASS: managed dependency properties use the shim value store" in launch,
+                "dependency-property fixture did not finish")
         require("PASS: Suspending raised on the managed App" in launch and "UNUSED HANDLER" not in launch,
                 "Suspending must reach the subscribed handler and not the removed one")
+        run("mark-abi-setters", [marker.name, application.name, "application-abi.exe", "--abi-setters"], marker="flags=WindowsRuntime")
+        shutil.copyfile(output / "application-abi.exe", app / "application-abi.exe")
+        run("abi-setter-before-completion", ["application-abi.exe"], cwd=app, succeeds=False, marker="put_Content")
         run("application-exception", [application.name, "throw"], cwd=app, marker="PASS: OnLaunched exception crossed the native boundary; callback released")
         unimplemented = compile_file("unimplemented.exe", [repo / "tests/winrt_projection/unimplemented.cs"], ["/r:" + windows(reference)])
         run("mark-unimplemented", [marker.name, unimplemented.name, "unimplemented-winrt.exe"], marker="flags=WindowsRuntime")
@@ -227,7 +242,7 @@ def main():
         run("before-completion", [unimplemented.name], cwd=missing, succeeds=False, marker="UNBOUND:")
         resolver = compile_file("resolve-references.exe", [repo / "tests/winrt_projection/resolve_references.cs"], ["/r:Mono.Cecil.dll"])
         completer = compile_file("complete.exe", [repo / "host/winrt/complete.cs"], ["/r:Mono.Cecil.dll"])
-        consumers = [output / "unimplemented-winrt.exe", output / "consumer-winrt.exe", output / "application-winrt.exe"]
+        consumers = [output / "unimplemented-winrt.exe", output / "consumer-winrt.exe", output / "application-winrt.exe", output / "application-abi.exe"]
         consumers += [p.resolve() for p in args.consumer]
         run("resolve-before-completion", [resolver.name, windows(projection.parent)] + [windows(p) for p in consumers],
             succeeds=False, marker="UNRESOLVED ")
@@ -242,6 +257,7 @@ def main():
         run("completed-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
         shutil.copyfile(completed, app / "Windows.dll")
         run("completed-application", [application.name], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
+        run("completed-abi-setter", ["application-abi.exe"], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         if args.game:
             source = args.game
             paths = [source / "appx-host.exe", source / "AppxManifest.xml"] + [p.resolve() for p in args.consumer]

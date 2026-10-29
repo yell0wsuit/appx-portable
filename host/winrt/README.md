@@ -28,8 +28,9 @@ validation.
 
 `generator.cs` is a build-time tool. It reads SDK contract `.winmd` files with
 Mono.Cecil and emits C# for the members selected by `bootstrap.xml`:
-`<Property>` getters, `<Method>` (void, with no parameter or one runtime
-class, interface, or delegate), `<Event>` as consumers bind it (a
+`<Property>` getters/setters and `<Method>` calls with pointer-valued results
+or void and string, object, TypeName, runtime class, interface, or delegate
+arguments, `<Event>` as consumers bind it (a
 token-returning `add_X` and a token-taking `remove_X`), `<Constructor>` for
 composable classes, `<Overridable>` virtuals, `<Enum>`, `<Delegate>`, and
 `<Interface>` with property getters. A selected class implements the selected
@@ -127,7 +128,9 @@ fields, and delegate signatures. This pass does not yet copy every implemented
 interface or virtual method shape; reference resolution measures binding coverage,
 not complete CLR interface dispatch or implemented behavior. It then adds every referenced member with
 the game's exact signature. Members the projection already implements are
-kept; every other body throws `NotImplementedException` naming the member,
+kept. WinRT `put_X` calls forward to an implemented C# `set_X` only when
+WinMD identifies the setter and the exact projected signature matches;
+ordinary methods are not renamed. Every other body throws `NotImplementedException` naming the member,
 for example `Windows.UI.Xaml.Window.get_Current`. A WinMD shape that would
 need a CLR-redirected type such as `Uri` or `Thickness` fails by name.
 
@@ -142,10 +145,12 @@ unresolved after completion. In a copied game, `Program.Main` starts the
 shim's Application; its callback constructs `Bejeweled3.App`, whose
 constructor subscribes to `Suspending`, and the shim then calls the game's
 `App.OnLaunched` on its view thread. `OnLaunched` sets a composed `Frame` as
-`Window.Current.Content`, then fails in the game's `SuspensionManager` static
-constructor with `NotImplementedException:
-Windows.UI.Xaml.DependencyProperty.RegisterAttached`, which needs
-`DependencyProperty` and the CLR-redirected `System.Type`.
+`Window.Current.Content`. The local dependency-property implementation lets
+`SuspensionManager` initialize its string and dictionary attached properties.
+The next measured failure is a `TypeLoadException` for the missing
+`Microsoft.Xbox` assembly while loading `Bejeweled3.Classes.XboxWrapper`'s
+`_currentUser` field, at `App.OnLaunched` offset 0x65. No menu or game round
+has been displayed by this path.
 
 The game also references `System.Runtime.WindowsRuntime` and
 `System.Runtime.WindowsRuntime.UI.Xaml`, which Wine Mono does not provide, plus
@@ -153,8 +158,8 @@ the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. None of these
 is projected yet.
 
 This is a foundation for managed compatibility, not a replacement for the game's
-`Windows` assembly. `DependencyProperty`, CLR-redirected types such as
-`System.Type` and `System.Uri`, and managed implementations of WinRT interfaces
+`Windows` assembly. Layout, source loading, rendering integration,
+CLR-redirected types such as `System.Uri`, and general managed implementations of WinRT interfaces
 remain to be implemented before Bejeweled can use this path. The existing game
 host is unchanged; its older "XAML Islands (STA)" log label identifies the STA
 route even when the shim selects its Wine XAML backend. The ini override for
@@ -183,10 +188,48 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game \
-  --expected-game-error 'NotImplementedException: Windows.UI.Xaml.Application.OnActivated override'
+  --expected-game-error "Could not load file or assembly 'Microsoft.Xbox, Version=255.255.255.255"
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
 concurrent and nested exception scopes, stale failures, and reentrant callbacks.
 The x86 cross build, registered Wine CTest, full game probe, and 153 Python tests
 passed locally. Windows and x64 runtime controls remain unverified for this slice.
+
+## Local dependency properties
+
+`shim/xaml/properties.cpp` serves real `DependencyProperty` and
+`PropertyMetadata` factories through `ShimGetFactory`. Each shim element owns
+its local values; absent and explicit-null entries differ, `ReadLocalValue`
+returns the stable UnsetValue sentinel for absence, and `ClearValue` restores
+the registered default. Change callbacks receive retained old/new values after
+the update, including reentrant changes, and failures propagate as HRESULTs.
+Access to an element's store is restricted to its creating thread. The model
+follows the documented [default and local value rules](https://learn.microsoft.com/en-us/windows/apps/develop/platform/xaml/dependency-properties-overview).
+
+Native registrations support string, object, Boolean, Int32/UInt32, Int64/UInt64,
+Single and Double, with scalar type validation and implicit zero defaults for
+numeric/value types. Custom managed reference properties use a private
+projection/shim interface to let the CLR check assignability; class-name
+comparison cannot validate generic arguments, interfaces, or base classes.
+Custom type names carry assembly identity. The projection maps native
+[TypeName to System.Type](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.interop.typename),
+boxes/unboxes string and Int32 via Wine's IPropertyValue, and preserves the
+identity of other managed references through a real IInspectable CCW. The
+CCW stays rooted until native AddRef establishes its lifetime.
+
+`dependencytest` checks registration, duplicate rejection, default/local/null/
+unset transitions, scalar equality, invalid types, callbacks, reentrancy,
+callback failure, ownership, and wrong-thread rejection. The managed Application
+fixture checks TypeName ABI, scalar and dictionary round trips, derived values,
+type rejection, and temporary objects while another thread forces GC.
+Its second variant uses WinRT `put_Content` metadata to verify completion
+forwards to the implemented setter; the original C# variant still runs.
+
+This is the local-value foundation of milestone 2b. Style/template/animation
+precedence, inheritance, binding invalidation, built-in control property
+identifiers, and general layout are still pending. Metadata factory callbacks
+and foreign PropertyMetadata implementations fail explicitly; parameterized
+PropertyMetadata constructors are not projected yet. Managed scalar boxing
+beyond string and Int32 is also explicit unsupported behavior. This checkpoint
+does not establish Windows or x64 runtime parity.

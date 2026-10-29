@@ -11,6 +11,13 @@ class MarkReference
             {
                 if (reference.Name != "Windows") continue;
                 reference.Attributes |= AssemblyAttributes.WindowsRuntime;
+                if (args.Length > 2 && args[2] == "--abi-setters")
+                    foreach (MemberReference member in assembly.MainModule.GetMemberReferences())
+                    {
+                        var method = member as MethodReference;
+                        if (method != null && method.DeclaringType.Scope.Name == "Windows" && method.Name.StartsWith("set_", StringComparison.Ordinal))
+                            method.Name = "put_" + method.Name.Substring(4);
+                    }
                 assembly.Write(args[1]);
                 Console.WriteLine(reference.FullName + " flags=" + reference.Attributes);
                 return 0;

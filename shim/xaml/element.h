@@ -1,5 +1,6 @@
 #pragma once
 #include "package/package.h"
+#include "properties.h"
 #include "generated/xaml.h"
 #include "com/composable.h"
 #include "host/host.h"
@@ -99,6 +100,7 @@ class Element
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerCanceled_;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerWheelChanged_;
     double width_ = 1024, height_ = 768;
+    PropertyValues properties_;
     bool loadedRaised_ = false;
     ABI::Windows::Foundation::Size laidOut_{0, 0};
     // XAML raises SizeChanged on first layout (from 0x0) and on every later
@@ -152,6 +154,25 @@ private:
     }
 
 public:
+    HRESULT STDMETHODCALLTYPE GetValue(ABI::Windows::UI::Xaml::IDependencyProperty* property,
+                                       IInspectable** value) override {
+        return properties_.Get(property, value);
+    }
+    HRESULT STDMETHODCALLTYPE SetValue(ABI::Windows::UI::Xaml::IDependencyProperty* property,
+                                       IInspectable* value) override {
+        return properties_.Set(this, property, value);
+    }
+    HRESULT STDMETHODCALLTYPE ClearValue(ABI::Windows::UI::Xaml::IDependencyProperty* property) override {
+        return properties_.Set(this, property, nullptr, true);
+    }
+    HRESULT STDMETHODCALLTYPE ReadLocalValue(ABI::Windows::UI::Xaml::IDependencyProperty* property,
+                                             IInspectable** value) override {
+        return properties_.Get(property, value, true);
+    }
+    HRESULT STDMETHODCALLTYPE GetAnimationBaseValue(ABI::Windows::UI::Xaml::IDependencyProperty* property,
+                                                    IInspectable** value) override {
+        return properties_.Get(property, value);
+    }
     HRESULT STDMETHODCALLTYPE GetPlacement(UINT index, INT32* value) override {
         if (!value) return E_POINTER;
         if (index >= 4) return E_INVALIDARG;
