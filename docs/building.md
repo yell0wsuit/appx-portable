@@ -68,7 +68,7 @@ The toolchain defaults to LLVM in `/opt/homebrew/opt/llvm` and SDK files in `.sd
 
 ### Wine graphics (macOS)
 
-macOS stops at OpenGL 4.1, so Wine's WineD3D caps every Direct3D 11 device at feature level 9_3, even for games that ask for 11_x. At 9_x, WineD3D runs only legacy shader code that Wine's compiler never emits, and the GL backend never receives the game's D3D11 constants for it, so games render black. [`wine/wined3d.patch`](../wine/wined3d.patch), taken from ctr2-uwp-shim, instead runs the SM4 code and supplies OpenGL integer-conversion fallbacks for macOS.
+macOS stops at OpenGL 4.1, so Wine's WineD3D caps every Direct3D 11 device at feature level 9_3, even for games that ask for 11_x. At 9_x, WineD3D runs only legacy shader code that Wine's compiler never emits, and the GL backend never receives the game's D3D11 constants for it, so games render black. [`wine/wined3d.patch`](../wine/wined3d.patch), whose WineD3D part is taken from ctr2-uwp-shim, instead runs the SM4 code and supplies OpenGL integer-conversion fallbacks for macOS. Wine's Direct2D asks D3D11 for a feature level 10_0 context state, which the capped device cannot give, so games that draw with Direct2D never started; the patch gives such a context state the device's own level.
 
 Build the matched D3D11/DXGI/WineD3D stack with:
 

@@ -1,15 +1,17 @@
-Patch for Wine's wined3d.dll (Wine 11.18) so that Direct3D 11 at feature
-level 9_x runs SM4 shader code on the OpenGL renderer on macOS.
+Patch for Wine's wined3d.dll and d3d11.dll (Wine 11.18) so that Direct3D 11
+at feature level 9_x runs SM4 shader code on the OpenGL renderer on macOS.
 
 macOS stops at OpenGL 4.1, so wined3d caps every D3D11 device at 9_3, even
 for games that ask for 11_x. At 9_x, wined3d ignored the SM4 code and
 signatures and only used Aon9 (SM2) code, which Wine's compiler never emits
 and whose constants the GL backend never receives from D3D11; games render
 black. The SM4 GLSL path also required EXT_shader_integer_mix (GL 4.5), used
-only by ftoi/ftou.
+only by ftoi/ftou. d3d11 gives a context state the device's own level when
+none of the requested levels is available: d2d1 asks for 10_0 only, so
+Direct2D games never started.
 
-Taken from ctr2-uwp-shim. Built by scripts/build-wined3d.sh; see
-docs/building.md.
+The wined3d changes are taken from ctr2-uwp-shim. Built by
+scripts/build-wined3d.sh; see docs/building.md.
 
 --- a/dlls/wined3d/shader_sm4.c
 +++ b/dlls/wined3d/shader_sm4.c
@@ -128,3 +130,23 @@ docs/building.md.
  
      if (shader_model_4
              && gl_info->supported[ARB_COMPUTE_SHADER]
+--- a/dlls/d3d11/device.c
++++ b/dlls/d3d11/device.c
+@@ -5209,7 +5209,16 @@
+ 
+     if (FAILED(hr = wined3d_state_create(device->wined3d_device,
+             (const enum wined3d_feature_level *)feature_levels, feature_level_count, &wined3d_state)))
+-        goto fail;
++    {
++        /* appx-portable: d2d1 asks for 10_0 only, above the 9_3 cap on macOS, and
++         * games that draw with Direct2D then never start. The patched shader path
++         * runs d2d1's SM4 shaders at the device's own level, so use that. */
++        feature_level = device->state->feature_level;
++        WARN("No requested feature level is supported; using the device's %#x.\n", feature_level);
++        if (FAILED(hr = wined3d_state_create(device->wined3d_device,
++                (const enum wined3d_feature_level *)&feature_level, 1, &wined3d_state)))
++            goto fail;
++    }
+     feature_level = d3d_feature_level_from_wined3d(wined3d_state_get_feature_level(wined3d_state));
+ 
+     if (chosen_feature_level)
