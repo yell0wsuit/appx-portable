@@ -126,9 +126,9 @@ internal static class WinrtProjectionCompleter
         return Ensure(type.FullName);
     }
 
-    private static string Signature(MethodReference method)
+    private static string Signature(MethodReference method, string name = null)
     {
-        return method.HasThis + " " + method.ReturnType.FullName + " " + method.Name + "`" + method.GenericParameters.Count +
+        return method.HasThis + " " + method.ReturnType.FullName + " " + (name ?? method.Name) + "`" + method.GenericParameters.Count +
             "(" + string.Join(",", method.Parameters.Select(p => p.ParameterType.FullName)) + ")";
     }
 
@@ -149,6 +149,27 @@ internal static class WinrtProjectionCompleter
         if (owner.Methods.Any(m => Signature(m) == signature)) return;
         if (owner.BaseType != null && owner.BaseType.FullName == "System.MulticastDelegate")
             throw new NotSupportedException("Delegate member not in metadata: " + owner.FullName + "::" + reference.Name);
+        // WinRT consumers call put_X; a C# property emits set_X. Forward only
+        // when WinMD identifies this accessor and its exact projected signature
+        // matches an implemented property. Ordinary methods are never renamed.
+        TypeDefinition contract;
+        if (metadata.TryGetValue(owner.FullName, out contract))
+        {
+            PropertyDefinition declared = contract.Properties.SingleOrDefault(p => p.SetMethod != null && p.SetMethod.Name == reference.Name);
+            PropertyDefinition implemented = declared == null ? null : owner.Properties.SingleOrDefault(p => p.Name == declared.Name && p.SetMethod != null &&
+                Signature(p.SetMethod, reference.Name) == signature);
+            if (implemented != null)
+            {
+                ILProcessor forward = method.Body.GetILProcessor();
+                if (method.HasThis) forward.Emit(OpCodes.Ldarg_0);
+                foreach (ParameterDefinition parameter in method.Parameters) forward.Emit(OpCodes.Ldarg, parameter);
+                forward.Emit(OpCodes.Call, implemented.SetMethod);
+                forward.Emit(OpCodes.Ret);
+                if (!reference.HasThis) method.IsStatic = true;
+                owner.Methods.Add(method);
+                return;
+            }
+        }
         if (!reference.HasThis) method.IsStatic = true;
         if (method.Name == ".ctor") method.Attributes |= MethodAttributes.SpecialName | MethodAttributes.RTSpecialName;
         if (owner.IsInterface)

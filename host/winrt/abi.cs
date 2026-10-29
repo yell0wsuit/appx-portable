@@ -29,7 +29,7 @@ namespace AppxPortable.WinRT
         NativeObject INativeWrapper.Native { get { return native; } }
     }
 
-    internal sealed class NativeObject : SafeHandle
+    internal sealed partial class NativeObject : SafeHandle
     {
         [DllImport("appxportable.dll", CallingConvention = CallingConvention.StdCall)]
         private static extern int ShimGetFactory(IntPtr name, out IntPtr factory);
@@ -66,7 +66,7 @@ namespace AppxPortable.WinRT
         public override bool IsInvalid { get { return handle == IntPtr.Zero; } }
         protected override bool ReleaseHandle() { Marshal.Release(handle); return true; }
 
-        private static NativeObject TakeResult(int hr, IntPtr owned)
+        internal static NativeObject TakeResult(int hr, IntPtr owned)
         {
             if (hr < 0)
             {
@@ -75,6 +75,11 @@ namespace AppxPortable.WinRT
             }
             if (owned == IntPtr.Zero) throw new InvalidOperationException("WinRT returned a null interface");
             return new NativeObject(owned);
+        }
+
+        internal static NativeObject ObjectResult(int hr, IntPtr value)
+        {
+            return hr >= 0 && value == IntPtr.Zero ? null : TakeResult(hr, value);
         }
 
         // A pointer the caller still owns, such as a callback argument.
@@ -143,6 +148,10 @@ namespace AppxPortable.WinRT
         // An object argument: the managed object behind it, or a generic wrapper.
         internal static object Inspectable(NativeObject value)
         {
+            if (value == null) return null;
+            object unboxed;
+            try { if (Unbox(value, out unboxed)) { value.Dispose(); return unboxed; } }
+            catch { value.Dispose(); throw; }
             return Wrap<object>(value, inspectable, v => new InspectableObject(v));
         }
 
@@ -276,7 +285,7 @@ namespace AppxPortable.WinRT
 
         // Keep the COM reference alive across vtable lookup and invocation,
         // including when another managed thread disposes the wrapper.
-        private sealed class Access : IDisposable
+        internal sealed class Access : IDisposable
         {
             private NativeObject owner;
             internal readonly IntPtr Self;
