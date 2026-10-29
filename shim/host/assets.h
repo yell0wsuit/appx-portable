@@ -14,4 +14,8 @@ HRESULT DecodePackageNames(const std::filesystem::path& gameDirectory, unsigned*
 // One name's decoded form, or nothing when it has no valid escapes or would
 // decode to an invalid file name.
 std::optional<std::wstring> DecodePackageName(const std::wstring& name);
+// Store packages supply shell logos rather than executable icon resources.
+// Decodes one (PNG or JPEG) and scales it to a width x height icon, or returns
+// null for a missing or undecodable file.
+HICON LoadGameIcon(const std::filesystem::path& path, int width, int height) noexcept;
 }

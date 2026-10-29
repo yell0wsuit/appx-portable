@@ -1,7 +1,10 @@
 #include "host/assets.h"
+#include <wincodec.h>
+#include <wrl/client.h>
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <vector>
 
 static int failures;
 #define CHECK(x)                                                                                                       \
@@ -17,7 +20,61 @@ static std::string Read(const std::filesystem::path& path) {
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
+// An 88x88 image of one opaque BGR color, as a package logo at scale-200.
+static bool WriteImage(const std::filesystem::path& path, REFGUID format, BYTE blue, BYTE green, BYTE red) {
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IWICImagingFactory> factory;
+    ComPtr<IWICStream> stream;
+    ComPtr<IWICBitmapEncoder> encoder;
+    ComPtr<IWICBitmapFrameEncode> frame;
+    constexpr UINT size = 88;
+    std::vector<BYTE> pixels(size * size * 3);
+    for (size_t i = 0; i < pixels.size(); i += 3) {
+        pixels[i] = blue;
+        pixels[i + 1] = green;
+        pixels[i + 2] = red;
+    }
+    WICPixelFormatGUID pixelFormat = GUID_WICPixelFormat24bppBGR;
+    return SUCCEEDED(
+               CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) &&
+           SUCCEEDED(factory->CreateStream(&stream)) &&
+           SUCCEEDED(stream->InitializeFromFilename(path.c_str(), GENERIC_WRITE)) &&
+           SUCCEEDED(factory->CreateEncoder(format, nullptr, &encoder)) &&
+           SUCCEEDED(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache)) &&
+           SUCCEEDED(encoder->CreateNewFrame(&frame, nullptr)) && SUCCEEDED(frame->Initialize(nullptr)) &&
+           SUCCEEDED(frame->SetSize(size, size)) && SUCCEEDED(frame->SetPixelFormat(&pixelFormat)) &&
+           IsEqualGUID(pixelFormat, GUID_WICPixelFormat24bppBGR) &&
+           SUCCEEDED(frame->WritePixels(size, size * 3, static_cast<UINT>(pixels.size()), pixels.data())) &&
+           SUCCEEDED(frame->Commit()) && SUCCEEDED(encoder->Commit());
+}
+// The icon's size and the BGR color at its centre.
+static bool IconColor(HICON icon, int size, BYTE& blue, BYTE& green, BYTE& red) {
+    ICONINFO info{};
+    if (!icon || !GetIconInfo(icon, &info)) return false;
+    BITMAP bitmap{};
+    bool ok = GetObjectW(info.hbmColor, sizeof bitmap, &bitmap) && bitmap.bmWidth == size && bitmap.bmHeight == size;
+    BITMAPINFO format{};
+    format.bmiHeader.biSize = sizeof format.bmiHeader;
+    format.bmiHeader.biWidth = size;
+    format.bmiHeader.biHeight = -size;
+    format.bmiHeader.biPlanes = 1;
+    format.bmiHeader.biBitCount = 32;
+    format.bmiHeader.biCompression = BI_RGB;
+    std::vector<BYTE> pixels(static_cast<size_t>(size) * size * 4);
+    HDC screen = GetDC(nullptr);
+    ok = ok && GetDIBits(screen, info.hbmColor, 0, size, pixels.data(), &format, DIB_RGB_COLORS) == size;
+    ReleaseDC(nullptr, screen);
+    DeleteObject(info.hbmColor);
+    DeleteObject(info.hbmMask);
+    const auto* centre = &pixels[(static_cast<size_t>(size / 2) * size + size / 2) * 4];
+    blue = centre[0];
+    green = centre[1];
+    red = centre[2];
+    return ok;
+}
+
 int main() {
+    CHECK(SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED)));
     // Single names: OPC escapes are UTF-8; invalid results stay encoded.
     CHECK(appx::DecodePackageName(L"%21_MapSelectController.xml") == std::wstring(L"!_MapSelectController.xml"));
     CHECK(appx::DecodePackageName(L"User%20Controls") == std::wstring(L"User Controls"));
@@ -71,6 +128,22 @@ int main() {
     if (locked != INVALID_HANDLE_VALUE) CloseHandle(locked);
     CHECK(SUCCEEDED(appx::DecodePackageNames(root)));
     CHECK(Read(decoded) == "replacement");
+
+    // Window icons come from the manifest's small logo, a PNG or, as in Human
+    // Anatomy Atlas, a JPEG; either is scaled to the requested icon size.
+    const auto png = root / L"Square44x44Logo.scale-200.png";
+    const auto jpeg = root / L"Square44x44Logo.scale-200.jpg";
+    CHECK(WriteImage(png, GUID_ContainerFormatPng, 0, 0, 255));
+    CHECK(WriteImage(jpeg, GUID_ContainerFormatJpeg, 255, 0, 0));
+    BYTE blue{}, green{}, red{};
+    HICON icon = appx::LoadGameIcon(png, 16, 16);
+    CHECK(IconColor(icon, 16, blue, green, red) && red > 200 && green < 50 && blue < 50);
+    if (icon) DestroyIcon(icon);
+    icon = appx::LoadGameIcon(jpeg, 32, 32);
+    CHECK(IconColor(icon, 32, blue, green, red) && blue > 200 && green < 50 && red < 50);
+    if (icon) DestroyIcon(icon);
+    CHECK(!appx::LoadGameIcon(maps / L"100%.txt", 16, 16));
+    CHECK(!appx::LoadGameIcon(root / L"missing.png", 16, 16));
     std::filesystem::remove_all(root);
     printf("assettest: %d failure(s)\n", failures);
     return failures ? 1 : 0;

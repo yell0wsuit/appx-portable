@@ -316,25 +316,6 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
     }
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
-// Store packages supply PNG shell icons rather than executable icon resources:
-// the manifest's small logo, at the file resources.pri picks for this display.
-static HICON LoadGameIcon(const std::filesystem::path& path, int width, int height) {
-    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                              FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE) return nullptr;
-    const DWORD sizeBytes = GetFileSize(file, nullptr);
-    // Bound the allocation for missing, corrupt, or unexpectedly large assets.
-    if (!sizeBytes || sizeBytes > 1024 * 1024) {
-        CloseHandle(file);
-        return nullptr;
-    }
-    std::vector<BYTE> bytes(sizeBytes);
-    DWORD read{};
-    const bool loaded = ReadFile(file, bytes.data(), sizeBytes, &read, nullptr) && read == sizeBytes;
-    CloseHandle(file);
-    if (!loaded) return nullptr;
-    return CreateIconFromResourceEx(bytes.data(), sizeBytes, TRUE, 0x00030000, width, height, LR_DEFAULTCOLOR);
-}
 HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     InitializeDiagnostics();
     if (window) return E_ILLEGAL_METHOD_CALL;
@@ -377,6 +358,8 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_STRING, SettingsMenuId, L"Game settings\tCtrl+,");
         InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_SEPARATOR, 0, nullptr);
     }
+    // The window icon is the manifest's small logo, at the file resources.pri
+    // picks for this display.
     const auto& package = CurrentPackage();
     const auto logo =
         package.smallLogo.empty() ? std::filesystem::path{} : ResolvePackageFile(package, package.smallLogo);
