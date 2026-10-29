@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+
 using AppxPortable.WinRT;
 
 // Compiled with the runtime sources so these tests exercise native ownership and
@@ -40,12 +41,17 @@ class RuntimeTest
             for (int i = 0; i < 2; ++i)
             {
                 int index = i;
-                threads[i] = new Thread(() => {
-                    try { values[index] = NativeObject.Wrap(NativeObject.Borrow(held.Pointer), iid, native => {
-                        owned[index] = native;
-                        Check(barrier.SignalAndWait(5000), "wrapper creation barrier");
-                        return new Wrapper(native);
-                    }); }
+                threads[i] = new Thread(() =>
+                {
+                    try
+                    {
+                        values[index] = NativeObject.Wrap(NativeObject.Borrow(held.Pointer), iid, native =>
+                        {
+                            owned[index] = native;
+                            Check(barrier.SignalAndWait(5000), "wrapper creation barrier");
+                            return new Wrapper(native);
+                        });
+                    }
                     catch (Exception error) { errors[index] = error; }
                 });
                 threads[i].Start();
@@ -75,14 +81,16 @@ class RuntimeTest
             for (int i = 0; i < 2; ++i)
             {
                 int index = i;
-                threads[i] = new Thread(() => {
+                threads[i] = new Thread(() =>
+                {
                     try
                     {
                         using (Errors.Begin())
                         using (var held = ManagedObject.Hold(new object(), new NativeInterface(iid, false, invoke)))
                         {
                             int hr = 0;
-                            var callback = new Thread(() => {
+                            var callback = new Thread(() =>
+                            {
                                 hr = ManagedObject.Call(held.Pointer, target => { throw new InvalidOperationException("caller " + index); });
                             });
                             callback.Start();
@@ -123,7 +131,8 @@ class RuntimeTest
             ManagedObject.Held held = null;
             int hr = 0;
             Exception failure = null;
-            var owner = new Thread(() => {
+            var owner = new Thread(() =>
+            {
                 try
                 {
                     using (Errors.Begin())
