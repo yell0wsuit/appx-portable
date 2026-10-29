@@ -17,6 +17,11 @@ if [[ $# -ge 2 && ${#architectures[@]} -ne 1 ]]; then
   echo "Name one architecture with a build directory." >&2
   exit 2
 fi
+# Resolve the build directory now; the build below runs from the object tree.
+if [[ $# -ge 2 ]]; then
+  mkdir -p "$2"
+  output=$(cd "$2" && pwd)
+fi
 # Pin the source this patch is maintained against. Runtime Wine version is
 # deliberately irrelevant: all three consumers of the private ABI ship together.
 version=11.18
@@ -75,9 +80,8 @@ for architecture in "${architectures[@]}"; do
     x86) pe=i386-windows ;;
     x64) pe=x86_64-windows ;;
   esac
-  build=${2:-"$root/build/macos-$architecture"}
+  build=${output:-"$root/build/macos-$architecture"}
   mkdir -p "$build"
-  build=$(cd "$build" && pwd)
   ${host[@]+"${host[@]}"} make -j"$(getconf _NPROCESSORS_ONLN)" "dlls/wined3d/$pe/wined3d.dll" \
     "dlls/d3d11/$pe/d3d11.dll" "dlls/dxgi/$pe/dxgi.dll" > "make-$architecture.log" 2>&1 \
     || { tail -20 "make-$architecture.log" >&2; exit 1; }
