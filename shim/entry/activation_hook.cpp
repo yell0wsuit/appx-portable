@@ -170,6 +170,12 @@ static HRESULT WINAPI UnregisterForApartmentShutdown(APARTMENT_SHUTDOWN_REGISTRA
 // C++/CX catch handlers report a rethrown HRESULT here. Like Wine's own
 // RoOriginateError, report that no debugger took the error.
 static BOOL WINAPI TransformError(HRESULT, HRESULT, HSTRING) noexcept { return FALSE; }
+// vccorlib110 captures the stack here for every Platform::Exception it makes
+// from an HRESULT; there is no error-reporting stack to keep it in.
+static HRESULT WINAPI CaptureErrorContext(HRESULT error) noexcept {
+    Log("TRACE", "Platform::Exception hr=%08lX", static_cast<unsigned long>(error));
+    return S_OK;
+}
 static bool OnWine() noexcept {
     static const bool wine = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != nullptr;
     return wine;
@@ -202,6 +208,8 @@ static void PatchModule(HMODULE module, bool activation) noexcept {
             if (OnWine() && strcmp(name, "RoUnregisterForApartmentShutdown") == 0)
                 hook = reinterpret_cast<void*>(&UnregisterForApartmentShutdown);
             if (OnWine() && strcmp(name, "RoTransformError") == 0) hook = reinterpret_cast<void*>(&TransformError);
+            if (OnWine() && strcmp(name, "RoCaptureErrorContext") == 0)
+                hook = reinterpret_cast<void*>(&CaptureErrorContext);
             if (OnWine() && _stricmp(reinterpret_cast<const char*>(base + imports->Name), "mfplat.dll") == 0 &&
                 strcmp(name, "MFCreateMFByteStreamOnStreamEx") == 0)
                 hook = reinterpret_cast<void*>(&CreateMFByteStreamOnStreamEx);

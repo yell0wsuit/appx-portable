@@ -44,6 +44,7 @@ int main() {
     // Wine's combase aborts in these stubs; the shim patches this folder's
     // imports of them, so reaching the next check is the test.
     RoTransformError(E_FAIL, E_NOTIMPL, nullptr);
+    RoCaptureErrorContext(E_FAIL);
     CHECK(SUCCEEDED(RoUnregisterForApartmentShutdown(nullptr)) || !GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version"));
     ComPtr<IActivationFactory> factory;
     CHECK(get(HStringReference(L"Unknown.Class").Get(), &factory) == CLASS_E_CLASSNOTAVAILABLE);
