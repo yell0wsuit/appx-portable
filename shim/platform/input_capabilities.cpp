@@ -10,8 +10,7 @@ using namespace Microsoft::WRL;
 using namespace ABI::Windows::Devices::Input;
 namespace appx {
 namespace {
-class TouchCapabilities final
-    : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultITouchCapabilities, FtmBase> {
+class TouchCapabilities final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultITouchCapabilities, FtmBase> {
     InspectableClass(L"Windows.Devices.Input.TouchCapabilities", BaseTrust);
 
 public:

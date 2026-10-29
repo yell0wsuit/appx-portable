@@ -15,8 +15,7 @@ namespace {
 using ReadOperationAbi = IAsyncOperationWithProgress<IBuffer*, UINT32>;
 // A read that has already finished. Its handler runs as soon as it is set:
 // a game may wait for the result on the thread a posted callback would need.
-class ReadOperation final
-    : public RuntimeClass<RuntimeClassFlags<WinRt>, ReadOperationAbi, IAsyncInfo, FtmBase> {
+class ReadOperation final : public RuntimeClass<RuntimeClassFlags<WinRt>, ReadOperationAbi, IAsyncInfo, FtmBase> {
     InspectableClass(L"Windows.Foundation.IAsyncOperationWithProgress`2", BaseTrust);
     using Completed = IAsyncOperationWithProgressCompletedHandler<IBuffer*, UINT32>;
     using Progress = IAsyncOperationProgressHandler<IBuffer*, UINT32>;

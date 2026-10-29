@@ -71,8 +71,9 @@ HRESULT WaitForOperation(IInspectable* operation) {
     return status == ABI::Windows::Foundation::AsyncStatus::Completed ? S_OK : E_FAIL;
 }
 // A test-owned buffer: Wine has no Windows.Storage.Streams.Buffer to create one.
-class TestBuffer final : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>, ABI::Windows::Storage::Streams::IBuffer,
-                                             ::Windows::Storage::Streams::IBufferByteAccess> {
+class TestBuffer final
+    : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>, ABI::Windows::Storage::Streams::IBuffer,
+                          ::Windows::Storage::Streams::IBufferByteAccess> {
     InspectableClass(L"Windows.Storage.Streams.Buffer", BaseTrust);
     byte bytes_[64]{};
     UINT32 length_ = 0;
@@ -138,7 +139,8 @@ bool CheckPackagedFileUri(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**)) {
     // The bytes come back through ReadAsync, from the position Seek sets.
     ComPtr<ABI::Windows::Storage::Streams::IInputStream> input;
     auto buffer = Make<TestBuffer>();
-    ComPtr<ABI::Windows::Foundation::IAsyncOperationWithProgress<ABI::Windows::Storage::Streams::IBuffer*, UINT32>> read;
+    ComPtr<ABI::Windows::Foundation::IAsyncOperationWithProgress<ABI::Windows::Storage::Streams::IBuffer*, UINT32>>
+        read;
     ComPtr<ABI::Windows::Storage::Streams::IBuffer> filled;
     UINT32 length = 0;
     byte* bytes = nullptr;

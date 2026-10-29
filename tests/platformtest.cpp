@@ -120,8 +120,8 @@ int main() {
     ComPtr<ITimeZoneOnCalendar> zone;
     HString zoneId;
     if (FAILED(zonedFactory->CreateCalendarWithTimeZone(
-            languageItems.Get(), HStringReference(L"GregorianCalendar").Get(),
-            HStringReference(L"24HourClock").Get(), HStringReference(L"UTC").Get(), &zoned)) ||
+            languageItems.Get(), HStringReference(L"GregorianCalendar").Get(), HStringReference(L"24HourClock").Get(),
+            HStringReference(L"UTC").Get(), &zoned)) ||
         FAILED(zoned.As(&zone)) || FAILED(zone->GetTimeZone(zoneId.GetAddressOf())))
         return 36;
     // A UTC calendar reads UTC fields whatever this machine's zone is.
@@ -136,8 +136,8 @@ int main() {
     }
     // Formatting and ranges at 2020-01-01 12:00 UTC; Leo's Fortune sets the numeral system.
     auto text = [](HRESULT hr, HString& value, const wchar_t* expected) {
-        return SUCCEEDED(hr) && (expected ? wcscmp(value.GetRawBuffer(nullptr), expected) == 0
-                                          : WindowsGetStringLen(value.Get()) > 0);
+        return SUCCEEDED(hr) &&
+               (expected ? wcscmp(value.GetRawBuffer(nullptr), expected) == 0 : WindowsGetStringLen(value.Get()) > 0);
     };
     HString numerals, monthText, dayText, yearText, hourText, monthName, dayName;
     INT32 months{};

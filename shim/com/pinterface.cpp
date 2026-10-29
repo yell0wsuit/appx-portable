@@ -29,8 +29,8 @@ GUID ParameterizedIid(const std::string& signature) {
     if (handle) BCryptDestroyHash(handle);
     if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
     if (!hashed) return GUID{};
-    hash[6] = static_cast<BYTE>((hash[6] & 0x0f) | 0x50);  // version 5
-    hash[8] = static_cast<BYTE>((hash[8] & 0x3f) | 0x80);  // RFC 4122 variant
+    hash[6] = static_cast<BYTE>((hash[6] & 0x0f) | 0x50); // version 5
+    hash[8] = static_cast<BYTE>((hash[8] & 0x3f) | 0x80); // RFC 4122 variant
     GUID result{};
     result.Data1 = static_cast<unsigned long>(hash[0]) << 24 | hash[1] << 16 | hash[2] << 8 | hash[3];
     result.Data2 = static_cast<unsigned short>(hash[4] << 8 | hash[5]);

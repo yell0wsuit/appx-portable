@@ -71,7 +71,8 @@ int main() {
                            static_cast<LPCWSTR>(ImportTarget(dll, "RoTransformError")), &target);
         CHECK(target == dll);
     }
-    CHECK(SUCCEEDED(RoUnregisterForApartmentShutdown(nullptr)) || !GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version"));
+    CHECK(SUCCEEDED(RoUnregisterForApartmentShutdown(nullptr)) ||
+          !GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version"));
     ComPtr<IActivationFactory> factory;
     CHECK(get(HStringReference(L"Unknown.Class").Get(), &factory) == CLASS_E_CLASSNOTAVAILABLE);
     CHECK(factory == nullptr);

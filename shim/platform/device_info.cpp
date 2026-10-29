@@ -43,7 +43,7 @@ public:
     HRESULT STDMETHODCALLTYPE get_Id(GUID* value) override {
         if (!value) return E_POINTER;
         // Fixed synthetic compatibility identity, independent of host/user.
-        *value = {0x78707061, 0x6f70, 0x7472, {0x80, 0, 0, 0, 0, 0, 0, 1}};  // "appxport"
+        *value = {0x78707061, 0x6f70, 0x7472, {0x80, 0, 0, 0, 0, 0, 0, 1}}; // "appxport"
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_OperatingSystem(HSTRING* value) override { return Text(L"Windows", value); }

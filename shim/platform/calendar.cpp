@@ -31,7 +31,8 @@ class Calendar final
     HRESULT SetLocal(const SYSTEMTIME& local) {
         SYSTEMTIME system = local;
         FILETIME utc{};
-        if ((!utc_ && !TzSpecificLocalTimeToSystemTime(nullptr, &local, &system)) || !SystemTimeToFileTime(&system, &utc))
+        if ((!utc_ && !TzSpecificLocalTimeToSystemTime(nullptr, &local, &system)) ||
+            !SystemTimeToFileTime(&system, &utc))
             return E_INVALIDARG;
         ticks_ = (static_cast<INT64>(utc.dwHighDateTime) << 32 | utc.dwLowDateTime) + ticks_ % 10000;
         return S_OK;
@@ -78,7 +79,8 @@ class Calendar final
     static HRESULT LocaleName(LCTYPE full, LCTYPE abbreviated, INT32 idealLength, HSTRING* result) {
         if (!result) return E_POINTER;
         wchar_t name[80]{};
-        if (!GetLocaleInfoEx(LOCALE_NAME_USER_DEFAULT, full, name, ARRAYSIZE(name))) return HRESULT_FROM_WIN32(GetLastError());
+        if (!GetLocaleInfoEx(LOCALE_NAME_USER_DEFAULT, full, name, ARRAYSIZE(name)))
+            return HRESULT_FROM_WIN32(GetLastError());
         if (idealLength >= 0 && (idealLength == 0 || static_cast<INT32>(wcslen(name)) > idealLength) &&
             !GetLocaleInfoEx(LOCALE_NAME_USER_DEFAULT, abbreviated, name, ARRAYSIZE(name)))
             return HRESULT_FROM_WIN32(GetLastError());
@@ -88,8 +90,8 @@ class Calendar final
         SYSTEMTIME local{};
         auto hr = Local(local);
         if (FAILED(hr)) return hr;
-        return LocaleName(LOCALE_SMONTHNAME1 + local.wMonth - 1, LOCALE_SABBREVMONTHNAME1 + local.wMonth - 1, idealLength,
-                          result);
+        return LocaleName(LOCALE_SMONTHNAME1 + local.wMonth - 1, LOCALE_SABBREVMONTHNAME1 + local.wMonth - 1,
+                          idealLength, result);
     }
     HRESULT DayName(INT32 idealLength, HSTRING* result) const {
         SYSTEMTIME local{};
@@ -284,7 +286,8 @@ public:
             Wrappers::HString language;
             auto hr = get_ResolvedLanguage(language.GetAddressOf());
             if (FAILED(hr)) return hr;
-            auto languages = winrt::single_threaded_vector<winrt::hstring>({winrt::hstring(language.GetRawBuffer(nullptr))});
+            auto languages =
+                winrt::single_threaded_vector<winrt::hstring>({winrt::hstring(language.GetRawBuffer(nullptr))});
             *value = reinterpret_cast<__FIVectorView_1_HSTRING*>(winrt::detach_abi(languages.GetView()));
             return S_OK;
         } catch (...) {
@@ -328,7 +331,9 @@ public:
     }
     HRESULT STDMETHODCALLTYPE get_FirstYearInThisEra(INT32* value) override { return Value(1601, value); }
     HRESULT STDMETHODCALLTYPE get_LastYearInThisEra(INT32* value) override { return Value(30827, value); }
-    HRESULT STDMETHODCALLTYPE get_NumberOfYearsInThisEra(INT32* value) override { return Value(30827 - 1601 + 1, value); }
+    HRESULT STDMETHODCALLTYPE get_NumberOfYearsInThisEra(INT32* value) override {
+        return Value(30827 - 1601 + 1, value);
+    }
     HRESULT STDMETHODCALLTYPE YearAsString(HSTRING* result) override {
         return LocalNumber([](const SYSTEMTIME& local) { return local.wYear; }, 1, result);
     }

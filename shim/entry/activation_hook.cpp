@@ -75,7 +75,7 @@ static bool FromGame(void* returnAddress) noexcept {
     if (!game && GetModuleFileNameW(module, path, MAX_PATH) && GetModuleFileNameW(nullptr, exe, MAX_PATH)) {
         if (ManagedMode() && _wcsicmp(std::filesystem::path(path).filename().c_str(), L"clr.dll") == 0) game = true;
         const size_t prefix = wcsrchr(exe, L'\\') - exe;
-        game = game || _wcsnicmp(path, exe, prefix) == 0 && path[prefix] == L'\\';
+        game = game || (_wcsnicmp(path, exe, prefix) == 0 && path[prefix] == L'\\');
     }
     try {
         known.emplace_back(module, game);
@@ -164,9 +164,7 @@ static void* Hotpatch(HMODULE module, const char* name, void* hook) noexcept {
 // Wine 11 exports these as stubs that abort the process when called.
 // RoRegisterForApartmentShutdown hands out a dummy cookie and never calls
 // back, so vccorlib's unregistration on every normal exit has nothing to undo.
-static HRESULT WINAPI UnregisterForApartmentShutdown(APARTMENT_SHUTDOWN_REGISTRATION_COOKIE) noexcept {
-    return S_OK;
-}
+static HRESULT WINAPI UnregisterForApartmentShutdown(APARTMENT_SHUTDOWN_REGISTRATION_COOKIE) noexcept { return S_OK; }
 // C++/CX catch handlers report a rethrown HRESULT here. Like Wine's own
 // RoOriginateError, report that no debugger took the error.
 static BOOL WINAPI TransformError(HRESULT, HRESULT, HSTRING) noexcept { return FALSE; }

@@ -41,7 +41,8 @@ int main(int argc, char** argv) {
         !Write(L"appx-portable.2.log", "oldest\n"))
         return 1;
     if (!LoadLibraryW(L"appxportable.dll")) return 1;
-    const auto current = Read(L"appx-portable.log"), older = Read(L"appx-portable.1.log"), oldest = Read(L"appx-portable.2.log");
+    const auto current = Read(L"appx-portable.log"), older = Read(L"appx-portable.1.log"),
+               oldest = Read(L"appx-portable.2.log");
     if (Exists(L"appx-portable.3.log")) {
         printf("optionstest: kept more than three logs\n");
         return 2;
@@ -60,8 +61,8 @@ int main(int argc, char** argv) {
     }
     // The attach line opens the new log and names the build.
     const auto first = current.substr(0, current.find('\n'));
-    if (first.find("appxportable attached version=") == std::string::npos || first.find(" commit=") == std::string::npos ||
-        current.find("current\n") != std::string::npos) {
+    if (first.find("appxportable attached version=") == std::string::npos ||
+        first.find(" commit=") == std::string::npos || current.find("current\n") != std::string::npos) {
         printf("optionstest: new log does not start with the attach line\n");
         return 2;
     }

@@ -58,8 +58,8 @@ public:
         if (!value) return E_POINTER;
         const DWORD attributes = GetFileAttributesW(path_.c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES) return HRESULT_FROM_WIN32(GetLastError());
-        *value = static_cast<FileAttributes>(attributes & (FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE |
-                                                           FILE_ATTRIBUTE_TEMPORARY));
+        *value = static_cast<FileAttributes>(
+            attributes & (FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_TEMPORARY));
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_DateCreated(ABI::Windows::Foundation::DateTime* value) override {
@@ -77,14 +77,14 @@ public:
         return S_OK;
     }
     // Reading only: the stream refuses writes, so ReadWrite fails here instead.
-    HRESULT STDMETHODCALLTYPE OpenReadAsync(
-        IAsyncOperation<IRandomAccessStreamWithContentType*>** operation) override {
+    HRESULT STDMETHODCALLTYPE OpenReadAsync(IAsyncOperation<IRandomAccessStreamWithContentType*>** operation) override {
         return Open<IRandomAccessStreamWithContentType*, IRandomAccessStreamWithContentType>(operation);
     }
     HRESULT STDMETHODCALLTYPE OpenSequentialReadAsync(IAsyncOperation<IInputStream*>** operation) override {
         return Open<IInputStream*, IInputStream>(operation);
     }
-    HRESULT STDMETHODCALLTYPE OpenAsync(FileAccessMode mode, IAsyncOperation<IRandomAccessStream*>** operation) override {
+    HRESULT STDMETHODCALLTYPE OpenAsync(FileAccessMode mode,
+                                        IAsyncOperation<IRandomAccessStream*>** operation) override {
         if (mode != FileAccessMode_Read) {
             if (operation) *operation = nullptr;
             Log("UNIMPL", "StorageFile %ls OpenAsync for writing", path_.c_str());
@@ -109,7 +109,8 @@ private:
             hr = MakeFailedOperation(__uuidof(IAsyncOperation<T>), hr, sizeof(void*), &failed);
             return SUCCEEDED(hr) ? failed.CopyTo(operation) : hr;
         }
-        auto completed = Make<CompletedOperation<T, Stream*>>([stream](Stream** value) { return stream.CopyTo(value); });
+        auto completed =
+            Make<CompletedOperation<T, Stream*>>([stream](Stream** value) { return stream.CopyTo(value); });
         return completed ? completed.CopyTo(operation) : E_OUTOFMEMORY;
     }
 };
@@ -134,9 +135,8 @@ HRESULT PathFileAsync(HSTRING path, IAsyncOperation<StorageFile*>** operation) {
     auto hr = item.As(&result);
     if (FAILED(hr)) return hr;
     Log("TRACE", "StorageFile %ls: using the path-only file", file.c_str());
-    auto completed = Make<CompletedOperation<StorageFile*, IStorageFile*>>([result](IStorageFile** value) {
-        return result.CopyTo(value);
-    });
+    auto completed = Make<CompletedOperation<StorageFile*, IStorageFile*>>(
+        [result](IStorageFile** value) { return result.CopyTo(value); });
     return completed ? completed.CopyTo(operation) : E_OUTOFMEMORY;
 }
 }

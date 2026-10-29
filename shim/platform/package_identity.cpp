@@ -28,10 +28,10 @@ public:
     HRESULT STDMETHODCALLTYPE get_Architecture(ABI::Windows::System::ProcessorArchitecture* value) override {
         if (!value) return E_POINTER;
         const auto& architecture = CurrentPackage().architecture;
-        *value = architecture == L"x86"     ? ABI::Windows::System::ProcessorArchitecture_X86
-                 : architecture == L"x64"   ? ABI::Windows::System::ProcessorArchitecture_X64
-                 : architecture == L"arm"   ? ABI::Windows::System::ProcessorArchitecture_Arm
-                                            : ABI::Windows::System::ProcessorArchitecture_Neutral;
+        *value = architecture == L"x86"   ? ABI::Windows::System::ProcessorArchitecture_X86
+                 : architecture == L"x64" ? ABI::Windows::System::ProcessorArchitecture_X64
+                 : architecture == L"arm" ? ABI::Windows::System::ProcessorArchitecture_Arm
+                                          : ABI::Windows::System::ProcessorArchitecture_Neutral;
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_ResourceId(HSTRING* value) override { return Text(L"", value); }
@@ -40,7 +40,9 @@ public:
         return Text(CurrentPackage().publisherId, value);
     }
     HRESULT STDMETHODCALLTYPE get_FullName(HSTRING* value) override { return Text(CurrentPackage().fullName, value); }
-    HRESULT STDMETHODCALLTYPE get_FamilyName(HSTRING* value) override { return Text(CurrentPackage().familyName, value); }
+    HRESULT STDMETHODCALLTYPE get_FamilyName(HSTRING* value) override {
+        return Text(CurrentPackage().familyName, value);
+    }
 };
 class Package final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIPackage, FtmBase> {
     InspectableClass(L"Windows.ApplicationModel.Package", BaseTrust);

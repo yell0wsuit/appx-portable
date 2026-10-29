@@ -349,9 +349,9 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         return HRESULT_FROM_WIN32(GetLastError());
     RECT rect{0, 0, 1024, 768};
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
-    window = CreateWindowExW(0, cls.lpszClassName, HostTitle().c_str(),
-                             WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-                             rect.right - rect.left, rect.bottom - rect.top, nullptr, nullptr, cls.hInstance, nullptr);
+    window = CreateWindowExW(0, cls.lpszClassName, HostTitle().c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+                             CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr,
+                             nullptr, cls.hInstance, nullptr);
     if (!window) return HRESULT_FROM_WIN32(GetLastError());
     if (IslandsMode()) {
         auto menu = GetSystemMenu(window, FALSE);
@@ -359,10 +359,10 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_SEPARATOR, 0, nullptr);
     }
     const auto& package = CurrentPackage();
-    const auto logo = package.smallLogo.empty() ? std::filesystem::path{}
-                                                : ResolvePackageFile(package, package.smallLogo);
-    HICON smallIcon = logo.empty() ? nullptr
-                                   : LoadGameIcon(logo, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
+    const auto logo =
+        package.smallLogo.empty() ? std::filesystem::path{} : ResolvePackageFile(package, package.smallLogo);
+    HICON smallIcon =
+        logo.empty() ? nullptr : LoadGameIcon(logo, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
     HICON largeIcon =
         logo.empty() ? nullptr : LoadGameIcon(logo, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON));
     if (!logo.empty() && !smallIcon) Log("TRACE", "window icon: cannot load %ls", logo.c_str());
