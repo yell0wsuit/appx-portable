@@ -67,6 +67,29 @@ static void PaintUnderSurfaces(HWND hwnd) {
         ReleaseDC(hwnd, dc);
     }
 }
+// PPL resumes a task's continuation on the thread that started the task by
+// calling into that thread's COM context from a thread-pool thread. Wine makes
+// the call over RPC, and its single-threaded apartments take RPC calls only
+// once they have marshaled something or waited in CoWaitForMultipleHandles;
+// the view thread's message loop does neither, so the call failed with
+// RPC_S_SERVER_UNAVAILABLE. Making an agile reference opens the apartment.
+static void AcceptCallsFromOtherApartments() {
+    static const bool wine = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != nullptr;
+    if (!wine) return;
+    using GetAgileReference = HRESULT(WINAPI*)(AgileReferenceOptions, REFIID, IUnknown*, IAgileReference**);
+    const auto get =
+        reinterpret_cast<GetAgileReference>(GetProcAddress(GetModuleHandleW(L"combase.dll"), "RoGetAgileReference"));
+    IUnknown* context{};
+    IAgileReference* reference{};
+    // Delayed: nothing is marshaled now; the reference is dropped right away.
+    const HRESULT hr = !get ? E_NOTIMPL
+                       : FAILED(CoGetObjectContext(IID_PPV_ARGS(&context)))
+                           ? CO_E_NOTINITIALIZED
+                           : get(AGILEREFERENCE_DELAYEDMARSHAL, __uuidof(IUnknown), context, &reference);
+    if (reference) reference->Release();
+    if (context) context->Release();
+    if (FAILED(hr)) Log("FAIL", "view thread cannot take calls from other apartments hr=%08lx", hr);
+}
 static HWND CreateSurfaceOnHostThread() {
     RECT client{};
     GetClientRect(window, &client);
@@ -309,6 +332,7 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     }
     if (decoded) Log("INFO", "decoded %u percent-encoded package file names", decoded);
     thread = GetCurrentThreadId();
+    AcceptCallsFromOtherApartments();
     WNDCLASSW cls{};
     cls.lpfnWndProc = WindowProc;
     cls.hInstance = GetModuleHandleW(nullptr);
