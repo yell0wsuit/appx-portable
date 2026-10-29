@@ -3,7 +3,9 @@
 #include "settings.h"
 #include <map>
 #include "storage.h"
+#include "com/completed_operation.h"
 #include "com/factory.h"
+#include "com/failed_operation.h"
 #include "package/package.h"
 #include <roapi.h>
 #include <shlobj.h>
@@ -143,6 +145,55 @@ public:
     HRESULT STDMETHODCALLTYPE IsOfType(StorageItemTypes type, boolean* value) override {
         if (!value) return E_POINTER;
         *value = (type & StorageItemTypes_Folder) != 0;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE CreateFolderAsyncOverloadDefaultOptions(
+        HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CStorageFolder** operation) override {
+        return CreateFolderAsync(name, CreationCollisionOption_FailIfExists, operation);
+    }
+    HRESULT STDMETHODCALLTYPE
+    CreateFolderAsync(HSTRING name, CreationCollisionOption options,
+                      __FIAsyncOperation_1_Windows__CStorage__CStorageFolder** operation) override {
+        if (!operation) return E_POINTER;
+        *operation = nullptr;
+        std::wstring created;
+        const HRESULT error = CreateChild(WindowsGetStringRawBuffer(name, nullptr), options, created);
+        Log("TRACE", "StorageFolder CreateFolderAsync %ls option=%d hr=%08lx", created.c_str(), options, error);
+        if (FAILED(error)) {
+            // Windows completes the operation with the error rather than failing the call.
+            ComPtr<IInspectable> failed;
+            const HRESULT hr = MakeFailedOperation(__uuidof(__FIAsyncOperation_1_Windows__CStorage__CStorageFolder),
+                                                   error, sizeof(void*), &failed);
+            return SUCCEEDED(hr) ? failed.CopyTo(operation) : hr;
+        }
+        ComPtr<IStorageFolder> folder = Make<Folder>(created);
+        if (!folder) return E_OUTOFMEMORY;
+        auto completed = Make<CompletedOperation<StorageFolder*, IStorageFolder*>>(
+            [folder](IStorageFolder** value) { return folder.CopyTo(value); });
+        return completed ? completed.CopyTo(operation) : E_OUTOFMEMORY;
+    }
+
+private:
+    HRESULT CreateChild(const std::wstring& name, CreationCollisionOption options, std::wstring& created) const {
+        if (name.empty() || name.find_first_of(L"\\/") != std::wstring::npos)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        const std::filesystem::path base(path_);
+        created = (base / name).wstring();
+        if (options == CreationCollisionOption_ReplaceExisting) {
+            std::error_code error;
+            std::filesystem::remove_all(created, error);
+            if (error) return HRESULT_FROM_WIN32(error.value());
+        }
+        // Windows numbers a taken name as "name (2)", "name (3)" and so on.
+        for (unsigned copy = 2; !CreateDirectoryW(created.c_str(), nullptr); ++copy) {
+            const DWORD error = GetLastError();
+            if (error != ERROR_ALREADY_EXISTS) return HRESULT_FROM_WIN32(error);
+            const DWORD attributes = GetFileAttributesW(created.c_str());
+            const bool folder = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+            if (options == CreationCollisionOption_OpenIfExists && folder) return S_OK;
+            if (options != CreationCollisionOption_GenerateUniqueName) return HRESULT_FROM_WIN32(error);
+            created = (base / (name + L" (" + std::to_wstring(copy) + L")")).wstring();
+        }
         return S_OK;
     }
 };

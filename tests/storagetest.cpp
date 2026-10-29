@@ -338,6 +338,32 @@ int main(int argc, char** argv) {
     CloseHandle(handle);
     DeleteFileW(file.c_str());
     if (read != sizeof(bytes) || memcmp(restored, bytes, sizeof(bytes)) != 0) return 13;
+    {
+        // Fruit Ninja makes its save folder with the default options, which
+        // fail when the folder exists; OpenIfExists then opens it.
+        const std::wstring name = L"__appxportable_test_dir";
+        const std::wstring created = text + L"\\" + name;
+        std::error_code error;
+        std::filesystem::remove_all(created, error);
+        ComPtr<__FIAsyncOperation_1_Windows__CStorage__CStorageFolder> creating;
+        ComPtr<IStorageFolder> child;
+        ComPtr<IStorageItem> childItem;
+        HString childPath;
+        if (FAILED(folder->CreateFolderAsyncOverloadDefaultOptions(HStringReference(name.c_str()).Get(), &creating)) ||
+            FAILED(WaitForOperation(creating.Get())) || FAILED(creating->GetResults(&child)) ||
+            FAILED(child.As(&childItem)) || FAILED(childItem->get_Path(childPath.GetAddressOf())) ||
+            created != WindowsGetStringRawBuffer(childPath.Get(), nullptr) ||
+            !(GetFileAttributesW(created.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
+            return 98;
+        if (FAILED(folder->CreateFolderAsyncOverloadDefaultOptions(HStringReference(name.c_str()).Get(), &creating)) ||
+            SUCCEEDED(WaitForOperation(creating.Get())))
+            return 99;
+        if (FAILED(folder->CreateFolderAsync(HStringReference(name.c_str()).Get(), CreationCollisionOption_OpenIfExists,
+                                             &creating)) ||
+            FAILED(WaitForOperation(creating.Get())))
+            return 100;
+        std::filesystem::remove_all(created, error);
+    }
     ComPtr<ABI::Windows::Foundation::IPropertyValueStatics> props;
     if (FAILED(
             RoGetActivationFactory(HStringReference(L"Windows.Foundation.PropertyValue").Get(), IID_PPV_ARGS(&props))))
