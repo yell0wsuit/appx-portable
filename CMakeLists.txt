@@ -302,6 +302,12 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
       --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
       --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
     set_tests_properties(winrt_projection PROPERTIES TIMEOUT 600 LABELS managed-clr)
+    add_test(NAME winrt_storage_projection COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
+      --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
+      --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
+      --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-storage-projection" --storage-only)
+    set_tests_properties(winrt_storage_projection PROPERTIES TIMEOUT 600 LABELS "managed-clr;storage")
     if(APPX_XBOX_METADATA)
       add_test(NAME winrt_xbox_projection COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
@@ -383,7 +389,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     DEPENDS host/managed.cs host/managed.manifest VERBATIM)
   add_custom_target(appx_managed_host ALL DEPENDS "${CMAKE_BINARY_DIR}/appx-host.exe")
   # Experimental explicit WinRT ABI bridge; not yet installed into games.
-  set(APPX_WINRT_SOURCES host/winrt/abi.cs host/winrt/ccw.cs host/winrt/dispatcher.cs host/winrt/property_abi.cs host/winrt/package.cs host/winrt/assembly.cs)
+  set(APPX_WINRT_SOURCES host/winrt/abi.cs host/winrt/ccw.cs host/winrt/dispatcher.cs host/winrt/property_abi.cs host/winrt/collections.cs host/winrt/package.cs host/winrt/assembly.cs)
   set(APPX_WINRT_NATIVE_SOURCES)
   foreach(source IN LISTS APPX_WINRT_SOURCES)
     file(TO_NATIVE_PATH "${CMAKE_SOURCE_DIR}/${source}" native_source)

@@ -150,9 +150,9 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 `Window.Current.Content`. The local dependency-property implementation lets
 `SuspensionManager` initialize its string and dictionary attached properties.
 With the Xbox bootstrap below, the game passes that assembly binding,
-`CoreWindow.GetForCurrentThread`, and native Xbox User activation. It next fails
-at `Windows.Storage.ApplicationData.get_Current` in the XboxWrapper constructor
-(offset 0x2a), called by `App.OnApplicationStarted`. No menu or game round has
+`CoreWindow.GetForCurrentThread`, and native Xbox User activation. With the settings projection below, it passes ApplicationData startup and next
+fails loading `System.Runtime.WindowsRuntime` in `XboxWrapper.GetLastUserXuid`,
+called by its constructor and `App.OnApplicationStarted`. No menu or game round has
 been displayed by this path.
 
 The game also references `System.Runtime.WindowsRuntime` and
@@ -170,10 +170,8 @@ route even when the shim selects its Wine XAML backend. The ini override for
 hosting mode remains to be added; this slice only supports the environment
 override above.
 
-ApplicationData was excluded from this first slice because Wine 9.0's native
-PropertySet activation returned E_NOTIMPL, blocking the shim's settings backing
-store independently of managed projection. This has not been rechecked on
-Wine 11.18.
+Native PropertySet activation and settings persistence now pass on the patched
+Wine 11.18 runtime. The managed settings projection is described below.
 
 The probe's `--game` option copies an installed game into a fresh output
 subdirectory and launches its unchanged `appx-host.exe` with the completed
@@ -194,7 +192,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error 'NotImplementedException: Windows.Storage.ApplicationData.get_Current'
+  --expected-game-error "Could not load file or assembly 'System.Runtime.WindowsRuntime,"
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -220,7 +218,7 @@ projection/shim interface to let the CLR check assignability; class-name
 comparison cannot validate generic arguments, interfaces, or base classes.
 Custom type names carry assembly identity. The projection maps native
 [TypeName to System.Type](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.interop.typename),
-boxes/unboxes string and Int32 via Wine's IPropertyValue, and preserves the
+boxes/unboxes string, Int32, Int64, Boolean, Double, and Guid via Wine's IPropertyValue, and preserves the
 identity of other managed references through a real IInspectable CCW. The
 CCW stays rooted until native AddRef establishes its lifetime.
 
@@ -236,8 +234,7 @@ This is the local-value foundation of milestone 2b. Style/template/animation
 precedence, inheritance, binding invalidation, built-in control property
 identifiers, and general layout are still pending. Metadata factory callbacks
 and foreign PropertyMetadata implementations fail explicitly; parameterized
-PropertyMetadata constructors are not projected yet. Managed scalar boxing
-beyond string and Int32 is also explicit unsupported behavior. This checkpoint
+PropertyMetadata constructors are not projected yet. Other managed scalar boxing remains explicit unsupported behavior. This checkpoint
 does not establish Windows or x64 runtime parity.
 
 ## Xbox bootstrap and CoreWindow
@@ -282,3 +279,28 @@ Dispatcher through the existing native factories. The managed Application
 fixture verifies a current view-thread window, a dispatcher, and stable wrapper
 identity; the existing dispatcher continuation checks still run. General
 CoreWindow events and further storage APIs remain named completion stubs.
+
+## Persistent application settings
+
+`bootstrap.xml` selects ApplicationData.Current, LocalSettings/RoamingSettings,
+and container Name/Locality/Values/CreateContainer/DeleteContainer. Values use
+an IPropertySet adapter implementing `IDictionary<string, object>` over the
+native IMap and its iterable interfaces. Each operation reaches the existing
+native settings store; the projection keeps no shadow dictionary. Keys and
+Values expose read-only live views, and enumeration owns and releases its
+native iterator and pairs. Compound Add and pair-removal operations require
+caller synchronization when other actors mutate the map.
+
+The generator derives closed generic IIDs and slots from WinMD, validates
+consumed signatures and method order, and checks generated values against SDK
+header constants. Negative metadata fixtures reject changed Insert/iterator
+signatures and reordered map slots. The focused `--storage-only` probe and
+`winrt_storage_projection` CTest verify dictionary operations, Unicode keys,
+scalar round trips, local/roaming separation, child containers, and durable
+reads in a second process. Unsupported settings values fail without insertion.
+
+The managed bridge supports string, Int32, Int64, Boolean, Double, and Guid
+settings values. UInt64, arrays/composites, MapChanged events, the Containers
+read-only map, storage folders/files, and general async adapters are pending.
+This checkpoint does not establish Windows/x64 runtime or rendered gameplay
+acceptance.
