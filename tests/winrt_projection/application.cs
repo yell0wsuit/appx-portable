@@ -1,6 +1,8 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
+
 using Windows.ApplicationModel.Activation;
 using Windows.UI.Xaml;
 // A managed Application composed over the shim's, started the way games start:
@@ -10,7 +12,25 @@ using Windows.UI.Xaml;
 class LaunchApp : Application
 {
     internal static string mode = "";
-    internal static int launches, mainThread;
+    internal static int launches, mainThread, activations;
+
+    // Subscribed the way compiled games do; Exit suspends before ending the process.
+    internal LaunchApp()
+    {
+        SuspendingEventHandler unused = (sender, e) => Console.WriteLine("UNUSED HANDLER");
+        WindowsRuntimeMarshal.AddEventHandler<SuspendingEventHandler>(add_Suspending, remove_Suspending, unused);
+        WindowsRuntimeMarshal.RemoveEventHandler<SuspendingEventHandler>(remove_Suspending, unused);
+        WindowsRuntimeMarshal.AddEventHandler<SuspendingEventHandler>(add_Suspending, remove_Suspending, OnSuspending);
+    }
+
+    void OnSuspending(object sender, Windows.ApplicationModel.SuspendingEventArgs e)
+    {
+        Check(ReferenceEquals(sender, this) && e != null, "Suspending sender and arguments");
+        Console.WriteLine("PASS: Suspending raised on the managed App");
+    }
+
+    // Overridden as games do; construction must accept it.
+    protected override void OnActivated(IActivatedEventArgs args) { ++activations; }
 
     static void Check(bool value, string name)
     {
@@ -24,6 +44,12 @@ class LaunchApp : Application
         Check(Thread.CurrentThread.ManagedThreadId != mainThread, "OnLaunched on the view thread");
         Check(ReferenceEquals(Current, this), "Application.Current is the managed App");
         Check(args != null && args.Arguments == "", "launch arguments");
+        // The shim launches from NotRunning; Kind comes through the IActivatedEventArgs view.
+        Check(args.PreviousExecutionState == ApplicationExecutionState.NotRunning, "class member from a required interface");
+        IActivatedEventArgs activated = args;
+        Check(activated.Kind == ActivationKind.Launch && activated.PreviousExecutionState == ApplicationExecutionState.NotRunning,
+            "interface view of the launch arguments");
+        Check(activations == 0, "OnActivated not called for a launch");
         Console.WriteLine("PASS: managed App.OnLaunched ran on the shim view thread");
         Exit();
     }

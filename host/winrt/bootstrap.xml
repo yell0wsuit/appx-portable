@@ -10,6 +10,12 @@
     <Property Name="Architecture" />
   </Class>
   <Enum Name="Windows.System.ProcessorArchitecture" />
+  <Enum Name="Windows.ApplicationModel.Activation.ActivationKind" />
+  <Enum Name="Windows.ApplicationModel.Activation.ApplicationExecutionState" />
+  <Interface Name="Windows.ApplicationModel.Activation.IActivatedEventArgs">
+    <Property Name="Kind" />
+    <Property Name="PreviousExecutionState" />
+  </Interface>
   <Class Name="Windows.ApplicationModel.Activation.LaunchActivatedEventArgs">
     <Property Name="Arguments" />
   </Class>
@@ -18,8 +24,13 @@
     <Property Name="Current" />
     <Method Name="Start" />
     <Method Name="Exit" />
+    <Event Name="Suspending" />
+    <Overridable Name="OnActivated" />
     <Overridable Name="OnLaunched" />
   </Class>
   <Class Name="Windows.UI.Xaml.ApplicationInitializationCallbackParams" />
   <Delegate Name="Windows.UI.Xaml.ApplicationInitializationCallback" />
+  <!-- A typed wrapper only: its referenced members are completion stubs. -->
+  <Class Name="Windows.ApplicationModel.SuspendingEventArgs" />
+  <Delegate Name="Windows.UI.Xaml.SuspendingEventHandler" />
 </Projection>

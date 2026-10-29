@@ -29,8 +29,15 @@ validation.
 `generator.cs` is a build-time tool. It reads SDK contract `.winmd` files with
 Mono.Cecil and emits C# for the members selected by `bootstrap.xml`:
 `<Property>` getters, `<Method>` (void, with no parameter or one runtime
-class or delegate), `<Constructor>` for composable classes, `<Overridable>`
-virtuals, `<Enum>`, and `<Delegate>`. IIDs, default, static, factory, and
+class, interface, or delegate), `<Event>` as consumers bind it (a
+token-returning `add_X` and a token-taking `remove_X`), `<Constructor>` for
+composable classes, `<Overridable>` virtuals, `<Enum>`, `<Delegate>`, and
+`<Interface>` with property getters. A selected class implements the selected
+interfaces WinMD lists for it, reaching their members by querying the
+interface per call; an interface wrapper first asks the native object's
+runtime class name and returns the selected class wrapper when it has one. A
+class with no members is a typed wrapper whose referenced members come from
+completion stubs. IIDs, default, static, factory, and
 overridable interfaces, vtable slots (six IInspectable slots plus WinMD
 method order; required interfaces add no slots), return types, and enum
 values all come from metadata. Unsupported surfaces, member kinds, and ABI
@@ -77,7 +84,9 @@ subclass the way games do. Its `OnLaunched` must run on the shim's view
 thread with `Application.Current` returning the same managed object, then
 `Exit` ends the process as a Store app's does. When `OnLaunched` throws,
 `Start` must rethrow that exception and the callback must then be
-collectable. Both consumers also run against the completed assembly, so
+collectable. Its constructor subscribes to `Suspending` through
+`WindowsRuntimeMarshal`, as compiled games do; `Exit` must raise it on the
+managed App, and not on a handler already removed. Both consumers also run against the completed assembly, so
 completion cannot replace implemented members with stubs. Configure the
 x86 cross build with `APPX_WINE`, `APPX_WINE_PREFIX`, `APPX_WINRT_METADATA`,
 and `APPX_WINRT_CECIL` to register it as the `winrt_projection` CTest. The
@@ -113,13 +122,12 @@ own resolution ignores. The probe runs it before completion (it must fail)
 and after (it must find no unresolved references). Pass `--consumer` once per
 game assembly to include a real game. For Bejeweled LIVE, `Bejeweled3.exe` and
 `DT.GoogleAnalytics.Metro.dll` have 240 type and 405 member references, none
-unresolved after completion. In a copied game, `Program.Main` now starts the
-shim's Application, whose callback constructs `Bejeweled3.App`; construction
-fails with `NotImplementedException: Windows.UI.Xaml.Application.OnActivated
-override`, because `App` overrides `OnActivated`, whose `IActivatedEventArgs`
-parameter needs interface projection. `App`'s constructor and `OnLaunched`
-also need `Application.LoadComponent` with `System.Uri`, the `Suspending`
-event, `Window`, and `Frame`.
+unresolved after completion. In a copied game, `Program.Main` starts the
+shim's Application; its callback constructs `Bejeweled3.App`, whose
+constructor subscribes to `Suspending`, and the shim then calls the game's
+`App.OnLaunched` on its view thread. `OnLaunched` fails at its first
+statement with `NotImplementedException: Windows.UI.Xaml.Window.get_Current`;
+`Window` and `Frame` come next.
 
 The game also references `System.Runtime.WindowsRuntime` and
 `System.Runtime.WindowsRuntime.UI.Xaml`, which Wine Mono does not provide, plus
@@ -127,9 +135,9 @@ the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. None of these
 is projected yet.
 
 This is a foundation for managed compatibility, not a replacement for the
-game's `Windows` assembly. Interface projection, events, CLR-redirected types,
-and dispatcher synchronization remain to be implemented before Bejeweled can
-use this path. The existing game host is unchanged; its older "XAML Islands (STA)" log label
+game's `Windows` assembly. `Window`, `Frame`, CLR-redirected types such as
+`System.Uri`, managed implementations of WinRT interfaces, and dispatcher
+synchronization remain to be implemented before Bejeweled can use this path. The existing game host is unchanged; its older "XAML Islands (STA)" log label
 identifies the STA route even when the shim selects its Wine XAML backend.
 The ini override for hosting mode remains to be added; this slice only supports
 the environment override above.

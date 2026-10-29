@@ -7,6 +7,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
+
 using Mono.Cecil;
 
 internal static class WinrtProjectionGenerator
@@ -18,6 +19,8 @@ internal static class WinrtProjectionGenerator
         new Dictionary<string, TypeDefinition>(StringComparer.Ordinal);
     private static readonly HashSet<string> selected = new HashSet<string>(StringComparer.Ordinal);
     private static readonly List<ModuleDefinition> modules = new List<ModuleDefinition>();
+    private static readonly Dictionary<string, XmlElement> interfaces = new Dictionary<string, XmlElement>(StringComparer.Ordinal);
+    private static readonly List<TypeDefinition> classes = new List<TypeDefinition>();
 
     private static TypeDefinition Find(string name)
     {
@@ -34,10 +37,30 @@ internal static class WinrtProjectionGenerator
     private static string Name(TypeReference type)
     {
         if (type.FullName == "System.String") return "string";
+        if (type.FullName == "System.Object") return "object";
         if (!selected.Contains(type.FullName))
             throw new NotSupportedException("Type is not selected: " + type.FullName);
         return "global::" + type.FullName;
     }
+
+    // The expression that wraps a native pointer as a selected type: interfaces use
+    // their generated wrapper, which also finds the most derived selected class.
+    private static string Wrapper(TypeReference type)
+    {
+        if (type.FullName == "System.Object") throw new NotSupportedException("Object is wrapped by Unwrap");
+        Name(type);
+        return interfaces.ContainsKey(type.FullName) ? Projected(Find(type.FullName)) : "global::" + type.FullName;
+    }
+
+    // A native pointer argument of a callback as its managed parameter.
+    private static string Unwrap(TypeReference type, string pointer)
+    {
+        string borrowed = Runtime + "NativeObject.Borrow(" + pointer + ")";
+        return type.FullName == "System.Object" ? Runtime + "NativeObject.Inspectable(" + borrowed + ")"
+            : Wrapper(type) + ".FromNative(" + borrowed + ")";
+    }
+
+    private static string Native(string argument) { return Runtime + "NativeObject.Of(" + argument + ")"; }
 
     private static string Literal(int value) { return value.ToString(CultureInfo.InvariantCulture); }
 
@@ -132,7 +155,7 @@ internal static class WinrtProjectionGenerator
                 throw new NotSupportedException("Unsupported enum ABI: " + definition.FullName);
             return "unchecked((" + Name(result) + ")" + receiver + ".UInt32(" + number + "))";
         }
-        return Name(result) + ".FromNative(" + receiver + ".Object(" + number + "))";
+        return Wrapper(result) + ".FromNative(" + receiver + ".Object(" + number + "))";
     }
 
     // Opens the receiver for an ABI call and returns its name: a static factory,
@@ -162,11 +185,11 @@ internal static class WinrtProjectionGenerator
         output.AppendLine("    }");
     }
 
-    // A selected runtime class passed by pointer, or a selected delegate passed as a managed callback.
+    // A selected runtime class or interface passed by pointer, or a selected delegate passed as a managed callback.
     private static TypeDefinition Parameter(TypeReference type, string use)
     {
         TypeDefinition definition = Find(type.FullName);
-        if (!selected.Contains(type.FullName) || definition.IsEnum || definition.IsValueType || definition.IsInterface)
+        if (!selected.Contains(type.FullName) || definition.IsEnum || definition.IsValueType)
             throw new NotSupportedException("Unsupported parameter type: " + type.FullName + " in " + use);
         return definition;
     }
@@ -176,7 +199,7 @@ internal static class WinrtProjectionGenerator
         MethodDefinition invoke = type.Methods.Single(m => m.Name == "Invoke");
         if (invoke.ReturnType.FullName != "System.Void") throw new NotSupportedException("Unsupported delegate return: " + type.FullName);
         var parameters = invoke.Parameters.ToList();
-        foreach (ParameterDefinition parameter in parameters)
+        foreach (ParameterDefinition parameter in parameters.Where(p => p.ParameterType.FullName != "System.Object"))
             if (IsDelegate(Parameter(parameter.ParameterType, type.FullName)))
                 throw new NotSupportedException("Unsupported delegate parameter: " + type.FullName);
         output.AppendLine("    public delegate void " + type.Name + "(" +
@@ -192,7 +215,7 @@ internal static class WinrtProjectionGenerator
             string.Concat(parameters.Select(p => ", global::System.IntPtr @" + p.Name)) + ");");
         output.AppendLine("        private static readonly InvokeCall invoke = (self" + string.Concat(parameters.Select(p => ", @" + p.Name)) +
             ") => " + Runtime + "ManagedObject.Call(self, target => ((global::" + type.FullName + ")target)(" +
-            string.Join(", ", parameters.Select(p => Name(p.ParameterType) + ".FromNative(" + Runtime + "NativeObject.Borrow(@" + p.Name + "))")) + "));");
+            string.Join(", ", parameters.Select(p => Unwrap(p.ParameterType, "@" + p.Name))) + "));");
         output.AppendLine("        internal static readonly " + Runtime + "NativeInterface Interface = new " + Runtime +
             "NativeInterface(" + Guid(type) + ", false, invoke);");
         output.AppendLine("    }");
@@ -222,9 +245,43 @@ internal static class WinrtProjectionGenerator
             output.AppendLine("                using (var argument = " + Runtime + "ManagedObject.Hold(@" + parameter.Name + ", " + Projected(argument) + ".Interface))");
             output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ", argument.Pointer);");
         }
-        else output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ", @" + parameter.Name + " == null ? null : @" + parameter.Name + ".native);");
+        else output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ", " + Native("@" + parameter.Name) + ");");
         output.AppendLine("            }");
         output.AppendLine("        }");
+    }
+
+    // A WinRT event as consumers bind it: EventRegistrationToken add_X(handler) and
+    // remove_X(token). The handler is a managed callback that native code retains.
+    private static void Event(StringBuilder output, TypeDefinition type, string name, bool composable)
+    {
+        EventDefinition definition = type.Events.SingleOrDefault(e => e.Name == name);
+        if (definition == null || definition.AddMethod == null || definition.RemoveMethod == null)
+            throw new NotSupportedException("Unsupported event: " + type.FullName + "." + name);
+        TypeDefinition handler = Find(definition.EventType.FullName);
+        if (!IsDelegate(handler) || !selected.Contains(handler.FullName))
+            throw new NotSupportedException("Unsupported event handler: " + type.FullName + "." + name);
+        const string Token = "global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken";
+        foreach (MethodDefinition accessor in new[] { definition.AddMethod, definition.RemoveMethod })
+        {
+            TypeDefinition owner = MemberInterface(type, accessor);
+            int slot = Slot(owner, accessor);
+            bool add = accessor == definition.AddMethod;
+            output.AppendLine("        // " + owner.FullName + "::" + accessor.Name + ", slot " + Literal(slot));
+            output.AppendLine("        public " + (accessor.IsStatic ? "static " : "") + (add ? Token : "void") + " " + accessor.Name + "(" +
+                (add ? Name(handler) + " @handler" : Token + " @token") + ")");
+            output.AppendLine("        {");
+            output.AppendLine("            using (var invocation = " + Runtime + "Errors.Begin())");
+            output.AppendLine("            {");
+            string receiver = Receiver(output, type, owner, accessor.IsStatic, composable);
+            if (add)
+            {
+                output.AppendLine("                using (var argument = " + Runtime + "ManagedObject.Hold(@handler, " + Projected(handler) + ".Interface))");
+                output.AppendLine("                    return " + receiver + ".AddHandler(" + Literal(slot) + ", argument.Pointer);");
+            }
+            else output.AppendLine("                    " + receiver + ".RemoveHandler(" + Literal(slot) + ", @token);");
+            output.AppendLine("            }");
+            output.AppendLine("        }");
+        }
     }
 
     private static void Property(StringBuilder output, TypeDefinition type, string name, bool composable)
@@ -246,6 +303,77 @@ internal static class WinrtProjectionGenerator
         output.AppendLine("        }");
     }
 
+    private static PropertyDefinition Getter(TypeDefinition owner, string name)
+    {
+        PropertyDefinition definition = owner.Properties.SingleOrDefault(p => p.Name == name);
+        if (definition == null || definition.GetMethod == null || definition.SetMethod != null || definition.Parameters.Count != 0)
+            throw new NotSupportedException("Unsupported property: " + owner.FullName + "." + name);
+        return definition;
+    }
+
+    // A property of a selected interface on an implementing wrapper. A class
+    // queries for the interface per call; the interface's own wrapper holds it.
+    private static void InterfaceProperty(StringBuilder output, TypeDefinition iface, string name, bool query)
+    {
+        MethodDefinition getter = Getter(iface, name).GetMethod;
+        int slot = Slot(iface, getter);
+        output.AppendLine("        // " + iface.FullName + "::" + getter.Name + ", slot " + Literal(slot));
+        output.AppendLine("        public " + Name(getter.ReturnType) + " " + name);
+        output.AppendLine("        {");
+        output.AppendLine("            get");
+        output.AppendLine("            {");
+        if (query) output.AppendLine("                using (var self = native.QueryInterface(" + Guid(iface) + "))");
+        output.AppendLine("                    return " + Call(getter, query ? "self" : "native", slot) + ";");
+        output.AppendLine("            }");
+        output.AppendLine("        }");
+    }
+
+    private static List<string> InterfaceMembers(TypeDefinition iface, XmlElement surface)
+    {
+        var members = new List<string>();
+        foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
+        {
+            if (member.Name != "Property") throw new NotSupportedException("Unsupported member kind: " + iface.FullName + "." + member.Name);
+            if (members.Contains(member.GetAttribute("Name")))
+                throw new InvalidDataException("Duplicate property: " + iface.FullName + "." + member.GetAttribute("Name"));
+            members.Add(member.GetAttribute("Name"));
+        }
+        if (members.Count == 0 && iface.Methods.Count != 0) throw new InvalidDataException("Empty runtime surface: " + iface.FullName);
+        return members;
+    }
+
+    private static void Interface(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        if (type.HasGenericParameters) throw new NotSupportedException("Unsupported generic interface: " + type.FullName);
+        List<string> members = InterfaceMembers(type, surface);
+        output.AppendLine("    public interface " + type.Name);
+        output.AppendLine("    {");
+        foreach (string name in members) output.AppendLine("        " + Name(Getter(type, name).GetMethod.ReturnType) + " " + name + " { get; }");
+        output.AppendLine("    }");
+        output.AppendLine("}");
+        output.AppendLine("namespace AppxPortable.WinRT.Projected");
+        output.AppendLine("{");
+        string wrapper = type.FullName.Replace('.', '_');
+        output.AppendLine("    // " + type.FullName + " over a native object of no selected class.");
+        output.AppendLine("    internal sealed class " + wrapper + " : global::" + type.FullName + ", " + Runtime + "INativeWrapper");
+        output.AppendLine("    {");
+        output.AppendLine("        private readonly " + Runtime + "NativeObject native;");
+        output.AppendLine("        private " + wrapper + "(" + Runtime + "NativeObject value) { native = value; }");
+        output.AppendLine("        " + Runtime + "NativeObject " + Runtime + "INativeWrapper.Native { get { return native; } }");
+        output.AppendLine("        internal static global::" + type.FullName + " FromNative(" + Runtime + "NativeObject value)");
+        output.AppendLine("        {");
+        output.AppendLine("            return " + Runtime + "NativeObject.Wrap<global::" + type.FullName + ">(value, " + Guid(type) + ", v =>");
+        output.AppendLine("            {");
+        output.AppendLine("                string name = v.RuntimeClassName();");
+        foreach (TypeDefinition implementer in classes.Where(c => c.Interfaces.Any(i => i.InterfaceType.FullName == type.FullName)))
+            output.AppendLine("                if (name == \"" + implementer.FullName + "\") return global::" + implementer.FullName + ".Create(v);");
+        output.AppendLine("                return new " + wrapper + "(v);");
+        output.AppendLine("            });");
+        output.AppendLine("        }");
+        foreach (string name in members) InterfaceProperty(output, type, name, false);
+        output.AppendLine("    }");
+    }
+
     private static void Class(StringBuilder output, TypeDefinition type, XmlElement surface)
     {
         CustomAttribute composition = Attribute(type, "Windows.Foundation.Metadata.ComposableAttribute");
@@ -258,7 +386,7 @@ internal static class WinrtProjectionGenerator
         foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
         {
             string kind = member.Name, name = member.GetAttribute("Name");
-            if (kind != "Property" && kind != "Method" && kind != "Constructor" && kind != "Overridable")
+            if (kind != "Property" && kind != "Method" && kind != "Constructor" && kind != "Overridable" && kind != "Event")
                 throw new NotSupportedException("Unsupported member kind: " + type.FullName + "." + kind);
             if (!members.Add(kind == "Constructor" ? ".ctor" : name))
                 throw new InvalidDataException("Duplicate " + kind.ToLowerInvariant() + ": " + type.FullName + "." + name);
@@ -266,7 +394,6 @@ internal static class WinrtProjectionGenerator
             if (kind == "Overridable") overridden.Add(name);
         }
         TypeDefinition primary = DefaultInterface(type);
-        if (members.Count == 0 && primary.Methods.Count != 0) throw new InvalidDataException("Empty runtime surface: " + type.FullName);
         if (constructor && !composable) throw new NotSupportedException("Constructor needs a composable class: " + type.FullName);
         if (overridden.Count != 0 && !constructor) throw new InvalidDataException("Overridable without Constructor: " + type.FullName);
 
@@ -280,14 +407,22 @@ internal static class WinrtProjectionGenerator
         var exposed = overridable.Where(i => i.Methods.Any(m => overridden.Contains(m.Name))).ToList();
         var unsupported = overridable.SelectMany(i => i.Methods).Select(m => m.Name).Where(n => !overridden.Contains(n)).ToList();
 
-        output.AppendLine("    public " + (type.IsSealed ? "sealed " : "") + "class " + type.Name);
+        var implemented = type.Interfaces.Select(i => i.InterfaceType.FullName).Where(interfaces.ContainsKey).ToList();
+        output.AppendLine("    public " + (type.IsSealed ? "sealed " : "") + "class " + type.Name + " : " +
+            string.Concat(implemented.Select(i => "global::" + i + ", ")) + Runtime + "INativeWrapper");
         output.AppendLine("    {");
         output.AppendLine("        internal readonly " + Runtime + "NativeObject native;");
+        output.AppendLine("        " + Runtime + "NativeObject " + Runtime + "INativeWrapper.Native { get { return native; } }");
         if (constructor) output.AppendLine("        private readonly " + Runtime + "ManagedObject outer;");
         output.AppendLine("        private " + type.Name + "(" + Runtime + "NativeObject value) { native = value; }");
         output.AppendLine("        internal static " + type.Name + " FromNative(" + Runtime + "NativeObject value)");
         output.AppendLine("        {");
         output.AppendLine("            return " + Runtime + "NativeObject.Wrap<" + type.Name + ">(value, " + Guid(primary) + ", v => new " + type.Name + "(v));");
+        output.AppendLine("        }");
+        output.AppendLine("        // A wrapper for an identity already known to be this class; disposes value.");
+        output.AppendLine("        internal static " + type.Name + " Create(" + Runtime + "NativeObject value)");
+        output.AppendLine("        {");
+        output.AppendLine("            using (value) return new " + type.Name + "(value.QueryInterface(" + Guid(primary) + "));");
         output.AppendLine("        }");
         if (constructor)
         {
@@ -335,8 +470,7 @@ internal static class WinrtProjectionGenerator
                     throw new NotSupportedException("Unsupported overridable shape: " + iface.FullName + "." + method.Name);
                 string thunk = "on" + method.Name;
                 string body = overridden.Contains(method.Name)
-                    ? "((" + type.Name + ")target)." + method.Name + "(" + Name(method.Parameters[0].ParameterType) + ".FromNative(" +
-                      Runtime + "NativeObject.Borrow(value)))"
+                    ? "((" + type.Name + ")target)." + method.Name + "(" + Unwrap(method.Parameters[0].ParameterType, "value") + ")"
                     : "((" + type.Name + ")target).BaseOverride(" + Guid(iface) + ", " + Literal(slot) + ", value)";
                 output.AppendLine("            // slot " + Literal(slot));
                 output.AppendLine("            private static readonly Call1 " + thunk + " = (self, value) => " + Runtime +
@@ -354,8 +488,7 @@ internal static class WinrtProjectionGenerator
                 output.AppendLine("        protected virtual void " + method.Name + "(" + Name(parameter.ParameterType) + " @" + parameter.Name + ")");
                 output.AppendLine("        {");
                 output.AppendLine("            using (var overrides = native.QueryInterface(" + Guid(iface) + "))");
-                output.AppendLine("                overrides.Call(" + Literal(Slot(iface, method)) + ", @" + parameter.Name + " == null ? null : @" +
-                    parameter.Name + ".native);");
+                output.AppendLine("                overrides.Call(" + Literal(Slot(iface, method)) + ", " + Native("@" + parameter.Name) + ");");
                 output.AppendLine("        }");
             }
         }
@@ -363,6 +496,13 @@ internal static class WinrtProjectionGenerator
         {
             if (member.Name == "Property") Property(output, type, member.GetAttribute("Name"), composable);
             else if (member.Name == "Method") Method(output, type, member.GetAttribute("Name"), composable);
+            else if (member.Name == "Event") Event(output, type, member.GetAttribute("Name"), composable);
+        }
+        foreach (string name in implemented)
+        {
+            TypeDefinition iface = Find(name);
+            foreach (string property in InterfaceMembers(iface, interfaces[name]).Where(p => !members.Contains(p)))
+                InterfaceProperty(output, iface, property, true);
         }
         output.AppendLine("    }");
     }
@@ -383,8 +523,12 @@ internal static class WinrtProjectionGenerator
             resolver.AddSearchDirectory(args[0]);
             foreach (string path in Directory.GetFiles(args[0], "*.winmd").OrderBy(p => p, StringComparer.Ordinal))
             {
-                var module = ModuleDefinition.ReadModule(path, new ReaderParameters {
-                    ApplyWindowsRuntimeProjections = false, AssemblyResolver = resolver, InMemory = true });
+                var module = ModuleDefinition.ReadModule(path, new ReaderParameters
+                {
+                    ApplyWindowsRuntimeProjections = false,
+                    AssemblyResolver = resolver,
+                    InMemory = true
+                });
                 modules.Add(module);
                 foreach (TypeDefinition type in module.Types.Where(t => t.Name != "<Module>"))
                 {
@@ -393,16 +537,21 @@ internal static class WinrtProjectionGenerator
                 }
             }
             var document = new XmlDocument { XmlResolver = null };
-            using (XmlReader reader = XmlReader.Create(args[1], new XmlReaderSettings {
-                DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null })) document.Load(reader);
+            using (XmlReader reader = XmlReader.Create(args[1], new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null
+            })) document.Load(reader);
             if (document.DocumentElement == null || document.DocumentElement.Name != "Projection")
                 throw new InvalidDataException("Expected Projection surface root");
             var elements = document.DocumentElement.ChildNodes.OfType<XmlElement>().ToList();
             foreach (XmlElement element in elements)
             {
-                if (element.Name != "Class" && element.Name != "Enum" && element.Name != "Delegate")
+                if (element.Name != "Class" && element.Name != "Enum" && element.Name != "Delegate" && element.Name != "Interface")
                     throw new NotSupportedException("Unsupported surface kind: " + element.Name);
                 if (!selected.Add(element.GetAttribute("Name"))) throw new InvalidDataException("Duplicate selected type");
+                if (element.Name == "Interface") interfaces.Add(element.GetAttribute("Name"), element);
+                if (element.Name == "Class") classes.Add(Find(element.GetAttribute("Name")));
             }
             var output = new StringBuilder();
             output.AppendLine("// Generated from SDK metadata. Do not edit.");
@@ -417,6 +566,7 @@ internal static class WinrtProjectionGenerator
                 output.AppendLine("{");
                 if (element.Name == "Enum" && type.IsEnum) Enum(output, type);
                 else if (element.Name == "Delegate" && IsDelegate(type)) Delegate(output, type);
+                else if (element.Name == "Interface" && type.IsInterface) Interface(output, type, element);
                 else if (element.Name == "Class" && !type.IsEnum && !IsDelegate(type) && !type.IsValueType && !type.IsInterface)
                     Class(output, type, element);
                 else throw new InvalidDataException("Surface kind does not match metadata: " + type.FullName);
