@@ -10,7 +10,7 @@ using System.Xml;
 
 using Mono.Cecil;
 
-internal static class WinrtProjectionGenerator
+internal static partial class WinrtProjectionGenerator
 {
     private const string Runtime = "global::AppxPortable.WinRT.";
     private const string StdCall = "[global::System.Runtime.InteropServices.UnmanagedFunctionPointer(" +
@@ -846,7 +846,9 @@ internal static class WinrtProjectionGenerator
                 TypeDefinition type = Find(element.GetAttribute("Name"));
                 output.AppendLine("namespace " + type.Namespace);
                 output.AppendLine("{");
-                if (element.GetAttribute("Adapter") == "Async")
+                if (element.GetAttribute("Adapter") == "Storage")
+                    StorageContract(output, type, element);
+                else if (element.GetAttribute("Adapter") == "Async")
                 {
                     if (element.HasChildNodes || (element.Name != "Interface" && element.Name != "Delegate") ||
                         (element.Name == "Interface") != type.IsInterface)

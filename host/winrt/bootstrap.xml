@@ -67,6 +67,7 @@
   <Class Name="Windows.Storage.ApplicationData">
     <Property Name="Current" />
     <Property Name="LocalSettings" />
+    <Property Name="LocalFolder" />
     <Property Name="RoamingSettings" />
   </Class>
   <Class Name="Windows.Storage.ApplicationDataContainer">
@@ -91,4 +92,14 @@
   <Delegate Name="Windows.Foundation.AsyncActionWithProgressCompletedHandler`1" Adapter="Async" />
   <Delegate Name="Windows.Foundation.AsyncOperationProgressHandler`2" Adapter="Async" />
   <Delegate Name="Windows.Foundation.AsyncOperationWithProgressCompletedHandler`2" Adapter="Async" />
+  <Class Name="Windows.Storage.StorageFolder" Adapter="Storage" />
+  <Class Name="Windows.Storage.StorageFile" Adapter="Storage" />
+  <Class Name="Windows.Storage.Streams.Buffer" Adapter="Storage" />
+  <Interface Name="Windows.Storage.Streams.IBuffer" Adapter="Storage" />
+  <Interface Name="Windows.Storage.Streams.IInputStream" Adapter="Storage" />
+  <Interface Name="Windows.Storage.Streams.IOutputStream" Adapter="Storage" />
+  <Interface Name="Windows.Storage.Streams.IRandomAccessStream" Adapter="Storage" />
+  <Interface Name="Windows.Storage.Streams.IRandomAccessStreamWithContentType" Adapter="Storage" />
+  <Interface Name="Windows.Storage.Streams.IContentTypeProvider" Adapter="Storage" />
+  <Enum Name="Windows.Storage.Streams.InputStreamOptions" />
 </Projection>
