@@ -64,4 +64,19 @@
     <Property Name="Dispatcher" />
   </Class>
   <Class Name="Windows.UI.Core.CoreDispatcher" />
+  <Class Name="Windows.Storage.ApplicationData">
+    <Property Name="Current" />
+    <Property Name="LocalSettings" />
+    <Property Name="RoamingSettings" />
+  </Class>
+  <Class Name="Windows.Storage.ApplicationDataContainer">
+    <Property Name="Name" />
+    <Property Name="Locality" />
+    <Property Name="Values" />
+    <Method Name="CreateContainer" />
+    <Method Name="DeleteContainer" />
+  </Class>
+  <Enum Name="Windows.Storage.ApplicationDataLocality" />
+  <Enum Name="Windows.Storage.ApplicationDataCreateDisposition" />
+  <Interface Name="Windows.Foundation.Collections.IPropertySet" Adapter="StringObjectMap" />
 </Projection>
