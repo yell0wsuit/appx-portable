@@ -154,6 +154,13 @@ add_test(NAME islands_settings_contract COMMAND "${CMAKE_COMMAND}"
   "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
   "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-settings-fixture"
   -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
+add_test(NAME islands_view_contract COMMAND "${CMAKE_COMMAND}"
+  "-DTEST_EXE=$<TARGET_FILE:viewtest>"
+  "-DSHIM=$<TARGET_FILE:appxportable>"
+  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+  "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-view-fixture"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
+set_tests_properties(islands_view_contract PROPERTIES TIMEOUT 60 LABELS managed-clr)
 set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 60)
 add_executable(searchtest tests/searchtest.cpp host/managed.manifest)
 target_link_libraries(searchtest PRIVATE runtimeobject ole32)

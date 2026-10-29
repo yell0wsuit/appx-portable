@@ -208,5 +208,8 @@ HRESULT MakeApplicationViewFactory(IActivationFactory** v) {
     static auto factory = Make<ViewFactory>();
     return factory ? factory.CopyTo(v) : E_OUTOFMEMORY;
 }
-const ShimClass applicationViewClass{L"Windows.UI.ViewManagement.ApplicationView", MakeApplicationViewFactory};
+// Desktop XAML Islands also need the portable view: the system view describes
+// the island rather than the game's host and reports it as not fullscreen.
+const ShimClass applicationViewClass{L"Windows.UI.ViewManagement.ApplicationView", MakeApplicationViewFactory,
+                                     ShimPolicy::Replace, InIslands};
 }

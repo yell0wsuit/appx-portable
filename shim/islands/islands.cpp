@@ -58,6 +58,7 @@ static ComPtr<IInspectable> appInstance;
 // The system Application itself: its managed outer may still be constructing.
 static ComPtr<IApplication> systemApplication;
 HRESULT ConnectIslandScrolling(IInspectable* root);
+HRESULT ConnectIslandPanels(IInspectable* root);
 HRESULT MakeIslandGridFactory(IActivationFactory** value);
 static ComPtr<IUIElement> pendingContent;
 static ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> islandDispatcher;
@@ -238,6 +239,8 @@ public:
         // island exists; hold the content until it is attached.
         content_ = v;
         HRESULT hr = ConnectIslandScrolling(v);
+        if (FAILED(hr)) return hr;
+        hr = ConnectIslandPanels(v);
         if (FAILED(hr)) return hr;
         if (v) {
             hr = ApplyRootTheme(v);
