@@ -49,6 +49,20 @@
     "header": "windows.foundation.metadata.h",
     "interfaces": ["ABI::Windows::Foundation::Metadata::IApiInformationStatics"]
   },
+  "text_core.h": {
+    "header": "windows.ui.text.core.h",
+    "interfaces": [
+      "ABI::Windows::UI::Text::Core::ICoreTextServicesManagerStatics",
+      "ABI::Windows::UI::Text::Core::ICoreTextServicesManager",
+      "ABI::Windows::UI::Text::Core::ICoreTextEditContext",
+      "ABI::Windows::UI::Text::Core::ICoreTextEditContext2",
+      "ABI::Windows::UI::Text::Core::ICoreTextTextUpdatingEventArgs",
+      "ABI::Windows::UI::Text::Core::ICoreTextTextRequestedEventArgs",
+      "ABI::Windows::UI::Text::Core::ICoreTextTextRequest",
+      "ABI::Windows::UI::Text::Core::ICoreTextSelectionRequestedEventArgs",
+      "ABI::Windows::UI::Text::Core::ICoreTextSelectionRequest"
+    ]
+  },
   "win10_input.h": {
     "header": "windows.ui.core.h",
     "interfaces": ["ABI::Windows::UI::Core::ICoreInputSourceBase", "ABI::Windows::UI::Core::ICorePointerInputSource"]
