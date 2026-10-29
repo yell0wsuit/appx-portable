@@ -293,6 +293,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
   endif()
   set(APPX_WINRT_METADATA "" CACHE PATH "Directory of SDK contract .winmd files")
   set(APPX_WINRT_CECIL "" CACHE FILEPATH "Mono.Cecil.dll used only at build time")
+  set(APPX_XBOX_METADATA "" CACHE FILEPATH "Package Microsoft.Xbox.winmd used only at build time")
   if(APPX_WINE AND APPX_WINE_PREFIX AND APPX_WINRT_METADATA AND APPX_WINRT_CECIL)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_test(NAME winrt_projection COMMAND "${Python3_EXECUTABLE}"
@@ -301,6 +302,15 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
       --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
       --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
     set_tests_properties(winrt_projection PROPERTIES TIMEOUT 600 LABELS managed-clr)
+    if(APPX_XBOX_METADATA)
+      add_test(NAME winrt_xbox_projection COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
+        --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
+        --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
+        --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-xbox-projection"
+        --xbox-metadata "${APPX_XBOX_METADATA}" --xbox-only)
+      set_tests_properties(winrt_xbox_projection PROPERTIES TIMEOUT 600 LABELS "managed-clr;xbox")
+    endif()
   endif()
 endif()
 add_executable(navtest tests/navtest.cpp)

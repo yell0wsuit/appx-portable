@@ -26,7 +26,9 @@ HEADER_IIDS = {
     "IDependencyObject": "5c526665-f60e-4912-af59-5fe0680f089d",
     "IDependencyProperty": "85b13970-9bc4-4e96-acf1-30c8fd3d55c8",
     "IDependencyPropertyStatics": "49e5f28f-8259-4d5c-aae0-83d56dbb68d9",
-    "IPropertyMetadata": "814ef30d-8d18-448a-8644-f2cb51e70380"}
+    "IPropertyMetadata": "814ef30d-8d18-448a-8644-f2cb51e70380",
+    "ICoreWindowStatic": "4d239005-3c2a-41b1-9022-536bb9cf93b1", "ICoreWindow": "79b9d5f2-879e-4b89-b798-79e47598030c",
+    "ICoreDispatcher": "60db2fa8-b705-4fde-a7d6-ebbb1891d39e"}
 HEADER_SLOTS = [
     "Windows.ApplicationModel.IPackageStatics::get_Current, slot 6", "Windows.ApplicationModel.IPackage::get_Id, slot 6",
     "Windows.ApplicationModel.IPackageId::get_Name, slot 6", "Windows.ApplicationModel.IPackageId::get_Architecture, slot 8",
@@ -46,7 +48,8 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.IDependencyPropertyStatics::RegisterAttached, slot 8",
     "Windows.UI.Xaml.IDependencyObject::GetValue, slot 6", "Windows.UI.Xaml.IDependencyObject::SetValue, slot 7",
     "Windows.UI.Xaml.IDependencyObject::ClearValue, slot 8", "Windows.UI.Xaml.IDependencyObject::ReadLocalValue, slot 9",
-    "Windows.UI.Xaml.IDependencyObject::GetAnimationBaseValue, slot 10"]
+    "Windows.UI.Xaml.IDependencyObject::GetAnimationBaseValue, slot 10",
+    "Windows.UI.Core.ICoreWindowStatic::GetForCurrentThread, slot 6", "Windows.UI.Core.ICoreWindow::get_Dispatcher, slot 9"]
 # The runtime's dispatcher context calls CoreWindow and CoreDispatcher directly
 # (windows.ui.core.h): each IID and slot, and the call that uses the slot.
 HEADER_RUNTIME = [
@@ -59,10 +62,20 @@ HEADER_DELEGATES = ['NativeInterface(new global::System.Guid("' + iid + '"), fal
                     for iid in ("b6351c55-c284-46e4-8310-fb0967fab76f", "23429465-e36a-40e2-b139-a4704602a6e1")]
 
 
+def copy_owned_file(source, destination):
+    """Copy into owned output without following a copied destination symlink."""
+    destination = Path(destination)
+    if destination.is_symlink():
+        destination.unlink()
+    shutil.copyfile(source, destination)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("wine", "prefix", "metadata", "shim", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--xbox-only", action="store_true", help="run the focused Xbox projection fixture")
+    parser.add_argument("--xbox-metadata", type=Path, help="package Microsoft.Xbox.winmd, metadata only")
     parser.add_argument("--game", type=Path, help="copy and launch this installed game after completion")
     parser.add_argument("--expected-game-error", help="required named failure in the copied game managed.log")
     parser.add_argument("--cecil", type=Path)
@@ -70,6 +83,8 @@ def main():
     parser.add_argument("--consumer", type=Path, action="append", default=[])
     parser.add_argument("--architecture", choices=("x86", "x64"), default="x86")
     args = parser.parse_args()
+    if args.xbox_only and (not args.xbox_metadata or args.game):
+        parser.error("--xbox-only requires --xbox-metadata and cannot launch a game")
     repo = Path(__file__).resolve().parents[1]
     wine, prefix, metadata, shim, output = (getattr(args, name).resolve()
                                           for name in ("wine", "prefix", "metadata", "shim", "output"))
@@ -93,7 +108,7 @@ def main():
     if (image[pe:pe + 4] != b"PE\0\0" or struct.unpack_from("<H", image, pe + 4)[0]
             != (0x14c if args.architecture == "x86" else 0x8664)):
         parser.error("shim architecture does not match the requested fixture")
-    shutil.copyfile(cecils[0], output / "Mono.Cecil.dll")
+    copy_owned_file(cecils[0], output / "Mono.Cecil.dll")
     env = dict(os.environ, WINEPREFIX=str(prefix), WINEDEBUG="-all", MVK_CONFIG_LOG_LEVEL="0")
     for key in ("WINE_MONO_AOT", "WINEDLLOVERRIDES", "MONO_PATH", "MONO_ENV_OPTIONS"):
         env.pop(key, None)
@@ -142,14 +157,71 @@ def main():
     def fixture(name, executable, identity, publisher):
         folder = output / name
         folder.mkdir(exist_ok=True)
-        shutil.copyfile(shim, folder / "appxportable.dll")
+        copy_owned_file(shim, folder / "appxportable.dll")
         (folder / "AppxManifest.xml").write_text(
             '<Package><Identity Name="' + identity + '" Publisher="' + publisher +
             '" Version="1.0.0.0" ProcessorArchitecture="' + args.architecture +
             '"/><Applications><Application Id="Test" Executable="' + executable + '"/></Applications></Package>')
         return folder
 
+    def probe_xbox(marker, generator, completer):
+        xbox_reference = compile_file("xbox-reference/Microsoft.Xbox.dll", [repo / "tests/winrt_projection/xbox_reference.cs"], ["/target:library"])
+        xbox_consumer = compile_file("xbox.exe", [repo / "tests/winrt_projection/xbox.cs"], ["/r:" + windows(xbox_reference)])
+        run("mark-xbox", [marker.name, xbox_consumer.name, "xbox-winrt.exe", "--assembly", "Microsoft.Xbox"], marker="flags=WindowsRuntime")
+        xbox_folder = fixture("xbox", xbox_consumer.name, "XboxProjectionTest", "CN=projection")
+        copy_owned_file(output / "xbox-winrt.exe", xbox_folder / xbox_consumer.name)
+        copy_owned_file(xbox_reference, xbox_folder / "Microsoft.Xbox.dll")
+        run("xbox-reference-contract", [xbox_consumer.name], cwd=xbox_folder, succeeds=False, marker="Microsoft.Xbox.User..ctor")
+        xbox_metadata = output / "xbox-metadata"
+        xbox_metadata.mkdir(exist_ok=True)
+        xbox_winmd = xbox_metadata / "Microsoft.Xbox.winmd"
+        copy_owned_file(args.xbox_metadata.resolve(), xbox_winmd)
+        xbox_generated = output / "Microsoft.Xbox.generated.cs"
+        run("generate-xbox", [generator.name, windows(xbox_metadata), windows(repo / "host/winrt/xbox.xml"), windows(xbox_generated)])
+        xbox_text = xbox_generated.read_text(encoding="utf-8")
+        for value in ("d7fba214-e744-4093-9fee-ab68795b70a0", "115ccd10-26c2-471c-b97b-5b3dac160c6e", "4b00e95d-3006-4f02-bd96-3919d984d4c7"):
+            require('System.Guid("' + value + '")' in xbox_text, "Xbox IID differs from native header: " + value)
+        for member in ("Microsoft.Xbox.IUser::get_Identity, slot 6", "Microsoft.Xbox.Foundation.IServiceClient::get_Token, slot 11",
+                       "Microsoft.Xbox.Foundation.IServiceClient::get_SignedInUserIdentity, slot 10", "Microsoft.Xbox.IXboxLIVEService::get_ServiceClient, slot 11",
+                       "Microsoft.Xbox.IXboxLIVEService::get_SignedInUserIdentity, slot 10"):
+            require("// " + member in xbox_text, "Xbox member differs from native header: " + member)
+        no_constructor = output / "xbox-no-default-constructor.xml"
+        no_constructor.write_text('<Projection><Class Name="Microsoft.Xbox.Foundation.UserIdentity"><Constructor /></Class></Projection>')
+        run("reject-xbox-constructor", [generator.name, windows(xbox_metadata), windows(no_constructor), windows(output / "xbox-no-constructor.cs")],
+            succeeds=False, marker="No default activation constructor")
+        qualifier = compile_file("xbox-metadata.exe", [repo / "host/winrt/xbox_metadata.cs"], ["/r:Mono.Cecil.dll"])
+        version = output / "Microsoft.Xbox.version.cs"
+        qualification = run("qualify-xbox", [qualifier.name, windows(xbox_winmd), windows(version)], marker="Xbox IUser ABI ")
+        abi_version = re.search(r"Xbox IUser ABI ([0-9.]+)", qualification).group(1)
+        metadata_hash = hashlib.sha256(xbox_winmd.read_bytes()).hexdigest()
+        require(metadata_hash in xbox_text and metadata_hash in qualification,
+                "Xbox generation and qualification must use the same metadata snapshot")
+        mutator = compile_file("mutate-xbox.exe", [repo / "tests/winrt_projection/mutate_xbox_metadata.cs"], ["/r:Mono.Cecil.dll"])
+        for mutation in ("iid", "layout", "signature", "service-slot", "live-slot"):
+            changed = output / ("xbox-" + mutation + ".winmd")
+            invalid = output / ("xbox-" + mutation + ".cs")
+            run("mutate-xbox-" + mutation, [mutator.name, windows(xbox_winmd), windows(changed), mutation])
+            run("reject-xbox-" + mutation, [qualifier.name, windows(changed), windows(invalid)], succeeds=False, marker="Unsupported Xbox")
+            require(not invalid.exists(), "unqualified Xbox metadata produced a version")
+        runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs")]
+        bootstrap = compile_file("xbox-projection/Microsoft.Xbox.dll", runtime + [xbox_generated, version], ["/target:library"])
+        all_consumers = [output / "xbox-winrt.exe"] + [p.resolve() for p in args.consumer]
+        xbox_projection = output / "completed/Microsoft.Xbox.dll"
+        xbox_projection.parent.mkdir(exist_ok=True)
+        run("complete-xbox", [completer.name, windows(xbox_metadata), windows(bootstrap), windows(xbox_projection)] + [windows(p) for p in all_consumers], marker="Completed ")
+        copy_owned_file(xbox_projection, xbox_folder / "Microsoft.Xbox.dll")
+        resolver = compile_file("resolve-xbox.exe", [repo / "tests/winrt_projection/resolve_references.cs"], ["/r:Mono.Cecil.dll"])
+        run("resolve-xbox", [resolver.name, "--assembly", "Microsoft.Xbox", windows(xbox_projection.parent)] + [windows(p) for p in all_consumers], marker="0 unresolved")
+        run("xbox-offline-contract", [xbox_consumer.name, abi_version], cwd=xbox_folder, marker="PASS: Xbox projection uses native signed-out user and service client")
+        return xbox_projection
+
     try:
+        if args.xbox_only:
+            marker = compile_file("mark-reference.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs"], ["/r:Mono.Cecil.dll"])
+            completer = compile_file("complete.exe", [repo / "host/winrt/complete.cs"], ["/r:Mono.Cecil.dll"])
+            probe_xbox(marker, generator, completer)
+            return 0
         if args.runtime_case:
             executable = compile_file("runtime.exe", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs",
                                       repo / "tests/winrt_projection/runtime.cs"])
@@ -165,15 +237,15 @@ def main():
         legacy = compile_file("managed-winrt-bridge.exe", [repo / "tests/managed_winrt_bridge.cs"], ["/r:" + windows(bridge)])
         folder = fixture("legacy", legacy.name, "ManagedWinrtBridgeTest", "CN=bridge-đá-💎")
         for path in (bridge, legacy):
-            shutil.copyfile(path, folder / path.name)
+            copy_owned_file(path, folder / path.name)
         run("legacy-bridge", [legacy.name], cwd=folder, marker="PASS: managed WinRT activation")
         reference = compile_file("reference/Windows.dll", [repo / "tests/winrt_projection/reference.cs"], ["/target:library"])
         consumer = compile_file("consumer.exe", [repo / "tests/winrt_projection/consumer.cs"], ["/r:" + windows(reference)])
         marker = compile_file("mark-reference.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
         run("mark-reference", [marker.name, consumer.name, "consumer-winrt.exe"], marker="flags=WindowsRuntime")
         folder = fixture("fixture", consumer.name, "GeneratedProjectionTest", "CN=projection-đá-💎")
-        shutil.copyfile(output / "consumer-winrt.exe", folder / consumer.name)
-        shutil.copyfile(reference, folder / "Windows.dll")
+        copy_owned_file(output / "consumer-winrt.exe", folder / consumer.name)
+        copy_owned_file(reference, folder / "Windows.dll")
         run("unimplemented-contract", [consumer.name], cwd=folder, succeeds=False,
             marker="NotImplementedException: Windows.ApplicationModel.Package.Current")
         generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs"], ["/r:Mono.Cecil.dll"])
@@ -189,7 +261,7 @@ def main():
         results.append(dict(case="header-values", missing=missing, passed=not missing))
         require(not missing, "generated IIDs or slots differ from the SDK headers: " + ", ".join(missing))
         projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", generated], ["/target:library"])
-        shutil.copyfile(projection, folder / "Windows.dll")
+        copy_owned_file(projection, folder / "Windows.dll")
         run("generated-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
         invalid = [
             ("unknown-member", '<Class Name="Windows.ApplicationModel.Package"><Unknown Name="NoOp" /></Class>', "Unsupported member kind"),
@@ -215,15 +287,15 @@ def main():
         require("native.String(7)" in text, "method slot did not follow metadata")
         mutant = compile_file("mutant/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", target], ["/target:library"])
         try:
-            shutil.copyfile(mutant, folder / "Windows.dll")
+            copy_owned_file(mutant, folder / "Windows.dll")
             run("changed-iid-rejected", [consumer.name], cwd=folder, succeeds=False, marker="80004002")
         finally:
-            shutil.copyfile(projection, folder / "Windows.dll")
+            copy_owned_file(projection, folder / "Windows.dll")
         application = compile_file("application.exe", [repo / "tests/winrt_projection/application.cs"], ["/r:" + windows(reference)])
         run("mark-application", [marker.name, application.name, "application-winrt.exe"], marker="flags=WindowsRuntime")
         app = fixture("application", application.name, "ApplicationProjectionTest", "CN=projection")
-        shutil.copyfile(output / "application-winrt.exe", app / application.name)
-        shutil.copyfile(projection, app / "Windows.dll")
+        copy_owned_file(output / "application-winrt.exe", app / application.name)
+        copy_owned_file(projection, app / "Windows.dll")
         run("application-launch", [application.name], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         launch = (output / "application-launch.log").read_text(errors="replace")
         require("PASS: managed dependency properties use the shim value store" in launch,
@@ -231,14 +303,14 @@ def main():
         require("PASS: Suspending raised on the managed App" in launch and "UNUSED HANDLER" not in launch,
                 "Suspending must reach the subscribed handler and not the removed one")
         run("mark-abi-setters", [marker.name, application.name, "application-abi.exe", "--abi-setters"], marker="flags=WindowsRuntime")
-        shutil.copyfile(output / "application-abi.exe", app / "application-abi.exe")
+        copy_owned_file(output / "application-abi.exe", app / "application-abi.exe")
         run("abi-setter-before-completion", ["application-abi.exe"], cwd=app, succeeds=False, marker="put_Content")
         run("application-exception", [application.name, "throw"], cwd=app, marker="PASS: OnLaunched exception crossed the native boundary; callback released")
         unimplemented = compile_file("unimplemented.exe", [repo / "tests/winrt_projection/unimplemented.cs"], ["/r:" + windows(reference)])
         run("mark-unimplemented", [marker.name, unimplemented.name, "unimplemented-winrt.exe"], marker="flags=WindowsRuntime")
         missing = fixture("unimplemented", unimplemented.name, "UnimplementedProjectionTest", "CN=projection")
-        shutil.copyfile(output / "unimplemented-winrt.exe", missing / unimplemented.name)
-        shutil.copyfile(projection, missing / "Windows.dll")
+        copy_owned_file(output / "unimplemented-winrt.exe", missing / unimplemented.name)
+        copy_owned_file(projection, missing / "Windows.dll")
         run("before-completion", [unimplemented.name], cwd=missing, succeeds=False, marker="UNBOUND:")
         resolver = compile_file("resolve-references.exe", [repo / "tests/winrt_projection/resolve_references.cs"], ["/r:Mono.Cecil.dll"])
         completer = compile_file("complete.exe", [repo / "host/winrt/complete.cs"], ["/r:Mono.Cecil.dll"])
@@ -250,17 +322,19 @@ def main():
         completed.parent.mkdir(exist_ok=True)
         run("complete", [completer.name, windows(metadata), windows(projection), windows(completed)] + [windows(p) for p in consumers], marker="Completed ")
         run("resolve-completed", [resolver.name, windows(completed.parent)] + [windows(p) for p in consumers], marker="0 unresolved")
-        shutil.copyfile(completed, missing / "Windows.dll")
+        copy_owned_file(completed, missing / "Windows.dll")
         run("after-completion", [unimplemented.name], cwd=missing, marker="UNIMPLEMENTED: Windows.Devices.Geolocation.Geolocator..ctor")
         # Completion must keep implemented members native, not replace them with stubs.
-        shutil.copyfile(completed, folder / "Windows.dll")
+        copy_owned_file(completed, folder / "Windows.dll")
         run("completed-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
-        shutil.copyfile(completed, app / "Windows.dll")
+        copy_owned_file(completed, app / "Windows.dll")
         run("completed-application", [application.name], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         run("completed-abi-setter", ["application-abi.exe"], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
+        xbox_projection = probe_xbox(marker, generator, completer) if args.xbox_metadata else None
         if args.game:
             source = args.game
             paths = [source / "appx-host.exe", source / "AppxManifest.xml"] + [p.resolve() for p in args.consumer]
+            paths += [source / name for name in ("appxportable.dll", "Windows.dll", "Microsoft.Xbox.dll") if (source / name).is_file()]
             def hashes():
                 return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
             before = hashes()
@@ -269,8 +343,10 @@ def main():
             # Keep links as links: an installed game's own Wine prefix maps z: to /.
             # The launch uses --prefix, so that prefix is not copied at all.
             shutil.copytree(source, game, symlinks=True, ignore=shutil.ignore_patterns("*.log", ".wine-prefix"))
-            shutil.copyfile(shim, game / "appxportable.dll")
-            shutil.copyfile(completed, game / "Windows.dll")
+            copy_owned_file(shim, game / "appxportable.dll")
+            copy_owned_file(completed, game / "Windows.dll")
+            if xbox_projection:
+                copy_owned_file(xbox_projection, game / "Microsoft.Xbox.dll")
             run("game-launch", ["appx-host.exe"], cwd=game, succeeds=False,
                 marker=args.expected_game_error, evidence=game / "managed.log")
             require(before == hashes(), "source game files changed during probe")

@@ -1,0 +1,15 @@
+<Projection>
+  <Class Name="Microsoft.Xbox.User">
+    <Constructor />
+    <Property Name="Identity" />
+  </Class>
+  <Class Name="Microsoft.Xbox.Foundation.UserIdentity" />
+  <Class Name="Microsoft.Xbox.Foundation.ServiceClient">
+    <Property Name="Token" />
+    <Property Name="SignedInUserIdentity" />
+  </Class>
+  <Class Name="Microsoft.Xbox.XboxLIVEService">
+    <Property Name="ServiceClient" />
+    <Property Name="SignedInUserIdentity" />
+  </Class>
+</Projection>

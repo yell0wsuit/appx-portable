@@ -102,6 +102,9 @@ class LaunchApp : Application
         window.Content = frame;
         Check(ReferenceEquals(window.Content, frame), "Window.Content returns the managed Frame");
         Check(ReferenceEquals(Window.Current, window), "one wrapper per native Window");
+        var core = global::Windows.UI.Core.CoreWindow.GetForCurrentThread();
+        Check(core != null && core.Dispatcher != null, "projected CoreWindow and dispatcher on the view thread");
+        Check(ReferenceEquals(core, global::Windows.UI.Core.CoreWindow.GetForCurrentThread()), "one CoreWindow wrapper per identity");
         window.Activate();
         Check(SynchronizationContext.Current != null, "the view thread has a synchronization context");
         Continue(Thread.CurrentThread.ManagedThreadId);

@@ -32,7 +32,7 @@ Mono.Cecil and emits C# for the members selected by `bootstrap.xml`:
 or void and string, object, TypeName, runtime class, interface, or delegate
 arguments, `<Event>` as consumers bind it (a
 token-returning `add_X` and a token-taking `remove_X`), `<Constructor>` for
-composable classes, `<Overridable>` virtuals, `<Enum>`, `<Delegate>`, and
+composable classes or metadata-marked parameterless activation, `<Overridable>` virtuals, `<Enum>`, `<Delegate>`, and
 `<Interface>` with property getters. A selected class implements the selected
 interfaces WinMD lists for it, reaching their members by querying the
 interface per call; an interface wrapper first asks the native object's
@@ -40,6 +40,8 @@ runtime class name and returns the selected class wrapper when it has one. A
 class with no members is a typed wrapper whose referenced members come from
 completion stubs. A class may derive from another selected class: the root
 holds the native object, and only the most derived constructor composes.
+Static runtime classes use their metadata-selected static interfaces without
+requiring a default instance interface.
 Unsealed classes query the member's interface per call and wrap native
 objects as the most derived selected class by runtime class name. Class and
 interface arguments are queried for the parameter's interface. Property
@@ -147,15 +149,17 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 `App.OnLaunched` on its view thread. `OnLaunched` sets a composed `Frame` as
 `Window.Current.Content`. The local dependency-property implementation lets
 `SuspensionManager` initialize its string and dictionary attached properties.
-The next measured failure is a `TypeLoadException` for the missing
-`Microsoft.Xbox` assembly while loading `Bejeweled3.Classes.XboxWrapper`'s
-`_currentUser` field, at `App.OnLaunched` offset 0x65. No menu or game round
-has been displayed by this path.
+With the Xbox bootstrap below, the game passes that assembly binding,
+`CoreWindow.GetForCurrentThread`, and native Xbox User activation. It next fails
+at `Windows.Storage.ApplicationData.get_Current` in the XboxWrapper constructor
+(offset 0x2a), called by `App.OnApplicationStarted`. No menu or game round has
+been displayed by this path.
 
 The game also references `System.Runtime.WindowsRuntime` and
 `System.Runtime.WindowsRuntime.UI.Xaml`, which Wine Mono does not provide, plus
-the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. None of these
-is projected yet.
+the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. The initial Xbox
+surface is projected; the other component assemblies and general async adapters
+remain pending.
 
 This is a foundation for managed compatibility, not a replacement for the game's
 `Windows` assembly. Layout, source loading, rendering integration,
@@ -177,7 +181,9 @@ projection and current shim. Supply `--consumer` for each managed game assembly
 and `--expected-game-error` for the expected named gap. Source and output
 directories must be disjoint. Links are copied as links and the game's own
 `.wine-prefix` is skipped: its `z:` drive links to `/`, and the launch uses
-`--prefix`. Source executable, manifest, and consumer hashes
+`--prefix`. Replacement DLL links in the copied game are detached before
+writing, so their original targets remain untouched. Source executable,
+manifest, consumer, and replaced runtime DLL hashes
 are checked after launch and recorded in `game-inputs.json`. For this checkpoint:
 
 ```sh
@@ -187,13 +193,13 @@ python3 scripts/probe-winrt-projection.py \
   --shim build/macos-x86/appxportable.dll --output build/game-projection-probe \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
-  --game /path/to/game \
-  --expected-game-error "Could not load file or assembly 'Microsoft.Xbox, Version=255.255.255.255"
+  --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
+  --expected-game-error 'NotImplementedException: Windows.Storage.ApplicationData.get_Current'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
 concurrent and nested exception scopes, stale failures, and reentrant callbacks.
-The x86 cross build, registered Wine CTest, full game probe, and 153 Python tests
+The x86 cross build, registered Wine CTest, full game probe, and 154 Python tests
 passed locally. Windows and x64 runtime controls remain unverified for this slice.
 
 ## Local dependency properties
@@ -233,3 +239,46 @@ and foreign PropertyMetadata implementations fail explicitly; parameterized
 PropertyMetadata constructors are not projected yet. Managed scalar boxing
 beyond string and Int32 is also explicit unsupported behavior. This checkpoint
 does not establish Windows or x64 runtime parity.
+
+## Xbox bootstrap and CoreWindow
+
+`xbox.xml` selects native-backed `Microsoft.Xbox.User` default activation and
+its Identity getter, plus XboxLIVEService.ServiceClient/SignedInUserIdentity
+and ServiceClient.Token/SignedInUserIdentity. IIDs and slots come from the
+package's Microsoft.Xbox.winmd, with independent checks against
+`shim/xbox/xbox_abi.h`. The existing native stand-in supplies an unsigned-in
+user, no signed-in identity, an empty token, and a shared client. The Microsoft
+implementation DLL is neither inspected nor loaded for this projection.
+
+The generator supports static runtime classes and parameterless activation
+when WinMD explicitly advertises it. Completion scopes definitions to the input
+projection assembly, retaining external Windows and System scopes. Xbox members
+outside the selected surface have named NotImplementedException bodies;
+async service calls, profile retrieval, achievements and title storage are
+not yet forwarded to their native offline operations. Referenced type/member
+binding is not equivalent to implementing those APIs.
+
+`xbox_metadata.cs` verifies IUser's IID and full ordered ABI signatures against
+the supported native layouts, plus the selected service interfaces' IIDs, slots
+and signatures. It derives the ABI layout version from that metadata snapshot
+and emits AssemblyFileVersion for the generated DLL. The native stand-in uses
+this resource to choose its IUser10 or IUser12 vtable. AssemblyVersion remains
+255.255.255.255; the file version describes the ABI, not an inferred Microsoft
+SDK product build. Unknown layouts are rejected. The tested package matches
+ABI 1.2; real SDK 1.0/1.1 and Windows/x64 projection controls remain unverified.
+
+The optional `--xbox-metadata` probe builds and completes Microsoft.Xbox.dll,
+checks native activation, signed-out state, wrapper identity, the version
+resource after completion, named unimplemented behavior, and reference
+resolution. Mutated IIDs, method order, argument widths, and service slots must
+fail qualification. `--xbox-only` runs this focused fixture. Set
+`APPX_XBOX_METADATA=/path/to/game/Microsoft.Xbox.winmd` in the existing CMake
+configuration to register `winrt_xbox_projection`; it uses only the metadata,
+not the Microsoft implementation DLL. SDK metadata and generated artifacts
+remain outside release packages and normal installer behavior.
+
+The Windows projection also exposes CoreWindow.GetForCurrentThread and its
+Dispatcher through the existing native factories. The managed Application
+fixture verifies a current view-thread window, a dispatcher, and stable wrapper
+identity; the existing dispatcher continuation checks still run. General
+CoreWindow events and further storage APIs remain named completion stubs.
