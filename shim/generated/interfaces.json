@@ -239,5 +239,13 @@
       "ABI::Windows::Data::Xml::Dom::IXmlCharacterData",
       "ABI::Windows::Data::Xml::Dom::IXmlNodeList"
     ]
+  },
+  "device_enumeration.h": {
+    "header": "windows.devices.enumeration.h",
+    "interfaces": [
+      "ABI::Windows::Devices::Enumeration::IDeviceInformationStatics",
+      "ABI::Windows::Devices::Enumeration::IDeviceInformation",
+      "ABI::Windows::Devices::Enumeration::IDeviceWatcher"
+    ]
   }
 }

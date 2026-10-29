@@ -6,13 +6,100 @@
 #include <windows.foundation.diagnostics.h>
 #include <windows.globalization.h>
 #include <windows.media.devices.h>
+#include <windows.devices.enumeration.h>
+#include <mmdeviceapi.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
+#include <atomic>
 #include <string>
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
 using namespace ABI::Windows::Graphics::Display;
+// FMOD lists the audio endpoints and watches them before it opens one, and
+// opens none it cannot list: every active endpoint, the default among them.
+static int CheckAudioDevices(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**),
+                             ABI::Windows::Media::Devices::IMediaDeviceStatics* media, HSTRING selector) {
+    using namespace ABI::Windows::Devices::Enumeration;
+    using ABI::Windows::Foundation::ITypedEventHandler;
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    ComPtr<IMMDeviceCollection> active;
+    UINT endpoints = 0;
+    if (FAILED(
+            CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&enumerator))) ||
+        FAILED(enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &active)) ||
+        FAILED(active->GetCount(&endpoints)))
+        return 41;
+    ComPtr<IActivationFactory> factory;
+    ComPtr<IDeviceInformationStatics> devices;
+    ComPtr<__FIAsyncOperation_1_Windows__CDevices__CEnumeration__CDeviceInformationCollection> finding;
+    if (FAILED(get(HStringReference(L"Windows.Devices.Enumeration.DeviceInformation").Get(), &factory)) ||
+        FAILED(factory.As(&devices)) || FAILED(devices->FindAllAsyncAqsFilter(selector, &finding)))
+        return 42;
+    ComPtr<ABI::Windows::Foundation::IAsyncInfo> info;
+    ABI::Windows::Foundation::AsyncStatus status{};
+    finding.As(&info);
+    for (int i = 0;
+         i < 500 && SUCCEEDED(info->get_Status(&status)) && status == ABI::Windows::Foundation::AsyncStatus::Started;
+         ++i)
+        Sleep(10);
+    ComPtr<__FIVectorView_1_Windows__CDevices__CEnumeration__CDeviceInformation> found;
+    UINT32 listed = 0;
+    if (FAILED(finding->GetResults(&found)) || !found || FAILED(found->get_Size(&listed)) || listed != endpoints) {
+        printf("FAIL audio devices: %u listed, %u active endpoints\n", listed, endpoints);
+        return 43;
+    }
+    if (endpoints) {
+        HString preferred;
+        bool listedDefault = false;
+        if (FAILED(media->GetDefaultAudioRenderId(ABI::Windows::Media::Devices::AudioDeviceRole_Default,
+                                                  preferred.GetAddressOf())))
+            return 44;
+        for (UINT32 i = 0; i < listed; ++i) {
+            ComPtr<IDeviceInformation> device;
+            HString id;
+            if (SUCCEEDED(found->GetAt(i, &device)) && SUCCEEDED(device->get_Id(id.GetAddressOf())) &&
+                _wcsicmp(id.GetRawBuffer(nullptr), preferred.GetRawBuffer(nullptr)) == 0)
+                listedDefault = true;
+        }
+        if (!listedDefault) {
+            printf("FAIL default audio device %ls not listed\n", preferred.GetRawBuffer(nullptr));
+            return 45;
+        }
+    }
+    ComPtr<IDeviceWatcher> watcher;
+    if (FAILED(devices->CreateWatcherAqsFilter(selector, &watcher))) return 46;
+    std::atomic<UINT32> added{0};
+    Event enumerated(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    HANDLE done = enumerated.Get();
+    auto onAdded = Callback<
+        Implements<RuntimeClassFlags<ClassicCom>, ITypedEventHandler<DeviceWatcher*, DeviceInformation*>, FtmBase>>(
+        [&added](IDeviceWatcher*, IDeviceInformation*) {
+            ++added;
+            return S_OK;
+        });
+    auto onChanged =
+        Callback<Implements<RuntimeClassFlags<ClassicCom>, ITypedEventHandler<DeviceWatcher*, DeviceInformationUpdate*>,
+                            FtmBase>>([](IDeviceWatcher*, IDeviceInformationUpdate*) { return S_OK; });
+    auto onEnumerated =
+        Callback<Implements<RuntimeClassFlags<ClassicCom>, ITypedEventHandler<DeviceWatcher*, IInspectable*>, FtmBase>>(
+            [done](IDeviceWatcher*, IInspectable*) {
+                SetEvent(done);
+                return S_OK;
+            });
+    EventRegistrationToken tokens[4]{};
+    if (FAILED(watcher->add_Added(onAdded.Get(), &tokens[0])) ||
+        FAILED(watcher->add_Removed(onChanged.Get(), &tokens[1])) ||
+        FAILED(watcher->add_Updated(onChanged.Get(), &tokens[2])) ||
+        FAILED(watcher->add_EnumerationCompleted(onEnumerated.Get(), &tokens[3])) || FAILED(watcher->Start()))
+        return 47;
+    if (WaitForSingleObject(done, 5000) != WAIT_OBJECT_0 || added != endpoints) {
+        printf("FAIL audio watcher: %u added, %u active endpoints\n", added.load(), endpoints);
+        return 48;
+    }
+    watcher->Stop();
+    return 0;
+}
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
     auto* dll = LoadLibraryW(L"appxportable.dll");
@@ -174,6 +261,7 @@ int main() {
         printf("FAIL audio render selector %ls\n", WindowsGetStringRawBuffer(selector.Get(), nullptr));
         return 40;
     }
+    if (int failed = CheckAudioDevices(get, media.Get(), selector.Get())) return failed;
     puts("platformtest: 0 failure(s)");
     return 0;
 }
