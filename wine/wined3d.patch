@@ -1,5 +1,6 @@
 Patch for Wine's wined3d.dll and d3d11.dll (Wine 11.18) so that Direct3D 11
-at feature level 9_x runs SM4 shader code on the OpenGL renderer on macOS.
+at feature level 9_x runs SM4 shader code on macOS, on the Vulkan renderer
+over MoltenVK or the OpenGL one.
 
 macOS stops at OpenGL 4.1, so wined3d caps every D3D11 device at 9_3, even
 for games that ask for 11_x. At 9_x, wined3d ignored the SM4 code and
@@ -10,7 +11,12 @@ only by ftoi/ftou. d3d11 gives a context state the device's own level when
 none of the requested levels is available: d2d1 asks for 10_0 only, so
 Direct2D games never started.
 
-The wined3d changes are taken from ctr2-uwp-shim. Built by
+The launcher picks wined3d's Vulkan renderer on macOS, which MoltenVK runs
+on Metal. Metal has no geometry shaders, so that renderer stops at 9_3 too.
+On MoltenVK, wined3d leaves out the host-memory handle type Wine adds to
+every buffer and image of a 32-bit process, which MoltenVK rejects.
+
+The SM4 and GLSL changes are taken from ctr2-uwp-shim. Built by
 scripts/build-wined3d.sh; see docs/building.md.
 
 --- a/dlls/wined3d/shader_sm4.c
@@ -150,3 +156,110 @@ scripts/build-wined3d.sh; see docs/building.md.
      feature_level = d3d_feature_level_from_wined3d(wined3d_state_get_feature_level(wined3d_state));
  
      if (chosen_feature_level)
+--- a/dlls/wined3d/wined3d_vk.h
++++ b/dlls/wined3d/wined3d_vk.h
+@@ -260,6 +260,7 @@
+     WINED3D_VK_EXT_SHADER_STENCIL_EXPORT,
+     WINED3D_VK_EXT_TRANSFORM_FEEDBACK,
+     WINED3D_VK_EXT_VERTEX_ATTRIBUTE_DIVISOR,
++    WINED3D_VK_KHR_DRIVER_PROPERTIES,
+     WINED3D_VK_KHR_MAINTENANCE2,
+     WINED3D_VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE,
+     WINED3D_VK_KHR_SAMPLER_YCBCR_CONVERSION,
+@@ -834,6 +835,7 @@
+ 
+     VkPhysicalDeviceLimits device_limits;
+     VkPhysicalDeviceMemoryProperties memory_properties;
++    bool moltenvk;
+ };
+ 
+ static inline struct wined3d_adapter_vk *wined3d_adapter_vk(struct wined3d_adapter *adapter)
+--- a/dlls/wined3d/adapter_vk.c
++++ b/dlls/wined3d/adapter_vk.c
+@@ -2421,6 +2421,7 @@
+         {VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,             ~0u},
+         {VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,       ~0u},
+         {VK_KHR_MAINTENANCE1_EXTENSION_NAME,                VK_API_VERSION_1_1, true},
++        {VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME,           VK_API_VERSION_1_2},
+         {VK_KHR_MAINTENANCE2_EXTENSION_NAME,                VK_API_VERSION_1_1},
+         {VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME,VK_API_VERSION_1_2},
+         {VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,    VK_API_VERSION_1_1},
+@@ -2448,6 +2449,7 @@
+         {VK_EXT_SHADER_STENCIL_EXPORT_EXTENSION_NAME,        WINED3D_VK_EXT_SHADER_STENCIL_EXPORT},
+         {VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME,           WINED3D_VK_EXT_TRANSFORM_FEEDBACK},
+         {VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME,     WINED3D_VK_EXT_VERTEX_ATTRIBUTE_DIVISOR},
++        {VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME,            WINED3D_VK_KHR_DRIVER_PROPERTIES},
+         {VK_KHR_MAINTENANCE2_EXTENSION_NAME,                 WINED3D_VK_KHR_MAINTENANCE2},
+         {VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME, WINED3D_VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE},
+         {VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,     WINED3D_VK_KHR_SAMPLER_YCBCR_CONVERSION},
+@@ -2584,7 +2586,19 @@
+     else
+         VK_CALL(vkGetPhysicalDeviceProperties(adapter_vk->physical_device, &properties2.properties));
+     adapter_vk->device_limits = properties2.properties.limits;
++
++    /* appx-portable: see wined3d_context_vk_create_bo(). */
++    if (vk_info->vk_ops.vkGetPhysicalDeviceProperties2 && (vk_info->api_version >= VK_API_VERSION_1_2
++            || vk_info->supported[WINED3D_VK_KHR_DRIVER_PROPERTIES]))
++    {
++        VkPhysicalDeviceDriverProperties driver = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
++        VkPhysicalDeviceProperties2 driver_properties2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
++                .pNext = &driver};
+ 
++        VK_CALL(vkGetPhysicalDeviceProperties2(adapter_vk->physical_device, &driver_properties2));
++        adapter_vk->moltenvk = driver.driverID == VK_DRIVER_ID_MOLTENVK;
++    }
++
+     VK_CALL(vkGetPhysicalDeviceMemoryProperties(adapter_vk->physical_device, &adapter_vk->memory_properties));
+ 
+     if (id_properties.deviceLUIDValid)
+--- a/dlls/wined3d/context_vk.c
++++ b/dlls/wined3d/context_vk.c
+@@ -548,6 +548,7 @@
+     const struct wined3d_vk_info *vk_info = context_vk->vk_info;
+     VkMemoryRequirements memory_requirements;
+     struct wined3d_adapter_vk *adapter_vk;
++    VkExternalMemoryBufferCreateInfo external_info;
+     VkBufferCreateInfo create_info;
+     unsigned int memory_type_idx;
+     VkResult vr;
+@@ -557,8 +558,17 @@
+ 
+     adapter_vk = wined3d_adapter_vk(device_vk->d.adapter);
+ 
++    /* appx-portable: in a 32-bit process, Wine maps Vulkan memory by
++     * importing host memory when the driver cannot place mappings, as
++     * MoltenVK cannot, and marks every buffer and image as importable from
++     * host memory. MoltenVK takes only Metal handle types there and fails the
++     * creation. No handle types leaves the resource unmarked, and MoltenVK
++     * binds it to that memory all the same. */
++    external_info.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
++    external_info.pNext = NULL;
++    external_info.handleTypes = 0;
+     create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+-    create_info.pNext = NULL;
++    create_info.pNext = adapter_vk->moltenvk ? &external_info : NULL;
+     create_info.flags = 0;
+     create_info.size = size;
+     create_info.usage = usage;
+@@ -635,7 +645,20 @@
+ 
+     image->command_buffer_id = 0;
+ 
+-    vr = VK_CALL(vkCreateImage(device_vk->vk_device, desc, NULL, &image->vk_image));
++    if (adapter_vk->moltenvk)
++    {
++        /* appx-portable: as for buffers in wined3d_context_vk_create_bo(). */
++        VkExternalMemoryImageCreateInfo external_info = {VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
++                desc->pNext, 0};
++        VkImageCreateInfo unmarked = *desc;
++
++        unmarked.pNext = &external_info;
++        vr = VK_CALL(vkCreateImage(device_vk->vk_device, &unmarked, NULL, &image->vk_image));
++    }
++    else
++    {
++        vr = VK_CALL(vkCreateImage(device_vk->vk_device, desc, NULL, &image->vk_image));
++    }
+     if (vr != VK_SUCCESS)
+     {
+         ERR("Failed to create image, vr %s.\n", wined3d_debug_vkresult(vr));
