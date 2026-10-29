@@ -151,16 +151,17 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 `SuspensionManager` initialize its string and dictionary attached properties.
 With the Xbox bootstrap below, the game passes that assembly binding,
 `CoreWindow.GetForCurrentThread`, and native Xbox User activation. With the settings projection below, it passes ApplicationData startup and next
-loads the owned `System.Runtime.WindowsRuntime` bridge and fails resolving
-`System.IO.WindowsRuntimeStreamExtensions` in `XboxWrapper.GetLastUserXuid`,
-called by its constructor and `App.OnApplicationStarted`. No menu or game round has
+loads the owned `System.Runtime.WindowsRuntime` bridge and passes the storage/
+stream startup boundary. It next fails at
+`Windows.Networking.Connectivity.NetworkInformation.add_NetworkStatusChanged`
+in the XboxWrapper constructor (offset 0x57), called by `App.OnApplicationStarted`. No menu or game round has
 been displayed by this path.
 
 The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
 and `System.Runtime.WindowsRuntime.UI.Xaml`, still missing from Wine Mono, plus
 the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. The initial Xbox
-surface and managed task adapters are projected; the other component assemblies,
-native async wrappers, and stream/buffer adapters remain pending.
+surface, task adapters, and the read-only storage/stream path are projected;
+other component assemblies and additional native async shapes remain pending.
 
 This is a foundation for managed compatibility, not a replacement for the game's
 `Windows` assembly. Layout, source loading, rendering integration,
@@ -193,7 +194,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error 'System.IO.WindowsRuntimeStreamExtensions'
+  --expected-game-error 'Windows.Networking.Connectivity.NetworkInformation.add_NetworkStatusChanged'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -302,7 +303,8 @@ reads in a second process. Unsupported settings values fail without insertion.
 
 The managed bridge supports string, Int32, Int64, Boolean, Double, and Guid
 settings values. UInt64, arrays/composites, MapChanged events, the Containers
-read-only map, storage folders/files, and native async wrappers are pending.
+read-only map and additional storage/async surfaces are pending. The read-only
+file path and its native async wrappers are described below.
 This checkpoint does not establish Windows/x64 runtime or rendered gameplay
 acceptance.
 
@@ -335,4 +337,47 @@ the WindowsRuntime flag and its System.Runtime.WindowsRuntime reference uses
 version 4.0.0.0/token b77a5c561934e089. It first fails without the bridge, then
 runs with the owned replacement. This establishes Wine Mono binding; Windows
 strong-name binding remains unverified. The bridge is only copied into isolated
-probe games. Native async ABI wrappers and stream/buffer extensions are pending.
+probe games. The selected native async and stream extensions are described below;
+other async result shapes and writable streams remain pending.
+
+## Native file reads and stream adapters
+
+`storage_generation.cs` qualifies the IIDs, consumed method signatures, and slots
+for `storage_abi.cs`, including closed `IAsyncOperation<StorageFile>`,
+`IAsyncOperation<IRandomAccessStreamWithContentType>` and
+`IAsyncOperationWithProgress<IBuffer, uint>`. Generated values are independently
+checked against SDK ABI headers. Negative metadata fixtures reject changed
+64-bit sizes/read counts and reordered buffer/async slots.
+
+ApplicationData.LocalFolder, StorageFolder.Path/Name/GetFileAsync, and
+StorageFile.GetFileFromPathAsync/Path/Name/OpenReadAsync reach the native shim.
+The native folder fallback now looks up relative file paths, including subfolders,
+and returns the existing native async error for missing files. This follows the
+[documented GetFileAsync path contract](https://learn.microsoft.com/en-us/uwp/api/windows.storage.storagefolder.getfileasync).
+Completion and progress callbacks are real CCWs; they reconstruct operation
+wrappers from the callback argument and avoid retaining their own source.
+
+The shim fills Wine's missing Buffer factory with owned byte storage, capacity/
+length validation and IBufferByteAccess. The managed AsBuffer(byte[]) adapter
+instead shares the original array through an IBuffer CCW and a separately owned
+pin, as required by the
+[buffer extension API](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.windowsruntime.windowsruntimebufferextensions).
+Native references keep the bytes alive after the projected wrapper is collected.
+Object-valued returns preserve or recreate the public buffer wrapper; they do
+not expose its backing state. ToArray copies bytes. Compatible delegate rebinding
+handles Mono returning a CCW's original delegate type for a function pointer.
+
+AsStream(IRandomAccessStream) and AsStreamForRead(IInputStream) expose actual
+native reads, EOF, seeking and position through System.IO.Stream. ReadAsync
+serializes position changes and avoids capturing the caller's synchronization
+context. The seekable view is limited to read-only streams; writable streams,
+resizing, output streams and additional extension overloads fail explicitly or
+remain unprojected. Disposal closes the underlying WinRT input stream.
+
+`--io-only` and `winrt_storage_io_projection` cover real file reads, 64-bit
+positions on x86, UTF-8/NUL StreamReader content, missing-file errors, relative
+subfolder lookup, array mutation in both directions, object identity and pin
+lifetime after collection, invalid buffer lengths and oversized allocations.
+The consumer carries the game's WindowsRuntime reference flag and runtime
+assembly version/token. All fixtures use owned output/save directories. This
+checkpoint does not establish Windows/x64 runtime or rendered gameplay parity.

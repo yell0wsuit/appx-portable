@@ -14,12 +14,24 @@ class MutateCollectionsMetadata
             string target = Path.Combine(args[1], Path.GetFileName(path));
             using (var module = ModuleDefinition.ReadModule(path, new ReaderParameters { ApplyWindowsRuntimeProjections = false, InMemory = true }))
             {
-                string name = args[2] != "iterator" ? "Windows.Foundation.Collections.IMap`2" : "Windows.Foundation.Collections.IIterator`1";
+                string name;
+                switch (args[2])
+                {
+                    case "iterator": name = "Windows.Foundation.Collections.IIterator`1"; break;
+                    case "stream-size": name = "Windows.Storage.Streams.IRandomAccessStream"; break;
+                    case "read-count": name = "Windows.Storage.Streams.IInputStream"; break;
+                    case "buffer-order": name = "Windows.Storage.Streams.IBuffer"; break;
+                    case "future-order": name = "Windows.Foundation.IAsyncOperation`1"; break;
+                    default: name = "Windows.Foundation.Collections.IMap`2"; break;
+                }
                 var type = module.Types.SingleOrDefault(t => t.FullName == name);
                 if (type == null) { File.Copy(path, target, true); continue; }
                 if (args[2] == "insert") type.Methods.Single(m => m.Name == "Insert").Parameters[1].ParameterType = module.TypeSystem.UInt64;
-                else if (args[2] == "order") { var first = type.Methods[0]; type.Methods.RemoveAt(0); type.Methods.Add(first); }
-                else type.Methods.Single(m => m.Name == "get_HasCurrent").ReturnType = module.TypeSystem.UInt32;
+                else if (args[2] == "order" || args[2] == "buffer-order" || args[2] == "future-order") { var first = type.Methods[0]; type.Methods.RemoveAt(0); type.Methods.Add(first); }
+                else if (args[2] == "iterator") type.Methods.Single(m => m.Name == "get_HasCurrent").ReturnType = module.TypeSystem.UInt32;
+                else if (args[2] == "stream-size") type.Methods.Single(m => m.Name == "get_Size").ReturnType = module.TypeSystem.UInt32;
+                else if (args[2] == "read-count") type.Methods.Single(m => m.Name == "ReadAsync").Parameters[1].ParameterType = module.TypeSystem.UInt64;
+                else throw new ArgumentException("Unknown mutation");
                 module.Write(target);
                 changed = true;
             }

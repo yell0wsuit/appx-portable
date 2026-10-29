@@ -109,7 +109,10 @@ namespace AppxPortable.WinRT
             using (value)
             {
                 IntPtr identity = value.Identity();
-                T existing = ManagedObject.Find(identity) as T;
+                object managed = ManagedObject.Find(identity);
+                var projection = managed as IManagedProjection;
+                if (projection != null) managed = projection.Resolve(value);
+                T existing = managed as T;
                 if (existing != null) return existing;
                 WeakReference cached;
                 lock (gate)
@@ -299,7 +302,12 @@ namespace AppxPortable.WinRT
             internal T Method<T>(int slot) where T : class
             {
                 IntPtr method = Marshal.ReadIntPtr(Marshal.ReadIntPtr(Self), checked(slot * IntPtr.Size));
-                return (T)(object)Marshal.GetDelegateForFunctionPointer(method, typeof(T));
+                Delegate callback = Marshal.GetDelegateForFunctionPointer(method, typeof(T));
+                // A pointer originating from our CCW may resolve to the original
+                // managed delegate, even when the requested delegate type has an
+                // identical signature. Rebind it instead of an invalid CLR cast.
+                if (callback is T) return (T)(object)callback;
+                return (T)(object)Delegate.CreateDelegate(typeof(T), callback.Target, callback.Method);
             }
             public void Dispose()
             {

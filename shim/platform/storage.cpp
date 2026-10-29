@@ -147,6 +147,22 @@ public:
         *value = (type & StorageItemTypes_Folder) != 0;
         return S_OK;
     }
+    HRESULT STDMETHODCALLTYPE GetFileAsync(HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        if (!operation) return E_POINTER;
+        *operation = nullptr;
+        UINT32 length = 0;
+        const wchar_t* raw = WindowsGetStringRawBuffer(name, &length);
+        std::wstring text(raw, length);
+        std::filesystem::path relative(text);
+        if (text.empty() || text.find(L'\0') != std::wstring::npos || relative.has_root_path() || text.find(L':') != std::wstring::npos)
+            return E_INVALIDARG;
+        const auto base = std::filesystem::path(path_).lexically_normal();
+        const auto path = (base / relative).lexically_normal();
+        const auto child = path.lexically_relative(base);
+        if (child.empty() || *child.begin() == L"..") return E_INVALIDARG;
+        const auto full = path.wstring();
+        return PathFileAsync(HStringReference(full.c_str(), static_cast<unsigned>(full.size())).Get(), operation);
+    }
     HRESULT STDMETHODCALLTYPE CreateFolderAsyncOverloadDefaultOptions(
         HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CStorageFolder** operation) override {
         return CreateFolderAsync(name, CreationCollisionOption_FailIfExists, operation);

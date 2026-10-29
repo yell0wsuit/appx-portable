@@ -70,6 +70,13 @@ namespace AppxPortable.WinRT
         }
     }
 
+    // Backing state for a native CCW can expose a weak/recreatable projected
+    // identity without keeping its own native wrapper alive.
+    internal interface IManagedProjection
+    {
+        object Resolve(NativeObject value);
+    }
+
     // One native interface a managed object exposes: its IID and method thunks
     // after IUnknown (and IInspectable for WinRT interfaces; delegates are IUnknown).
     internal sealed class NativeInterface
@@ -188,12 +195,12 @@ namespace AppxPortable.WinRT
         }
 
         // A counted reference for passing a managed object as a native argument.
-        internal static Held Hold(object target, NativeInterface iface)
+        internal static Held Hold(object target, params NativeInterface[] contracts)
         {
             if (target == null) return new Held(null);
             // Each passed callback gets its own invocation context, even when
             // callers reuse the same managed delegate concurrently.
-            ManagedObject managed = new ManagedObject(target, new[] { iface }, true);
+            ManagedObject managed = new ManagedObject(target, contracts, true);
             managed.Reference(1);
             return new Held(managed);
         }
