@@ -38,6 +38,7 @@ internal static class WinrtProjectionGenerator
     {
         if (type.FullName == "System.String") return "string";
         if (type.FullName == "System.Object") return "object";
+        if (type.FullName == "Windows.UI.Xaml.Interop.TypeName") return "global::System.Type";
         if (!selected.Contains(type.FullName))
             throw new NotSupportedException("Type is not selected: " + type.FullName);
         return "global::" + type.FullName;
@@ -157,6 +158,7 @@ internal static class WinrtProjectionGenerator
         string number = Literal(slot);
         TypeReference result = method.ReturnType;
         if (result.FullName == "System.String") return receiver + ".String(" + number + ")";
+        if (result.FullName == "System.Object") return Runtime + "NativeObject.Inspectable(" + receiver + ".Object(" + number + "))";
         TypeDefinition definition = Find(result.FullName);
         if (definition.IsEnum)
         {
@@ -231,35 +233,67 @@ internal static class WinrtProjectionGenerator
         output.AppendLine("    }");
     }
 
+    // Emit the selected pointer/TypeName ABI directly. Every IID and method slot
+    // comes from WinMD; unsupported value/array/generic signatures fail generation.
     private static void Method(StringBuilder output, TypeDefinition type, string name, bool composable)
     {
         var methods = type.Methods.Where(m => m.Name == name && !m.IsConstructor).ToList();
         if (methods.Count != 1) throw new NotSupportedException("Method not found or overloaded: " + type.FullName + "." + name);
         MethodDefinition method = methods[0];
-        if (method.ReturnType.FullName != "System.Void") throw new NotSupportedException("Unsupported method return: " + type.FullName + "." + name);
-        if (method.Parameters.Count > 1) throw new NotSupportedException("Unsupported method arity: " + type.FullName + "." + name);
+        bool returns = method.ReturnType.FullName != "System.Void";
+        if (returns && method.ReturnType.FullName != "System.Object") Parameter(method.ReturnType, type.FullName + "." + name);
         TypeDefinition owner = MemberInterface(type, method);
         int slot = Slot(owner, method);
-        ParameterDefinition parameter = method.Parameters.SingleOrDefault();
-        TypeDefinition argument = parameter == null ? null : Parameter(parameter.ParameterType, type.FullName + "." + name);
+        var abi = new List<string>();
+        var setup = new List<string>();
+        var arguments = new List<string>();
+        foreach (ParameterDefinition parameter in method.Parameters)
+        {
+            string full = parameter.ParameterType.FullName, value = "@" + parameter.Name;
+            string local = "argument" + Literal(parameter.Index), prepare;
+            string native = "global::System.IntPtr";
+            if (full == "System.String") prepare = "new " + Runtime + "NativeString(" + value + ")";
+            else if (full == "Windows.UI.Xaml.Interop.TypeName")
+            {
+                prepare = "new " + Runtime + "NativeTypeName(" + value + ")";
+                native = Runtime + "NativeTypeName.Abi";
+            }
+            else if (full == "System.Object") prepare = Runtime + "NativeObject.Box(" + value + ")";
+            else
+            {
+                TypeDefinition definition = Parameter(parameter.ParameterType, type.FullName + "." + name);
+                prepare = IsDelegate(definition) ? Runtime + "ManagedObject.Hold(" + value + ", " + Projected(definition) + ".Interface)"
+                    : Argument(parameter.ParameterType, value);
+            }
+            bool pointer = full != "System.String" && full != "Windows.UI.Xaml.Interop.TypeName";
+            bool held = !pointer ? false : full != "System.Object" && IsDelegate(Find(full));
+            arguments.Add(!pointer ? local + ".Value" : held ? local + ".Pointer" : local + " == null ? global::System.IntPtr.Zero : " + local + ".DangerousGetHandle()");
+            abi.Add(native + " " + local);
+            setup.Add("                using (var " + local + " = " + prepare + ")");
+        }
+        output.AppendLine("        " + StdCall);
+        output.AppendLine("        private delegate int Native_" + name + "(global::System.IntPtr self" +
+            string.Concat(abi.Select(p => ", " + p)) + (returns ? ", out global::System.IntPtr result" : "") + ");");
         output.AppendLine("        // " + owner.FullName + "::" + name + ", slot " + Literal(slot));
-        output.AppendLine("        public " + (method.IsStatic ? "static " : "") + "void " + name + "(" +
-            (parameter == null ? "" : Name(parameter.ParameterType) + " @" + parameter.Name) + ")");
+        output.AppendLine("        public " + (method.IsStatic ? "static " : "") + (returns ? Name(method.ReturnType) : "void") + " " + name + "(" +
+            string.Join(", ", method.Parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ")");
         output.AppendLine("        {");
         output.AppendLine("            using (var invocation = " + Runtime + "Errors.Begin())");
         output.AppendLine("            {");
         string receiver = Receiver(output, type, owner, method.IsStatic, composable);
-        if (argument == null) output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ");");
-        else if (IsDelegate(argument))
+        foreach (string line in setup) output.AppendLine(line);
+        output.AppendLine("                using (var call = new " + Runtime + "NativeObject.Access(" + receiver + "))");
+        output.AppendLine("                {");
+        if (returns) output.AppendLine("                    global::System.IntPtr result;");
+        output.AppendLine("                    int hr = call.Method<Native_" + name + ">(" + Literal(slot) + ")(call.Self" +
+            string.Concat(arguments.Select(p => ", " + p)) + (returns ? ", out result" : "") + ");");
+        if (returns)
         {
-            output.AppendLine("                using (var argument = " + Runtime + "ManagedObject.Hold(@" + parameter.Name + ", " + Projected(argument) + ".Interface))");
-            output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ", argument.Pointer);");
+            string result = Runtime + "NativeObject.ObjectResult(hr, result)";
+            output.AppendLine("                    return " + (method.ReturnType.FullName == "System.Object" ? Runtime + "NativeObject.Inspectable(" + result + ")" : Wrapper(method.ReturnType) + ".FromNative(" + result + ")") + ";");
         }
-        else
-        {
-            output.AppendLine("                using (var argument = " + Argument(parameter.ParameterType, "@" + parameter.Name) + ")");
-            output.AppendLine("                    " + receiver + ".Call(" + Literal(slot) + ", argument);");
-        }
+        else output.AppendLine("                    " + Runtime + "Errors.Check(hr);");
+        output.AppendLine("                }");
         output.AppendLine("            }");
         output.AppendLine("        }");
     }

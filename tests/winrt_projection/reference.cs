@@ -50,7 +50,21 @@ namespace Windows.UI.Xaml
         }
         public void Activate() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Activate"); }
     }
-    public class DependencyObject { internal DependencyObject() { } }
+    public sealed class PropertyMetadata { }
+    public sealed class DependencyProperty
+    {
+        public static DependencyProperty RegisterAttached(string name, global::System.Type type, global::System.Type owner, PropertyMetadata metadata) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyProperty.RegisterAttached"); }
+        public static DependencyProperty Register(string name, global::System.Type type, global::System.Type owner, PropertyMetadata metadata) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyProperty.Register"); }
+        public static object UnsetValue { get { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyProperty.UnsetValue"); } }
+    }
+    public class DependencyObject
+    {
+        internal DependencyObject() { }
+        public object GetValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.GetValue"); }
+        public void SetValue(DependencyProperty property, object value) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.SetValue"); }
+        public void ClearValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.ClearValue"); }
+        public object ReadLocalValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.ReadLocalValue"); }
+    }
     public class UIElement : DependencyObject { internal UIElement() { } }
     public class FrameworkElement : UIElement { internal FrameworkElement() { } }
 }

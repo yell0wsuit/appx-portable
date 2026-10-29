@@ -139,6 +139,7 @@ namespace AppxPortable.WinRT
         private ManagedObject(object target, NativeInterface[] interfaces, bool invocationBound = false)
         {
             this.target = target;
+            interfaces = interfaces.Concat(new[] { ManagedPropertyValue.Interface }).ToArray();
             invocation = Errors.Current;
             this.invocationBound = invocationBound;
             this.interfaces = interfaces;
