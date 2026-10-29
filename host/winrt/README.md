@@ -66,15 +66,19 @@ either default. Windows behavior is unchanged without the variable.
 engine, prefix, metadata directory, Cecil, and shim, using bundled Mono `mcs`
 with C# 5. It runs the bridge test above; then a consumer whose `Windows`
 reference carries the WindowsRuntime flag must fail against a throwing
-reference assembly and pass against the generated one. The real shim validates generated slots and IIDs through native calls. Unknown
-or duplicate surface entries must fail, and metadata with a changed IID and
+reference assembly and pass against the generated one. Generated IIDs and slots
+are compared with values taken from the SDK's ABI headers
+(`windows.applicationmodel.h`, `windows.applicationmodel.activation.h`,
+`windows.ui.xaml.h`), and the real shim validates them through native calls.
+Unknown or duplicate surface entries must fail, and metadata with a changed IID and
 method order must change the output and be rejected by the shim.
 `tests/winrt_projection/application.cs` starts a managed `Application`
 subclass the way games do. Its `OnLaunched` must run on the shim's view
 thread with `Application.Current` returning the same managed object, then
 `Exit` ends the process as a Store app's does. When `OnLaunched` throws,
 `Start` must rethrow that exception and the callback must then be
-collectable. Configure the
+collectable. Both consumers also run against the completed assembly, so
+completion cannot replace implemented members with stubs. Configure the
 x86 cross build with `APPX_WINE`, `APPX_WINE_PREFIX`, `APPX_WINRT_METADATA`,
 and `APPX_WINRT_CECIL` to register it as the `winrt_projection` CTest. The
 tested metadata is `ref/netstandard2.0` from the Microsoft.Windows.SDK.Contracts
@@ -139,7 +143,9 @@ The probe's `--game` option copies an installed game into a fresh output
 subdirectory and launches its unchanged `appx-host.exe` with the completed
 projection and current shim. Supply `--consumer` for each managed game assembly
 and `--expected-game-error` for the expected named gap. Source and output
-directories must be disjoint; source executable, manifest, and consumer hashes
+directories must be disjoint. Links are copied as links and the game's own
+`.wine-prefix` is skipped: its `z:` drive links to `/`, and the launch uses
+`--prefix`. Source executable, manifest, and consumer hashes
 are checked after launch and recorded in `game-inputs.json`. For this checkpoint:
 
 ```sh

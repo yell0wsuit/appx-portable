@@ -11,6 +11,27 @@ import signal
 import struct
 import subprocess
 
+# IIDs and vtable slots taken from the Windows SDK's ABI headers
+# (windows.applicationmodel.h, windows.applicationmodel.activation.h, windows.ui.xaml.h),
+# independent of the metadata the generator reads. Slots follow IInspectable's six.
+HEADER_IIDS = {
+    "IPackageStatics": "4e534bdf-2960-4878-97a4-9624deb72f2d", "IPackage": "163c792f-bd75-413c-bf23-b1fe7b95d825",
+    "IPackageId": "1adb665e-37c7-4790-9980-dd7ae74e8bb2", "ILaunchActivatedEventArgs": "fbc93e26-a14a-4b4f-82b0-33bed920af52",
+    "IApplication": "74b861a1-7487-46a9-9a6e-c78b512726c5", "IApplicationStatics": "06499997-f7b4-45fe-b763-7577d1d3cb4a",
+    "IApplicationFactory": "93bbe361-be5a-4ee3-b4a3-95118dc97a89", "IApplicationOverrides": "25f99ff7-9347-459a-9fac-b2d0e11c1a0f",
+    "IApplicationInitializationCallback": "b6351c55-c284-46e4-8310-fb0967fab76f",
+    "IApplicationInitializationCallbackParams": "751b792e-5772-4488-8b87-f547faa64474"}
+HEADER_SLOTS = [
+    "Windows.ApplicationModel.IPackageStatics::get_Current, slot 6", "Windows.ApplicationModel.IPackage::get_Id, slot 6",
+    "Windows.ApplicationModel.IPackageId::get_Name, slot 6", "Windows.ApplicationModel.IPackageId::get_Architecture, slot 8",
+    "Windows.ApplicationModel.IPackageId::get_ResourceId, slot 9", "Windows.ApplicationModel.IPackageId::get_Publisher, slot 10",
+    "Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs::get_Arguments, slot 6",
+    "Windows.UI.Xaml.IApplicationFactory::CreateInstance, slot 6", "Windows.UI.Xaml.IApplicationStatics::get_Current, slot 6",
+    "Windows.UI.Xaml.IApplicationStatics::Start, slot 7", "Windows.UI.Xaml.IApplication::Exit, slot 17",
+    "Windows.UI.Xaml.IApplicationOverrides::OnLaunched, slot 7"]
+# The delegate is IUnknown-based: Invoke is its only method, at slot 3.
+HEADER_DELEGATE = 'NativeInterface(new global::System.Guid("b6351c55-c284-46e4-8310-fb0967fab76f"), false, invoke)'
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -133,6 +154,12 @@ def main():
         generated = output / "Windows.generated.cs"
         surface = repo / "host/winrt/bootstrap.xml"
         run("generate", [generator.name, windows(metadata), windows(surface), windows(generated)])
+        text = generated.read_text(encoding="utf-8")
+        missing = [name for name, iid in HEADER_IIDS.items() if 'System.Guid("' + iid + '")' not in text]
+        missing += [slot for slot in HEADER_SLOTS if "// " + slot + "\n" not in text]
+        missing += [] if HEADER_DELEGATE in text else [HEADER_DELEGATE]
+        results.append(dict(case="header-values", missing=missing, passed=not missing))
+        require(not missing, "generated IIDs or slots differ from the SDK headers: " + ", ".join(missing))
         projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", generated], ["/target:library"])
         shutil.copyfile(projection, folder / "Windows.dll")
         run("generated-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
@@ -179,7 +206,8 @@ def main():
         run("before-completion", [unimplemented.name], cwd=missing, succeeds=False, marker="UNBOUND:")
         resolver = compile_file("resolve-references.exe", [repo / "tests/winrt_projection/resolve_references.cs"], ["/r:Mono.Cecil.dll"])
         completer = compile_file("complete.exe", [repo / "host/winrt/complete.cs"], ["/r:Mono.Cecil.dll"])
-        consumers = [output / "unimplemented-winrt.exe"] + [p.resolve() for p in args.consumer]
+        consumers = [output / "unimplemented-winrt.exe", output / "consumer-winrt.exe", output / "application-winrt.exe"]
+        consumers += [p.resolve() for p in args.consumer]
         run("resolve-before-completion", [resolver.name, windows(projection.parent)] + [windows(p) for p in consumers],
             succeeds=False, marker="UNRESOLVED ")
         completed = output / "completed/Windows.dll"
@@ -188,6 +216,11 @@ def main():
         run("resolve-completed", [resolver.name, windows(completed.parent)] + [windows(p) for p in consumers], marker="0 unresolved")
         shutil.copyfile(completed, missing / "Windows.dll")
         run("after-completion", [unimplemented.name], cwd=missing, marker="UNIMPLEMENTED: Windows.UI.Xaml.Window.get_Current")
+        # Completion must keep implemented members native, not replace them with stubs.
+        shutil.copyfile(completed, folder / "Windows.dll")
+        run("completed-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
+        shutil.copyfile(completed, app / "Windows.dll")
+        run("completed-application", [application.name], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         if args.game:
             source = args.game
             paths = [source / "appx-host.exe", source / "AppxManifest.xml"] + [p.resolve() for p in args.consumer]
@@ -196,7 +229,9 @@ def main():
             before = hashes()
             game = output / "game"
             require(not game.exists(), "game output already exists; choose a fresh --output directory")
-            shutil.copytree(source, game, ignore=shutil.ignore_patterns("*.log"))
+            # Keep links as links: an installed game's own Wine prefix maps z: to /.
+            # The launch uses --prefix, so that prefix is not copied at all.
+            shutil.copytree(source, game, symlinks=True, ignore=shutil.ignore_patterns("*.log", ".wine-prefix"))
             shutil.copyfile(shim, game / "appxportable.dll")
             shutil.copyfile(completed, game / "Windows.dll")
             run("game-launch", ["appx-host.exe"], cwd=game, succeeds=False,
