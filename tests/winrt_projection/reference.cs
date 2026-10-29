@@ -43,6 +43,32 @@ namespace Windows.UI.Xaml
     public sealed class Window
     {
         public static Window Current { get { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Current"); } }
+        public UIElement Content
+        {
+            get { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Content"); }
+            set { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Content"); }
+        }
+        public void Activate() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Activate"); }
+    }
+    public class DependencyObject { internal DependencyObject() { } }
+    public class UIElement : DependencyObject { internal UIElement() { } }
+    public class FrameworkElement : UIElement { internal FrameworkElement() { } }
+}
+namespace Windows.UI.Xaml.Controls
+{
+    public class Control : global::Windows.UI.Xaml.FrameworkElement { internal Control() { } }
+    public class ContentControl : Control { internal ContentControl() { } }
+    public class Frame : ContentControl
+    {
+        public Frame() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Controls.Frame..ctor"); }
+    }
+}
+namespace Windows.Devices.Geolocation
+{
+    // Outside the implemented surface: completion must stub it, naming itself.
+    public sealed class Geolocator
+    {
+        public Geolocator() { throw new global::System.NotImplementedException("Windows.Devices.Geolocation.Geolocator..ctor"); }
     }
 }
 namespace Windows.ApplicationModel.Activation

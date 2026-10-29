@@ -21,7 +21,8 @@ HEADER_IIDS = {
     "IApplicationFactory": "93bbe361-be5a-4ee3-b4a3-95118dc97a89", "IApplicationOverrides": "25f99ff7-9347-459a-9fac-b2d0e11c1a0f",
     "IApplicationInitializationCallback": "b6351c55-c284-46e4-8310-fb0967fab76f",
     "IApplicationInitializationCallbackParams": "751b792e-5772-4488-8b87-f547faa64474",
-    "IActivatedEventArgs": "cf651713-cd08-4fd8-b697-a281b6544e2e"}
+    "IActivatedEventArgs": "cf651713-cd08-4fd8-b697-a281b6544e2e", "IWindowStatics": "93328409-4ea1-4afa-83dc-0c4e73e88bb1",
+    "IWindow": "3276167d-c9f6-462d-9de2-ae4c1fd8c2e5", "IFrameFactory": "02ee93d4-448e-469e-9799-0a8a1f70f171"}
 HEADER_SLOTS = [
     "Windows.ApplicationModel.IPackageStatics::get_Current, slot 6", "Windows.ApplicationModel.IPackage::get_Id, slot 6",
     "Windows.ApplicationModel.IPackageId::get_Name, slot 6", "Windows.ApplicationModel.IPackageId::get_Architecture, slot 8",
@@ -32,7 +33,10 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.IApplicationOverrides::OnLaunched, slot 7", "Windows.UI.Xaml.IApplicationOverrides::OnActivated, slot 6",
     "Windows.ApplicationModel.Activation.IActivatedEventArgs::get_Kind, slot 6",
     "Windows.ApplicationModel.Activation.IActivatedEventArgs::get_PreviousExecutionState, slot 7",
-    "Windows.UI.Xaml.IApplication::add_Suspending, slot 13", "Windows.UI.Xaml.IApplication::remove_Suspending, slot 14"]
+    "Windows.UI.Xaml.IApplication::add_Suspending, slot 13", "Windows.UI.Xaml.IApplication::remove_Suspending, slot 14",
+    "Windows.UI.Xaml.IWindowStatics::get_Current, slot 6", "Windows.UI.Xaml.IWindow::get_Content, slot 8",
+    "Windows.UI.Xaml.IWindow::put_Content, slot 9", "Windows.UI.Xaml.IWindow::Activate, slot 20",
+    "Windows.UI.Xaml.Controls.IFrameFactory::CreateInstance, slot 6"]
 # Delegates are IUnknown-based: Invoke is their only method, at slot 3.
 HEADER_DELEGATES = ['NativeInterface(new global::System.Guid("' + iid + '"), false, invoke)'
                     for iid in ("b6351c55-c284-46e4-8310-fb0967fab76f", "23429465-e36a-40e2-b139-a4704602a6e1")]
@@ -223,7 +227,7 @@ def main():
         run("complete", [completer.name, windows(metadata), windows(projection), windows(completed)] + [windows(p) for p in consumers], marker="Completed ")
         run("resolve-completed", [resolver.name, windows(completed.parent)] + [windows(p) for p in consumers], marker="0 unresolved")
         shutil.copyfile(completed, missing / "Windows.dll")
-        run("after-completion", [unimplemented.name], cwd=missing, marker="UNIMPLEMENTED: Windows.UI.Xaml.Window.get_Current")
+        run("after-completion", [unimplemented.name], cwd=missing, marker="UNIMPLEMENTED: Windows.Devices.Geolocation.Geolocator..ctor")
         # Completion must keep implemented members native, not replace them with stubs.
         shutil.copyfile(completed, folder / "Windows.dll")
         run("completed-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")

@@ -37,7 +37,12 @@ interfaces WinMD lists for it, reaching their members by querying the
 interface per call; an interface wrapper first asks the native object's
 runtime class name and returns the selected class wrapper when it has one. A
 class with no members is a typed wrapper whose referenced members come from
-completion stubs. IIDs, default, static, factory, and
+completion stubs. A class may derive from another selected class: the root
+holds the native object, and only the most derived constructor composes.
+Unsealed classes query the member's interface per call and wrap native
+objects as the most derived selected class by runtime class name. Class and
+interface arguments are queried for the parameter's interface. Property
+setters take a runtime class or interface. IIDs, default, static, factory, and
 overridable interfaces, vtable slots (six IInspectable slots plus WinMD
 method order; required interfaces add no slots), return types, and enum
 values all come from metadata. Unsupported surfaces, member kinds, and ABI
@@ -86,7 +91,9 @@ thread with `Application.Current` returning the same managed object, then
 `Start` must rethrow that exception and the callback must then be
 collectable. Its constructor subscribes to `Suspending` through
 `WindowsRuntimeMarshal`, as compiled games do; `Exit` must raise it on the
-managed App, and not on a handler already removed. Both consumers also run against the completed assembly, so
+managed App, and not on a handler already removed. `OnLaunched` sets a new
+`Frame` as the content of `Window.Current`, which must then return that same
+managed `Frame`. Both consumers also run against the completed assembly, so
 completion cannot replace implemented members with stubs. Configure the
 x86 cross build with `APPX_WINE`, `APPX_WINE_PREFIX`, `APPX_WINRT_METADATA`,
 and `APPX_WINRT_CECIL` to register it as the `winrt_projection` CTest. The
@@ -125,9 +132,11 @@ game assembly to include a real game. For Bejeweled LIVE, `Bejeweled3.exe` and
 unresolved after completion. In a copied game, `Program.Main` starts the
 shim's Application; its callback constructs `Bejeweled3.App`, whose
 constructor subscribes to `Suspending`, and the shim then calls the game's
-`App.OnLaunched` on its view thread. `OnLaunched` fails at its first
-statement with `NotImplementedException: Windows.UI.Xaml.Window.get_Current`;
-`Window` and `Frame` come next.
+`App.OnLaunched` on its view thread. `OnLaunched` sets a composed `Frame` as
+`Window.Current.Content`, then fails in the game's `SuspensionManager` static
+constructor with `NotImplementedException:
+Windows.UI.Xaml.DependencyProperty.RegisterAttached`, which needs
+`DependencyProperty` and the CLR-redirected `System.Type`.
 
 The game also references `System.Runtime.WindowsRuntime` and
 `System.Runtime.WindowsRuntime.UI.Xaml`, which Wine Mono does not provide, plus
@@ -135,8 +144,8 @@ the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. None of these
 is projected yet.
 
 This is a foundation for managed compatibility, not a replacement for the
-game's `Windows` assembly. `Window`, `Frame`, CLR-redirected types such as
-`System.Uri`, managed implementations of WinRT interfaces, and dispatcher
+game's `Windows` assembly. `DependencyProperty`, CLR-redirected types such as
+`System.Type` and `System.Uri`, managed implementations of WinRT interfaces, and dispatcher
 synchronization remain to be implemented before Bejeweled can use this path. The existing game host is unchanged; its older "XAML Islands (STA)" log label
 identifies the STA route even when the shim selects its Wine XAML backend.
 The ini override for hosting mode remains to be added; this slice only supports
