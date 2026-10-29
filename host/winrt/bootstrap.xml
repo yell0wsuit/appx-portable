@@ -79,4 +79,16 @@
   <Enum Name="Windows.Storage.ApplicationDataLocality" />
   <Enum Name="Windows.Storage.ApplicationDataCreateDisposition" />
   <Interface Name="Windows.Foundation.Collections.IPropertySet" Adapter="StringObjectMap" />
+  <Enum Name="Windows.Foundation.AsyncStatus" />
+  <Interface Name="Windows.Foundation.IAsyncInfo" Adapter="Async" />
+  <Interface Name="Windows.Foundation.IAsyncAction" Adapter="Async" />
+  <Interface Name="Windows.Foundation.IAsyncOperation`1" Adapter="Async" />
+  <Interface Name="Windows.Foundation.IAsyncActionWithProgress`1" Adapter="Async" />
+  <Interface Name="Windows.Foundation.IAsyncOperationWithProgress`2" Adapter="Async" />
+  <Delegate Name="Windows.Foundation.AsyncActionCompletedHandler" Adapter="Async" />
+  <Delegate Name="Windows.Foundation.AsyncOperationCompletedHandler`1" Adapter="Async" />
+  <Delegate Name="Windows.Foundation.AsyncActionProgressHandler`1" Adapter="Async" />
+  <Delegate Name="Windows.Foundation.AsyncActionWithProgressCompletedHandler`1" Adapter="Async" />
+  <Delegate Name="Windows.Foundation.AsyncOperationProgressHandler`2" Adapter="Async" />
+  <Delegate Name="Windows.Foundation.AsyncOperationWithProgressCompletedHandler`2" Adapter="Async" />
 </Projection>
