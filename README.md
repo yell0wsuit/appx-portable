@@ -22,7 +22,7 @@ The installer changes no game file except through a known game's patch. Game-spe
 - 📴 **Offline service stand-ins.** The Xbox LIVE SDK and similar shut-down services report "no connection" cleanly instead of crashing. Nothing is sent over the network.
 - 🧠 **Managed (C#) games.** `appx-host.exe` hosts .NET games through CoreWindow or XAML Islands, selected automatically.
 - 🏗️ **x86 and x64.** Windows 8/8.1 x86 games, plus experimental support for x64 Windows 10 UWP games.
-- 🍷 **Wine (experimental).** Cross-compile and run on macOS through Wine.
+- 🍷 **Experimental Wine support.** Play on macOS through Wine: the installer sets up Wine, Rosetta 2 and GStreamer, and games draw through Vulkan on Metal. Managed games do not run under Wine yet.
 
 ## Tested games
 
@@ -60,6 +60,8 @@ For more tested games and the Store package IDs, please see [game compatibility]
    ```
 
 4. Double-click `00_click2startme.bat` in the game folder to play.
+
+On macOS (experimental), run `python3 installappx.py` with the package instead, then double-click `00_click2startme.command`; see [macOS / Wine](docs/installer.md#macos--wine-experimental).
 
 The installer downloads the Visual C++ runtime and the Appx Portable DLLs the game needs, and asks where to install, which Store options to turn on, and whether to write the launcher. Run it again on the same folder to update; saves and settings are kept. See the [installer guide](docs/installer.md) for its command-line options, using your own build, and macOS/Wine.
 
