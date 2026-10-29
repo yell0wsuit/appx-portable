@@ -53,7 +53,7 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.IDependencyObject::GetAnimationBaseValue, slot 10",
     "Windows.UI.Core.ICoreWindowStatic::GetForCurrentThread, slot 6", "Windows.UI.Core.ICoreWindow::get_Dispatcher, slot 9",
     "Windows.Storage.IApplicationDataStatics::get_Current, slot 6", "Windows.Storage.IApplicationData::get_LocalSettings, slot 10",
-    "Windows.Storage.IApplicationData::get_RoamingSettings, slot 11", "Windows.Storage.IApplicationDataContainer::get_Name, slot 6",
+    "Windows.Storage.IApplicationData::get_RoamingSettings, slot 11", "Windows.Storage.IApplicationData::get_LocalFolder, slot 12", "Windows.Storage.IApplicationDataContainer::get_Name, slot 6",
     "Windows.Storage.IApplicationDataContainer::get_Locality, slot 7", "Windows.Storage.IApplicationDataContainer::get_Values, slot 8",
     "Windows.Storage.IApplicationDataContainer::CreateContainer, slot 10", "Windows.Storage.IApplicationDataContainer::DeleteContainer, slot 11"]
 # The runtime's dispatcher context calls CoreWindow and CoreDispatcher directly
@@ -80,6 +80,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("wine", "prefix", "metadata", "shim", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--io-only", action="store_true", help="run the native storage/stream projection fixture")
     parser.add_argument("--async-only", action="store_true", help="run the focused WinRT task adapters fixture")
     parser.add_argument("--storage-only", action="store_true", help="run the focused persistent settings projection fixture")
     parser.add_argument("--xbox-only", action="store_true", help="run the focused Xbox projection fixture")
@@ -91,9 +92,9 @@ def main():
     parser.add_argument("--consumer", type=Path, action="append", default=[])
     parser.add_argument("--architecture", choices=("x86", "x64"), default="x86")
     args = parser.parse_args()
-    if sum((args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
+    if sum((args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
         parser.error("focused probe modes cannot be combined")
-    if (args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
+    if (args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
         parser.error("focused async/storage probes cannot include game or Xbox inputs")
     if args.xbox_only and (not args.xbox_metadata or args.game):
         parser.error("--xbox-only requires --xbox-metadata and cannot launch a game")
@@ -193,7 +194,7 @@ def main():
             require(not target.exists(), "invalid collection ABI produced a usable output")
 
     def probe_async(projection):
-        bridge = compile_file("tasks/System.Runtime.WindowsRuntime.dll", [repo / "host/winrt/task_extensions.cs"],
+        bridge = compile_file("tasks/System.Runtime.WindowsRuntime.dll", [repo / "host/winrt/task_extensions.cs", repo / "host/winrt/stream_extensions.cs"],
                               ["/target:library", "/r:" + windows(projection)])
         consumer = compile_file("async.exe", [repo / "tests/winrt_projection/async.cs"],
                                 ["/r:" + windows(projection), "/r:" + windows(bridge)])
@@ -213,6 +214,49 @@ def main():
         run("task-adapters", [signed.name], cwd=folder,
             marker="PASS: WinRT task adapters preserve completion, failure, cancellation, progress and ownership")
         return bridge
+
+    def check_io_metadata(generator):
+        mutator = compile_file("mutate-storage-abi.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
+        for kind, expected in (("stream-size", "IRandomAccessStream.get_Size"), ("read-count", "IInputStream.ReadAsync"),
+                               ("buffer-order", "Unsupported buffer method order"), ("future-order", "Unsupported storage async method order")):
+            changed = output / ("storage-" + kind)
+            target = output / ("storage-" + kind + ".cs")
+            if target.exists():
+                target.unlink()
+            run("mutate-storage-" + kind, [mutator.name, windows(metadata), windows(changed), kind])
+            run("reject-storage-" + kind, [generator.name, windows(changed), windows(repo / "host/winrt/bootstrap.xml"), windows(target)], succeeds=False, marker=expected)
+            require(not target.exists(), "unqualified storage ABI produced output")
+
+    def probe_io(projection, bridge):
+        generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
+        # Independent closed generic IID constants from windows.storage(.streams).h.
+        for iid in ("5e52f8ce-aced-5a42-95b4-f674dd84885e", "c4a57c5e-32b0-55b3-ad13-ce1c23041ed6", "d26b2819-897f-5c7d-84d6-56d796561431", "e521c894-2c26-5946-9e61-2b5e188d01ed", "3dddecf4-1d39-58e8-83b1-dbed541c7f35", "06386a7a-e009-5b0b-ab68-a8e48b516647", "bf666554-7605-5d9a-b14e-18d8c8472afe"):
+            require(iid in generated, "storage async IID differs from SDK header: " + iid)
+        # Slots independently counted from the SDK ABI declarations.
+        expected_slots = {"Item_get_Name": 11, "Item_get_Path": 12, "Folder_GetFileAsync": 10,
+                          "FileStatics_GetFileFromPathAsync": 6, "FileReference_OpenReadAsync": 6,
+                          "Info_get_Id": 6, "Info_get_Status": 7, "Info_get_ErrorCode": 8, "Info_Cancel": 9, "Info_Close": 10,
+                          "Buffer_get_Capacity": 6, "Buffer_get_Length": 7, "Buffer_put_Length": 8, "BufferFactory_Create": 6,
+                          "Input_ReadAsync": 6, "Random_get_Size": 6, "Random_put_Size": 7, "Random_GetInputStreamAt": 8,
+                          "Random_GetOutputStreamAt": 9, "Random_get_Position": 10, "Random_Seek": 11, "Random_CloneStream": 12,
+                          "Random_get_CanRead": 13, "Random_get_CanWrite": 14, "Content_get_ContentType": 6, "Closable_Close": 6}
+        for member, slot in expected_slots.items():
+            require("int " + member + " = " + str(slot) + ";" in generated, "storage ABI slot differs from SDK header: " + member)
+        consumer = compile_file("storage-io.exe", [repo / "tests/winrt_projection/storage_io.cs"],
+                                ["/r:" + windows(projection), "/r:" + windows(bridge)])
+        marker = output / "mark-async.exe"
+        run("mark-storage-io-winrt", [marker.name, windows(consumer), "storage-io-winrt.exe"], marker="flags=WindowsRuntime")
+        signed = output / "storage-io-bound.exe"
+        run("mark-storage-io-runtime", [marker.name, "storage-io-winrt.exe", windows(signed), "--runtime-reference"], marker="PublicKeyToken=b77a5c561934e089")
+        folder = fixture("storage-io", signed.name, "StorageIoProjectionTest", "CN=projection")
+        for source in (signed, projection, bridge):
+            copy_owned_file(source, folder / source.name)
+        runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
+        identity = compile_file("storage-identity.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/storage_identity.cs"])
+        copy_owned_file(identity, folder / identity.name)
+        run("storage-identity", [identity.name], cwd=folder, marker="PASS: buffer projection preserves object identity and native-owned pin lifetime")
+        run("storage-io", [signed.name], cwd=folder, environment={"APPX_PORTABLE_DATA": windows(output / "io-data")},
+            marker="PASS: managed storage awaits native files and reads seekable streams and buffers")
 
     def probe_storage(marker, projection):
         reference = compile_file("storage-reference/Windows.dll", [repo / "tests/winrt_projection/reference.cs"], ["/target:library"])
@@ -278,27 +322,37 @@ def main():
         return xbox_projection
 
     try:
-        if args.async_only:
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs"], ["/r:Mono.Cecil.dll"])
+        if args.io_only:
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
             run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
             runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
-            projection = compile_file("projection/Windows.dll", runtime + [generated], ["/target:library"])
+            projection = compile_file("projection/Windows.dll", runtime + [repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", generated], ["/target:library"])
+            check_io_metadata(generator)
+            bridge = probe_async(projection)
+            probe_io(projection, bridge)
+            return 0
+        if args.async_only:
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generated = output / "Windows.generated.cs"
+            run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
+            runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
+            projection = compile_file("projection/Windows.dll", runtime + [repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", generated], ["/target:library"])
             probe_async(projection)
             return 0
         if args.storage_only:
             marker = compile_file("mark-reference.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
             run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
             check_storage_metadata(generator)
             runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
-            projection = compile_file("projection/Windows.dll", runtime + [generated], ["/target:library"])
+            projection = compile_file("projection/Windows.dll", runtime + [repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", generated], ["/target:library"])
             probe_storage(marker, projection)
             return 0
         if args.xbox_only:
             marker = compile_file("mark-reference.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
             completer = compile_file("complete.exe", [repo / "host/winrt/complete.cs"], ["/r:Mono.Cecil.dll"])
             probe_xbox(marker, generator, completer)
             return 0
@@ -328,7 +382,7 @@ def main():
         copy_owned_file(reference, folder / "Windows.dll")
         run("unimplemented-contract", [consumer.name], cwd=folder, succeeds=False,
             marker="NotImplementedException: Windows.ApplicationModel.Package.Current")
-        generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs"], ["/r:Mono.Cecil.dll"])
+        generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
         generated = output / "Windows.generated.cs"
         surface = repo / "host/winrt/bootstrap.xml"
         run("generate", [generator.name, windows(metadata), windows(surface), windows(generated)])
@@ -340,7 +394,7 @@ def main():
         missing += [value for value in HEADER_RUNTIME if value not in runtime_source]
         results.append(dict(case="header-values", missing=missing, passed=not missing))
         require(not missing, "generated IIDs or slots differ from the SDK headers: " + ", ".join(missing))
-        projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", repo / "host/winrt/collections.cs", generated], ["/target:library"])
+        projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", repo / "host/winrt/collections.cs", repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", generated], ["/target:library"])
         copy_owned_file(projection, folder / "Windows.dll")
         run("generated-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
         invalid = [
@@ -365,7 +419,7 @@ def main():
         text = target.read_text()
         require(changed + "-37c7-4790-9980-dd7ae74e8bb2" in text, "IID did not follow metadata")
         require("native.String(7)" in text, "method slot did not follow metadata")
-        mutant = compile_file("mutant/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", repo / "host/winrt/collections.cs", target], ["/target:library"])
+        mutant = compile_file("mutant/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", repo / "host/winrt/collections.cs", repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", target], ["/target:library"])
         try:
             copy_owned_file(mutant, folder / "Windows.dll")
             run("changed-iid-rejected", [consumer.name], cwd=folder, succeeds=False, marker="80004002")
@@ -412,7 +466,9 @@ def main():
         run("completed-abi-setter", ["application-abi.exe"], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         check_storage_metadata(generator)
         probe_storage(marker, projection)
+        check_io_metadata(generator)
         task_bridge = probe_async(projection)
+        probe_io(projection, task_bridge)
         xbox_projection = probe_xbox(marker, generator, completer) if args.xbox_metadata else None
         if args.game:
             source = args.game
