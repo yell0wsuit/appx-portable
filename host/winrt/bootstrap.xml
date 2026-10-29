@@ -1,0 +1,25 @@
+<Projection>
+  <Class Name="Windows.ApplicationModel.Package">
+    <Property Name="Current" />
+    <Property Name="Id" />
+  </Class>
+  <Class Name="Windows.ApplicationModel.PackageId">
+    <Property Name="Name" />
+    <Property Name="Publisher" />
+    <Property Name="ResourceId" />
+    <Property Name="Architecture" />
+  </Class>
+  <Enum Name="Windows.System.ProcessorArchitecture" />
+  <Class Name="Windows.ApplicationModel.Activation.LaunchActivatedEventArgs">
+    <Property Name="Arguments" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Application">
+    <Constructor />
+    <Property Name="Current" />
+    <Method Name="Start" />
+    <Method Name="Exit" />
+    <Overridable Name="OnLaunched" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.ApplicationInitializationCallbackParams" />
+  <Delegate Name="Windows.UI.Xaml.ApplicationInitializationCallback" />
+</Projection>
