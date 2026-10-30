@@ -162,7 +162,7 @@ namespace AppxPortable.WinRT
         internal static NativeObject Argument(object value, Guid iid)
         {
             NativeObject native = Of(value);
-            return native == null ? null : native.QueryInterface(iid);
+            return native == null ? null : ManagedObject.ComposedArgument(value, iid) ?? native.QueryInterface(iid);
         }
 
         // IInspectable::GetRuntimeClassName, slot 4.
