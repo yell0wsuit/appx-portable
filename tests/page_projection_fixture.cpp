@@ -131,3 +131,5 @@ extern "C" HRESULT __cdecl ValidateLoadedSource() {
     if (FAILED(element->get_Width(&width)) || width != 42) return E_FAIL;
     return S_OK;
 }
+
+#include "resource_projection_fixture.h"
