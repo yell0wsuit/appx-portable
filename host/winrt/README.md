@@ -152,10 +152,11 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 With the Xbox, settings, task, stream and connectivity projections below, the
 game constructs its Xbox wrapper and returns to `App.OnApplicationStarted`.
 It retrieves the native launch splash and composes the game's `ExtendedSplash`
-Page. It then fails at `Windows.UI.Xaml.Application.LoadComponent` in
-`ExtendedSplash.InitializeComponent` (offset 0x1b), called by its constructor
-and `App.OnApplicationStarted` (offset 0x3f). No menu or game round has been displayed
-by this path.
+Page. Its LoadComponent call now opens and parses `ExtendedSplash.xaml`, then
+fails explicitly at `Page.Resources` (E_NOTIMPL in `appx-portable.log`). The
+managed stack points to `ExtendedSplash.InitializeComponent` (offset 0x1b),
+called by its constructor and `App.OnApplicationStarted` (offset 0x3f). No menu or
+game round has been displayed by this path.
 
 The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
 and `System.Runtime.WindowsRuntime.UI.Xaml`, still missing from Wine Mono, plus
@@ -177,7 +178,8 @@ Wine 11.18 runtime. The managed settings projection is described below.
 
 The probe's `--game` option copies an installed game into a fresh output
 subdirectory and launches its unchanged `appx-host.exe` with the completed
-projection and current shim. Supply `--consumer` for each managed game assembly
+projection and current shim, with `--trace` to record named native gaps in
+`appx-portable.log`. Supply `--consumer` for each managed game assembly
 and `--expected-game-error` for the expected named gap. Source and output
 directories must be disjoint. Links are copied as links and the game's own
 `.wine-prefix` is skipped: its `z:` drive links to `/`, and the launch uses
@@ -460,7 +462,7 @@ identity. The DLL is not copied into probe games or release content. Its default
 location is beside the shim; `--page-fixture` selects another path.
 
 The fixture does not perform actual Frame navigation or test populated
-cancellation arguments. XAML component/source loading, layout, rendering,
+cancellation arguments. Broader XAML source loading, layout, rendering,
 Windows/x64 controls and gameplay acceptance remain pending.
 
 ## Managed component ABI prerequisites
@@ -492,9 +494,45 @@ call and GC, boxed strings, callback exceptions and recovery, and URI round trip
 with package paths, escapes, Unicode, query and fragment components. Mutated
 connector ID, URI result and URI factory parameter metadata must be rejected.
 
-These are prerequisites for Application.LoadComponent. That method remains an
-explicit completion stub: the existing native Windows 8 path can return success
-without constructing source XAML, so enabling it now would hide the missing
-loader. Source parsing, element trees, properties, names and event wiring still
-need their own implementation and verification before the game can pass its
-ExtendedSplash.InitializeComponent call.
+These prerequisites are now used by the first source-XAML loader below. The
+existing native Windows 8 loader remains separate from the managed shim path.
+
+## Source-XAML loading
+
+Both [Application.LoadComponent overloads](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.application.loadcomponent)
+now call a real source loader in managed shim-XAML mode. The generator qualifies
+the overloaded signatures from metadata and emits separate ABI delegates for
+the two SDK slots. Native games keep the existing loader path; Windows Islands
+continues to use system XAML.
+
+This first slice supports Page, Frame and empty Grid elements, implicit content
+and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
+ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
+attributes in a declared ignorable Blend namespace are skipped. Resources,
+animations, brushes, Grid children, other controls and other properties fail
+explicitly, with their member names in appx-portable.log.
+
+Package-local ms-appx:/// source paths are UTF-8 unescaped and resolved through
+the existing package resource reader. Query/fragment components, remote schemes
+and other package authorities are unsupported; only the Application resource
+location is implemented. XML DTDs are prohibited and element depth is bounded.
+The full document is validated and children are built detached before applying
+the root's content and properties. Names are registered before connection
+callbacks, and callback failures propagate to the managed caller.
+
+Each loaded component owns a namescope shared by its descendants. The scope
+retains named descendants and holds a WinRT weak reference to the root;
+descendants borrow the scope. Managed inspectable identities expose the SDK
+IWeakReferenceSource/IWeakReference ABI so resolution acquires a managed root
+before publishing a counted COM reference. This avoids a root/scope reference
+cycle and permits a retained child to outlive its root safely. Source loading
+and element FindName check the owning thread. Namescope lookups do not fabricate
+legacy panel names after a component has been loaded.
+
+The source fixture runs as a WindowsRuntime-marked external consumer through
+`--page-only` and `winrt_page_projection`. An SDK-typed native inspector checks
+the actual content tree, dimensions, visibility and descendant namescope.
+Regressions cover escaped Unicode paths, root/child identity, connection timing,
+malformed and unsupported source, invalid values, replacement namescopes,
+wrong-thread calls, callback exceptions, and retained-child lookups during root
+collection. Rendering, layout and the game's splash/menu remain separate gates.

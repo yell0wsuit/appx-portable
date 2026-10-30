@@ -45,6 +45,9 @@ HEADER_SLOTS = [
     "Windows.ApplicationModel.IPackageId::get_ResourceId, slot 9", "Windows.ApplicationModel.IPackageId::get_Publisher, slot 10",
     "Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs::get_Arguments, slot 6",
     "Windows.UI.Xaml.IApplicationFactory::CreateInstance, slot 6", "Windows.UI.Xaml.IApplicationStatics::get_Current, slot 6",
+    "Windows.UI.Xaml.IApplicationStatics::LoadComponent, slot 8",
+    "Windows.UI.Xaml.IApplicationStatics::LoadComponentWithResourceLocation, slot 9",
+    "Windows.UI.Xaml.IFrameworkElement::FindName, slot 51",
     "Windows.UI.Xaml.IApplicationStatics::Start, slot 7", "Windows.UI.Xaml.IApplication::Exit, slot 17",
     "Windows.UI.Xaml.IApplicationOverrides::OnLaunched, slot 7", "Windows.UI.Xaml.IApplicationOverrides::OnActivated, slot 6",
     "Windows.ApplicationModel.Activation.IActivatedEventArgs::get_Kind, slot 6",
@@ -254,7 +257,7 @@ def main():
         for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
-            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::")):
+            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
         mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri")):
@@ -274,6 +277,13 @@ def main():
         abi = compile_file("page-abi.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/page.cs"], ["/define:NATIVE_ABI"])
         copy_owned_file(abi, folder / abi.name)
         run("page-abi", [abi.name], cwd=folder, marker="PASS: native Page callbacks dispatch through derived managed overrides and base methods")
+        source = compile_file("source.exe", [repo / "tests/winrt_projection/source.cs"], ["/r:" + windows(reference)])
+        run("mark-source", [marker.name, windows(source), "source-winrt.exe"], marker="flags=WindowsRuntime")
+        folder = fixture("source", source.name, "SourceProjectionTest", "CN=projection")
+        copy_owned_file(output / "source-winrt.exe", folder / source.name)
+        copy_owned_file(projection, folder / "Windows.dll")
+        copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
+        run("source", [source.name], cwd=folder, marker="PASS: source XAML builds native content, properties, names and managed connections; unsupported input fails explicitly")
 
     def probe_splash(projection, generator):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
@@ -630,7 +640,7 @@ def main():
             copy_owned_file(task_bridge, game / task_bridge.name)
             if xbox_projection:
                 copy_owned_file(xbox_projection, game / "Microsoft.Xbox.dll")
-            run("game-launch", ["appx-host.exe"], cwd=game, succeeds=False,
+            run("game-launch", ["appx-host.exe", "--trace"], cwd=game, succeeds=False,
                 marker=args.expected_game_error, evidence=game / "managed.log")
             require(before == hashes(), "source game files changed during probe")
             (output / "game-inputs.json").write_text(json.dumps(before, indent=2) + "\n")

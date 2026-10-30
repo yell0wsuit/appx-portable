@@ -28,6 +28,8 @@ namespace Windows.UI.Xaml
     public class Application
     {
         public Application() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application..ctor"); }
+        public static void LoadComponent(object component, global::System.Uri uri) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.LoadComponent"); }
+        public static void LoadComponent(object component, global::System.Uri uri, global::Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation location) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.LoadComponent"); }
         public static Application Current { get { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.Current"); } }
         public static void Start(ApplicationInitializationCallback callback) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.Start"); }
         public void Exit() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.Exit"); }
@@ -66,7 +68,11 @@ namespace Windows.UI.Xaml
         public object ReadLocalValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.ReadLocalValue"); }
     }
     public class UIElement : DependencyObject { internal UIElement() { } }
-    public class FrameworkElement : UIElement { internal FrameworkElement() { } }
+    public class FrameworkElement : UIElement
+    {
+        internal FrameworkElement() { }
+        public object FindName(string name) { throw new global::System.NotImplementedException(); }
+    }
 }
 namespace Windows.UI.Xaml.Controls
 {
@@ -191,4 +197,9 @@ namespace Windows.UI.Xaml.Navigation
 namespace Windows.UI.Xaml.Markup
 {
     public interface IComponentConnector { void Connect(int connectionId, object target); }
+}
+
+namespace Windows.UI.Xaml.Controls.Primitives
+{
+    public enum ComponentResourceLocation { Application, Nested }
 }

@@ -24,6 +24,7 @@
     <Constructor />
     <Property Name="Current" />
     <Method Name="Start" />
+    <Method Name="LoadComponent" />
     <Method Name="Exit" />
     <Event Name="Suspending" />
     <Overridable Name="OnActivated" />
@@ -50,7 +51,10 @@
   </Class>
   <Class Name="Windows.UI.Xaml.PropertyMetadata" />
   <Class Name="Windows.UI.Xaml.UIElement" />
-  <Class Name="Windows.UI.Xaml.FrameworkElement" />
+  <Class Name="Windows.UI.Xaml.FrameworkElement">
+    <Method Name="FindName" />
+  </Class>
+  <Enum Name="Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation" />
   <Class Name="Windows.UI.Xaml.Controls.Control" />
   <Class Name="Windows.UI.Xaml.Controls.ContentControl" />
   <Class Name="Windows.UI.Xaml.Controls.UserControl">

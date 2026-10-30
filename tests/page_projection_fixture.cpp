@@ -42,7 +42,7 @@ extern "C" HRESULT __cdecl InvokeComponentConnector(IUnknown* page, INT32 id, II
 
 // Resolve the same Window the external, marked consumer populated. This tests
 // callbacks across Windows.dll's assembly boundary without exposing its internals.
-extern "C" HRESULT __cdecl ConnectWindowContent(INT32 id) {
+static HRESULT WindowContent(ABI::Windows::UI::Xaml::IUIElement** value) {
     using namespace ABI::Windows::UI::Xaml;
     using GetFactory = HRESULT (WINAPI*)(HSTRING, IActivationFactory**);
     auto getFactory = reinterpret_cast<GetFactory>(GetProcAddress(GetModuleHandleW(L"appxportable.dll"), "ShimGetFactory"));
@@ -53,8 +53,11 @@ extern "C" HRESULT __cdecl ConnectWindowContent(INT32 id) {
     if (SUCCEEDED(hr)) hr = factory.As(&statics);
     ComPtr<IWindow> window;
     if (SUCCEEDED(hr)) hr = statics->get_Current(&window);
-    ComPtr<IUIElement> content;
-    if (SUCCEEDED(hr)) hr = window->get_Content(&content);
+    return FAILED(hr) ? hr : window->get_Content(value);
+}
+extern "C" HRESULT __cdecl ConnectWindowContent(INT32 id) {
+    ComPtr<ABI::Windows::UI::Xaml::IUIElement> content;
+    auto hr = WindowContent(&content);
     ComPtr<IInspectable> target;
     if (SUCCEEDED(hr) && content) hr = content.As(&target);
     return FAILED(hr) ? hr : InvokeComponentConnector(content.Get(), id, target.Get());
@@ -92,4 +95,39 @@ extern "C" HRESULT __cdecl CheckNamelessTarget(IInspectable* target) {
     Wrappers::HString text;
     if (SUCCEEDED(hr)) hr = stringable->ToString(text.GetAddressOf());
     return FAILED(hr) ? hr : wcscmp(text.GetRawBuffer(nullptr), L"nameless") == 0 ? S_OK : E_FAIL;
+}
+
+extern "C" HRESULT __cdecl ValidateLoadedSource() {
+    using namespace ABI::Windows::UI::Xaml;
+    using namespace ABI::Windows::UI::Xaml::Controls;
+    ComPtr<IUIElement> root;
+    auto hr = WindowContent(&root);
+    if (FAILED(hr)) return hr;
+    ComPtr<IFrameworkElement> element;
+    if (FAILED(root.As(&element))) return E_FAIL;
+    double width = 0, height = 0;
+    if (FAILED(element->get_Width(&width)) || width != 321 || FAILED(element->get_Height(&height)) || height != 123)
+        return E_FAIL;
+    ComPtr<IUserControl> page;
+    if (FAILED(root.As(&page))) return E_FAIL;
+    ComPtr<IUIElement> frame;
+    if (FAILED(page->get_Content(&frame)) || !frame) return E_FAIL;
+    if (FAILED(frame.As(&element)) || FAILED(element->get_Width(&width)) || width != 80.5) return E_FAIL;
+    ComPtr<IInspectable> namedRoot;
+    if (FAILED(element->FindName(Wrappers::HStringReference(L"root").Get(), &namedRoot)) || !namedRoot) return E_FAIL;
+    ComPtr<IUnknown> rootIdentity, foundIdentity;
+    if (FAILED(root.As(&rootIdentity)) || FAILED(namedRoot.As(&foundIdentity)) || rootIdentity != foundIdentity)
+        return E_FAIL;
+    Visibility visibility;
+    if (FAILED(frame->get_Visibility(&visibility)) || visibility != Visibility_Collapsed) return E_FAIL;
+    ComPtr<IContentControl> frameContent;
+    if (FAILED(frame.As(&frameContent))) return E_FAIL;
+    ComPtr<IInspectable> inner;
+    if (FAILED(frameContent->get_Content(&inner)) || !inner || FAILED(inner.As(&page))) return E_FAIL;
+    ComPtr<IUIElement> leaf;
+    if (FAILED(page->get_Content(&leaf)) || !leaf) return E_FAIL;
+    ComPtr<IGrid> grid;
+    if (FAILED(leaf.As(&grid)) || FAILED(leaf.As(&element))) return E_FAIL;
+    if (FAILED(element->get_Width(&width)) || width != 42) return E_FAIL;
+    return S_OK;
 }
