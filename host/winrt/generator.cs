@@ -247,8 +247,13 @@ internal static partial class WinrtProjectionGenerator
     private static void Method(StringBuilder output, TypeDefinition type, string name, bool composable)
     {
         var methods = type.Methods.Where(m => m.Name == name && !m.IsConstructor).ToList();
-        if (methods.Count != 1) throw new NotSupportedException("Method not found or overloaded: " + type.FullName + "." + name);
-        MethodDefinition method = methods[0];
+        if (methods.Count == 0) throw new NotSupportedException("Method not found: " + type.FullName + "." + name);
+        foreach (MethodDefinition method in methods) MethodOverload(output, type, method, composable, methods.Count > 1);
+    }
+
+    private static void MethodOverload(StringBuilder output, TypeDefinition type, MethodDefinition method, bool composable, bool overloaded)
+    {
+        string name = method.Name;
         bool returns = method.ReturnType.FullName != "System.Void";
         bool enumResult = returns && selected.Contains(method.ReturnType.FullName) && Find(method.ReturnType.FullName).IsEnum;
         string resultAbi = "global::System.IntPtr";
@@ -261,6 +266,7 @@ internal static partial class WinrtProjectionGenerator
         else if (returns && method.ReturnType.FullName != "System.Object") Parameter(method.ReturnType, type.FullName + "." + name);
         TypeDefinition owner = MemberInterface(type, method);
         int slot = Slot(owner, method);
+        string nativeName = name + (overloaded ? "_" + Literal(slot) : "");
         var abi = new List<string>();
         var setup = new List<string>();
         var arguments = new List<string>();
@@ -298,9 +304,11 @@ internal static partial class WinrtProjectionGenerator
             setup.Add("                using (var " + local + " = " + prepare + ")");
         }
         output.AppendLine("        " + StdCall);
-        output.AppendLine("        private delegate int Native_" + name + "(global::System.IntPtr self" +
+        output.AppendLine("        private delegate int Native_" + nativeName + "(global::System.IntPtr self" +
             string.Concat(abi.Select(p => ", " + p)) + (returns ? ", out " + resultAbi + " result" : "") + ");");
-        output.AppendLine("        // " + owner.FullName + "::" + name + ", slot " + Literal(slot));
+        CustomAttribute overload = Attribute(method, "Windows.Foundation.Metadata.OverloadAttribute");
+        string abiName = overload == null ? name : (string)overload.ConstructorArguments[0].Value;
+        output.AppendLine("        // " + owner.FullName + "::" + abiName + ", slot " + Literal(slot));
         output.AppendLine("        public " + (method.IsStatic ? "static " : "") + (returns ? Name(method.ReturnType) : "void") + " " + name + "(" +
             string.Join(", ", method.Parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ")");
         output.AppendLine("        {");
@@ -311,7 +319,7 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("                using (var call = new " + Runtime + "NativeObject.Access(" + receiver + "))");
         output.AppendLine("                {");
         if (returns) output.AppendLine("                    " + resultAbi + " result;");
-        output.AppendLine("                    int hr = call.Method<Native_" + name + ">(" + Literal(slot) + ")(call.Self" +
+        output.AppendLine("                    int hr = call.Method<Native_" + nativeName + ">(" + Literal(slot) + ")(call.Self" +
             string.Concat(arguments.Select(p => ", " + p)) + (returns ? ", out result" : "") + ");");
         if (enumResult)
         {

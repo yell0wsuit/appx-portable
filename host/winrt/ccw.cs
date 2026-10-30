@@ -130,6 +130,12 @@ namespace AppxPortable.WinRT
         private static readonly Guid agile = new Guid("94ea2b94-e9cc-49e0-c0ff-ee64ca8f5b90");
         // The IInspectable identity of a composed outer, before its overrides interfaces.
         internal static readonly NativeInterface Identity = new NativeInterface(inspectable, true);
+        // SDK IWeakReferenceSource::GetWeakReference and IWeakReference::Resolve,
+        // both IUnknown-based, slot 3. A native weak reference holds no target root.
+        private static readonly NativeInterface weakSource = new NativeInterface(
+            new Guid("00000038-0000-0000-c000-000000000046"), false, new GetPointerCall(GetWeakReference));
+        private static readonly NativeInterface weakReference = new NativeInterface(
+            new Guid("00000037-0000-0000-c000-000000000046"), false, new QueryInterfaceCall(ResolveWeak));
         private static readonly object gate = new object();
         private static readonly Dictionary<IntPtr, WeakReference> pointers = new Dictionary<IntPtr, WeakReference>();
         private static readonly HashSet<ManagedObject> referenced = new HashSet<ManagedObject>();
@@ -146,7 +152,8 @@ namespace AppxPortable.WinRT
         private ManagedObject(object target, NativeInterface[] interfaces, bool invocationBound = false)
         {
             this.target = target;
-            interfaces = interfaces.Concat(new[] { ManagedPropertyValue.Interface }).ToArray();
+            interfaces = interfaces.Concat(interfaces.Any(i => i.Inspectable)
+                ? new[] { ManagedPropertyValue.Interface, weakSource } : new[] { ManagedPropertyValue.Interface }).ToArray();
             invocation = Errors.Current;
             this.invocationBound = invocationBound;
             this.interfaces = interfaces;
@@ -292,6 +299,37 @@ namespace AppxPortable.WinRT
             if (value == IntPtr.Zero) return inner == null ? E_NOINTERFACE : inner.TryQueryInterface(iid, out value);
             Reference(1);
             return 0;
+        }
+
+        private static int GetWeakReference(IntPtr self, out IntPtr value)
+        {
+            value = IntPtr.Zero;
+            try
+            {
+                var owner = From(self);
+                var weak = new ManagedObject(new WeakReference(owner), new[] { weakReference });
+                weak.Reference(1);
+                value = weak.Pointer;
+                GC.KeepAlive(owner);
+                return 0;
+            }
+            catch (Exception error) { return Errors.Report(error); }
+        }
+
+        private static int ResolveWeak(IntPtr self, ref Guid iid, out IntPtr value)
+        {
+            value = IntPtr.Zero;
+            try
+            {
+                // WeakReference.Target establishes a managed root before QI can
+                // publish the counted native reference, including during GC.
+                var owner = ((WeakReference)From(self).target).Target as ManagedObject;
+                if (owner == null) return 0;
+                int hr = owner.Query(iid, out value);
+                GC.KeepAlive(owner);
+                return hr;
+            }
+            catch (Exception error) { return Errors.Report(error); }
         }
 
         private static int QueryInterface(IntPtr self, ref Guid iid, out IntPtr value)

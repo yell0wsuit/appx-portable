@@ -47,6 +47,7 @@ static bool ShimXaml() noexcept {
     }();
     return shim;
 }
+bool ManagedXamlMode() noexcept { return ManagedMode() && !managedCoreWindow.load() && ShimXaml(); }
 // appx-native-host.exe starts native C++/CX XAML games, which run on real
 // Windows XAML in an island, as .NET Native games do; its CoreWindow games do not.
 bool IslandsMode() noexcept {

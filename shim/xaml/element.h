@@ -13,10 +13,20 @@
 #include <map>
 #include <string>
 #include <functional>
+#include <memory>
 namespace appx {
+// The component root owns its scope and named children; descendants borrow it.
+// Excluding the root from the retained map avoids a COM reference cycle.
+struct SourceNameScope {
+    Microsoft::WRL::WeakRef root;
+    std::wstring rootName;
+    std::map<std::wstring, Microsoft::WRL::ComPtr<IInspectable>> elements;
+};
 // Internal namescope bridge used by the source-XAML loader.
 MIDL_INTERFACE("B9D4328C-BA3E-4F70-A0E9-E604BB4DB236") INamedElementRegistry : IUnknown {
     virtual HRESULT STDMETHODCALLTYPE RegisterName(HSTRING name, IInspectable * value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE CheckSourceThread() = 0;
+    virtual void STDMETHODCALLTYPE SetSourceNameScope(const std::shared_ptr<SourceNameScope>& scope, bool root) = 0;
 };
 HRESULT MakePanel(IInspectable** value);
 HRESULT MakeBackgroundPanel(IInspectable** value);
@@ -89,6 +99,10 @@ class Element
     Microsoft::WRL::ComPtr<ABI::Windows::UI::Xaml::Media::IRectangleGeometry> clip_;
     std::map<std::wstring, Microsoft::WRL::ComPtr<IInspectable>> namedElements_;
     Microsoft::WRL::Wrappers::HString name_;
+    std::shared_ptr<SourceNameScope> ownedScope_;
+    std::weak_ptr<SourceNameScope> sourceScope_;
+    bool sourceLoaded_ = false;
+    const DWORD thread_ = GetCurrentThreadId();
     ABI::Windows::UI::Xaml::Visibility visibility_ = ABI::Windows::UI::Xaml::Visibility_Visible;
     INT32 placement_[4]{0, 0, 1, 1};
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerPressed_;
@@ -370,11 +384,33 @@ public:
         namedElements_[WindowsGetStringRawBuffer(name, nullptr)] = value;
         return S_OK;
     }
+    HRESULT STDMETHODCALLTYPE CheckSourceThread() override {
+        return GetCurrentThreadId() == thread_ ? S_OK : RPC_E_WRONG_THREAD;
+    }
+    void STDMETHODCALLTYPE SetSourceNameScope(const std::shared_ptr<SourceNameScope>& scope, bool root) override {
+        sourceLoaded_ = true;
+        namedElements_.clear();
+        ownedScope_ = root ? scope : nullptr;
+        sourceScope_ = scope;
+    }
     HRESULT STDMETHODCALLTYPE FindName(HSTRING name, IInspectable** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
         const wchar_t* text = WindowsGetStringRawBuffer(name, nullptr);
         Log("TRACE", "FindName(%ls)", text);
+        if (sourceLoaded_) {
+            auto scope = sourceScope_.lock();
+            if (!scope) return S_OK;
+            if (!scope->rootName.empty() && scope->rootName == text) {
+                Microsoft::WRL::ComPtr<IInspectable> root;
+                auto hr = scope->root.As(&root);
+                return FAILED(hr) ? hr : root.CopyTo(value);
+            }
+            const auto named = scope->elements.find(text);
+            return named == scope->elements.end() ? S_OK : named->second.CopyTo(value);
+        }
         const auto named = namedElements_.find(text);
         if (named != namedElements_.end()) return named->second.CopyTo(value);
         // Windows 8 DirectX pages use a SwapChainBackgroundPanel under this name.
