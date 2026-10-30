@@ -1,4 +1,5 @@
 #include "source.h"
+#include "animation.h"
 #include "element.h"
 #include "registry.h"
 #include "package/resources.h"
@@ -30,7 +31,11 @@ struct Node {
     std::vector<Attribute> attributes;
     std::vector<std::unique_ptr<Node>> children;
     Node* content = nullptr;
-    std::vector<Node*> resources;
+    std::vector<Node*> resources, timelines;
+    bool explicitTimelines = false, hasDuration = false, hasTargetName = false, hasThemeName = false,
+         hasTargetProperty = false;
+    Duration duration{};
+    std::wstring targetName, themeName, targetProperty;
     std::wstring key;
     bool hasKey = false, hasResources = false;
     ComPtr<IResourceDictionary> dictionary;
@@ -92,7 +97,8 @@ HRESULT Read(IXmlReader* reader, std::unique_ptr<Node>& root) {
 HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
                 std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource = false) {
     if (node.space != Presentation) return Fail(node.space + L":" + node.type);
-    if (node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid") return Fail(node.type);
+    const bool animation = AnimationType(node.type);
+    if (!animation && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid") return Fail(node.type);
     for (const auto& attr : node.attributes)
         if (attr.space == Xmlns) spaces[attr.name] = attr.value;
     for (const auto& attr : node.attributes)
@@ -106,6 +112,11 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         }
     for (const auto& attr : node.attributes) {
         const auto member = node.type + L"." + attr.name;
+        if (animation && attr.space.empty() &&
+            (attr.name == L"Storyboard.TargetName" || attr.name == L"Storyboard.TargetProperty" ||
+             attr.name == L"TargetName") &&
+            !attr.value.empty() && attr.value.front() == L'{')
+            return Fail(member);
         if (attr.space == Xmlns || (attr.space == Compatibility && attr.name == L"Ignorable") ||
             (ignoreDesign && attr.space == Design))
             continue;
@@ -114,7 +125,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
             node.key = attr.value;
             node.hasKey = true;
-        } else if ((attr.space == Language || attr.space.empty()) && attr.name == L"Name") {
+        } else if ((attr.space == Language || (!animation && attr.space.empty())) && attr.name == L"Name") {
             if (!node.name.empty() || !Identifier(attr.value) || !names.insert(attr.value).second)
                 return Fail(member, E_INVALIDARG);
             node.name = attr.value;
@@ -126,7 +137,20 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             if (!(number >> node.connection) || !(number >> std::ws).eof() || node.connection <= 0 ||
                 !connections.insert(node.connection).second)
                 return Fail(member, E_INVALIDARG);
-        } else if (attr.space.empty() && (attr.name == L"Width" || attr.name == L"Height")) {
+        } else if (animation && attr.space.empty() && attr.name == L"Duration") {
+            auto hr = ParseAnimationDuration(attr.value, &node.duration);
+            if (FAILED(hr)) return Fail(node.type + L".Duration", hr);
+            node.hasDuration = true;
+        } else if (animation && attr.space.empty() && attr.name == L"Storyboard.TargetName") {
+            node.targetName = attr.value;
+            node.hasTargetName = true;
+        } else if (animation && attr.space.empty() && attr.name == L"Storyboard.TargetProperty") {
+            node.targetProperty = attr.value;
+            node.hasTargetProperty = true;
+        } else if (animation && node.type != L"Storyboard" && attr.space.empty() && attr.name == L"TargetName") {
+            node.themeName = attr.value;
+            node.hasThemeName = true;
+        } else if (!animation && attr.space.empty() && (attr.name == L"Width" || attr.name == L"Height")) {
             double value;
             std::wistringstream number(attr.value);
             number.imbue(std::locale::classic());
@@ -139,7 +163,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
                 node.height = value;
                 node.hasHeight = true;
             }
-        } else if (attr.space.empty() && attr.name == L"Visibility") {
+        } else if (!animation && attr.space.empty() && attr.name == L"Visibility") {
             if (attr.value != L"Visible" && attr.value != L"Collapsed") return Fail(member, E_INVALIDARG);
             node.visibility = attr.value == L"Visible" ? Visibility_Visible : Visibility_Collapsed;
             node.hasVisibility = true;
@@ -151,7 +175,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         node.key = node.name;
     }
     for (auto& child : node.children) {
-        if (child->space == Presentation && child->type == node.type + L".Resources") {
+        if (!animation && child->space == Presentation && child->type == node.type + L".Resources") {
             if (node.hasResources) return Fail(child->type + L" multiple values", E_INVALIDARG);
             node.hasResources = true;
             auto resourceSpaces = spaces;
@@ -183,6 +207,36 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             }
             continue;
         }
+        if (node.type == L"Storyboard") {
+            Node* holder = nullptr;
+            if (child->space == Presentation && child->type == L"Storyboard.Children") {
+                if (node.explicitTimelines || !node.timelines.empty())
+                    return Fail(L"Storyboard.Children multiple values", E_INVALIDARG);
+                for (const auto& attr : child->attributes)
+                    if (attr.space != Xmlns) return Fail(L"Storyboard.Children." + attr.name);
+                node.explicitTimelines = true;
+                holder = child.get();
+            } else if (node.explicitTimelines)
+                return Fail(L"Storyboard.Children mixed values", E_INVALIDARG);
+            auto prepareTimeline = [&](Node& entry) -> HRESULT {
+                auto hr = Prepare(entry, spaces, ignoreDesign, names, connections, false);
+                if (FAILED(hr)) return hr;
+                if (!AnimationType(entry.type)) return Fail(L"Storyboard.Children type " + entry.type, E_INVALIDARG);
+                node.timelines.push_back(&entry);
+                return S_OK;
+            };
+            if (holder) {
+                for (auto& entry : holder->children) {
+                    auto hr = prepareTimeline(*entry);
+                    if (FAILED(hr)) return hr;
+                }
+            } else {
+                auto hr = prepareTimeline(*child);
+                if (FAILED(hr)) return hr;
+            }
+            continue;
+        }
+        if (animation) return Fail(node.type + L".Children");
         Node* content = child.get();
         if (child->space == Presentation && child->type == node.type + L".Content") {
             if (node.type == L"Grid") return Fail(child->type);
@@ -193,11 +247,19 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         if (node.content) return Fail(node.type + L".Content multiple values", E_INVALIDARG);
         auto hr = Prepare(*content, spaces, ignoreDesign, names, connections, false);
         if (FAILED(hr)) return hr;
+        if (node.type == L"Page" && AnimationType(content->type))
+            return Fail(L"Page.Content nonvisual value", E_INVALIDARG);
         node.content = content;
     }
     return S_OK;
 }
 HRESULT Create(Node& node) {
+    if (AnimationType(node.type)) {
+        auto name = L"Windows.UI.Xaml.Media.Animation." + node.type;
+        ComPtr<IActivationFactory> factory;
+        auto hr = ShimGetFactory(Wrappers::HStringReference(name.c_str()).Get(), &factory);
+        return FAILED(hr) ? hr : factory->ActivateInstance(&node.value);
+    }
     if (node.type == L"Grid") return MakeGrid(&node.value);
     ComPtr<IActivationFactory> factory;
     auto name = L"Windows.UI.Xaml.Controls." + node.type;
@@ -232,6 +294,11 @@ HRESULT SetContent(Node& node) {
     return FAILED(hr) ? hr : content->put_Content(ui.Get());
 }
 HRESULT Apply(Node& node) {
+    if (AnimationType(node.type))
+        return ConfigureAnimation(node.value.Get(), node.hasDuration ? &node.duration : nullptr,
+                                  node.hasTargetName ? &node.targetName : nullptr,
+                                  node.hasThemeName ? &node.themeName : nullptr,
+                                  node.hasTargetProperty ? &node.targetProperty : nullptr);
     ComPtr<IFrameworkElement> element;
     auto hr = node.value.As(&element);
     if (SUCCEEDED(hr) && !node.name.empty())
@@ -248,6 +315,11 @@ HRESULT Apply(Node& node) {
 }
 HRESULT Build(Node& node);
 HRESULT BuildParts(Node& node) {
+    for (auto* timeline : node.timelines) {
+        auto hr = Build(*timeline);
+        if (SUCCEEDED(hr)) hr = AppendAnimation(node.value.Get(), timeline->value.Get());
+        if (FAILED(hr)) return hr;
+    }
     for (auto* resource : node.resources) {
         auto hr = Build(*resource);
         if (FAILED(hr)) return hr;
@@ -269,11 +341,20 @@ HRESULT Build(Node& node) {
     return FAILED(hr) ? hr : Apply(node);
 }
 HRESULT AttachNames(Node& node, const std::shared_ptr<SourceNameScope>& scope, bool root) {
-    ComPtr<INamedElementRegistry> registry;
-    auto hr = node.value.As(&registry);
+    HRESULT hr = S_OK;
+    if (AnimationType(node.type))
+        hr = BindAnimationScope(node.value.Get(), scope);
+    else {
+        ComPtr<INamedElementRegistry> registry;
+        hr = node.value.As(&registry);
+        if (SUCCEEDED(hr)) registry->SetSourceNameScope(scope, root);
+    }
     if (FAILED(hr)) return hr;
-    registry->SetSourceNameScope(scope, root);
     if (!root && !node.name.empty()) scope->elements[node.name] = node.value;
+    for (auto* timeline : node.timelines) {
+        hr = AttachNames(*timeline, scope, false);
+        if (FAILED(hr)) return hr;
+    }
     for (auto* resource : node.resources) {
         hr = AttachNames(*resource, scope, false);
         if (FAILED(hr)) return hr;
@@ -284,6 +365,10 @@ HRESULT Connect(Node& node, ABI::Windows::UI::Xaml::Markup::IComponentConnector*
     if (node.connection && !connector) return Fail(L"IComponentConnector", E_NOINTERFACE);
     auto hr = node.connection ? connector->Connect(node.connection, node.value.Get()) : S_OK;
     if (FAILED(hr)) return hr;
+    for (auto* timeline : node.timelines) {
+        hr = Connect(*timeline, connector);
+        if (FAILED(hr)) return hr;
+    }
     for (auto* resource : node.resources) {
         hr = Connect(*resource, connector);
         if (FAILED(hr)) return hr;
