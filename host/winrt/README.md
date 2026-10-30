@@ -151,8 +151,10 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 `SuspensionManager` initialize its string and dictionary attached properties.
 With the Xbox, settings, task, stream and connectivity projections below, the
 game constructs its Xbox wrapper and returns to `App.OnApplicationStarted`.
-It next fails at `Windows.ApplicationModel.Activation.IActivatedEventArgs.get_SplashScreen`
-(offset 0x33). No menu or game round has been displayed by this path.
+It retrieves the native launch splash and enters the game's `ExtendedSplash`
+constructor, then fails at `Windows.UI.Xaml.Controls.Page..ctor`
+(`App.OnApplicationStarted` offset 0x3f). No menu or game round has been displayed
+by this path.
 
 The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
 and `System.Runtime.WindowsRuntime.UI.Xaml`, still missing from Wine Mono, plus
@@ -192,7 +194,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error 'Windows.ApplicationModel.Activation.IActivatedEventArgs.get_SplashScreen'
+  --expected-game-error 'Windows.UI.Xaml.Controls.Page..ctor'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -405,3 +407,27 @@ managed-object senders, including an exception that must return through the
 invocation scope. It is copied only into that fixture and is not release content.
 By default the probe finds it beside the shim; `--network-fixture` selects an
 explicit path. Windows/x64 controls and gameplay acceptance remain pending.
+
+## Launch splash and typed events
+
+The IActivatedEventArgs.SplashScreen projection returns the shim's existing
+shared splash object. SplashScreen.Dismissed reaches the native event source,
+which queues dismissal behind activation and fires once. The generator supports
+`TypedEventHandler<TSender, TArgs>` through `Adapter="TypedEvent"`, deriving the
+closed delegate IID from WinMD and the selected argument signatures. The native
+callback uses two pointer arguments and preserves existing wrapper identity.
+Supported native arguments are selected runtime classes/interfaces and object;
+unsupported shapes fail generation by name.
+
+`--splash-only` and `winrt_splash_projection` launch a real composed Application
+with a WindowsRuntime-marked consumer. They verify splash identity, dismissal
+after OnLaunched returns, sender/argument identity, view-thread execution and
+continuation, one dismissal across repeated activation, and removal of the
+unwanted handler. The closed IID is independently checked against the SDK; a
+mutated typed-delegate signature must be rejected without producing output.
+
+The copied game now reaches ExtendedSplash's Page base constructor. Page
+composition, XAML component loading, splash ImageLocation/geometry projection,
+and a rendered game page remain pending. The fixture proves native splash
+object/event behavior; it does not establish a displayed game splash. Windows
+and x64 controls remain unverified.

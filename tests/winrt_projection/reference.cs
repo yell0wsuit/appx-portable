@@ -94,12 +94,14 @@ namespace Windows.ApplicationModel.Activation
     {
         ActivationKind Kind { get; }
         ApplicationExecutionState PreviousExecutionState { get; }
+        SplashScreen SplashScreen { get; }
     }
     public sealed class LaunchActivatedEventArgs : IActivatedEventArgs
     {
         public string Arguments { get { throw new global::System.NotImplementedException("Windows.ApplicationModel.Activation.LaunchActivatedEventArgs.Arguments"); } }
         public ActivationKind Kind { get { throw new global::System.NotImplementedException("Windows.ApplicationModel.Activation.LaunchActivatedEventArgs.Kind"); } }
         public ApplicationExecutionState PreviousExecutionState { get { throw new global::System.NotImplementedException("Windows.ApplicationModel.Activation.LaunchActivatedEventArgs.PreviousExecutionState"); } }
+        public SplashScreen SplashScreen { get { throw new global::System.NotImplementedException("Windows.ApplicationModel.Activation.IActivatedEventArgs.get_SplashScreen"); } }
     }
 }
 namespace Windows.UI.Core
@@ -148,5 +150,18 @@ namespace Windows.Networking.Connectivity
         public static ConnectionProfile GetInternetConnectionProfile() { throw new global::System.NotImplementedException("Windows.Networking.Connectivity.NetworkInformation.GetInternetConnectionProfile"); }
         public static global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_NetworkStatusChanged(NetworkStatusChangedEventHandler handler) { throw new global::System.NotImplementedException(); }
         public static void remove_NetworkStatusChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+}
+
+namespace Windows.Foundation
+{
+    public delegate void TypedEventHandler<TSender, TArgs>(TSender sender, TArgs args);
+}
+namespace Windows.ApplicationModel.Activation
+{
+    public sealed class SplashScreen
+    {
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Dismissed(global::Windows.Foundation.TypedEventHandler<SplashScreen, object> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Dismissed(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
 }

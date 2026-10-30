@@ -304,6 +304,12 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
       --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
       --shim "$<TARGET_FILE:appxportable>" --network-fixture "$<TARGET_FILE:network_projection_fixture>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
     set_tests_properties(winrt_projection PROPERTIES TIMEOUT 600 LABELS managed-clr)
+    add_test(NAME winrt_splash_projection COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
+      --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
+      --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
+      --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-splash-projection" --splash-only)
+    set_tests_properties(winrt_splash_projection PROPERTIES TIMEOUT 600 LABELS "managed-clr;activation")
     add_test(NAME winrt_network_projection COMMAND "${Python3_EXECUTABLE}"
       "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
       --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
