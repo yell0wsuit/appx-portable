@@ -30,7 +30,9 @@ HEADER_IIDS = {
     "ICoreWindowStatic": "4d239005-3c2a-41b1-9022-536bb9cf93b1", "ICoreWindow": "79b9d5f2-879e-4b89-b798-79e47598030c",
     "ICoreDispatcher": "60db2fa8-b705-4fde-a7d6-ebbb1891d39e",
     "IApplicationDataStatics": "5612147b-e843-45e3-94d8-06169e3c8e17", "IApplicationData": "c3da6fb7-b744-4b45-b0b8-223a0938d0dc",
-    "IApplicationDataContainer": "c5aefd1e-f467-40ba-8566-ab640a441e1d", "IPropertySet": "8a43ed9f-f4e6-4421-acf9-1dab2986820c"}
+    "IApplicationDataContainer": "c5aefd1e-f467-40ba-8566-ab640a441e1d", "IPropertySet": "8a43ed9f-f4e6-4421-acf9-1dab2986820c",
+    "INetworkInformationStatics": "5074f851-950d-4165-9c15-365619481eea",
+    "IConnectionProfile": "71ba143c-598e-49d0-84eb-8febaedcc195", "INetworkStatusChangedEventHandler": "71ba143f-598e-49d0-84eb-8febaedcc195"}
 HEADER_SLOTS = [
     "Windows.ApplicationModel.IPackageStatics::get_Current, slot 6", "Windows.ApplicationModel.IPackage::get_Id, slot 6",
     "Windows.ApplicationModel.IPackageId::get_Name, slot 6", "Windows.ApplicationModel.IPackageId::get_Architecture, slot 8",
@@ -55,7 +57,12 @@ HEADER_SLOTS = [
     "Windows.Storage.IApplicationDataStatics::get_Current, slot 6", "Windows.Storage.IApplicationData::get_LocalSettings, slot 10",
     "Windows.Storage.IApplicationData::get_RoamingSettings, slot 11", "Windows.Storage.IApplicationData::get_LocalFolder, slot 12", "Windows.Storage.IApplicationDataContainer::get_Name, slot 6",
     "Windows.Storage.IApplicationDataContainer::get_Locality, slot 7", "Windows.Storage.IApplicationDataContainer::get_Values, slot 8",
-    "Windows.Storage.IApplicationDataContainer::CreateContainer, slot 10", "Windows.Storage.IApplicationDataContainer::DeleteContainer, slot 11"]
+    "Windows.Storage.IApplicationDataContainer::CreateContainer, slot 10", "Windows.Storage.IApplicationDataContainer::DeleteContainer, slot 11",
+    "Windows.Networking.Connectivity.INetworkInformationStatics::GetInternetConnectionProfile, slot 7",
+    "Windows.Networking.Connectivity.INetworkInformationStatics::add_NetworkStatusChanged, slot 12",
+    "Windows.Networking.Connectivity.INetworkInformationStatics::remove_NetworkStatusChanged, slot 13",
+    "Windows.Networking.Connectivity.IConnectionProfile::get_ProfileName, slot 6",
+    "Windows.Networking.Connectivity.IConnectionProfile::GetNetworkConnectivityLevel, slot 7"]
 # The runtime's dispatcher context calls CoreWindow and CoreDispatcher directly
 # (windows.ui.core.h): each IID and slot, and the call that uses the slot.
 HEADER_RUNTIME = [
@@ -80,6 +87,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("wine", "prefix", "metadata", "shim", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--network-fixture", type=Path, help="test-only native network callback DLL (default beside shim)")
+    parser.add_argument("--network-only", action="store_true", help="run the native connectivity projection fixture")
     parser.add_argument("--io-only", action="store_true", help="run the native storage/stream projection fixture")
     parser.add_argument("--async-only", action="store_true", help="run the focused WinRT task adapters fixture")
     parser.add_argument("--storage-only", action="store_true", help="run the focused persistent settings projection fixture")
@@ -92,15 +101,18 @@ def main():
     parser.add_argument("--consumer", type=Path, action="append", default=[])
     parser.add_argument("--architecture", choices=("x86", "x64"), default="x86")
     args = parser.parse_args()
-    if sum((args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
+    if sum((args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
         parser.error("focused probe modes cannot be combined")
-    if (args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
-        parser.error("focused async/storage probes cannot include game or Xbox inputs")
+    if (args.network_only or args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
+        parser.error("focused projection probes cannot include game or Xbox inputs")
     if args.xbox_only and (not args.xbox_metadata or args.game):
         parser.error("--xbox-only requires --xbox-metadata and cannot launch a game")
     repo = Path(__file__).resolve().parents[1]
     wine, prefix, metadata, shim, output = (getattr(args, name).resolve()
                                           for name in ("wine", "prefix", "metadata", "shim", "output"))
+    network_fixture = args.network_fixture.resolve() if args.network_fixture else shim.parent / "network_projection_fixture.dll"
+    if (args.network_only or not any((args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not network_fixture.is_file():
+        parser.error("build network_projection_fixture or pass --network-fixture")
     if args.game:
         args.game = args.game.resolve()
         if not args.consumer or not args.expected_game_error:
@@ -215,6 +227,38 @@ def main():
             marker="PASS: WinRT task adapters preserve completion, failure, cancellation, progress and ownership")
         return bridge
 
+    def probe_network(projection, generator):
+        generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
+        checks = ['System.Guid("' + HEADER_IIDS[name] + '")' for name in ("INetworkInformationStatics", "IConnectionProfile", "INetworkStatusChangedEventHandler")]
+        checks += ["// " + slot for slot in HEADER_SLOTS if "Networking.Connectivity" in slot]
+        checks += ["self, out int result);", "public static global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_NetworkStatusChanged"]
+        require(all(value in generated for value in checks), "network ABI differs from SDK header values")
+        mutator = compile_file("mutate-network.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
+        changed = output / "network-wide-enum"
+        invalid = output / "network-wide-enum.cs"
+        if invalid.exists():
+            invalid.unlink()
+        run("mutate-network-enum", [mutator.name, windows(metadata), windows(changed), "network-enum"])
+        run("reject-network-enum", [generator.name, windows(changed), windows(repo / "host/winrt/bootstrap.xml"), windows(invalid)], succeeds=False, marker="Unsupported enum return")
+        require(not invalid.exists(), "invalid connectivity enum left a usable output")
+        marker = compile_file("mark-network.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
+        reference = compile_file("network-reference/Windows.dll", [repo / "tests/winrt_projection/reference.cs"], ["/target:library"])
+        consumer = compile_file("network.exe", [repo / "tests/winrt_projection/network.cs"], ["/r:" + windows(reference)])
+        run("mark-network", [marker.name, windows(consumer), "network-winrt.exe"], marker="flags=WindowsRuntime")
+        folder = fixture("network", consumer.name, "NetworkProjectionTest", "CN=projection")
+        copy_owned_file(output / "network-winrt.exe", folder / consumer.name)
+        copy_owned_file(reference, folder / "Windows.dll")
+        run("network-reference-contract", [consumer.name], cwd=folder, succeeds=False, marker="NetworkInformation.GetInternetConnectionProfile")
+        copy_owned_file(projection, folder / "Windows.dll")
+        for mode in ("offline", "stub"):
+            run("network-" + mode, [consumer.name, mode], cwd=folder, environment={"APPX_PORTABLE_STUB_IAP": "1" if mode == "stub" else "0"},
+                marker="PASS: managed network projection preserves native connectivity and event lifetime (" + mode + ")")
+        runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
+        abi = compile_file("network-abi.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/network_abi.cs"])
+        copy_owned_file(abi, folder / abi.name)
+        copy_owned_file(network_fixture, folder / "network_projection_fixture.dll")
+        run("network-abi", [abi.name], cwd=folder, marker="PASS: native network delegate ABI preserves sender and callback failures")
+
     def check_io_metadata(generator):
         mutator = compile_file("mutate-storage-abi.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         for kind, expected in (("stream-size", "IRandomAccessStream.get_Size"), ("read-count", "IInputStream.ReadAsync"),
@@ -322,6 +366,14 @@ def main():
         return xbox_projection
 
     try:
+        if args.network_only:
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generated = output / "Windows.generated.cs"
+            run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
+            runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
+            projection = compile_file("projection/Windows.dll", runtime + [generated], ["/target:library"])
+            probe_network(projection, generator)
+            return 0
         if args.io_only:
             generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
@@ -466,6 +518,7 @@ def main():
         run("completed-abi-setter", ["application-abi.exe"], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         check_storage_metadata(generator)
         probe_storage(marker, projection)
+        probe_network(projection, generator)
         check_io_metadata(generator)
         task_bridge = probe_async(projection)
         probe_io(projection, task_bridge)
