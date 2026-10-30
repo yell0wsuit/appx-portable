@@ -61,11 +61,19 @@ internal static partial class WinrtProjectionGenerator
         return interfaces.ContainsKey(type.FullName) ? Projected(Find(type.FullName)) : "global::" + type.FullName;
     }
 
+    // Selected Windows object results share the connector's qualified type dispatch.
+    private static string Inspectable(string value)
+    {
+        const string connector = "Windows.UI.Xaml.Markup.IComponentConnector";
+        return selected.Contains(connector) ? Projected(Find(connector)) + ".FromNativeObject(" + value + ")"
+            : Runtime + "NativeObject.Inspectable(" + value + ")";
+    }
+
     // A native pointer argument of a callback as its managed parameter.
     private static string Unwrap(TypeReference type, string pointer)
     {
         string borrowed = Runtime + "NativeObject.Borrow(" + pointer + ")";
-        return type.FullName == "System.Object" ? Runtime + "NativeObject.Inspectable(" + borrowed + ")"
+        return type.FullName == "System.Object" ? Inspectable(borrowed)
             : Wrapper(type) + ".FromNative(" + borrowed + ")";
     }
 
@@ -167,7 +175,7 @@ internal static partial class WinrtProjectionGenerator
         string number = Literal(slot);
         TypeReference result = method.ReturnType;
         if (result.FullName == "System.String") return receiver + ".String(" + number + ")";
-        if (result.FullName == "System.Object") return Runtime + "NativeObject.Inspectable(" + receiver + ".Object(" + number + "))";
+        if (result.FullName == "System.Object") return Inspectable(receiver + ".Object(" + number + ")");
         TypeDefinition definition = Find(result.FullName);
         if (definition.IsEnum)
         {
@@ -329,7 +337,7 @@ internal static partial class WinrtProjectionGenerator
         else if (returns)
         {
             string result = Runtime + "NativeObject.ObjectResult(hr, result)";
-            output.AppendLine("                    return " + (method.ReturnType.FullName == "System.Object" ? Runtime + "NativeObject.Inspectable(" + result + ")" : Wrapper(method.ReturnType) + ".FromNative(" + result + ")") + ";");
+            output.AppendLine("                    return " + (method.ReturnType.FullName == "System.Object" ? Inspectable(result) : Wrapper(method.ReturnType) + ".FromNative(" + result + ")") + ";");
         }
         else output.AppendLine("                    " + Runtime + "Errors.Check(hr);");
         output.AppendLine("                }");
@@ -472,6 +480,10 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("        private static readonly ConnectCall connect = (self, id, value) => " + Runtime + "ManagedObject.Call(self, target =>");
         output.AppendLine("            ((global::Windows.UI.Xaml.Markup.IComponentConnector)target).Connect(id, Unwrap(value)));");
         output.AppendLine("        internal static readonly " + Runtime + "NativeInterface Interface = new " + Runtime + "NativeInterface(" + Guid(type) + ", true, connect);");
+        output.AppendLine("        internal static object FromNativeObject(" + Runtime + "NativeObject value)");
+        output.AppendLine("        {");
+        output.AppendLine("            using (value) return value == null ? null : Unwrap(value.DangerousGetHandle());");
+        output.AppendLine("        }");
         output.AppendLine("        private static object Unwrap(global::System.IntPtr pointer)");
         output.AppendLine("        {");
         output.AppendLine("            using (var value = " + Runtime + "NativeObject.Borrow(pointer))");

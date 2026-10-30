@@ -510,7 +510,7 @@ This first slice supports Page, Frame and empty Grid elements, implicit content
 and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
 ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
 attributes in a declared ignorable Blend namespace are skipped. Inline resource
-dictionaries are supported as described below. Animations, brushes, Grid children,
+dictionaries and storyboard data are supported as described below. Animation clocks, brushes, Grid children,
 other controls and other properties fail
 explicitly, with their member names in appx-portable.log.
 
@@ -559,7 +559,7 @@ unselected; native map behavior is verified through the SDK ABI.
 
 The source loader accepts `<Page.Resources>`, `<Frame.Resources>` and
 `<Grid.Resources>` with implicit entries or a sole explicit ResourceDictionary.
-Resource values currently use the supported Page/Frame/Grid source types.
+Resource values currently use the supported Page/Frame/Grid and animation source types.
 Literal x:Key selects a key; x:Name supplies a fallback key under the documented
 [XAML naming convention](https://learn.microsoft.com/en-us/windows/apps/develop/platform/xaml/x-name-attribute).
 Keys do not register names for FindName. Actual names enter the component's
@@ -573,5 +573,33 @@ replacement/removal, snapshots retaining a native value after its original
 references are released, split views, iterator boundaries/GetMany, wrong-thread
 calls and unsupported keys. Source regressions cover implicit, explicit, empty
 and nested dictionaries; names versus keys; replacement lifetime; callbacks; and
-unsupported entries preserving the existing tree/resources. Storyboards and
-animation execution remain separate implementation checkpoints.
+unsupported entries preserving the existing tree/resources. Animation execution
+remains a separate implementation checkpoint.
+
+
+## Storyboard and timeline data
+
+The native engine activates Storyboard, FadeInThemeAnimation and
+FadeOutThemeAnimation through their SDK interfaces. Timeline properties store
+validated duration, begin time, speed, repeat, fill and reverse values. Source
+XAML accepts implicit Storyboard children or a sole Storyboard.Children container,
+Duration values with exact 100 ns precision, and literal animation target names
+and properties. Theme TargetName and Storyboard.TargetName remain distinct.
+Named timelines participate in source namescopes and component callbacks;
+FindName returns the selected managed animation type even without a prior callback.
+Retaining a timeline does not retain the component root.
+
+Storyboard.Children implements the SDK vector, iterable, snapshot view and
+iterator contracts. Children retain their timeline objects; collections remain
+usable after their original Storyboard is released. Invalid replacements preserve
+old contents, cycles are rejected, and operations enforce the creating thread.
+Completed subscriptions retain and release handlers, but no completion is fired.
+
+Clock operations, including Begin, return named E_NOTIMPL errors. No animation
+runs in this checkpoint. Explicit object targets, animation dependency-property
+identifiers and target markup extensions also fail explicitly. Managed animation
+constructors and collection/property projection remain unselected; SDK callers
+verify the native data contract. The source fixture covers typed names, exact
+and overflowing durations, thread checks, lifetime, collection boundaries,
+oversized ReplaceAll counts and rejected Page content preserving root properties.
+Frame retains its object-typed content contract.

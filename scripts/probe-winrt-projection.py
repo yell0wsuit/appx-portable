@@ -12,7 +12,8 @@ import struct
 import subprocess
 
 # IIDs and vtable slots taken from the Windows SDK's ABI headers
-# (windows.applicationmodel.h, windows.applicationmodel.activation.h, windows.ui.xaml.h),
+# (windows.applicationmodel.h, windows.applicationmodel.activation.h, windows.ui.xaml.h,
+# windows.ui.xaml.media.animation.h),
 # independent of the metadata the generator reads. Slots follow IInspectable's six.
 HEADER_IIDS = {
     "IPackageStatics": "4e534bdf-2960-4878-97a4-9624deb72f2d", "IPackage": "163c792f-bd75-413c-bf23-b1fe7b95d825",
@@ -33,6 +34,7 @@ HEADER_IIDS = {
     "IApplicationDataContainer": "c5aefd1e-f467-40ba-8566-ab640a441e1d", "IPropertySet": "8a43ed9f-f4e6-4421-acf9-1dab2986820c",
     "ISplashScreen": "ca4d975c-d4d6-43f0-97c0-0833c6391c24",
     "IResourceDictionary": "c1ea4f24-d6de-4191-8e3a-f48601f7489c", "IResourceDictionaryFactory": "ea3639b5-31b7-4271-92c9-7c9584a91c22",
+    "ITimeline": "0bc465dc-be4d-4d0d-9549-2208b715f40d", "IStoryboard": "d45c1e6e-3594-460e-981a-32271bd3aa06",
     "IComponentConnector": "f6790987-e6e5-47f2-92c6-eccce4ba159a",
     "IUriRuntimeClass": "9e365e57-48b2-4160-956f-c7385120bbfc", "IUriRuntimeClassFactory": "44a9796f-723e-4fdf-a218-033e75b0c084",
     "IPage": "c4b27075-e641-453e-824d-012fc7cf95cf", "IPageFactory": "dfa149ac-1849-445e-937c-40a9590cc076",
@@ -41,6 +43,7 @@ HEADER_IIDS = {
     "INetworkInformationStatics": "5074f851-950d-4165-9c15-365619481eea",
     "IConnectionProfile": "71ba143c-598e-49d0-84eb-8febaedcc195", "INetworkStatusChangedEventHandler": "71ba143f-598e-49d0-84eb-8febaedcc195"}
 HEADER_SLOTS = [
+    "Windows.UI.Xaml.Media.Animation.IStoryboard::Begin, slot 9",
     "Windows.ApplicationModel.IPackageStatics::get_Current, slot 6", "Windows.ApplicationModel.IPackage::get_Id, slot 6",
     "Windows.ApplicationModel.IPackageId::get_Name, slot 6", "Windows.ApplicationModel.IPackageId::get_Architecture, slot 8",
     "Windows.ApplicationModel.IPackageId::get_ResourceId, slot 9", "Windows.ApplicationModel.IPackageId::get_Publisher, slot 10",
@@ -257,10 +260,10 @@ def main():
 
     def probe_page(projection):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
-        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory"):
+        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
-            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory")):
+            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
         mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri")):

@@ -8,3 +8,5 @@ EXPORTS
   ValidateLoadedSource
   ExerciseResourceMap
   ValidateLoadedResources
+  ExerciseAnimationData
+  ValidateSourceRootFields
