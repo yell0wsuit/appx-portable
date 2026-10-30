@@ -223,6 +223,8 @@ if(WIN32)
     "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-toast-fixture"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 endif()
+add_library(page_projection_fixture SHARED tests/page_projection_fixture.cpp tests/page_projection_fixture.def)
+target_link_libraries(page_projection_fixture PRIVATE runtimeobject ole32)
 add_library(network_projection_fixture SHARED tests/network_projection_fixture.cpp tests/network_projection_fixture.def)
 target_link_libraries(network_projection_fixture PRIVATE runtimeobject ole32)
 add_executable(storetest tests/storetest.cpp)
@@ -302,8 +304,15 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
       "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
       --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
       --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
-      --shim "$<TARGET_FILE:appxportable>" --network-fixture "$<TARGET_FILE:network_projection_fixture>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
+      --shim "$<TARGET_FILE:appxportable>" --network-fixture "$<TARGET_FILE:network_projection_fixture>" --page-fixture "$<TARGET_FILE:page_projection_fixture>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
     set_tests_properties(winrt_projection PROPERTIES TIMEOUT 600 LABELS managed-clr)
+    add_test(NAME winrt_page_projection COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
+      --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
+      --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
+      --shim "$<TARGET_FILE:appxportable>" --page-fixture "$<TARGET_FILE:page_projection_fixture>"
+      --output "${CMAKE_BINARY_DIR}/winrt-page-projection" --page-only)
+    set_tests_properties(winrt_page_projection PROPERTIES TIMEOUT 600 LABELS "managed-clr;activation")
     add_test(NAME winrt_splash_projection COMMAND "${Python3_EXECUTABLE}"
       "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
       --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
