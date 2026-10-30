@@ -72,6 +72,19 @@ namespace Windows.UI.Xaml.Controls
 {
     public class Control : global::Windows.UI.Xaml.FrameworkElement { internal Control() { } }
     public class ContentControl : Control { internal ContentControl() { } }
+    public class UserControl : Control
+    {
+        internal UserControl() { }
+        public global::Windows.UI.Xaml.UIElement Content { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
+    public class Page : UserControl
+    {
+        public Page() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Controls.Page..ctor"); }
+        public Frame Frame { get { throw new global::System.NotImplementedException(); } }
+        protected virtual void OnNavigatedTo(global::Windows.UI.Xaml.Navigation.NavigationEventArgs args) { throw new global::System.NotImplementedException(); }
+        protected virtual void OnNavigatedFrom(global::Windows.UI.Xaml.Navigation.NavigationEventArgs args) { throw new global::System.NotImplementedException(); }
+        protected virtual void OnNavigatingFrom(global::Windows.UI.Xaml.Navigation.NavigatingCancelEventArgs args) { throw new global::System.NotImplementedException(); }
+    }
     public class Frame : ContentControl
     {
         public Frame() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Controls.Frame..ctor"); }
@@ -164,4 +177,10 @@ namespace Windows.ApplicationModel.Activation
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Dismissed(global::Windows.Foundation.TypedEventHandler<SplashScreen, object> handler) { throw new global::System.NotImplementedException(); }
         public void remove_Dismissed(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
+}
+
+namespace Windows.UI.Xaml.Navigation
+{
+    public sealed class NavigationEventArgs { }
+    public sealed class NavigatingCancelEventArgs { }
 }

@@ -151,9 +151,10 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 `SuspensionManager` initialize its string and dictionary attached properties.
 With the Xbox, settings, task, stream and connectivity projections below, the
 game constructs its Xbox wrapper and returns to `App.OnApplicationStarted`.
-It retrieves the native launch splash and enters the game's `ExtendedSplash`
-constructor, then fails at `Windows.UI.Xaml.Controls.Page..ctor`
-(`App.OnApplicationStarted` offset 0x3f). No menu or game round has been displayed
+It retrieves the native launch splash and composes the game's `ExtendedSplash`
+Page. It then fails at `Windows.UI.Xaml.Application.LoadComponent` in
+`ExtendedSplash.InitializeComponent` (offset 0x1b), called by its constructor
+and `App.OnApplicationStarted` (offset 0x3f). No menu or game round has been displayed
 by this path.
 
 The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
@@ -186,7 +187,7 @@ manifest, consumer, and replaced runtime DLL hashes
 are checked after launch and recorded in `game-inputs.json`. For this checkpoint, build the test callback DLL beside the shim as well:
 
 ```sh
-cmake --build build/macos-x86 --target appxportable network_projection_fixture
+cmake --build build/macos-x86 --target appxportable network_projection_fixture page_projection_fixture
 python3 scripts/probe-winrt-projection.py \
   --wine "$wine/bin/wine" --prefix /path/to/isolated-prefix \
   --metadata /path/to/contracts/ref/netstandard2.0 \
@@ -194,7 +195,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error 'Windows.UI.Xaml.Controls.Page..ctor'
+  --expected-game-error 'Windows.UI.Xaml.Application.LoadComponent'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -426,8 +427,37 @@ continuation, one dismissal across repeated activation, and removal of the
 unwanted handler. The closed IID is independently checked against the SDK; a
 mutated typed-delegate signature must be rejected without producing output.
 
-The copied game now reaches ExtendedSplash's Page base constructor. Page
-composition, XAML component loading, splash ImageLocation/geometry projection,
+The copied game now passes ExtendedSplash's Page base constructor. XAML component
+loading, splash ImageLocation/geometry projection,
 and a rendered game page remain pending. The fixture proves native splash
 object/event behavior; it does not establish a displayed game splash. Windows
 and x64 controls remain unverified.
+
+## Managed Page composition
+
+The selected Page constructor now composes over the existing native Page factory.
+UserControl supplies the selected base type and Content property; Page.Frame
+reads the native page's host frame. The most-derived projected constructor
+creates the native object once, sharing its root's native/outer fields through
+the marker constructor chain. Derived composable classes can expose their own
+selected override interfaces.
+
+OnNavigatedTo, OnNavigatedFrom and OnNavigatingFrom dispatch through the managed
+controlling outer. Their managed base implementations call the nondelegating
+inner's native interface. This preserves the native base behavior and avoids
+recursive override dispatch. NavigationEventArgs and NavigatingCancelEventArgs
+are typed wrappers; their general properties remain unselected.
+
+`--page-only` and `winrt_page_projection` check a WindowsRuntime-marked consumer
+with two levels of managed Page inheritance, real inherited Content and local
+dependency properties, and Page identity through Window.Content. A second
+fixture compiles the same consumer with the production runtime and uses the
+test-only `page_projection_fixture.dll` to call the SDK IPageOverrides ABI via an
+ordinary UI interface. It checks all three overrides, shared navigation-argument
+identity, inherited base methods, a partial override, and callback exception
+identity. The DLL is not copied into probe games or release content. Its default
+location is beside the shim; `--page-fixture` selects another path.
+
+The fixture does not perform actual Frame navigation or test populated
+cancellation arguments. XAML component/source loading, layout, rendering,
+Windows/x64 controls and gameplay acceptance remain pending.

@@ -692,7 +692,6 @@ internal static partial class WinrtProjectionGenerator
                 a.ConstructorArguments[0].Type.FullName == "System.UInt32")))
             throw new NotSupportedException("No default activation constructor: " + type.FullName);
         if (overridden.Count != 0 && !constructor) throw new InvalidDataException("Overridable without Constructor: " + type.FullName);
-        if (overridden.Count != 0 && baseClass != null) throw new NotSupportedException("Overridable on a derived class: " + type.FullName);
 
         // Overridable interfaces with a selected member are answered by the managed outer;
         // the others, across the class chain, keep the native behavior, and a managed
