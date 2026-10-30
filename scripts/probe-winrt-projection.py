@@ -31,6 +31,7 @@ HEADER_IIDS = {
     "ICoreDispatcher": "60db2fa8-b705-4fde-a7d6-ebbb1891d39e",
     "IApplicationDataStatics": "5612147b-e843-45e3-94d8-06169e3c8e17", "IApplicationData": "c3da6fb7-b744-4b45-b0b8-223a0938d0dc",
     "IApplicationDataContainer": "c5aefd1e-f467-40ba-8566-ab640a441e1d", "IPropertySet": "8a43ed9f-f4e6-4421-acf9-1dab2986820c",
+    "ISplashScreen": "ca4d975c-d4d6-43f0-97c0-0833c6391c24",
     "INetworkInformationStatics": "5074f851-950d-4165-9c15-365619481eea",
     "IConnectionProfile": "71ba143c-598e-49d0-84eb-8febaedcc195", "INetworkStatusChangedEventHandler": "71ba143f-598e-49d0-84eb-8febaedcc195"}
 HEADER_SLOTS = [
@@ -62,7 +63,10 @@ HEADER_SLOTS = [
     "Windows.Networking.Connectivity.INetworkInformationStatics::add_NetworkStatusChanged, slot 12",
     "Windows.Networking.Connectivity.INetworkInformationStatics::remove_NetworkStatusChanged, slot 13",
     "Windows.Networking.Connectivity.IConnectionProfile::get_ProfileName, slot 6",
-    "Windows.Networking.Connectivity.IConnectionProfile::GetNetworkConnectivityLevel, slot 7"]
+    "Windows.Networking.Connectivity.IConnectionProfile::GetNetworkConnectivityLevel, slot 7",
+    "Windows.ApplicationModel.Activation.IActivatedEventArgs::get_SplashScreen, slot 8",
+    "Windows.ApplicationModel.Activation.ISplashScreen::add_Dismissed, slot 7",
+    "Windows.ApplicationModel.Activation.ISplashScreen::remove_Dismissed, slot 8"]
 # The runtime's dispatcher context calls CoreWindow and CoreDispatcher directly
 # (windows.ui.core.h): each IID and slot, and the call that uses the slot.
 HEADER_RUNTIME = [
@@ -87,6 +91,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("wine", "prefix", "metadata", "shim", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--splash-only", action="store_true", help="run the native splash activation fixture")
     parser.add_argument("--network-fixture", type=Path, help="test-only native network callback DLL (default beside shim)")
     parser.add_argument("--network-only", action="store_true", help="run the native connectivity projection fixture")
     parser.add_argument("--io-only", action="store_true", help="run the native storage/stream projection fixture")
@@ -101,9 +106,9 @@ def main():
     parser.add_argument("--consumer", type=Path, action="append", default=[])
     parser.add_argument("--architecture", choices=("x86", "x64"), default="x86")
     args = parser.parse_args()
-    if sum((args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
+    if sum((args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
         parser.error("focused probe modes cannot be combined")
-    if (args.network_only or args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
+    if (args.splash_only or args.network_only or args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
         parser.error("focused projection probes cannot include game or Xbox inputs")
     if args.xbox_only and (not args.xbox_metadata or args.game):
         parser.error("--xbox-only requires --xbox-metadata and cannot launch a game")
@@ -111,7 +116,7 @@ def main():
     wine, prefix, metadata, shim, output = (getattr(args, name).resolve()
                                           for name in ("wine", "prefix", "metadata", "shim", "output"))
     network_fixture = args.network_fixture.resolve() if args.network_fixture else shim.parent / "network_projection_fixture.dll"
-    if (args.network_only or not any((args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not network_fixture.is_file():
+    if (args.network_only or not any((args.splash_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not network_fixture.is_file():
         parser.error("build network_projection_fixture or pass --network-fixture")
     if args.game:
         args.game = args.game.resolve()
@@ -226,6 +231,30 @@ def main():
         run("task-adapters", [signed.name], cwd=folder,
             marker="PASS: WinRT task adapters preserve completion, failure, cancellation, progress and ownership")
         return bridge
+
+    def probe_splash(projection, generator):
+        generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
+        for value in (HEADER_IIDS["ISplashScreen"], "7725b2a5-287d-5ed2-a789-2a6a2673c7fe"):
+            require(value in generated, "splash IID differs from SDK header: " + value)
+        for value in HEADER_SLOTS:
+            if "SplashScreen" in value or "ISplashScreen" in value:
+                require("// " + value in generated, "splash ABI differs from SDK header: " + value)
+        mutator = compile_file("mutate-splash.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
+        changed = output / "splash-bad-handler"
+        invalid = output / "splash-bad-handler.cs"
+        if invalid.exists():
+            invalid.unlink()
+        run("mutate-splash-handler", [mutator.name, windows(metadata), windows(changed), "typed-event"])
+        run("reject-splash-handler", [generator.name, windows(changed), windows(repo / "host/winrt/bootstrap.xml"), windows(invalid)], succeeds=False, marker="Unsupported typed event delegate")
+        require(not invalid.exists(), "unqualified typed event produced output")
+        marker = compile_file("mark-splash.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
+        reference = compile_file("splash-reference/Windows.dll", [repo / "tests/winrt_projection/reference.cs"], ["/target:library"])
+        consumer = compile_file("splash.exe", [repo / "tests/winrt_projection/splash.cs"], ["/r:" + windows(reference)])
+        run("mark-splash", [marker.name, windows(consumer), "splash-winrt.exe"], marker="flags=WindowsRuntime")
+        folder = fixture("splash", consumer.name, "SplashProjectionTest", "CN=projection")
+        copy_owned_file(output / "splash-winrt.exe", folder / consumer.name)
+        copy_owned_file(projection, folder / "Windows.dll")
+        run("splash", [consumer.name], cwd=folder, marker="PASS: managed splash identity and typed dismissal follow native activation")
 
     def probe_network(projection, generator):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
@@ -366,6 +395,14 @@ def main():
         return xbox_projection
 
     try:
+        if args.splash_only:
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generated = output / "Windows.generated.cs"
+            run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
+            runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
+            projection = compile_file("projection/Windows.dll", runtime + [generated], ["/target:library"])
+            probe_splash(projection, generator)
+            return 0
         if args.network_only:
             generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
@@ -518,6 +555,7 @@ def main():
         run("completed-abi-setter", ["application-abi.exe"], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         check_storage_metadata(generator)
         probe_storage(marker, projection)
+        probe_splash(projection, generator)
         probe_network(projection, generator)
         check_io_metadata(generator)
         task_bridge = probe_async(projection)
