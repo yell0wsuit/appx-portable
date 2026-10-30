@@ -53,6 +53,18 @@
   <Class Name="Windows.UI.Xaml.FrameworkElement" />
   <Class Name="Windows.UI.Xaml.Controls.Control" />
   <Class Name="Windows.UI.Xaml.Controls.ContentControl" />
+  <Class Name="Windows.UI.Xaml.Controls.UserControl">
+    <Property Name="Content" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.Page">
+    <Constructor />
+    <Property Name="Frame" />
+    <Overridable Name="OnNavigatedTo" />
+    <Overridable Name="OnNavigatedFrom" />
+    <Overridable Name="OnNavigatingFrom" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Navigation.NavigationEventArgs" />
+  <Class Name="Windows.UI.Xaml.Navigation.NavigatingCancelEventArgs" />
   <Class Name="Windows.UI.Xaml.Controls.Frame">
     <Constructor />
   </Class>

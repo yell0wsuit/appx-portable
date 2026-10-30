@@ -32,6 +32,9 @@ HEADER_IIDS = {
     "IApplicationDataStatics": "5612147b-e843-45e3-94d8-06169e3c8e17", "IApplicationData": "c3da6fb7-b744-4b45-b0b8-223a0938d0dc",
     "IApplicationDataContainer": "c5aefd1e-f467-40ba-8566-ab640a441e1d", "IPropertySet": "8a43ed9f-f4e6-4421-acf9-1dab2986820c",
     "ISplashScreen": "ca4d975c-d4d6-43f0-97c0-0833c6391c24",
+    "IPage": "c4b27075-e641-453e-824d-012fc7cf95cf", "IPageFactory": "dfa149ac-1849-445e-937c-40a9590cc076",
+    "IPageOverrides": "230b9cb8-3419-4306-aabe-4a8e680d3627", "IUserControl": "a7a69ec9-ea35-4679-bf29-f4f09286d314",
+    "INavigationEventArgs": "b6aa9834-6691-44d1-bdf7-58820c27b0d0", "INavigatingCancelEventArgs": "fd1d67ae-eafb-4079-be80-6dc92a03aedf",
     "INetworkInformationStatics": "5074f851-950d-4165-9c15-365619481eea",
     "IConnectionProfile": "71ba143c-598e-49d0-84eb-8febaedcc195", "INetworkStatusChangedEventHandler": "71ba143f-598e-49d0-84eb-8febaedcc195"}
 HEADER_SLOTS = [
@@ -66,7 +69,11 @@ HEADER_SLOTS = [
     "Windows.Networking.Connectivity.IConnectionProfile::GetNetworkConnectivityLevel, slot 7",
     "Windows.ApplicationModel.Activation.IActivatedEventArgs::get_SplashScreen, slot 8",
     "Windows.ApplicationModel.Activation.ISplashScreen::add_Dismissed, slot 7",
-    "Windows.ApplicationModel.Activation.ISplashScreen::remove_Dismissed, slot 8"]
+    "Windows.ApplicationModel.Activation.ISplashScreen::remove_Dismissed, slot 8",
+    "Windows.UI.Xaml.Controls.IPageFactory::CreateInstance, slot 6", "Windows.UI.Xaml.Controls.IPage::get_Frame, slot 6",
+    "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatedFrom, slot 6", "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatedTo, slot 7",
+    "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatingFrom, slot 8", "Windows.UI.Xaml.Controls.IUserControl::get_Content, slot 6",
+    "Windows.UI.Xaml.Controls.IUserControl::put_Content, slot 7"]
 # The runtime's dispatcher context calls CoreWindow and CoreDispatcher directly
 # (windows.ui.core.h): each IID and slot, and the call that uses the slot.
 HEADER_RUNTIME = [
@@ -91,6 +98,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("wine", "prefix", "metadata", "shim", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--page-fixture", type=Path, help="test-only native Page callback DLL (default beside shim)")
+    parser.add_argument("--page-only", action="store_true", help="run native Page composition and override fixtures")
     parser.add_argument("--splash-only", action="store_true", help="run the native splash activation fixture")
     parser.add_argument("--network-fixture", type=Path, help="test-only native network callback DLL (default beside shim)")
     parser.add_argument("--network-only", action="store_true", help="run the native connectivity projection fixture")
@@ -106,9 +115,9 @@ def main():
     parser.add_argument("--consumer", type=Path, action="append", default=[])
     parser.add_argument("--architecture", choices=("x86", "x64"), default="x86")
     args = parser.parse_args()
-    if sum((args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
+    if sum((args.page_only, args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
         parser.error("focused probe modes cannot be combined")
-    if (args.splash_only or args.network_only or args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
+    if (args.page_only or args.splash_only or args.network_only or args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
         parser.error("focused projection probes cannot include game or Xbox inputs")
     if args.xbox_only and (not args.xbox_metadata or args.game):
         parser.error("--xbox-only requires --xbox-metadata and cannot launch a game")
@@ -116,8 +125,11 @@ def main():
     wine, prefix, metadata, shim, output = (getattr(args, name).resolve()
                                           for name in ("wine", "prefix", "metadata", "shim", "output"))
     network_fixture = args.network_fixture.resolve() if args.network_fixture else shim.parent / "network_projection_fixture.dll"
-    if (args.network_only or not any((args.splash_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not network_fixture.is_file():
+    if (args.network_only or not any((args.page_only, args.splash_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not network_fixture.is_file():
         parser.error("build network_projection_fixture or pass --network-fixture")
+    page_fixture = args.page_fixture.resolve() if args.page_fixture else shim.parent / "page_projection_fixture.dll"
+    if (args.page_only or not any((args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not page_fixture.is_file():
+        parser.error("build page_projection_fixture or pass --page-fixture")
     if args.game:
         args.game = args.game.resolve()
         if not args.consumer or not args.expected_game_error:
@@ -231,6 +243,27 @@ def main():
         run("task-adapters", [signed.name], cwd=folder,
             marker="PASS: WinRT task adapters preserve completion, failure, cancellation, progress and ownership")
         return bridge
+
+    def probe_page(projection):
+        generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
+        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs"):
+            require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
+        for slot in HEADER_SLOTS:
+            if "Controls.IPage" in slot or "Controls.IUserControl" in slot:
+                require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
+        marker = compile_file("mark-page.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
+        reference = compile_file("page-reference/Windows.dll", [repo / "tests/winrt_projection/reference.cs"], ["/target:library"])
+        consumer = compile_file("page.exe", [repo / "tests/winrt_projection/page.cs"], ["/r:" + windows(reference)])
+        run("mark-page", [marker.name, windows(consumer), "page-winrt.exe"], marker="flags=WindowsRuntime")
+        folder = fixture("page", consumer.name, "PageProjectionTest", "CN=projection")
+        copy_owned_file(output / "page-winrt.exe", folder / consumer.name)
+        copy_owned_file(projection, folder / "Windows.dll")
+        run("page", [consumer.name], cwd=folder, marker="PASS: managed Page composes native inheritance, content and window identity")
+        runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
+        abi = compile_file("page-abi.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/page.cs"], ["/define:NATIVE_ABI"])
+        copy_owned_file(abi, folder / abi.name)
+        copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
+        run("page-abi", [abi.name], cwd=folder, marker="PASS: native Page callbacks dispatch through derived managed overrides and base methods")
 
     def probe_splash(projection, generator):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
@@ -395,6 +428,14 @@ def main():
         return xbox_projection
 
     try:
+        if args.page_only:
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generated = output / "Windows.generated.cs"
+            run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
+            runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
+            projection = compile_file("projection/Windows.dll", runtime + [generated], ["/target:library"])
+            probe_page(projection)
+            return 0
         if args.splash_only:
             generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
@@ -555,6 +596,7 @@ def main():
         run("completed-abi-setter", ["application-abi.exe"], cwd=app, marker="PASS: managed App.OnLaunched ran on the shim view thread")
         check_storage_metadata(generator)
         probe_storage(marker, projection)
+        probe_page(projection)
         probe_splash(projection, generator)
         probe_network(projection, generator)
         check_io_metadata(generator)
