@@ -223,6 +223,8 @@ if(WIN32)
     "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-toast-fixture"
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
 endif()
+add_library(network_projection_fixture SHARED tests/network_projection_fixture.cpp tests/network_projection_fixture.def)
+target_link_libraries(network_projection_fixture PRIVATE runtimeobject ole32)
 add_executable(storetest tests/storetest.cpp)
 target_link_libraries(storetest PRIVATE runtimeobject ole32)
 add_test(NAME storetest COMMAND storetest)
@@ -300,8 +302,15 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
       "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
       --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
       --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
-      --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
+      --shim "$<TARGET_FILE:appxportable>" --network-fixture "$<TARGET_FILE:network_projection_fixture>" --output "${CMAKE_BINARY_DIR}/winrt-projection")
     set_tests_properties(winrt_projection PROPERTIES TIMEOUT 600 LABELS managed-clr)
+    add_test(NAME winrt_network_projection COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
+      --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
+      --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
+      --shim "$<TARGET_FILE:appxportable>" --network-fixture "$<TARGET_FILE:network_projection_fixture>"
+      --output "${CMAKE_BINARY_DIR}/winrt-network-projection" --network-only)
+    set_tests_properties(winrt_network_projection PROPERTIES TIMEOUT 600 LABELS "managed-clr;network")
     add_test(NAME winrt_storage_io_projection COMMAND "${Python3_EXECUTABLE}"
       "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
       --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"

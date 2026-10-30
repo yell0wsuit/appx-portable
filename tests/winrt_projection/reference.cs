@@ -134,3 +134,19 @@ namespace Windows.Storage
         public void DeleteContainer(string name) { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.DeleteContainer"); }
     }
 }
+namespace Windows.Networking.Connectivity
+{
+    public enum NetworkConnectivityLevel { None, LocalAccess, ConstrainedInternetAccess, InternetAccess }
+    public delegate void NetworkStatusChangedEventHandler(object sender);
+    public sealed class ConnectionProfile
+    {
+        public string ProfileName { get { throw new global::System.NotImplementedException(); } }
+        public NetworkConnectivityLevel GetNetworkConnectivityLevel() { throw new global::System.NotImplementedException(); }
+    }
+    public static class NetworkInformation
+    {
+        public static ConnectionProfile GetInternetConnectionProfile() { throw new global::System.NotImplementedException("Windows.Networking.Connectivity.NetworkInformation.GetInternetConnectionProfile"); }
+        public static global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_NetworkStatusChanged(NetworkStatusChangedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public static void remove_NetworkStatusChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+}
