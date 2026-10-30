@@ -71,6 +71,7 @@ namespace Windows.UI.Xaml
     public class FrameworkElement : UIElement
     {
         internal FrameworkElement() { }
+        public ResourceDictionary Resources { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public object FindName(string name) { throw new global::System.NotImplementedException(); }
     }
 }
@@ -202,4 +203,12 @@ namespace Windows.UI.Xaml.Markup
 namespace Windows.UI.Xaml.Controls.Primitives
 {
     public enum ComponentResourceLocation { Application, Nested }
+}
+
+namespace Windows.UI.Xaml
+{
+    public class ResourceDictionary : DependencyObject
+    {
+        public ResourceDictionary() { throw new global::System.NotImplementedException(); }
+    }
 }

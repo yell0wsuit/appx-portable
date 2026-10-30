@@ -153,7 +153,8 @@ With the Xbox, settings, task, stream and connectivity projections below, the
 game constructs its Xbox wrapper and returns to `App.OnApplicationStarted`.
 It retrieves the native launch splash and composes the game's `ExtendedSplash`
 Page. Its LoadComponent call now opens and parses `ExtendedSplash.xaml`, then
-fails explicitly at `Page.Resources` (E_NOTIMPL in `appx-portable.log`). The
+accepts the resource container and fails explicitly at `Storyboard`
+(E_NOTIMPL in `appx-portable.log`). The
 managed stack points to `ExtendedSplash.InitializeComponent` (offset 0x1b),
 called by its constructor and `App.OnApplicationStarted` (offset 0x3f). No menu or
 game round has been displayed by this path.
@@ -508,8 +509,9 @@ continues to use system XAML.
 This first slice supports Page, Frame and empty Grid elements, implicit content
 and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
 ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
-attributes in a declared ignorable Blend namespace are skipped. Resources,
-animations, brushes, Grid children, other controls and other properties fail
+attributes in a declared ignorable Blend namespace are skipped. Inline resource
+dictionaries are supported as described below. Animations, brushes, Grid children,
+other controls and other properties fail
 explicitly, with their member names in appx-portable.log.
 
 Package-local ms-appx:/// source paths are UTF-8 unescaped and resolved through
@@ -536,3 +538,40 @@ Regressions cover escaped Unicode paths, root/child identity, connection timing,
 malformed and unsupported source, invalid values, replacement namescopes,
 wrong-thread calls, callback exceptions, and retained-child lookups during root
 collection. Rendering, layout and the game's splash/menu remain separate gates.
+
+## Inline resource dictionaries
+
+FrameworkElement.Resources now returns a real native ResourceDictionary, created
+lazily per element. The managed constructor, property getter/setter and inherited
+local dependency values use the native ABI. Native games retain their existing
+hosting route, and system XAML remains in charge in Islands mode.
+
+The native IResourceDictionary also implements IMap<object,object> and its
+iterable contract. This slice accepts boxed string keys using ordinal string
+comparison. Insert reports replacement, missing keys return E_BOUNDS, null values
+remain distinguishable from missing entries, and Remove/Clear release owned
+references. Read-only views and enumeration use snapshots; pairs and iterators
+retain their own keys and values. Views support Split and iterators support
+GetMany. Dictionary and snapshot operations enforce their creating thread.
+Non-string keys, non-null Source, merged dictionaries and theme dictionaries
+fail explicitly. Managed dictionary indexer/enumeration projection is still
+unselected; native map behavior is verified through the SDK ABI.
+
+The source loader accepts `<Page.Resources>`, `<Frame.Resources>` and
+`<Grid.Resources>` with implicit entries or a sole explicit ResourceDictionary.
+Resource values currently use the supported Page/Frame/Grid source types.
+Literal x:Key selects a key; x:Name supplies a fallback key under the documented
+[XAML naming convention](https://learn.microsoft.com/en-us/windows/apps/develop/platform/xaml/x-name-attribute).
+Keys do not register names for FindName. Actual names enter the component's
+namescope and can participate in connection callbacks. Keys are local to each
+dictionary, so nested dictionaries can reuse a key. Duplicate keys and missing
+keys are rejected during preparation. Source dictionaries are built detached
+before replacement, and retained old dictionaries remain usable.
+
+The SDK-typed resource fixture checks identity, Unicode string keys, null values,
+replacement/removal, snapshots retaining a native value after its original
+references are released, split views, iterator boundaries/GetMany, wrong-thread
+calls and unsupported keys. Source regressions cover implicit, explicit, empty
+and nested dictionaries; names versus keys; replacement lifetime; callbacks; and
+unsupported entries preserving the existing tree/resources. Storyboards and
+animation execution remain separate implementation checkpoints.

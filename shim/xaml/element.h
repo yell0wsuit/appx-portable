@@ -1,6 +1,7 @@
 #pragma once
 #include "package/package.h"
 #include "properties.h"
+#include "resources.h"
 #include "generated/xaml.h"
 #include "com/composable.h"
 #include "host/host.h"
@@ -115,6 +116,7 @@ class Element
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerWheelChanged_;
     double width_ = 1024, height_ = 768;
     PropertyValues properties_;
+    Microsoft::WRL::ComPtr<ABI::Windows::UI::Xaml::IResourceDictionary> resources_;
     bool loadedRaised_ = false;
     ABI::Windows::Foundation::Size laidOut_{0, 0};
     // XAML raises SizeChanged on first layout (from 0x0) and on every later
@@ -168,6 +170,19 @@ private:
     }
 
 public:
+    HRESULT STDMETHODCALLTYPE get_Resources(ABI::Windows::UI::Xaml::IResourceDictionary** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto hr = CheckSourceThread();
+        if (SUCCEEDED(hr) && !resources_) hr = MakeResourceDictionary(&resources_);
+        return FAILED(hr) ? hr : resources_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE put_Resources(ABI::Windows::UI::Xaml::IResourceDictionary* value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        resources_ = value;
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE GetValue(ABI::Windows::UI::Xaml::IDependencyProperty* property,
                                        IInspectable** value) override {
         return properties_.Get(property, value);

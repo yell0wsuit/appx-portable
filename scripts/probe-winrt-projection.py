@@ -32,6 +32,7 @@ HEADER_IIDS = {
     "IApplicationDataStatics": "5612147b-e843-45e3-94d8-06169e3c8e17", "IApplicationData": "c3da6fb7-b744-4b45-b0b8-223a0938d0dc",
     "IApplicationDataContainer": "c5aefd1e-f467-40ba-8566-ab640a441e1d", "IPropertySet": "8a43ed9f-f4e6-4421-acf9-1dab2986820c",
     "ISplashScreen": "ca4d975c-d4d6-43f0-97c0-0833c6391c24",
+    "IResourceDictionary": "c1ea4f24-d6de-4191-8e3a-f48601f7489c", "IResourceDictionaryFactory": "ea3639b5-31b7-4271-92c9-7c9584a91c22",
     "IComponentConnector": "f6790987-e6e5-47f2-92c6-eccce4ba159a",
     "IUriRuntimeClass": "9e365e57-48b2-4160-956f-c7385120bbfc", "IUriRuntimeClassFactory": "44a9796f-723e-4fdf-a218-033e75b0c084",
     "IPage": "c4b27075-e641-453e-824d-012fc7cf95cf", "IPageFactory": "dfa149ac-1849-445e-937c-40a9590cc076",
@@ -48,6 +49,8 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.IApplicationStatics::LoadComponent, slot 8",
     "Windows.UI.Xaml.IApplicationStatics::LoadComponentWithResourceLocation, slot 9",
     "Windows.UI.Xaml.IFrameworkElement::FindName, slot 51",
+    "Windows.UI.Xaml.IFrameworkElement::get_Resources, slot 7", "Windows.UI.Xaml.IFrameworkElement::put_Resources, slot 8",
+    "Windows.UI.Xaml.IResourceDictionaryFactory::CreateInstance, slot 6",
     "Windows.UI.Xaml.IApplicationStatics::Start, slot 7", "Windows.UI.Xaml.IApplication::Exit, slot 17",
     "Windows.UI.Xaml.IApplicationOverrides::OnLaunched, slot 7", "Windows.UI.Xaml.IApplicationOverrides::OnActivated, slot 6",
     "Windows.ApplicationModel.Activation.IActivatedEventArgs::get_Kind, slot 6",
@@ -254,10 +257,10 @@ def main():
 
     def probe_page(projection):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
-        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory"):
+        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
-            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName")):
+            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
         mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri")):

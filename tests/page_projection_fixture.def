@@ -6,3 +6,5 @@ EXPORTS
   ConnectNamelessTarget
   CheckNamelessTarget
   ValidateLoadedSource
+  ExerciseResourceMap
+  ValidateLoadedResources

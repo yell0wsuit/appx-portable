@@ -51,7 +51,11 @@
   </Class>
   <Class Name="Windows.UI.Xaml.PropertyMetadata" />
   <Class Name="Windows.UI.Xaml.UIElement" />
+  <Class Name="Windows.UI.Xaml.ResourceDictionary">
+    <Constructor />
+  </Class>
   <Class Name="Windows.UI.Xaml.FrameworkElement">
+    <Property Name="Resources" />
     <Method Name="FindName" />
   </Class>
   <Enum Name="Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation" />
