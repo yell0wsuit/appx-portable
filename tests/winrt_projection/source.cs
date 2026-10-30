@@ -9,6 +9,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Markup;
+using Windows.UI.Xaml.Media.Animation;
 class SourcePage : Page, IComponentConnector
 {
     internal readonly Dictionary<int, object> Targets = new Dictionary<int, object>();
@@ -28,6 +29,10 @@ class SourceApp : Application
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ExerciseResourceMap();
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ExerciseAnimationData();
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateSourceRootFields();
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedResources(int stage);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     static void Bad(SourcePage page, string body, int hr)
@@ -37,6 +42,7 @@ class SourceApp : Application
         var resources = page.Resources;
         try { Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/bad.xaml")); throw new Exception("bad source accepted"); }
         catch (Exception error) { if (error.Message == "bad source accepted" || (hr != 0 && Marshal.GetHRForException(error) != hr)) throw; }
+        Check(ValidateSourceRootFields() == 0, "invalid source changed dimensions or name");
         Check(ReferenceEquals(content, page.Content), "invalid source changed content");
         Check(ReferenceEquals(resources, page.Resources), "invalid source changed resources");
         Check(ReferenceEquals(page.FindName("root"), page), "invalid source changed namescope");
@@ -101,13 +107,56 @@ class SourceApp : Application
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/resources.xaml"));
         Check(ValidateLoadedResources(3) == 0, "empty explicit dictionary");
         WrongThread(() => GC.KeepAlive(page.Resources));
-        Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"animation\"/></Page.Resources></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Page.Resources><DoubleAnimation x:Name=\"unsupportedAnimation\"/></Page.Resources></Page>", unchecked((int)0x80004001));
         Bad(page, "<Page" + Ns + "><Page.Resources><Grid x:Key=\"same\"/><Grid x:Key=\"same\"/></Page.Resources></Page>", unchecked((int)0x80070057));
         Bad(page, "<Page" + Ns + "><Page.Resources><Grid/></Page.Resources></Page>", unchecked((int)0x80070057));
         Bad(page, "<Page" + Ns + "><Grid x:Key=\"outside\"/></Page>", unchecked((int)0x80070057));
         Bad(page, "<Page" + Ns + "><Page.Resources/><Page.Resources/></Page>", unchecked((int)0x80070057));
         Console.WriteLine("PASS: native resource dictionaries preserve map semantics, source keys, names and ownership");
         GC.KeepAlive(previous);
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static Storyboard RetainAnimation(out WeakReference root)
+    {
+        var page = new SourcePage();
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/animations.xaml"));
+        root = new WeakReference(page);
+        return (Storyboard)page.FindName("unconnected");
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void VerifyAnimations(SourcePage page)
+    {
+        File.WriteAllText("Fixtures/animations.xaml", "<Page" + Ns + " x:Name=\"root\"><Page.Resources>" +
+            "<Storyboard x:Name=\"animation\" x:ConnectionId=\"7\"><FadeInThemeAnimation x:Name=\"fade\" Storyboard.TargetName=\"leaf\" Duration=\"0:0:4.5000001\"/>" +
+            "<FadeOutThemeAnimation Storyboard.TargetName=\"leaf\"/></Storyboard>" +
+            "<Storyboard x:Name=\"unconnected\"><Storyboard.Children><FadeOutThemeAnimation TargetName=\"inner target\" Duration=\"Automatic\"/></Storyboard.Children></Storyboard>" +
+            "</Page.Resources><Grid x:Name=\"leaf\"/></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/animations.xaml"));
+        var storyboard = page.FindName("animation") as Storyboard;
+        Check(storyboard != null && ReferenceEquals(storyboard, page.Targets[7]), "named storyboard projection identity");
+        Check(page.FindName("unconnected") is Storyboard, "uncached named storyboard projection");
+        Check(page.FindName("fade") is FadeInThemeAnimation, "named theme animation projection");
+        Bad(page, "<Page" + Ns + " x:Name=\"changed\" Width=\"999\"><Page.Resources><Grid x:Key=\"new\"/></Page.Resources><Storyboard/></Page>", unchecked((int)0x80070057));
+        Check(ExerciseAnimationData() == 0, "native timeline properties, children and collection lifetime");
+        try { storyboard.Begin(); throw new Exception("unimplemented storyboard clock accepted"); }
+        catch (NotImplementedException) { }
+        WrongThread(() => storyboard.Begin());
+        Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><FadeInThemeAnimation Duration=\"0:0:-1\"/></Storyboard></Page.Resources></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><Grid/></Storyboard></Page.Resources></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><DoubleAnimation/></Storyboard></Page.Resources></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><FadeInThemeAnimation TargetName=\"{Binding Name}\"/></Storyboard></Page.Resources></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><FadeInThemeAnimation Storyboard.TargetName=\"{Binding Name}\"/></Storyboard></Page.Resources></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><FadeInThemeAnimation Storyboard.TargetProperty=\"{StaticResource Property}\"/></Storyboard></Page.Resources></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><FadeInThemeAnimation Duration=\"256204778:48:05.4775808\"/></Storyboard></Page.Resources></Page>", unchecked((int)0x80070057));
+        WeakReference root;
+        var retained = RetainAnimation(out root);
+        for (int i = 0; i < 3; ++i) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+        Check(!root.IsAlive, "retained storyboard kept the component root alive");
+        GC.KeepAlive(retained);
+        File.WriteAllText("Fixtures/frame-data.xaml", "<Page" + Ns + " x:Name=\"root\"><Frame><Storyboard x:Name=\"contentData\"/></Frame></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/frame-data.xaml"));
+        Check(page.Content is Frame && page.FindName("contentData") is Storyboard, "Frame object-typed timeline content");
+        Console.WriteLine("PASS: storyboard data loads with typed names, timeline properties and owned children; unsupported clocks fail explicitly");
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
     void Verify(SourcePage page)
@@ -148,6 +197,7 @@ class SourceApp : Application
         try { Application.LoadComponent(page, new Uri("ms-appx:///missing.xaml"), ComponentResourceLocation.Nested); throw new Exception("nested resources accepted"); }
         catch (NotImplementedException) { }
         VerifyResources(page);
+        VerifyAnimations(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");
         try { Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/error.xaml")); throw new Exception("callback error accepted"); }

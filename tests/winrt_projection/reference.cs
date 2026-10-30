@@ -212,3 +212,15 @@ namespace Windows.UI.Xaml
         public ResourceDictionary() { throw new global::System.NotImplementedException(); }
     }
 }
+
+namespace Windows.UI.Xaml.Media.Animation
+{
+    public class Timeline : global::Windows.UI.Xaml.DependencyObject { internal Timeline() { } }
+    public class Storyboard : Timeline
+    {
+        public Storyboard() { throw new global::System.NotImplementedException(); }
+        public void Begin() { throw new global::System.NotImplementedException(); }
+    }
+    public class FadeInThemeAnimation : Timeline { internal FadeInThemeAnimation() { } }
+    public class FadeOutThemeAnimation : Timeline { internal FadeOutThemeAnimation() { } }
+}

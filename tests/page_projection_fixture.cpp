@@ -133,3 +133,5 @@ extern "C" HRESULT __cdecl ValidateLoadedSource() {
 }
 
 #include "resource_projection_fixture.h"
+
+#include "animation_projection_fixture.h"
