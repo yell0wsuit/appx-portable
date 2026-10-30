@@ -181,6 +181,14 @@ namespace Windows.ApplicationModel.Activation
 
 namespace Windows.UI.Xaml.Navigation
 {
-    public sealed class NavigationEventArgs { }
+    public sealed class NavigationEventArgs
+    {
+        public global::System.Uri Uri { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public sealed class NavigatingCancelEventArgs { }
+}
+
+namespace Windows.UI.Xaml.Markup
+{
+    public interface IComponentConnector { void Connect(int connectionId, object target); }
 }

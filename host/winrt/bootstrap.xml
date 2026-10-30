@@ -63,7 +63,11 @@
     <Overridable Name="OnNavigatedFrom" />
     <Overridable Name="OnNavigatingFrom" />
   </Class>
-  <Class Name="Windows.UI.Xaml.Navigation.NavigationEventArgs" />
+  <Class Name="Windows.UI.Xaml.Navigation.NavigationEventArgs">
+    <Property Name="Uri" />
+  </Class>
+  <Class Name="Windows.Foundation.Uri" Adapter="Uri" />
+  <Interface Name="Windows.UI.Xaml.Markup.IComponentConnector" Adapter="ComponentConnector" />
   <Class Name="Windows.UI.Xaml.Navigation.NavigatingCancelEventArgs" />
   <Class Name="Windows.UI.Xaml.Controls.Frame">
     <Constructor />

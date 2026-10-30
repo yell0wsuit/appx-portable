@@ -446,7 +446,8 @@ OnNavigatedTo, OnNavigatedFrom and OnNavigatingFrom dispatch through the managed
 controlling outer. Their managed base implementations call the nondelegating
 inner's native interface. This preserves the native base behavior and avoids
 recursive override dispatch. NavigationEventArgs and NavigatingCancelEventArgs
-are typed wrappers; their general properties remain unselected.
+are typed wrappers; NavigationEventArgs.Uri is selected, while their other
+properties remain unselected.
 
 `--page-only` and `winrt_page_projection` check a WindowsRuntime-marked consumer
 with two levels of managed Page inheritance, real inherited Content and local
@@ -461,3 +462,39 @@ location is beside the shim; `--page-fixture` selects another path.
 The fixture does not perform actual Frame navigation or test populated
 cancellation arguments. XAML component/source loading, layout, rendering,
 Windows/x64 controls and gameplay acceptance remain pending.
+
+## Managed component ABI prerequisites
+
+Composed managed subclasses that implement
+`Windows.UI.Xaml.Markup.IComponentConnector` now expose that SDK interface on
+their controlling outer. Native `Connect(int, object)` calls dispatch to the
+managed implementation, preserving the signed ID, target identity and callback
+exceptions. Native targets use selected runtime-class wrappers; boxed property
+values are unboxed, and unnamed native objects retain a generic wrapper when
+GetRuntimeClassName returns E_NOTIMPL. Other native failures propagate.
+
+Public arguments of a composed object use its controlling identity, including
+IInspectable arguments. The private inner remains available for native base
+methods, preventing recursive override calls.
+
+The Uri adapter follows the documented
+[System.Uri projection](https://learn.microsoft.com/en-us/uwp/api/windows.foundation.uri):
+it creates a native IUriRuntimeClass through the platform factory and converts
+native values through AbsoluteUri. Null is supported; relative URIs are rejected
+before calling native code. URI targets are recognized by IID because the tested
+Wine implementation returns E_NOTIMPL for GetRuntimeClassName. The SDK metadata
+qualifies each signature, IID and slot; no Windows.Foundation.Uri CLR class is
+emitted.
+
+The Page probe checks a connector implemented by an external WindowsRuntime-marked
+consumer, native-created typed and unnamed targets retained beyond the native
+call and GC, boxed strings, callback exceptions and recovery, and URI round trips
+with package paths, escapes, Unicode, query and fragment components. Mutated
+connector ID, URI result and URI factory parameter metadata must be rejected.
+
+These are prerequisites for Application.LoadComponent. That method remains an
+explicit completion stub: the existing native Windows 8 path can return success
+without constructing source XAML, so enabling it now would hide the missing
+loader. Source parsing, element trees, properties, names and event wiring still
+need their own implementation and verification before the game can pass its
+ExtendedSplash.InitializeComponent call.
