@@ -17,6 +17,7 @@ class MutateCollectionsMetadata
                 string name;
                 switch (args[2])
                 {
+                    case "typed-event": name = "Windows.Foundation.TypedEventHandler`2"; break;
                     case "network-enum": name = "Windows.Networking.Connectivity.NetworkConnectivityLevel"; break;
                     case "iterator": name = "Windows.Foundation.Collections.IIterator`1"; break;
                     case "stream-size": name = "Windows.Storage.Streams.IRandomAccessStream"; break;
@@ -27,7 +28,8 @@ class MutateCollectionsMetadata
                 }
                 var type = module.Types.SingleOrDefault(t => t.FullName == name);
                 if (type == null) { File.Copy(path, target, true); continue; }
-                if (args[2] == "network-enum") type.Fields.Single(f => f.Name == "value__").FieldType = module.TypeSystem.Int64;
+                if (args[2] == "typed-event") type.Methods.Single(m => m.Name == "Invoke").Parameters[1].ParameterType = module.TypeSystem.UInt32;
+                else if (args[2] == "network-enum") type.Fields.Single(f => f.Name == "value__").FieldType = module.TypeSystem.Int64;
                 else if (args[2] == "insert") type.Methods.Single(m => m.Name == "Insert").Parameters[1].ParameterType = module.TypeSystem.UInt64;
                 else if (args[2] == "order" || args[2] == "buffer-order" || args[2] == "future-order") { var first = type.Methods[0]; type.Methods.RemoveAt(0); type.Methods.Add(first); }
                 else if (args[2] == "iterator") type.Methods.Single(m => m.Name == "get_HasCurrent").ReturnType = module.TypeSystem.UInt32;

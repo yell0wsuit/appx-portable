@@ -15,6 +15,7 @@
   <Interface Name="Windows.ApplicationModel.Activation.IActivatedEventArgs">
     <Property Name="Kind" />
     <Property Name="PreviousExecutionState" />
+    <Property Name="SplashScreen" />
   </Interface>
   <Class Name="Windows.ApplicationModel.Activation.LaunchActivatedEventArgs">
     <Property Name="Arguments" />
@@ -112,4 +113,8 @@
     <Method Name="GetNetworkConnectivityLevel" />
   </Class>
   <Enum Name="Windows.Networking.Connectivity.NetworkConnectivityLevel" />
+  <Class Name="Windows.ApplicationModel.Activation.SplashScreen">
+    <Event Name="Dismissed" />
+  </Class>
+  <Delegate Name="Windows.Foundation.TypedEventHandler`2" Adapter="TypedEvent" />
 </Projection>
