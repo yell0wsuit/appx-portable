@@ -123,7 +123,7 @@ namespace AppxPortable.WinRT
                 }
             }
         }
-        private static bool Unbox(NativeObject value, out object result)
+        internal static bool Unbox(NativeObject value, out object result)
         {
             result = null;
             IntPtr pointer;

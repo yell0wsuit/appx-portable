@@ -32,6 +32,8 @@ HEADER_IIDS = {
     "IApplicationDataStatics": "5612147b-e843-45e3-94d8-06169e3c8e17", "IApplicationData": "c3da6fb7-b744-4b45-b0b8-223a0938d0dc",
     "IApplicationDataContainer": "c5aefd1e-f467-40ba-8566-ab640a441e1d", "IPropertySet": "8a43ed9f-f4e6-4421-acf9-1dab2986820c",
     "ISplashScreen": "ca4d975c-d4d6-43f0-97c0-0833c6391c24",
+    "IComponentConnector": "f6790987-e6e5-47f2-92c6-eccce4ba159a",
+    "IUriRuntimeClass": "9e365e57-48b2-4160-956f-c7385120bbfc", "IUriRuntimeClassFactory": "44a9796f-723e-4fdf-a218-033e75b0c084",
     "IPage": "c4b27075-e641-453e-824d-012fc7cf95cf", "IPageFactory": "dfa149ac-1849-445e-937c-40a9590cc076",
     "IPageOverrides": "230b9cb8-3419-4306-aabe-4a8e680d3627", "IUserControl": "a7a69ec9-ea35-4679-bf29-f4f09286d314",
     "INavigationEventArgs": "b6aa9834-6691-44d1-bdf7-58820c27b0d0", "INavigatingCancelEventArgs": "fd1d67ae-eafb-4079-be80-6dc92a03aedf",
@@ -73,7 +75,10 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.Controls.IPageFactory::CreateInstance, slot 6", "Windows.UI.Xaml.Controls.IPage::get_Frame, slot 6",
     "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatedFrom, slot 6", "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatedTo, slot 7",
     "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatingFrom, slot 8", "Windows.UI.Xaml.Controls.IUserControl::get_Content, slot 6",
-    "Windows.UI.Xaml.Controls.IUserControl::put_Content, slot 7"]
+    "Windows.UI.Xaml.Controls.IUserControl::put_Content, slot 7",
+    "Windows.UI.Xaml.Markup.IComponentConnector::Connect, slot 6",
+    "Windows.Foundation.IUriRuntimeClass::get_AbsoluteUri, slot 6", "Windows.Foundation.IUriRuntimeClassFactory::CreateUri, slot 6",
+    "Windows.UI.Xaml.Navigation.INavigationEventArgs::get_Uri, slot 10", "Windows.UI.Xaml.Navigation.INavigationEventArgs::put_Uri, slot 11"]
 # The runtime's dispatcher context calls CoreWindow and CoreDispatcher directly
 # (windows.ui.core.h): each IID and slot, and the call that uses the slot.
 HEADER_RUNTIME = [
@@ -246,11 +251,16 @@ def main():
 
     def probe_page(projection):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
-        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs"):
+        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
-            if "Controls.IPage" in slot or "Controls.IUserControl" in slot:
+            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
+        mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
+        for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri")):
+            mutated = output / kind
+            run("mutate-" + kind, [mutator.name, windows(metadata), windows(mutated), kind])
+            run("reject-" + kind, ["generator.exe", windows(mutated), windows(repo / "host/winrt/bootstrap.xml"), windows(output / (kind + ".cs"))], succeeds=False, marker=member)
         marker = compile_file("mark-page.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
         reference = compile_file("page-reference/Windows.dll", [repo / "tests/winrt_projection/reference.cs"], ["/target:library"])
         consumer = compile_file("page.exe", [repo / "tests/winrt_projection/page.cs"], ["/r:" + windows(reference)])
@@ -258,11 +268,11 @@ def main():
         folder = fixture("page", consumer.name, "PageProjectionTest", "CN=projection")
         copy_owned_file(output / "page-winrt.exe", folder / consumer.name)
         copy_owned_file(projection, folder / "Windows.dll")
+        copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
         run("page", [consumer.name], cwd=folder, marker="PASS: managed Page composes native inheritance, content and window identity")
         runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
         abi = compile_file("page-abi.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/page.cs"], ["/define:NATIVE_ABI"])
         copy_owned_file(abi, folder / abi.name)
-        copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
         run("page-abi", [abi.name], cwd=folder, marker="PASS: native Page callbacks dispatch through derived managed overrides and base methods")
 
     def probe_splash(projection, generator):

@@ -182,6 +182,19 @@ namespace AppxPortable.WinRT
 
         internal void Aggregate(NativeObject value) { inner = value; }
 
+        // Public arguments of a composed object use its controlling identity.
+        // Its non-delegating inner remains private for native base dispatch.
+        internal static NativeObject ComposedArgument(object target, Guid iid)
+        {
+            ManagedObject managed;
+            if (target == null || !objects.TryGetValue(target, out managed) || managed.inner == null) return null;
+            using (NativeObject identity = NativeObject.Borrow(managed.Pointer))
+            {
+                GC.KeepAlive(managed);
+                return identity.QueryInterface(iid);
+            }
+        }
+
         // The managed object behind a native IUnknown, if it is one of ours.
         internal static object Find(IntPtr identity)
         {

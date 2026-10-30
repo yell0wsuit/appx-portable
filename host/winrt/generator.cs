@@ -44,6 +44,7 @@ internal static partial class WinrtProjectionGenerator
         }
         if (type.FullName == "System.String") return "string";
         if (type.FullName == "System.Object") return "object";
+        if (type.FullName == "Windows.Foundation.Uri") return "global::System.Uri";
         if (type.FullName == "Windows.UI.Xaml.Interop.TypeName") return "global::System.Type";
         if (!selected.Contains(type.FullName))
             throw new NotSupportedException("Type is not selected: " + type.FullName);
@@ -56,6 +57,7 @@ internal static partial class WinrtProjectionGenerator
     {
         if (type.FullName == "System.Object") throw new NotSupportedException("Object is wrapped by Unwrap");
         Name(type);
+        if (type.FullName == "Windows.Foundation.Uri") return Projected(Find(type.FullName));
         return interfaces.ContainsKey(type.FullName) ? Projected(Find(type.FullName)) : "global::" + type.FullName;
     }
 
@@ -76,6 +78,7 @@ internal static partial class WinrtProjectionGenerator
 
     private static string Argument(TypeReference type, string value)
     {
+        if (type.FullName == "Windows.Foundation.Uri") return Wrapper(type) + ".ToNative(" + value + ")";
         return Runtime + "NativeObject.Argument(" + value + ", " + ArgumentIid(type) + ")";
     }
 
@@ -394,6 +397,108 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("            }");
             output.AppendLine("        }");
         }
+    }
+
+    // CLR projects Windows.Foundation.Uri as System.Uri, not a Windows.dll class.
+    private static void UriContract(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        if (type.FullName != "Windows.Foundation.Uri" || surface.Name != "Class" || surface.HasChildNodes)
+            throw new NotSupportedException("Unsupported Uri surface");
+        TypeDefinition uri = DefaultInterface(type), factory = Find("Windows.Foundation.IUriRuntimeClassFactory");
+        CollectionMethod(uri, 0, "get_AbsoluteUri", "()->System.String");
+        CollectionMethod(factory, 0, "CreateUri", "(System.String)->Windows.Foundation.Uri");
+        output.AppendLine("}");
+        output.AppendLine("namespace AppxPortable.WinRT.Projected");
+        output.AppendLine("{");
+        output.AppendLine("    internal static class Windows_Foundation_Uri");
+        output.AppendLine("    {");
+        output.AppendLine("        [global::System.Runtime.InteropServices.DllImport(\"combase.dll\")]");
+        output.AppendLine("        private static extern int RoGetActivationFactory(global::System.IntPtr name, ref global::System.Guid iid, out global::System.IntPtr value);");
+        output.AppendLine("        " + StdCall);
+        output.AppendLine("        private delegate int CreateUri(global::System.IntPtr self, global::System.IntPtr text, out global::System.IntPtr value);");
+        output.AppendLine("        internal static global::System.Uri FromNative(" + Runtime + "NativeObject value)");
+        output.AppendLine("        {");
+        output.AppendLine("            if (value == null) return null;");
+        output.AppendLine("            using (value)");
+        output.AppendLine("            using (var uri = value.QueryInterface(" + Guid(uri) + "))");
+        output.AppendLine("                // " + uri.FullName + "::get_AbsoluteUri, slot " + NamedSlot(uri, "get_AbsoluteUri"));
+        output.AppendLine("                return new global::System.Uri(uri.String(" + NamedSlot(uri, "get_AbsoluteUri") + "), global::System.UriKind.Absolute);");
+        output.AppendLine("        }");
+        output.AppendLine("        internal static " + Runtime + "NativeObject ToNative(global::System.Uri value)");
+        output.AppendLine("        {");
+        output.AppendLine("            if (value == null) return null;");
+        output.AppendLine("            if (!value.IsAbsoluteUri) throw new global::System.ArgumentException(\"WinRT requires an absolute URI\", \"value\");");
+        output.AppendLine("            using (var name = new " + Runtime + "NativeString(\"Windows.Foundation.Uri\"))");
+        output.AppendLine("            using (var text = new " + Runtime + "NativeString(value.AbsoluteUri))");
+        output.AppendLine("            {");
+        output.AppendLine("                var iid = " + Guid(factory) + ";");
+        output.AppendLine("                global::System.IntPtr pointer;");
+        output.AppendLine("                int hr = RoGetActivationFactory(name.Value, ref iid, out pointer);");
+        output.AppendLine("                using (var factory = " + Runtime + "NativeObject.ObjectResult(hr, pointer))");
+        output.AppendLine("                using (var call = new " + Runtime + "NativeObject.Access(factory))");
+        output.AppendLine("                {");
+        output.AppendLine("                    // " + factory.FullName + "::CreateUri, slot " + NamedSlot(factory, "CreateUri"));
+        output.AppendLine("                    hr = call.Method<CreateUri>(" + NamedSlot(factory, "CreateUri") + ")(call.Self, text.Value, out pointer);");
+        output.AppendLine("                    return " + Runtime + "NativeObject.ObjectResult(hr, pointer);");
+        output.AppendLine("                }");
+        output.AppendLine("            }");
+        output.AppendLine("        }");
+        output.AppendLine("    }");
+    }
+
+    private static void ComponentConnectorContract(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        if (type.FullName != "Windows.UI.Xaml.Markup.IComponentConnector" || surface.Name != "Interface" ||
+            surface.HasChildNodes || type.Methods.Count != 1)
+            throw new NotSupportedException("Unsupported component connector surface");
+        CollectionMethod(type, 0, "Connect", "(System.Int32,System.Object)->System.Void");
+        output.AppendLine("    public interface IComponentConnector { void Connect(int connectionId, object target); }");
+        output.AppendLine("}");
+        output.AppendLine("namespace AppxPortable.WinRT.Projected");
+        output.AppendLine("{");
+        output.AppendLine("    internal static class Windows_UI_Xaml_Markup_IComponentConnector");
+        output.AppendLine("    {");
+        output.AppendLine("        " + StdCall);
+        output.AppendLine("        private delegate int ConnectCall(global::System.IntPtr self, int id, global::System.IntPtr value);");
+        output.AppendLine("        // " + type.FullName + "::Connect, slot " + NamedSlot(type, "Connect"));
+        output.AppendLine("        private static readonly ConnectCall connect = (self, id, value) => " + Runtime + "ManagedObject.Call(self, target =>");
+        output.AppendLine("            ((global::Windows.UI.Xaml.Markup.IComponentConnector)target).Connect(id, Unwrap(value)));");
+        output.AppendLine("        internal static readonly " + Runtime + "NativeInterface Interface = new " + Runtime + "NativeInterface(" + Guid(type) + ", true, connect);");
+        output.AppendLine("        private static object Unwrap(global::System.IntPtr pointer)");
+        output.AppendLine("        {");
+        output.AppendLine("            using (var value = " + Runtime + "NativeObject.Borrow(pointer))");
+        output.AppendLine("            {");
+        output.AppendLine("                if (value == null) return null;");
+        output.AppendLine("                object unboxed;");
+        output.AppendLine("                if (" + Runtime + "NativeObject.Unbox(value, out unboxed)) return unboxed;");
+        if (selected.Contains("Windows.Foundation.Uri"))
+        {
+            output.AppendLine("                // CLR redirects are recognized by IID; Wine Uri has no runtime class name.");
+            output.AppendLine("                global::System.IntPtr uri;");
+            output.AppendLine("                int hr = value.TryQueryInterface(" + Guid(DefaultInterface(Find("Windows.Foundation.Uri"))) + ", out uri);");
+            output.AppendLine("                if (hr != unchecked((int)0x80004002)) return " + Wrapper(Find("Windows.Foundation.Uri")) + ".FromNative(" + Runtime + "NativeObject.TakeResult(hr, uri));");
+            output.AppendLine("                if (uri != global::System.IntPtr.Zero) global::System.Runtime.InteropServices.Marshal.Release(uri);");
+        }
+        output.AppendLine("                string name = null;");
+        output.AppendLine("                try { name = value.RuntimeClassName(); }");
+        output.AppendLine("                catch (global::System.NotImplementedException) { }");
+        foreach (TypeDefinition target in classes.Where(c => !c.IsAbstract || !c.IsSealed))
+            output.AppendLine("                if (name == \"" + target.FullName + "\") return " + Wrapper(target) + ".FromNative(" + Runtime + "NativeObject.Borrow(pointer));");
+        output.AppendLine("                return " + Runtime + "NativeObject.Inspectable(" + Runtime + "NativeObject.Borrow(pointer));");
+        output.AppendLine("            }");
+        output.AppendLine("        }");
+        output.AppendLine("        internal static " + Runtime + "ManagedObject Compose(object target, params " + Runtime + "NativeInterface[] interfaces)");
+        output.AppendLine("        {");
+        output.AppendLine("            if (target is global::Windows.UI.Xaml.Markup.IComponentConnector)");
+        output.AppendLine("            {");
+        output.AppendLine("                var extended = new " + Runtime + "NativeInterface[interfaces.Length + 1];");
+        output.AppendLine("                global::System.Array.Copy(interfaces, extended, interfaces.Length);");
+        output.AppendLine("                extended[interfaces.Length] = Interface;");
+        output.AppendLine("                interfaces = extended;");
+        output.AppendLine("            }");
+        output.AppendLine("            return " + Runtime + "ManagedObject.For(target, interfaces);");
+        output.AppendLine("        }");
+        output.AppendLine("    }");
     }
 
     private static void Property(StringBuilder output, TypeDefinition type, string name, bool composable)
@@ -775,7 +880,9 @@ internal static partial class WinrtProjectionGenerator
             if (unsupported.Count != 0)
                 output.AppendLine("            " + Runtime + "ManagedObject.RequireOverrides(GetType(), typeof(" + type.Name + "), " +
                     string.Join(", ", unsupported.Select(n => "\"" + n + "\"")) + ");");
-            output.AppendLine("            outer = " + Runtime + "ManagedObject.For(this, " + Runtime + "ManagedObject.Identity" +
+            string compose = selected.Contains("Windows.UI.Xaml.Markup.IComponentConnector")
+                ? Projected(Find("Windows.UI.Xaml.Markup.IComponentConnector")) + ".Compose" : Runtime + "ManagedObject.For";
+            output.AppendLine("            outer = " + compose + "(this, " + Runtime + "ManagedObject.Identity" +
                 string.Concat(exposed.Select((i, n) => ", Overrides" + Literal(n) + ".Interface")) + ");");
             output.AppendLine("            using (var factory = " + Runtime + "NativeObject.Factory(\"" + type.FullName + "\", " + Guid(factory) + "))");
             output.AppendLine("                native = factory.Compose(" + Literal(slot) + ", outer.Pointer);");
@@ -901,7 +1008,11 @@ internal static partial class WinrtProjectionGenerator
                 TypeDefinition type = Find(element.GetAttribute("Name"));
                 output.AppendLine("namespace " + type.Namespace);
                 output.AppendLine("{");
-                if (element.GetAttribute("Adapter") == "Storage")
+                if (element.GetAttribute("Adapter") == "Uri")
+                    UriContract(output, type, element);
+                else if (element.GetAttribute("Adapter") == "ComponentConnector")
+                    ComponentConnectorContract(output, type, element);
+                else if (element.GetAttribute("Adapter") == "Storage")
                     StorageContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "TypedEvent")
                 {
