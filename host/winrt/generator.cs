@@ -241,7 +241,15 @@ internal static partial class WinrtProjectionGenerator
         if (methods.Count != 1) throw new NotSupportedException("Method not found or overloaded: " + type.FullName + "." + name);
         MethodDefinition method = methods[0];
         bool returns = method.ReturnType.FullName != "System.Void";
-        if (returns && method.ReturnType.FullName != "System.Object") Parameter(method.ReturnType, type.FullName + "." + name);
+        bool enumResult = returns && selected.Contains(method.ReturnType.FullName) && Find(method.ReturnType.FullName).IsEnum;
+        string resultAbi = "global::System.IntPtr";
+        if (enumResult)
+        {
+            string width = Find(method.ReturnType.FullName).Fields.Single(f => f.Name == "value__").FieldType.FullName;
+            if (width != "System.Int32" && width != "System.UInt32") throw new NotSupportedException("Unsupported enum return: " + method.ReturnType.FullName);
+            resultAbi = width == "System.Int32" ? "int" : "uint";
+        }
+        else if (returns && method.ReturnType.FullName != "System.Object") Parameter(method.ReturnType, type.FullName + "." + name);
         TypeDefinition owner = MemberInterface(type, method);
         int slot = Slot(owner, method);
         var abi = new List<string>();
@@ -282,7 +290,7 @@ internal static partial class WinrtProjectionGenerator
         }
         output.AppendLine("        " + StdCall);
         output.AppendLine("        private delegate int Native_" + name + "(global::System.IntPtr self" +
-            string.Concat(abi.Select(p => ", " + p)) + (returns ? ", out global::System.IntPtr result" : "") + ");");
+            string.Concat(abi.Select(p => ", " + p)) + (returns ? ", out " + resultAbi + " result" : "") + ");");
         output.AppendLine("        // " + owner.FullName + "::" + name + ", slot " + Literal(slot));
         output.AppendLine("        public " + (method.IsStatic ? "static " : "") + (returns ? Name(method.ReturnType) : "void") + " " + name + "(" +
             string.Join(", ", method.Parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ")");
@@ -293,10 +301,15 @@ internal static partial class WinrtProjectionGenerator
         foreach (string line in setup) output.AppendLine(line);
         output.AppendLine("                using (var call = new " + Runtime + "NativeObject.Access(" + receiver + "))");
         output.AppendLine("                {");
-        if (returns) output.AppendLine("                    global::System.IntPtr result;");
+        if (returns) output.AppendLine("                    " + resultAbi + " result;");
         output.AppendLine("                    int hr = call.Method<Native_" + name + ">(" + Literal(slot) + ")(call.Self" +
             string.Concat(arguments.Select(p => ", " + p)) + (returns ? ", out result" : "") + ");");
-        if (returns)
+        if (enumResult)
+        {
+            output.AppendLine("                    " + Runtime + "Errors.Check(hr);");
+            output.AppendLine("                    return unchecked((" + Name(method.ReturnType) + ")result);");
+        }
+        else if (returns)
         {
             string result = Runtime + "NativeObject.ObjectResult(hr, result)";
             output.AppendLine("                    return " + (method.ReturnType.FullName == "System.Object" ? Runtime + "NativeObject.Inspectable(" + result + ")" : Wrapper(method.ReturnType) + ".FromNative(" + result + ")") + ";");
@@ -625,6 +638,7 @@ internal static partial class WinrtProjectionGenerator
                 string name = member.GetAttribute("Name");
                 if (member.Name == "Property" && type.Properties.Any(p => p.Name == name && p.GetMethod.IsStatic)) Property(output, type, name, false);
                 else if (member.Name == "Method" && type.Methods.Any(m => m.Name == name && m.IsStatic)) Method(output, type, name, false);
+                else if (member.Name == "Event" && type.Events.Any(e => e.Name == name && e.AddMethod != null && e.AddMethod.IsStatic)) Event(output, type, name, false);
                 else throw new NotSupportedException("Unsupported static member: " + type.FullName + "." + name);
             }
             output.AppendLine("    }");

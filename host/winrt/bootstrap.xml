@@ -102,4 +102,14 @@
   <Interface Name="Windows.Storage.Streams.IRandomAccessStreamWithContentType" Adapter="Storage" />
   <Interface Name="Windows.Storage.Streams.IContentTypeProvider" Adapter="Storage" />
   <Enum Name="Windows.Storage.Streams.InputStreamOptions" />
+  <Class Name="Windows.Networking.Connectivity.NetworkInformation">
+    <Method Name="GetInternetConnectionProfile" />
+    <Event Name="NetworkStatusChanged" />
+  </Class>
+  <Delegate Name="Windows.Networking.Connectivity.NetworkStatusChangedEventHandler" />
+  <Class Name="Windows.Networking.Connectivity.ConnectionProfile">
+    <Property Name="ProfileName" />
+    <Method Name="GetNetworkConnectivityLevel" />
+  </Class>
+  <Enum Name="Windows.Networking.Connectivity.NetworkConnectivityLevel" />
 </Projection>

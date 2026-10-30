@@ -149,13 +149,10 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 `App.OnLaunched` on its view thread. `OnLaunched` sets a composed `Frame` as
 `Window.Current.Content`. The local dependency-property implementation lets
 `SuspensionManager` initialize its string and dictionary attached properties.
-With the Xbox bootstrap below, the game passes that assembly binding,
-`CoreWindow.GetForCurrentThread`, and native Xbox User activation. With the settings projection below, it passes ApplicationData startup and next
-loads the owned `System.Runtime.WindowsRuntime` bridge and passes the storage/
-stream startup boundary. It next fails at
-`Windows.Networking.Connectivity.NetworkInformation.add_NetworkStatusChanged`
-in the XboxWrapper constructor (offset 0x57), called by `App.OnApplicationStarted`. No menu or game round has
-been displayed by this path.
+With the Xbox, settings, task, stream and connectivity projections below, the
+game constructs its Xbox wrapper and returns to `App.OnApplicationStarted`.
+It next fails at `Windows.ApplicationModel.Activation.IActivatedEventArgs.get_SplashScreen`
+(offset 0x33). No menu or game round has been displayed by this path.
 
 The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
 and `System.Runtime.WindowsRuntime.UI.Xaml`, still missing from Wine Mono, plus
@@ -184,9 +181,10 @@ directories must be disjoint. Links are copied as links and the game's own
 `--prefix`. Replacement DLL links in the copied game are detached before
 writing, so their original targets remain untouched. Source executable,
 manifest, consumer, and replaced runtime DLL hashes
-are checked after launch and recorded in `game-inputs.json`. For this checkpoint:
+are checked after launch and recorded in `game-inputs.json`. For this checkpoint, build the test callback DLL beside the shim as well:
 
 ```sh
+cmake --build build/macos-x86 --target appxportable network_projection_fixture
 python3 scripts/probe-winrt-projection.py \
   --wine "$wine/bin/wine" --prefix /path/to/isolated-prefix \
   --metadata /path/to/contracts/ref/netstandard2.0 \
@@ -194,7 +192,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error 'Windows.Networking.Connectivity.NetworkInformation.add_NetworkStatusChanged'
+  --expected-game-error 'Windows.ApplicationModel.Activation.IActivatedEventArgs.get_SplashScreen'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -381,3 +379,29 @@ lifetime after collection, invalid buffer lengths and oversized allocations.
 The consumer carries the game's WindowsRuntime reference flag and runtime
 assembly version/token. All fixtures use owned output/save directories. This
 checkpoint does not establish Windows/x64 runtime or rendered gameplay parity.
+
+## Native connectivity projection
+
+`bootstrap.xml` selects NetworkInformation.GetInternetConnectionProfile and its
+NetworkStatusChanged event, ConnectionProfile.ProfileName and
+GetNetworkConnectivityLevel, plus the metadata enum and delegate. Static events
+use the existing token/CCW implementation; generated methods now support selected
+32-bit enum returns with HRESULT checks and the correct signed/unsigned ABI.
+A changed 64-bit connectivity enum fails generation by name. IIDs and slots are
+independently checked against windows.networking.connectivity.h.
+
+This projects the existing native connectivity contract. By default there is no
+internet profile. The explicit stub-IAP option supplies the existing synthetic
+profile named `Offline stub IAP` reporting InternetAccess, so connectivity
+preflight can reach the local Store stub. HTTP remains offline. Options are read
+once and the model is constant for the process; registration retains handlers
+and removal releases them, but it does not monitor physical network changes.
+
+`--network-only` and `winrt_network_projection` check both modes in separate
+processes, native subscriber lifetime/removal and WindowsRuntimeMarshal event
+registration. `network_projection_fixture.dll` is a test-only SDK ABI caller: it
+queries the generated callback IID and invokes its native vtable with null and
+managed-object senders, including an exception that must return through the
+invocation scope. It is copied only into that fixture and is not release content.
+By default the probe finds it beside the shim; `--network-fixture` selects an
+explicit path. Windows/x64 controls and gameplay acceptance remain pending.
