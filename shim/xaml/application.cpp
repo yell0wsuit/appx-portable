@@ -8,6 +8,7 @@
 #include "package/resources.h"
 #include "xbf.h"
 #include "element.h"
+#include "source.h"
 #include "compat/win10/xaml.h"
 #include <shlwapi.h>
 #include <xmllite.h>
@@ -313,6 +314,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE LoadComponent(IInspectable* component,
                                             ABI::Windows::Foundation::IUriRuntimeClass* uri) override {
+        if (ManagedXamlMode()) return LoadSourceXaml(component, uri);
         if (!uri) return E_INVALIDARG;
         HSTRING text{};
         uri->get_AbsoluteUri(&text);
@@ -380,7 +382,12 @@ public:
     }
     HRESULT STDMETHODCALLTYPE LoadComponentWithResourceLocation(
         IInspectable* component, ABI::Windows::Foundation::IUriRuntimeClass* uri,
-        ABI::Windows::UI::Xaml::Controls::Primitives::ComponentResourceLocation) override {
+        ABI::Windows::UI::Xaml::Controls::Primitives::ComponentResourceLocation location) override {
+        if (ManagedXamlMode() &&
+            location != ABI::Windows::UI::Xaml::Controls::Primitives::ComponentResourceLocation_Application) {
+            Log("FAIL", "source XAML ComponentResourceLocation %d hr=%08lx", location, E_NOTIMPL);
+            return E_NOTIMPL;
+        }
         return LoadComponent(component, uri);
     }
     HRESULT STDMETHODCALLTYPE Start(IApplicationInitializationCallback* callback) override {
