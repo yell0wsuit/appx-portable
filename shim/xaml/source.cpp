@@ -30,6 +30,10 @@ struct Node {
     std::vector<Attribute> attributes;
     std::vector<std::unique_ptr<Node>> children;
     Node* content = nullptr;
+    std::vector<Node*> resources;
+    std::wstring key;
+    bool hasKey = false, hasResources = false;
+    ComPtr<IResourceDictionary> dictionary;
     bool hasWidth = false, hasHeight = false, hasVisibility = false;
     double width = 0, height = 0;
     Visibility visibility = Visibility_Visible;
@@ -86,7 +90,7 @@ HRESULT Read(IXmlReader* reader, std::unique_ptr<Node>& root) {
     return FAILED(hr) ? hr : root && stack.empty() ? S_OK : E_INVALIDARG;
 }
 HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
-                std::set<std::wstring>& names, std::set<int>& connections, bool root) {
+                std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource = false) {
     if (node.space != Presentation) return Fail(node.space + L":" + node.type);
     if (node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid") return Fail(node.type);
     for (const auto& attr : node.attributes)
@@ -105,7 +109,12 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         if (attr.space == Xmlns || (attr.space == Compatibility && attr.name == L"Ignorable") ||
             (ignoreDesign && attr.space == Design))
             continue;
-        if ((attr.space == Language || attr.space.empty()) && attr.name == L"Name") {
+        if (attr.space == Language && attr.name == L"Key") {
+            if (!resource) return Fail(member, E_INVALIDARG);
+            if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
+            node.key = attr.value;
+            node.hasKey = true;
+        } else if ((attr.space == Language || attr.space.empty()) && attr.name == L"Name") {
             if (!node.name.empty() || !Identifier(attr.value) || !names.insert(attr.value).second)
                 return Fail(member, E_INVALIDARG);
             node.name = attr.value;
@@ -137,7 +146,43 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         } else
             return Fail(member);
     }
+    if (resource && !node.hasKey) {
+        if (node.name.empty()) return Fail(node.type + L" resource key", E_INVALIDARG);
+        node.key = node.name;
+    }
     for (auto& child : node.children) {
+        if (child->space == Presentation && child->type == node.type + L".Resources") {
+            if (node.hasResources) return Fail(child->type + L" multiple values", E_INVALIDARG);
+            node.hasResources = true;
+            auto resourceSpaces = spaces;
+            auto declarations = [&](Node& holder) -> HRESULT {
+                for (const auto& attr : holder.attributes) {
+                    if (attr.space != Xmlns) return Fail(holder.type + L"." + attr.name);
+                    resourceSpaces[attr.name] = attr.value;
+                }
+                return S_OK;
+            };
+            auto hr = declarations(*child);
+            if (FAILED(hr)) return hr;
+            Node* holder = child.get();
+            if (child->children.size() == 1 && child->children[0]->space == Presentation &&
+                child->children[0]->type == L"ResourceDictionary") {
+                holder = child->children[0].get();
+                hr = declarations(*holder);
+                if (FAILED(hr)) return hr;
+            }
+            std::set<std::wstring> keys;
+            for (auto& entry : holder->children) {
+                if (entry->space == Presentation && entry->type == L"ResourceDictionary")
+                    return Fail(child->type + L" mixed dictionary entries", E_INVALIDARG);
+                hr = Prepare(*entry, resourceSpaces, ignoreDesign, names, connections, false, true);
+                if (FAILED(hr)) return hr;
+                if (!keys.insert(entry->key).second)
+                    return Fail(child->type + L" duplicate key " + entry->key, E_INVALIDARG);
+                node.resources.push_back(entry.get());
+            }
+            continue;
+        }
         Node* content = child.get();
         if (child->space == Presentation && child->type == node.type + L".Content") {
             if (node.type == L"Grid") return Fail(child->type);
@@ -191,6 +236,7 @@ HRESULT Apply(Node& node) {
     auto hr = node.value.As(&element);
     if (SUCCEEDED(hr) && !node.name.empty())
         hr = element->put_Name(Wrappers::HStringReference(node.name.c_str()).Get());
+    if (SUCCEEDED(hr) && node.hasResources) hr = element->put_Resources(node.dictionary.Get());
     if (SUCCEEDED(hr) && node.hasWidth) hr = element->put_Width(node.width);
     if (SUCCEEDED(hr) && node.hasHeight) hr = element->put_Height(node.height);
     if (SUCCEEDED(hr) && node.hasVisibility) {
@@ -200,9 +246,26 @@ HRESULT Apply(Node& node) {
     }
     return FAILED(hr) ? hr : SetContent(node);
 }
+HRESULT Build(Node& node);
+HRESULT BuildParts(Node& node) {
+    for (auto* resource : node.resources) {
+        auto hr = Build(*resource);
+        if (FAILED(hr)) return hr;
+    }
+    if (node.hasResources) {
+        auto hr = MakeResourceDictionary(&node.dictionary);
+        if (FAILED(hr)) return hr;
+        for (auto* resource : node.resources) {
+            hr = AddSourceResource(node.dictionary.Get(), Wrappers::HStringReference(resource->key.c_str()).Get(),
+                                   resource->value.Get());
+            if (FAILED(hr)) return hr;
+        }
+    }
+    return node.content ? Build(*node.content) : S_OK;
+}
 HRESULT Build(Node& node) {
     auto hr = Create(node);
-    if (SUCCEEDED(hr) && node.content) hr = Build(*node.content);
+    if (SUCCEEDED(hr)) hr = BuildParts(node);
     return FAILED(hr) ? hr : Apply(node);
 }
 HRESULT AttachNames(Node& node, const std::shared_ptr<SourceNameScope>& scope, bool root) {
@@ -211,12 +274,21 @@ HRESULT AttachNames(Node& node, const std::shared_ptr<SourceNameScope>& scope, b
     if (FAILED(hr)) return hr;
     registry->SetSourceNameScope(scope, root);
     if (!root && !node.name.empty()) scope->elements[node.name] = node.value;
+    for (auto* resource : node.resources) {
+        hr = AttachNames(*resource, scope, false);
+        if (FAILED(hr)) return hr;
+    }
     return node.content ? AttachNames(*node.content, scope, false) : S_OK;
 }
 HRESULT Connect(Node& node, ABI::Windows::UI::Xaml::Markup::IComponentConnector* connector) {
     if (node.connection && !connector) return Fail(L"IComponentConnector", E_NOINTERFACE);
     auto hr = node.connection ? connector->Connect(node.connection, node.value.Get()) : S_OK;
-    return FAILED(hr) || !node.content ? hr : Connect(*node.content, connector);
+    if (FAILED(hr)) return hr;
+    for (auto* resource : node.resources) {
+        hr = Connect(*resource, connector);
+        if (FAILED(hr)) return hr;
+    }
+    return node.content ? Connect(*node.content, connector) : S_OK;
 }
 HRESULT ResourcePath(ABI::Windows::Foundation::IUriRuntimeClass* uri, std::wstring& path) {
     Wrappers::HString scheme, host, query, fragment, raw;
@@ -291,7 +363,7 @@ HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRu
             hr = component->QueryInterface(IID_PPV_ARGS(&connector));
             if (FAILED(hr)) return hr;
         }
-        if (root->content) hr = Build(*root->content);
+        hr = BuildParts(*root);
         if (FAILED(hr)) return hr;
         auto scope = std::make_shared<SourceNameScope>();
         hr = element.AsWeak(&scope->root);
