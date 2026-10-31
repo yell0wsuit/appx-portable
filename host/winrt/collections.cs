@@ -58,6 +58,11 @@ namespace AppxPortable.WinRT
             using (var access = new NativeObject.Access(map))
             using (var text = new NativeString(key))
             {
+                // Settings maps return success/null for an absent key. Test
+                // membership separately to preserve IDictionary semantics.
+                byte found;
+                Check(access.Method<HasKeyCall>(abi.HasKey)(access.Self, text.Value, out found));
+                if (found == 0) return false;
                 IntPtr result;
                 int hr = access.Method<LookupCall>(abi.Lookup)(access.Self, text.Value, out result);
                 if (hr == Bounds) { if (result != IntPtr.Zero) Marshal.Release(result); return false; }
