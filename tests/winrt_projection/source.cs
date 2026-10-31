@@ -13,11 +13,13 @@ using Windows.UI.Xaml.Media.Animation;
 class SourcePage : Page, IComponentConnector
 {
     internal readonly Dictionary<int, object> Targets = new Dictionary<int, object>();
+    internal readonly List<int> Connections = new List<int>();
     internal Exception Failure;
     void IComponentConnector.Connect(int id, object target)
     {
         if (id == 99) throw Failure;
         Targets[id] = target;
+        Connections.Add(id);
         if (FindName("leaf") == null) throw new Exception("names not registered before Connect");
     }
 }
@@ -32,6 +34,8 @@ class SourceApp : Application
     static extern int ExerciseAnimationData();
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateSourceRootFields();
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateGridChildren(int stage);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedResources(int stage);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
@@ -124,6 +128,39 @@ class SourceApp : Application
         return (Storyboard)page.FindName("unconnected");
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
+    static object RetainGridChild(out WeakReference root)
+    {
+        var page = new SourcePage();
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid.xaml"));
+        root = new WeakReference(page);
+        return page.FindName("first");
+    }
+    static void VerifyGrid(SourcePage page)
+    {
+        int connectionStart = page.Connections.Count;
+        File.WriteAllText("Fixtures/grid.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid x:Name=\"container\"><Grid x:Name=\"first\" x:ConnectionId=\"21\"><Grid.Children><Grid x:Name=\"leaf\"/></Grid.Children></Grid><Frame x:Name=\"second\" x:ConnectionId=\"22\"><Grid/></Frame></Grid></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid.xaml"));
+        Check(ReferenceEquals(page.FindName("first"), page.Targets[21]) && ReferenceEquals(page.FindName("second"), page.Targets[22]), "Grid child connection identities");
+        Check(page.Connections.Count == connectionStart + 2 && page.Connections[connectionStart] == 21 && page.Connections[connectionStart + 1] == 22, "Grid child callback order");
+        Check(ValidateGridChildren(0) == 0, "ordered native Grid children and collection ABI");
+        Bad(page, "<Page" + Ns + " Width=\"999\"><Grid><Storyboard/></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid/><Grid.Children/></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Children/><Grid/></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Children/><Grid.Children/></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Children Width=\"1\"/></Grid></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><Grid/></Grid.Background></Grid></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Grid><Grid x:Name=\"same\"/><Grid x:Name=\"same\"/></Grid></Page>", unchecked((int)0x80070057));
+        File.WriteAllText("Fixtures/grid-empty.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid><Grid.Children/></Grid></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid-empty.xaml"));
+        Check(ValidateGridChildren(1) == 0 && page.FindName("first") == null, "Grid replacement preserves retained children and clears names");
+        WeakReference root;
+        var retained = RetainGridChild(out root);
+        for (int i = 0; i < 3; ++i) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+        Check(!root.IsAlive, "retained Grid child kept the Page alive");
+        GC.KeepAlive(retained);
+        Console.WriteLine("PASS: source Grid children preserve order, names, callbacks and retained collection lifetime");
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)]
     static void VerifyAnimations(SourcePage page)
     {
         File.WriteAllText("Fixtures/animations.xaml", "<Page" + Ns + " x:Name=\"root\"><Page.Resources>" +
@@ -197,6 +234,7 @@ class SourceApp : Application
         try { Application.LoadComponent(page, new Uri("ms-appx:///missing.xaml"), ComponentResourceLocation.Nested); throw new Exception("nested resources accepted"); }
         catch (NotImplementedException) { }
         VerifyResources(page);
+        VerifyGrid(page);
         VerifyAnimations(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");
