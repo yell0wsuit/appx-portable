@@ -21,7 +21,9 @@ using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::ApplicationModel::Activation;
 namespace appx {
 // Windows 8 packages retain source XAML, including the generated connection
-// IDs. Bind supported named elements and their handlers from those IDs.
+// IDs. Bind supported named elements and their handlers from those IDs. With
+// no connector, only register the names: Windows 8 pages bind their fields by
+// FindName after LoadComponent, under whatever x:Name the page chose.
 static HRESULT ConnectSourceXaml(ABI::Windows::UI::Xaml::Markup::IComponentConnector* connector,
                                  IFrameworkElement* element, const wchar_t* filename) {
     const auto path = CurrentPackage().directory / filename;
@@ -54,16 +56,19 @@ static HRESULT ConnectSourceXaml(ABI::Windows::UI::Xaml::Markup::IComponentConne
             if (value) connection = value;
             reader->MoveToElement();
         }
-        if (connection.empty()) continue;
+        if (connector ? connection.empty() : (name.empty() || elementType == L"UserControl")) continue;
         if (reader->MoveToAttributeByName(L"Visibility", nullptr) == S_OK) {
             const wchar_t* value = nullptr;
             reader->GetValue(&value, nullptr);
             if (value) visibility = value;
             reader->MoveToElement();
         }
-        wchar_t* end = nullptr;
-        const long id = wcstol(connection.c_str(), &end, 10);
-        if (!end || *end || id <= 0 || id == LONG_MAX) return E_INVALIDARG;
+        long id = 0;
+        if (connector) {
+            wchar_t* end = nullptr;
+            id = wcstol(connection.c_str(), &end, 10);
+            if (!end || *end || id <= 0 || id == LONG_MAX) return E_INVALIDARG;
+        }
         ComPtr<IInspectable> target;
         const wchar_t* canonical = elementType == L"MediaElement"               ? L"mediaElement"
                                    : elementType == L"SwapChainBackgroundPanel" ? L"SwapChainPanel"
@@ -91,6 +96,7 @@ static HRESULT ConnectSourceXaml(ABI::Windows::UI::Xaml::Markup::IComponentConne
             if (SUCCEEDED(hr)) hr = ui->put_Visibility(Visibility_Collapsed);
             if (FAILED(hr)) return hr;
         }
+        if (!connector) continue;
         hr = connector->Connect(id, target.Get());
         if (FAILED(hr)) return hr;
     }
@@ -312,16 +318,20 @@ public:
         Log("TRACE", "Application::LoadComponent %ls", WindowsGetStringRawBuffer(text, nullptr));
         const bool movie = wcscmp(WindowsGetStringRawBuffer(text, nullptr), L"ms-appx:///MovieMgrPage.xaml") == 0;
         const bool directX = wcscmp(WindowsGetStringRawBuffer(text, nullptr), L"ms-appx:///DirectXPage.xaml") == 0;
+        // The page's file at the package root, or empty for any other URI.
+        std::wstring path = WindowsGetStringRawBuffer(text, nullptr);
+        const std::wstring prefix = L"ms-appx:///";
+        if (path.rfind(prefix, 0) == 0)
+            path.erase(0, prefix.size());
+        else
+            path.clear();
         if (component && CurrentPackage().universal) {
             ComPtr<ABI::Windows::UI::Xaml::Markup::IComponentConnector> connector;
             if (SUCCEEDED(component->QueryInterface(IID_PPV_ARGS(&connector)))) {
                 ComPtr<IFrameworkElement> element;
                 auto hr = component->QueryInterface(IID_PPV_ARGS(&element));
-                std::wstring path = WindowsGetStringRawBuffer(text, nullptr);
-                const std::wstring prefix = L"ms-appx:///";
-                if (SUCCEEDED(hr) && path.rfind(prefix, 0) == 0) {
-                    path.erase(0, prefix.size());
-                    if (!path.empty() && path.find_first_of(L"\\/:") == std::wstring::npos) {
+                if (SUCCEEDED(hr) && !path.empty()) {
+                    if (path.find_first_of(L"\\/:") == std::wstring::npos) {
                         hr = ConnectSourceXaml(connector.Get(), element.Get(), path.c_str());
                         if (hr != S_FALSE) {
                             WindowsDeleteString(text);
@@ -355,6 +365,15 @@ public:
                                    &target);
             if (FAILED(hr)) return hr;
             return connector->Connect(1, target.Get());
+        }
+        if (component && !CurrentPackage().universal && !path.empty() &&
+            path.find_first_of(L"\\/:") == std::wstring::npos) {
+            ComPtr<IFrameworkElement> element;
+            if (SUCCEEDED(component->QueryInterface(IID_PPV_ARGS(&element)))) {
+                // Best effort: the page loaded fine before this pass existed.
+                const auto hr = ConnectSourceXaml(nullptr, element.Get(), path.c_str());
+                if (FAILED(hr)) Log("FAIL", "source XAML names %ls hr=%08lx", path.c_str(), hr);
+            }
         }
         return S_OK;
     }
