@@ -51,6 +51,7 @@
   </Class>
   <Class Name="Windows.UI.Xaml.PropertyMetadata" />
   <Class Name="Windows.UI.Xaml.UIElement" />
+  <Class Name="Windows.UI.Xaml.Controls.Image" />
   <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" />
   <Class Name="Windows.UI.Xaml.Media.Animation.Storyboard">
     <Method Name="Begin" />
