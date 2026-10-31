@@ -51,6 +51,8 @@
   </Class>
   <Class Name="Windows.UI.Xaml.PropertyMetadata" />
   <Class Name="Windows.UI.Xaml.UIElement" />
+  <Class Name="Windows.UI.Xaml.Controls.Panel" />
+  <Class Name="Windows.UI.Xaml.Controls.Grid" />
   <Class Name="Windows.UI.Xaml.Controls.Image" />
   <Class Name="Windows.UI.Xaml.Controls.Viewbox" />
   <Class Name="Windows.UI.Xaml.Controls.TextBlock"><Property Name="Text" /></Class>

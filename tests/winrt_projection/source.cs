@@ -138,12 +138,12 @@ class SourceApp : Application
         return (Storyboard)page.FindName("unconnected");
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
-    static object RetainGridChild(out WeakReference root)
+    static Grid RetainGridChild(out WeakReference root)
     {
         var page = new SourcePage();
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid.xaml"));
         root = new WeakReference(page);
-        return page.FindName("first");
+        return (Grid)page.FindName("first");
     }
     static void VerifyViewbox(SourcePage page)
     {
@@ -273,6 +273,15 @@ class SourceApp : Application
         int connectionStart = page.Connections.Count;
         File.WriteAllText("Fixtures/grid.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid x:Name=\"container\"><Grid x:Name=\"first\" x:ConnectionId=\"21\"><Grid.Children><Grid x:Name=\"leaf\"/></Grid.Children></Grid><Frame x:Name=\"second\" x:ConnectionId=\"22\"><Grid/></Frame></Grid></Page>");
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid.xaml"));
+        var container = (Grid)page.Content;
+        Panel panel = container;
+        Check(ReferenceEquals(container, page.FindName("container")) && ReferenceEquals(panel.FindName("first"), page.Targets[21]), "Grid and Panel inherited namescope identity");
+        var first = (Grid)page.FindName("first");
+        Check(first is Panel && first is FrameworkElement && first is UIElement && first is DependencyObject, "Grid managed inheritance");
+        Check(ReferenceEquals(first.FindName("container"), container) && first.FindName("leaf") is Grid, "typed nested Grid namescope");
+        var state = DependencyProperty.RegisterAttached("GridState", typeof(string), typeof(SourcePage), null);
+        first.SetValue(state, "native grid state");
+        Check((string)((Grid)page.Targets[21]).GetValue(state) == "native grid state", "Grid wrapper shares native dependency values");
         Check(ReferenceEquals(page.FindName("first"), page.Targets[21]) && ReferenceEquals(page.FindName("second"), page.Targets[22]), "Grid child connection identities");
         Check(page.Connections.Count == connectionStart + 2 && page.Connections[connectionStart] == 21 && page.Connections[connectionStart + 1] == 22, "Grid child callback order");
         Check(ValidateGridChildren(0) == 0, "ordered native Grid children and collection ABI");
@@ -290,8 +299,9 @@ class SourceApp : Application
         var retained = RetainGridChild(out root);
         for (int i = 0; i < 3; ++i) { GC.Collect(); GC.WaitForPendingFinalizers(); }
         Check(!root.IsAlive, "retained Grid child kept the Page alive");
+        Check(retained.FindName("root") == null, "retained typed Grid resolved expired root");
         GC.KeepAlive(retained);
-        Console.WriteLine("PASS: source Grid children preserve order, names, callbacks and retained collection lifetime");
+        Console.WriteLine("PASS: typed Grid and Panel preserve native identity, inheritance, names, callbacks and retained collection lifetime");
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
     static void VerifyAnimations(SourcePage page)

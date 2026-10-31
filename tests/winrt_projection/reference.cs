@@ -77,6 +77,8 @@ namespace Windows.UI.Xaml
 }
 namespace Windows.UI.Xaml.Controls
 {
+    public class Panel : global::Windows.UI.Xaml.FrameworkElement { internal Panel() { } }
+    public class Grid : Panel { internal Grid() { } }
     public class Image : global::Windows.UI.Xaml.FrameworkElement { internal Image() { } }
     public class Control : global::Windows.UI.Xaml.FrameworkElement { internal Control() { } }
     public class Viewbox : global::Windows.UI.Xaml.FrameworkElement { internal Viewbox() { } }
