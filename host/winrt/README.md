@@ -154,9 +154,10 @@ game constructs its Xbox wrapper and returns to `App.OnApplicationStarted`.
 It retrieves the native launch splash and composes the game's `ExtendedSplash`
 Page. Its LoadComponent call now builds `ExtendedSplash.xaml`, including its
 resources and Viewbox children, and decodes both package wordmark images. It
-then fails with InvalidCastException in `ExtendedSplash.InitializeComponent`
-(offset 0x6f): the game's `FindName("unsnappedGrid")` result lacks a selected
-managed Grid wrapper. Grid/Panel projection is the next construction gap.
+then completes `ExtendedSplash.InitializeComponent`, including typed Grid
+namescope lookups. Its constructor next fails explicitly when subscribing to
+`Window.SizeChanged` (`Windows.UI.Xaml.Window.add_SizeChanged`). Window event
+projection is the next construction gap.
 No menu or game round has been displayed by this path.
 
 The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
@@ -198,7 +199,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error 'Bejeweled3.ExtendedSplash.InitializeComponent'
+  --expected-game-error 'Windows.UI.Xaml.Window.add_SizeChanged'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -789,3 +790,17 @@ default and explicit stretch data, invalid setter preservation, dimensions and
 visibility, wrong-thread reads and child ownership after tree replacement.
 These are tree and scaling-input contracts. Measure/arrange, scale calculation,
 transforms and drawing remain separate work.
+
+## Managed Grid and Panel identity
+
+Grid and its Panel base are selected typed wrappers over the existing native
+objects. Grid inherits Panel, FrameworkElement, UIElement and DependencyObject.
+Content, FindName and component callbacks reuse the same native identity, so
+source-loaded Grid results support typed casts and inherited implemented members.
+The fixture checks nested namescope lookup, shared dependency values and retained
+typed children after the component root is collected. SDK header constants verify
+IGrid and IPanel independently of the generator's WinMD inputs.
+
+Constructors, Panel.Children, Grid row/column definitions and attached layout
+properties remain unselected. This adds managed type identity; it does not add
+layout or rendering behavior.
