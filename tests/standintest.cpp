@@ -136,6 +136,75 @@ int main(int argc, char**) {
         }
     }
     // Xbox classes without a stand-in are "not registered", never the real DLL.
+    // Marketplace activation must work even with StubIap enabled. Xbox purchases
+    // fail through their async callback, which iStunt 2 handles, instead of
+    // throwing an uncaught TypeLoadException at ShowPurchaseAsync.
+    ComPtr<appx::xbox::IMarketplaceStatics> marketplace;
+    CHECK(SUCCEEDED(Factory(L"Microsoft.Xbox.Marketplace.MarketplaceService", factory)) &&
+          SUCCEEDED(factory.As(&marketplace)));
+    if (marketplace) {
+        const GUID offer = {0x12345678, 0x1234, 0x5678, {1, 2, 3, 4, 5, 6, 7, 8}};
+        ComPtr<ABI::Windows::Foundation::IAsyncAction> purchase;
+        CHECK(marketplace->ShowPurchaseAsync(offer, nullptr) == E_POINTER);
+        CHECK(SUCCEEDED(marketplace->ShowPurchaseAsync(offer, &purchase)) && purchase);
+        if (purchase) {
+            ComPtr<ABI::Windows::Foundation::IAsyncInfo> info;
+            ABI::Windows::Foundation::AsyncStatus status{};
+            HRESULT error{};
+            CHECK(SUCCEEDED(purchase.As(&info)) && SUCCEEDED(info->get_Status(&status)) &&
+                  status == ABI::Windows::Foundation::AsyncStatus::Error);
+            CHECK(info && SUCCEEDED(info->get_ErrorCode(&error)) &&
+                  error == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
+            Handler handler{handlerTable};
+            CHECK(SUCCEEDED(purchase->put_Completed(
+                reinterpret_cast<ABI::Windows::Foundation::IAsyncActionCompletedHandler*>(&handler))));
+            CHECK(handler.calls == 1 && handler.status == ABI::Windows::Foundation::AsyncStatus::Error);
+            CHECK(purchase->GetResults() == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
+            CHECK(info && SUCCEEDED(info->Close()));
+        }
+        auto checkMarketplaceResult = [&](HRESULT hr, ComPtr<IInspectable>& operation, const char* runtimeClass,
+                                          const GUID& defaultInterface) {
+            CHECK(SUCCEEDED(hr) && operation);
+            ComPtr<IUnknown> typed;
+            const auto iid = appx::ParameterizedIid(appx::AsyncOperationOfClass(runtimeClass, defaultInterface));
+            CHECK(operation && SUCCEEDED(operation->QueryInterface(iid, &typed)));
+            if (typed) {
+                void* result = reinterpret_cast<void*>(1);
+                CHECK(static_cast<OperationAbi*>(static_cast<IInspectable*>(typed.Get()))->GetResults(&result) ==
+                      HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
+                CHECK(!result);
+            }
+            operation.Reset();
+        };
+        ComPtr<IInspectable> operation;
+        auto hr = marketplace->EnumerateOffersByOfferIdsAsync(nullptr, &operation);
+        checkMarketplaceResult(hr, operation, "Microsoft.Xbox.Marketplace.OfferCollection",
+                               appx::xbox::defaults::OfferCollection);
+        hr = marketplace->EnumerateOffersAsync(0, 0, 0, 0, 0, 0, false, &operation);
+        checkMarketplaceResult(hr, operation, "Microsoft.Xbox.Marketplace.OfferCollection",
+                               appx::xbox::defaults::OfferCollection);
+        hr = marketplace->GetReceiptsAsync(0, 0, 0, nullptr, &operation);
+        checkMarketplaceResult(hr, operation, "Microsoft.Xbox.Marketplace.ReceiptCollection",
+                               appx::xbox::defaults::ReceiptCollection);
+        hr = marketplace->GetReceiptsWithDateFilterAsync(0, 0, 0, {}, nullptr, &operation);
+        checkMarketplaceResult(hr, operation, "Microsoft.Xbox.Marketplace.ReceiptCollection",
+                               appx::xbox::defaults::ReceiptCollection);
+        hr = marketplace->GetReceiptAsync(0, offer, &operation);
+        checkMarketplaceResult(hr, operation, "Microsoft.Xbox.Marketplace.Receipt", appx::xbox::defaults::Receipt);
+        hr = marketplace->GetAssetsAsync(0, 0, 0, nullptr, &operation);
+        checkMarketplaceResult(hr, operation, "Microsoft.Xbox.Marketplace.AssetBalanceCollection",
+                               appx::xbox::defaults::AssetBalanceCollection);
+        ComPtr<ABI::Windows::Foundation::IAsyncAction> consume;
+        CHECK(SUCCEEDED(marketplace->ConsumeAssetsAsync(0, nullptr, &consume)) && consume &&
+              consume->GetResults() == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
+        boolean retype = false;
+        CHECK(SUCCEEDED(marketplace->put_RetypeCredentialsAtPurchase(true)));
+        CHECK(SUCCEEDED(marketplace->get_RetypeCredentialsAtPurchase(&retype)) && retype);
+        ComPtr<ABI::Windows::Foundation::IAsyncAction> setting;
+        CHECK(SUCCEEDED(marketplace->SetRetypeCredentialsAtPurchaseAsync(false, &setting)) && setting &&
+              SUCCEEDED(setting->GetResults()));
+        CHECK(SUCCEEDED(marketplace->get_RetypeCredentialsAtPurchase(&retype)) && !retype);
+    }
     factory.Reset();
     CHECK(Factory(L"Microsoft.Xbox.Multiplayer.MatchmakingService", factory) == REGDB_E_CLASSNOTREG && !factory);
 

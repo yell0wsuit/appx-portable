@@ -41,14 +41,13 @@ unsigned FrameRate(const std::wstring& ini) {
     return GetPrivateProfileIntW(L"options", L"FrameRate", 60, ini.c_str());
 }
 // Product IDs for the stub IAP listing, from the environment, else the ini.
-std::wstring StubIapProducts(const std::wstring& ini) {
+std::wstring ProductSetting(const std::wstring& ini, const wchar_t* variable, const wchar_t* key) {
     std::wstring value(4096, L'\0');
-    auto length =
-        GetEnvironmentVariableW(L"APPX_PORTABLE_STUB_IAP_PRODUCTS", value.data(), static_cast<DWORD>(value.size()));
+    auto length = GetEnvironmentVariableW(variable, value.data(), static_cast<DWORD>(value.size()));
     if (length >= value.size()) length = 0;
     if (!length && GetLastError() == ERROR_ENVVAR_NOT_FOUND)
-        length = GetPrivateProfileStringW(L"options", L"StubIapProducts", L"", value.data(),
-                                          static_cast<DWORD>(value.size()), ini.c_str());
+        length =
+            GetPrivateProfileStringW(L"options", key, L"", value.data(), static_cast<DWORD>(value.size()), ini.c_str());
     value.resize(length);
     return value;
 }
@@ -74,7 +73,8 @@ Options Parse() {
     options.unlockTrial = Setting(L"APPX_PORTABLE_UNLOCK_TRIAL", L"UnlockTrial", ini);
     options.stubIap = Setting(L"APPX_PORTABLE_STUB_IAP", L"StubIap", ini);
     options.frameRate = FrameRate(ini);
-    options.stubIapProducts = StubIapProducts(ini);
+    options.stubIapProducts = ProductSetting(ini, L"APPX_PORTABLE_STUB_IAP_PRODUCTS", L"StubIapProducts");
+    options.stubXboxProducts = ProductSetting(ini, L"APPX_PORTABLE_STUB_XBOX_PRODUCTS", L"StubXboxProducts");
     bool program = true;
     ForEachWord(GetCommandLineW(), [&](const std::wstring& word) {
         if (program) {
