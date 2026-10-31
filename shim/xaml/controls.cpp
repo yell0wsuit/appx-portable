@@ -5,6 +5,7 @@
 #pragma warning(disable : 4996)
 #endif
 #include "element.h"
+#include "grid.h"
 #include "compat/win10/input.h"
 #include "generated/controls.h"
 #include "com/factory.h"
@@ -143,9 +144,19 @@ HRESULT MakeBackgroundPanel(IInspectable** value) {
 // MainPage's root Grid. InitializeComponent safe_casts FindName's result to
 // Grid^, so a null or non-Grid object breaks the generated field binding.
 class Grid final : public Element<Grid, DefaultIGrid, DefaultIPanel> {
+    ComPtr<GridChildren> children_;
+
 public:
     static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Controls.Grid";
     explicit Grid(IInspectable* outer) : Element(outer) {}
+    HRESULT STDMETHODCALLTYPE get_Children(GridChildren** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        if (!children_) hr = MakeGridChildren(children_.GetAddressOf());
+        return FAILED(hr) ? hr : children_.CopyTo(value);
+    }
     HRESULT STDMETHODCALLTYPE get_Background(ABI::Windows::UI::Xaml::Media::IBrush** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;

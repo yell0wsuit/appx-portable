@@ -506,13 +506,13 @@ the overloaded signatures from metadata and emits separate ABI delegates for
 the two SDK slots. Native games keep the existing loader path; Windows Islands
 continues to use system XAML.
 
-This first slice supports Page, Frame and empty Grid elements, implicit content
+The source loader supports Page, Frame and Grid elements, implicit content
 and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
 ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
 attributes in a declared ignorable Blend namespace are skipped. Inline resource
-dictionaries and storyboard data are supported as described below. Animation clocks, brushes, Grid children,
-other controls and other properties fail
-explicitly, with their member names in appx-portable.log.
+dictionaries, Grid child trees and storyboard data are supported as described below.
+Animation clocks, brushes, other controls and other properties fail explicitly,
+with their member names in appx-portable.log.
 
 Package-local ms-appx:/// source paths are UTF-8 unescaped and resolved through
 the existing package resource reader. Query/fragment components, remote schemes
@@ -603,3 +603,29 @@ verify the native data contract. The source fixture covers typed names, exact
 and overflowing durations, thread checks, lifetime, collection boundaries,
 oversized ReplaceAll counts and rejected Page content preserving root properties.
 Frame retains its object-typed content contract.
+
+
+## Source-loaded Grid children
+
+A Grid can contain ordered visual children directly or in a sole Grid.Children
+container. Children currently use the supported Page/Frame/Grid source types;
+nonvisual timelines are rejected. Duplicate or mixed child containers, duplicate
+names and unsupported property elements fail during preparation before Page
+properties or content change. Property-element failures retain the actual member
+name, including Grid.Background.
+
+IPanel.Children returns a stable native UIElementCollection with SDK vector read,
+view and iterable interfaces. Source loading installs a prepared immutable child
+snapshot. Views and iterators retain their snapshot, and a retained collection
+owns its children independently of the Grid. Reads enforce the creating thread.
+Programmatic vector mutations and UIElementCollection.Move return named E_NOTIMPL
+errors until visual parenting and reparenting are implemented. Managed collection
+projection remains unselected.
+
+Grid descendants share the component namescope and participate in connection
+callbacks in source order. Names are available before callbacks run, and retained
+children do not keep the component Page alive. The SDK fixture checks child order,
+nested/empty children, identity, iteration/GetMany, bounds, thread rejection,
+unsupported mutations and lifetime across Page replacement. This checkpoint adds
+tree data; layout, drawing, Loaded traversal through panels and background brushes
+remain separate work.

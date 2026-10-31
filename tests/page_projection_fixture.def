@@ -10,3 +10,4 @@ EXPORTS
   ValidateLoadedResources
   ExerciseAnimationData
   ValidateSourceRootFields
+  ValidateGridChildren
