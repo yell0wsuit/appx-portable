@@ -8,7 +8,11 @@ struct BrushSourceData {
     ABI::Windows::Foundation::Point start{0, 0}, end{1, 1};
     ABI::Windows::UI::Color color{};
     double offset = 0, opacity = 1;
+    bool hasColor = false;
 };
+bool BrushType(const std::wstring& type);
+HRESULT ParseSourceColor(const std::wstring& text, ABI::Windows::UI::Color& color);
+HRESULT MakeSolidColorBrush(ABI::Windows::UI::Color color, ABI::Windows::UI::Xaml::Media::IBrush** value);
 bool BrushDataType(const std::wstring& type);
 HRESULT ParseBrushAttribute(const std::wstring& type, const std::wstring& name, const std::wstring& text,
                             BrushSourceData& data);

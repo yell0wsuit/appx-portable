@@ -79,6 +79,11 @@ namespace Windows.UI.Xaml.Controls
 {
     public class Image : global::Windows.UI.Xaml.FrameworkElement { internal Image() { } }
     public class Control : global::Windows.UI.Xaml.FrameworkElement { internal Control() { } }
+    public class ProgressRing : Control
+    {
+        internal ProgressRing() { }
+        public bool IsActive { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public class ContentControl : Control { internal ContentControl() { } }
     public class UserControl : Control
     {
