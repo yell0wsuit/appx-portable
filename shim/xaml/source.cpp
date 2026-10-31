@@ -3,6 +3,7 @@
 #include "brush.h"
 #include "image.h"
 #include "text.h"
+#include "viewbox.h"
 #include "grid.h"
 #include "element.h"
 #include "registry.h"
@@ -69,6 +70,8 @@ struct Node {
     ComPtr<ABI::Windows::UI::Xaml::Media::IFontFamily> fontFamily;
     TextWrapping wrapping = TextWrapping_NoWrap;
     TextAlignment textAlignment = TextAlignment_Left;
+    bool hasDirection = false;
+    StretchDirection direction = StretchDirection_Both;
     int connection = 0;
     ComPtr<IInspectable> value;
 };
@@ -162,7 +165,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     const bool nonvisual = animation || brush;
     if (root && nonvisual) return Fail(L"nonvisual root", E_INVALIDARG);
     if (!nonvisual && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid" && node.type != L"Image" &&
-        node.type != L"ProgressRing" && node.type != L"TextBlock")
+        node.type != L"ProgressRing" && node.type != L"TextBlock" && node.type != L"Viewbox")
         return Fail(node.type);
     for (const auto& attr : node.attributes)
         if (attr.space == Xmlns) spaces[attr.name] = attr.value;
@@ -261,11 +264,19 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
             node.imageUri = attr.value;
             node.hasImageSource = true;
-        } else if (node.type == L"Image" && attr.space.empty() && attr.name == L"Stretch") {
+        } else if ((node.type == L"Image" || node.type == L"Viewbox") && attr.space.empty() &&
+                   attr.name == L"Stretch") {
+            if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
             auto value = Choice(attr.value, {L"None", L"Fill", L"Uniform", L"UniformToFill"});
             if (value < 0) return Fail(member, E_INVALIDARG);
             node.stretch = static_cast<ABI::Windows::UI::Xaml::Media::Stretch>(value);
             node.hasStretch = true;
+        } else if (node.type == L"Viewbox" && attr.space.empty() && attr.name == L"StretchDirection") {
+            if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
+            auto value = Choice(attr.value, {L"UpOnly", L"DownOnly", L"Both"});
+            if (value < 0) return Fail(member, E_INVALIDARG);
+            node.direction = static_cast<StretchDirection>(value);
+            node.hasDirection = true;
         } else if (!nonvisual && attr.space.empty() && attr.name == L"Margin") {
             auto hr = ParseMargin(attr.value, node.margin);
             if (FAILED(hr)) return Fail(member, hr);
@@ -470,22 +481,31 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             continue;
         }
         Node* content = child.get();
-        if (child->space == Presentation && child->type == node.type + L".Content") {
-            if (node.type == L"Grid") return Fail(child->type);
-            if (!child->attributes.empty() || child->children.size() != 1) return Fail(child->type, E_INVALIDARG);
+        auto contentSpaces = spaces;
+        const auto property = node.type + (node.type == L"Viewbox" ? L".Child" : L".Content");
+        if (child->space == Presentation && child->type == property) {
+            if (child->children.size() != 1) return Fail(property, E_INVALIDARG);
+            if (node.type == L"Viewbox") {
+                for (const auto& attr : child->attributes) {
+                    if (attr.space != Xmlns) return Fail(property + L"." + attr.name);
+                    contentSpaces[attr.name] = attr.value;
+                }
+            } else if (!child->attributes.empty())
+                return Fail(property, E_INVALIDARG);
             content = child->children[0].get();
         }
-        if (node.content) return Fail(node.type + L".Content multiple values", E_INVALIDARG);
-        auto hr = Prepare(*content, spaces, ignoreDesign, names, connections, false);
+        if (node.content) return Fail(property + L" multiple values", E_INVALIDARG);
+        auto hr = Prepare(*content, contentSpaces, ignoreDesign, names, connections, false);
         if (FAILED(hr)) return hr;
-        if (node.type == L"Page" && (AnimationType(content->type) || BrushDataType(content->type)))
-            return Fail(L"Page.Content nonvisual value", E_INVALIDARG);
+        if ((node.type == L"Page" || node.type == L"Viewbox") &&
+            (AnimationType(content->type) || BrushDataType(content->type)))
+            return Fail(property + L" nonvisual value", E_INVALIDARG);
         node.content = content;
     }
     return S_OK;
 }
 HRESULT Create(Node& node) {
-    if (node.type == L"Image" || node.type == L"ProgressRing" || node.type == L"TextBlock") {
+    if (node.type == L"Image" || node.type == L"ProgressRing" || node.type == L"TextBlock" || node.type == L"Viewbox") {
         ComPtr<IActivationFactory> factory;
         auto name = L"Windows.UI.Xaml.Controls." + node.type;
         auto hr = ShimGetFactory(Wrappers::HStringReference(name.c_str()).Get(), &factory);
@@ -533,6 +553,11 @@ HRESULT SetContent(Node& node) {
             if (FAILED(hr)) return hr;
         }
         return SetGridChildren(node.value.Get(), node.visualValues);
+    }
+    if (node.type == L"Viewbox") {
+        ComPtr<IUIElement> child;
+        auto hr = node.content ? node.content->value.As(&child) : S_OK;
+        return FAILED(hr) ? hr : SetSourceViewboxChild(node.value.Get(), child.Get());
     }
     auto* child = node.content ? node.content->value.Get() : nullptr;
     if (node.type == L"Frame") {
@@ -597,6 +622,12 @@ HRESULT Apply(Node& node) {
             if (SUCCEEDED(hr)) hr = control->put_Foreground(node.foreground.Get());
         }
         return hr;
+    }
+    if (node.type == L"Viewbox") {
+        ComPtr<IViewbox> viewbox;
+        if (SUCCEEDED(hr)) hr = node.value.As(&viewbox);
+        if (SUCCEEDED(hr) && node.hasStretch) hr = viewbox->put_Stretch(node.stretch);
+        if (SUCCEEDED(hr) && node.hasDirection) hr = viewbox->put_StretchDirection(node.direction);
     }
     return FAILED(hr) ? hr : SetContent(node);
 }
@@ -809,6 +840,7 @@ HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRu
             hr = root->type == L"Page"           ? component->QueryInterface(__uuidof(IPage), &kind)
                  : root->type == L"Frame"        ? component->QueryInterface(__uuidof(IFrame), &kind)
                  : root->type == L"Image"        ? component->QueryInterface(__uuidof(IImage), &kind)
+                 : root->type == L"Viewbox"      ? component->QueryInterface(__uuidof(IViewbox), &kind)
                  : root->type == L"TextBlock"    ? component->QueryInterface(__uuidof(ITextBlock), &kind)
                  : root->type == L"ProgressRing" ? component->QueryInterface(__uuidof(IProgressRing), &kind)
                                                  : component->QueryInterface(__uuidof(IGrid), &kind);

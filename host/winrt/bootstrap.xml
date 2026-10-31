@@ -52,6 +52,7 @@
   <Class Name="Windows.UI.Xaml.PropertyMetadata" />
   <Class Name="Windows.UI.Xaml.UIElement" />
   <Class Name="Windows.UI.Xaml.Controls.Image" />
+  <Class Name="Windows.UI.Xaml.Controls.Viewbox" />
   <Class Name="Windows.UI.Xaml.Controls.TextBlock"><Property Name="Text" /></Class>
   <Class Name="Windows.UI.Xaml.Controls.ProgressRing"><Property Name="IsActive" /></Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" />

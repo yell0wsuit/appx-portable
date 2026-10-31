@@ -79,6 +79,7 @@ namespace Windows.UI.Xaml.Controls
 {
     public class Image : global::Windows.UI.Xaml.FrameworkElement { internal Image() { } }
     public class Control : global::Windows.UI.Xaml.FrameworkElement { internal Control() { } }
+    public class Viewbox : global::Windows.UI.Xaml.FrameworkElement { internal Viewbox() { } }
     public class TextBlock : global::Windows.UI.Xaml.FrameworkElement
     {
         internal TextBlock() { }
