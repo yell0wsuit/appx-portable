@@ -1,6 +1,7 @@
 #pragma once
 #include "async_id.h"
 #include "log.h"
+#include "host/host.h"
 #include <windows.foundation.h>
 #include <wrl.h>
 #include <mutex>
@@ -16,8 +17,15 @@ class AsyncAction final : public RuntimeClass<RuntimeClassFlags<WinRt>, IAsyncAc
     HRESULT error_ = S_OK;
     ComPtr<IAsyncActionCompletedHandler> completed_;
     bool assigned_ = false, closed_ = false;
+    const bool queued_;
+    void Invoke(ComPtr<IAsyncActionCompletedHandler> handler, AsyncStatus status) {
+        ComPtr<AsyncAction> self(this);
+        auto invoke = [self, handler, status] { handler->Invoke(self.Get(), status); };
+        if (!queued_ || FAILED(PostHostWork(0, invoke))) invoke();
+    }
 
 public:
+    explicit AsyncAction(bool queued = false) : queued_(queued) {}
     void Finish(HRESULT error) {
         ComPtr<IAsyncActionCompletedHandler> callback;
         AsyncStatus status;
@@ -29,7 +37,7 @@ public:
             status = status_;
             callback = completed_;
         }
-        if (callback) callback->Invoke(this, status);
+        if (callback) Invoke(callback, status);
     }
     HRESULT STDMETHODCALLTYPE put_Completed(IAsyncActionCompletedHandler* handler) override {
         AsyncStatus status;
@@ -41,7 +49,7 @@ public:
             completed_ = handler;
             status = status_;
         }
-        if (handler && status != AsyncStatus::Started) handler->Invoke(this, status);
+        if (handler && status != AsyncStatus::Started) Invoke(ComPtr<IAsyncActionCompletedHandler>(handler), status);
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_Completed(IAsyncActionCompletedHandler** value) override {
@@ -85,7 +93,7 @@ public:
             status_ = AsyncStatus::Canceled;
             callback = completed_;
         }
-        if (callback) callback->Invoke(this, AsyncStatus::Canceled);
+        if (callback) Invoke(callback, AsyncStatus::Canceled);
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE Close() override {

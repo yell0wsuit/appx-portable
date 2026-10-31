@@ -11,6 +11,25 @@
 namespace appx::xbox {
 using ABI::Windows::Foundation::IAsyncAction;
 
+// Xbox Marketplace uses offer GUIDs, assets and receipts, independently of
+// Windows.ApplicationModel.Store.CurrentApp and its optional purchase stub.
+MIDL_INTERFACE("5FB27D3F-F307-4DCC-B8C1-588ADCE62FBD")
+IMarketplaceStatics : public IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE EnumerateOffersByOfferIdsAsync(IInspectable*, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE EnumerateOffersAsync(UINT32, UINT32, UINT32, INT32, UINT32, INT32, boolean,
+                                                           IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE ShowPurchaseAsync(GUID, IAsyncAction**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetReceiptsAsync(UINT32, UINT32, UINT32, IInspectable*, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetReceiptsWithDateFilterAsync(
+        UINT32, UINT32, UINT32, ABI::Windows::Foundation::DateTime, IInspectable*, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetReceiptAsync(UINT32, GUID, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetAssetsAsync(UINT32, UINT32, UINT32, IInspectable*, IInspectable**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE ConsumeAssetsAsync(UINT32, IInspectable*, IAsyncAction**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE get_RetypeCredentialsAtPurchase(boolean*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE put_RetypeCredentialsAtPurchase(boolean) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetRetypeCredentialsAtPurchaseAsync(boolean, IAsyncAction**) = 0;
+};
+
 MIDL_INTERFACE("4B00E95D-3006-4F02-BD96-3919D984D4C7")
 IXboxLIVEService : public IInspectable { // statics of Microsoft.Xbox.XboxLIVEService
     virtual HRESULT STDMETHODCALLTYPE SignInAsync(IInspectable * *operation) = 0; // IAsyncOperation<UserIdentity>
@@ -156,6 +175,10 @@ ITitleStorageFile : public IInspectable {
 // Default interfaces of the runtime classes the async methods produce; their
 // IIDs name the IAsyncOperation<T> instances.
 namespace defaults {
+constexpr GUID OfferCollection = {0xd8da7362, 0x27b9, 0x4860, {0x85, 0x5a, 0x63, 0x52, 0x32, 0xd2, 0x9a, 0x4b}};
+constexpr GUID ReceiptCollection = {0x2225bf0e, 0x3ef6, 0x44c7, {0xa0, 0x57, 0x71, 0xd5, 0xb7, 0x50, 0x28, 0x8e}};
+constexpr GUID Receipt = {0x64316033, 0x9488, 0x48f3, {0x8c, 0x23, 0x6c, 0xd8, 0x35, 0x2a, 0xb9, 0x32}};
+constexpr GUID AssetBalanceCollection = {0xf8b77f84, 0x3983, 0x4b52, {0x8b, 0x71, 0xe9, 0xc3, 0xda, 0xbc, 0x85, 0x86}};
 constexpr GUID UserIdentity = {0xb4cac078, 0xf6c1, 0x48f2, {0xa5, 0x12, 0x3e, 0x79, 0xd1, 0xb2, 0xb6, 0xf7}};
 constexpr GUID UserProfile = {0x10d2c627, 0xead4, 0x46aa, {0xb5, 0x2c, 0x36, 0xa9, 0x34, 0xdb, 0x2c, 0x29}};
 constexpr GUID UserCollection = {0x3bae39a4, 0xa149, 0x49f6, {0xb2, 0xc1, 0xa3, 0xac, 0xf7, 0x97, 0x11, 0xa0}};

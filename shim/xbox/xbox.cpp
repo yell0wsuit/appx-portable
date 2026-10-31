@@ -5,6 +5,7 @@
 // "not registered", so the real DLL is never loaded.
 #include "registry.h"
 #include "xbox_abi.h"
+#include "marketplace_abi.h"
 #include "com/factory.h"
 #include "com/failed_operation.h"
 #include "com/pinterface.h"
@@ -394,6 +395,8 @@ template <class T> HRESULT Shared(IActivationFactory** value) {
 }
 }
 HRESULT MakeXboxFactory(const wchar_t* name, IActivationFactory** value) {
+    if (wcscmp(name, L"Microsoft.Xbox.Marketplace.MarketplaceService") == 0) return xbox::MakeMarketplaceFactory(value);
+    if (wcscmp(name, L"Microsoft.Xbox.Marketplace.AssetBalance") == 0) return xbox::MakeAssetBalanceFactory(value);
     if (!value) return E_POINTER;
     *value = nullptr;
     SdkVersion(); // logs the stand-in once

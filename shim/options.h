@@ -24,6 +24,9 @@ struct Options {
     bool unlockTrial = false, stubIap = false, hosted = false, hostedXaml = false;
     unsigned frameRate = 60;
     std::wstring stubIapProducts;
+    // Xbox offer GUID:asset ID:quantity entries, separated by commas.
+    // Asset 0 describes a durable offer, represented only by its receipt.
+    std::wstring stubXboxProducts;
 };
 const Options& GetOptions() noexcept;
 }
