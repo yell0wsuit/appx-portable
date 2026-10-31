@@ -511,7 +511,7 @@ and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
 ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
 attributes in a declared ignorable Blend namespace are skipped. Inline resource
 dictionaries, Grid child trees and storyboard data are supported as described below.
-Animation clocks, brushes, other controls and other properties fail explicitly,
+Animation clocks, other brush types, other controls and other properties fail explicitly,
 with their member names in appx-portable.log.
 
 Package-local ms-appx:/// source paths are UTF-8 unescaped and resolved through
@@ -629,3 +629,36 @@ nested/empty children, identity, iteration/GetMany, bounds, thread rejection,
 unsupported mutations and lifetime across Page replacement. This checkpoint adds
 tree data; layout, drawing, Loaded traversal through panels and background brushes
 remain separate work.
+
+
+## Linear gradient background data
+
+The source loader accepts Grid.Background containing LinearGradientBrush, with
+StartPoint, EndPoint and Opacity literals. Stops can appear directly or in a sole
+LinearGradientBrush.GradientStops container. GradientStop supports finite Offset
+values and #RGB, #ARGB, #RRGGBB and #AARRGGBB colors. Points use two finite,
+float-representable coordinates separated by a comma. Other color syntaxes and
+brush types remain unsupported. Resources may contain these brush data objects;
+actual names participate in FindName and component callbacks.
+
+The native activation factories expose ILinearGradientBrush, IGradientBrush,
+IBrush and IGradientStop data plus inherited local dependency values. Defaults
+are start (0,0), end (1,1), opacity 1, Pad spread, relative mapping, sRGB
+interpolation, and a zero-color/zero-offset gradient stop. The
+[public gradient documentation](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.media.lineargradientbrush)
+and the user-supplied local Windows.UI.Xaml.dll.c constructor exports informed
+the defaults. Static reference inspection does not establish Windows runtime parity.
+
+Grid owns its assigned background. Stop collections, views and iterators retain
+stop objects independently of the brush, and all data operations enforce their
+creating thread. Source-created stop collections expose the SDK read, view and
+iteration contracts; public collection mutations fail by name. Brush property
+round trips and replacing a GradientStops vector retain the supplied references.
+Non-null transforms, alternate constructors, dependency-property identifiers,
+managed brush construction and additional source properties remain unsupported.
+
+Preparation rejects malformed literals, duplicate backgrounds, mixed stop
+containers, markup expressions and nonvisual Page/Grid children before changing
+the root tree. The SDK fixture verifies exact color bytes, default and explicit
+values, names, resources, ownership, bounds, property setters and thread errors.
+These are data contracts; gradient drawing and visual acceptance remain pending.

@@ -1,5 +1,6 @@
 #include "source.h"
 #include "animation.h"
+#include "brush.h"
 #include "grid.h"
 #include "element.h"
 #include "registry.h"
@@ -32,6 +33,10 @@ struct Node {
     std::vector<Attribute> attributes;
     std::vector<std::unique_ptr<Node>> children;
     Node* content = nullptr;
+    Node* background = nullptr;
+    std::vector<Node*> stops;
+    bool explicitStops = false;
+    BrushSourceData brushData;
     std::vector<Node*> resources, timelines, visuals;
     bool explicitVisuals = false;
     std::shared_ptr<const VisualChildren> visualValues;
@@ -101,7 +106,10 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
                 std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource = false) {
     if (node.space != Presentation) return Fail(node.space + L":" + node.type);
     const bool animation = AnimationType(node.type);
-    if (!animation && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid") return Fail(node.type);
+    const bool brush = BrushDataType(node.type);
+    const bool nonvisual = animation || brush;
+    if (root && nonvisual) return Fail(L"nonvisual root", E_INVALIDARG);
+    if (!nonvisual && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid") return Fail(node.type);
     for (const auto& attr : node.attributes)
         if (attr.space == Xmlns) spaces[attr.name] = attr.value;
     for (const auto& attr : node.attributes)
@@ -128,7 +136,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
             node.key = attr.value;
             node.hasKey = true;
-        } else if ((attr.space == Language || (!animation && attr.space.empty())) && attr.name == L"Name") {
+        } else if ((attr.space == Language || (!nonvisual && attr.space.empty())) && attr.name == L"Name") {
             if (!node.name.empty() || !Identifier(attr.value) || !names.insert(attr.value).second)
                 return Fail(member, E_INVALIDARG);
             node.name = attr.value;
@@ -153,7 +161,10 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         } else if (animation && node.type != L"Storyboard" && attr.space.empty() && attr.name == L"TargetName") {
             node.themeName = attr.value;
             node.hasThemeName = true;
-        } else if (!animation && attr.space.empty() && (attr.name == L"Width" || attr.name == L"Height")) {
+        } else if (brush && attr.space.empty()) {
+            auto hr = ParseBrushAttribute(node.type, attr.name, attr.value, node.brushData);
+            if (FAILED(hr)) return Fail(member, hr);
+        } else if (!nonvisual && attr.space.empty() && (attr.name == L"Width" || attr.name == L"Height")) {
             double value;
             std::wistringstream number(attr.value);
             number.imbue(std::locale::classic());
@@ -166,7 +177,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
                 node.height = value;
                 node.hasHeight = true;
             }
-        } else if (!animation && attr.space.empty() && attr.name == L"Visibility") {
+        } else if (!nonvisual && attr.space.empty() && attr.name == L"Visibility") {
             if (attr.value != L"Visible" && attr.value != L"Collapsed") return Fail(member, E_INVALIDARG);
             node.visibility = attr.value == L"Visible" ? Visibility_Visible : Visibility_Collapsed;
             node.hasVisibility = true;
@@ -178,7 +189,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         node.key = node.name;
     }
     for (auto& child : node.children) {
-        if (!animation && child->space == Presentation && child->type == node.type + L".Resources") {
+        if (!nonvisual && child->space == Presentation && child->type == node.type + L".Resources") {
             if (node.hasResources) return Fail(child->type + L" multiple values", E_INVALIDARG);
             node.hasResources = true;
             auto resourceSpaces = spaces;
@@ -210,6 +221,55 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             }
             continue;
         }
+        if (node.type == L"Grid" && child->space == Presentation && child->type == L"Grid.Background") {
+            if (node.background || child->children.size() != 1)
+                return Fail(L"Grid.Background multiple values", E_INVALIDARG);
+            auto backgroundSpaces = spaces;
+            for (const auto& attr : child->attributes) {
+                if (attr.space != Xmlns) return Fail(L"Grid.Background." + attr.name);
+                backgroundSpaces[attr.name] = attr.value;
+            }
+            auto* value = child->children[0].get();
+            auto hr = Prepare(*value, backgroundSpaces, ignoreDesign, names, connections, false);
+            if (FAILED(hr)) return hr;
+            if (value->type != L"LinearGradientBrush")
+                return Fail(L"Grid.Background type " + value->type, E_INVALIDARG);
+            node.background = value;
+            continue;
+        }
+        if (node.type == L"LinearGradientBrush") {
+            Node* holder = nullptr;
+            auto stopSpaces = spaces;
+            if (child->space == Presentation && child->type == L"LinearGradientBrush.GradientStops") {
+                if (node.explicitStops || !node.stops.empty())
+                    return Fail(L"GradientStops multiple values", E_INVALIDARG);
+                for (const auto& attr : child->attributes) {
+                    if (attr.space != Xmlns) return Fail(L"GradientStops." + attr.name);
+                    stopSpaces[attr.name] = attr.value;
+                }
+                node.explicitStops = true;
+                holder = child.get();
+            } else if (node.explicitStops)
+                return Fail(L"GradientStops mixed values", E_INVALIDARG);
+            auto prepareStop = [&](Node& entry) -> HRESULT {
+                auto hr = Prepare(entry, stopSpaces, ignoreDesign, names, connections, false);
+                if (FAILED(hr)) return hr;
+                if (entry.type != L"GradientStop") return Fail(L"GradientStops type " + entry.type, E_INVALIDARG);
+                node.stops.push_back(&entry);
+                return S_OK;
+            };
+            if (holder) {
+                for (auto& entry : holder->children) {
+                    auto hr = prepareStop(*entry);
+                    if (FAILED(hr)) return hr;
+                }
+            } else {
+                auto hr = prepareStop(*child);
+                if (FAILED(hr)) return hr;
+            }
+            continue;
+        }
+        if (node.type == L"GradientStop") return Fail(L"GradientStop.Children");
         if (node.type == L"Storyboard") {
             Node* holder = nullptr;
             if (child->space == Presentation && child->type == L"Storyboard.Children") {
@@ -260,7 +320,8 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             auto prepareVisual = [&](Node& entry) -> HRESULT {
                 auto hr = Prepare(entry, childSpaces, ignoreDesign, names, connections, false);
                 if (FAILED(hr)) return hr;
-                if (AnimationType(entry.type)) return Fail(L"Grid.Children nonvisual value", E_INVALIDARG);
+                if (AnimationType(entry.type) || BrushDataType(entry.type))
+                    return Fail(L"Grid.Children nonvisual value", E_INVALIDARG);
                 node.visuals.push_back(&entry);
                 return S_OK;
             };
@@ -284,13 +345,19 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         if (node.content) return Fail(node.type + L".Content multiple values", E_INVALIDARG);
         auto hr = Prepare(*content, spaces, ignoreDesign, names, connections, false);
         if (FAILED(hr)) return hr;
-        if (node.type == L"Page" && AnimationType(content->type))
+        if (node.type == L"Page" && (AnimationType(content->type) || BrushDataType(content->type)))
             return Fail(L"Page.Content nonvisual value", E_INVALIDARG);
         node.content = content;
     }
     return S_OK;
 }
 HRESULT Create(Node& node) {
+    if (BrushDataType(node.type)) {
+        auto name = L"Windows.UI.Xaml.Media." + node.type;
+        ComPtr<IActivationFactory> factory;
+        auto hr = ShimGetFactory(Wrappers::HStringReference(name.c_str()).Get(), &factory);
+        return FAILED(hr) ? hr : factory->ActivateInstance(&node.value);
+    }
     if (AnimationType(node.type)) {
         auto name = L"Windows.UI.Xaml.Media.Animation." + node.type;
         ComPtr<IActivationFactory> factory;
@@ -317,7 +384,17 @@ HRESULT Create(Node& node) {
     return FAILED(hr) ? hr : value.As(&node.value);
 }
 HRESULT SetContent(Node& node) {
-    if (node.type == L"Grid") return SetGridChildren(node.value.Get(), node.visualValues);
+    if (node.type == L"Grid") {
+        if (node.background) {
+            ComPtr<ABI::Windows::UI::Xaml::Media::IBrush> brush;
+            auto hr = node.background->value.As(&brush);
+            ComPtr<IPanel> panel;
+            if (SUCCEEDED(hr)) hr = node.value.As(&panel);
+            if (SUCCEEDED(hr)) hr = panel->put_Background(brush.Get());
+            if (FAILED(hr)) return hr;
+        }
+        return SetGridChildren(node.value.Get(), node.visualValues);
+    }
     auto* child = node.content ? node.content->value.Get() : nullptr;
     if (node.type == L"Frame") {
         ComPtr<IContentControl> content;
@@ -331,6 +408,7 @@ HRESULT SetContent(Node& node) {
     return FAILED(hr) ? hr : content->put_Content(ui.Get());
 }
 HRESULT Apply(Node& node) {
+    if (BrushDataType(node.type)) return ConfigureBrushData(node.value.Get(), node.type, node.brushData);
     if (AnimationType(node.type))
         return ConfigureAnimation(node.value.Get(), node.hasDuration ? &node.duration : nullptr,
                                   node.hasTargetName ? &node.targetName : nullptr,
@@ -352,6 +430,22 @@ HRESULT Apply(Node& node) {
 }
 HRESULT Build(Node& node);
 HRESULT BuildParts(Node& node) {
+    if (node.background) {
+        auto hr = Build(*node.background);
+        if (FAILED(hr)) return hr;
+    }
+    if (node.type == L"LinearGradientBrush") {
+        std::vector<ComPtr<ABI::Windows::UI::Xaml::Media::IGradientStop>> stops;
+        for (auto* stop : node.stops) {
+            auto hr = Build(*stop);
+            ComPtr<ABI::Windows::UI::Xaml::Media::IGradientStop> value;
+            if (SUCCEEDED(hr)) hr = stop->value.As(&value);
+            if (FAILED(hr)) return hr;
+            stops.push_back(std::move(value));
+        }
+        auto hr = SetSourceGradientStops(node.value.Get(), std::move(stops));
+        if (FAILED(hr)) return hr;
+    }
     if (node.type == L"Grid") {
         auto values = std::make_shared<VisualChildren>();
         for (auto* visual : node.visuals) {
@@ -398,13 +492,21 @@ HRESULT AttachNames(Node& node, const std::shared_ptr<SourceNameScope>& scope, b
     HRESULT hr = S_OK;
     if (AnimationType(node.type))
         hr = BindAnimationScope(node.value.Get(), scope);
-    else {
+    else if (!BrushDataType(node.type)) {
         ComPtr<INamedElementRegistry> registry;
         hr = node.value.As(&registry);
         if (SUCCEEDED(hr)) registry->SetSourceNameScope(scope, root);
     }
     if (FAILED(hr)) return hr;
     if (!root && !node.name.empty()) scope->elements[node.name] = node.value;
+    if (node.background) {
+        hr = AttachNames(*node.background, scope, false);
+        if (FAILED(hr)) return hr;
+    }
+    for (auto* stop : node.stops) {
+        hr = AttachNames(*stop, scope, false);
+        if (FAILED(hr)) return hr;
+    }
     for (auto* visual : node.visuals) {
         hr = AttachNames(*visual, scope, false);
         if (FAILED(hr)) return hr;
@@ -423,6 +525,14 @@ HRESULT Connect(Node& node, ABI::Windows::UI::Xaml::Markup::IComponentConnector*
     if (node.connection && !connector) return Fail(L"IComponentConnector", E_NOINTERFACE);
     auto hr = node.connection ? connector->Connect(node.connection, node.value.Get()) : S_OK;
     if (FAILED(hr)) return hr;
+    if (node.background) {
+        hr = Connect(*node.background, connector);
+        if (FAILED(hr)) return hr;
+    }
+    for (auto* stop : node.stops) {
+        hr = Connect(*stop, connector);
+        if (FAILED(hr)) return hr;
+    }
     for (auto* visual : node.visuals) {
         hr = Connect(*visual, connector);
         if (FAILED(hr)) return hr;

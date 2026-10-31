@@ -137,3 +137,5 @@ extern "C" HRESULT __cdecl ValidateLoadedSource() {
 #include "animation_projection_fixture.h"
 
 #include "grid_projection_fixture.h"
+
+#include "brush_projection_fixture.h"
