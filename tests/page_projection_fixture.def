@@ -13,3 +13,4 @@ EXPORTS
   ValidateGridChildren
   ValidateBrushData
   ValidateImageData
+  ValidateProgressData

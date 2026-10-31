@@ -42,6 +42,7 @@ internal static partial class WinrtProjectionGenerator
             if (!selected.Contains(generic.ElementType.FullName)) throw new NotSupportedException("Generic type is not selected: " + type.FullName);
             return "global::" + generic.ElementType.FullName.Split('`')[0] + "<" + string.Join(", ", generic.GenericArguments.Select(Name)) + ">";
         }
+        if (type.FullName == "System.Boolean") return "bool";
         if (type.FullName == "System.String") return "string";
         if (type.FullName == "System.Object") return "object";
         if (type.FullName == "Windows.Foundation.Uri") return "global::System.Uri";
@@ -174,6 +175,7 @@ internal static partial class WinrtProjectionGenerator
     {
         string number = Literal(slot);
         TypeReference result = method.ReturnType;
+        if (result.FullName == "System.Boolean") return receiver + ".Boolean(" + number + ")";
         if (result.FullName == "System.String") return receiver + ".String(" + number + ")";
         if (result.FullName == "System.Object") return Inspectable(receiver + ".Object(" + number + ")");
         TypeDefinition definition = Find(result.FullName);
@@ -527,14 +529,23 @@ internal static partial class WinrtProjectionGenerator
         if (definition == null || definition.GetMethod == null || definition.Parameters.Count != 0)
             throw new NotSupportedException("Unsupported property: " + type.FullName + "." + name);
         MethodDefinition getter = definition.GetMethod, setter = definition.SetMethod;
+        bool boolean = getter.ReturnType.FullName == "System.Boolean";
         TypeDefinition owner = MemberInterface(type, getter);
         int slot = Slot(owner, getter);
         output.AppendLine("        // " + owner.FullName + "::" + getter.Name + ", slot " + Literal(slot));
         if (setter != null)
         {
-            Parameter(setter.Parameters[0].ParameterType, type.FullName + "." + setter.Name);
-            if (IsDelegate(Find(setter.Parameters[0].ParameterType.FullName)))
-                throw new NotSupportedException("Unsupported property setter: " + type.FullName + "." + name);
+            if (boolean)
+            {
+                if (setter.Parameters[0].ParameterType.FullName != "System.Boolean")
+                    throw new NotSupportedException("Boolean property setter type differs: " + type.FullName + "." + name);
+            }
+            else
+            {
+                Parameter(setter.Parameters[0].ParameterType, type.FullName + "." + setter.Name);
+                if (IsDelegate(Find(setter.Parameters[0].ParameterType.FullName)))
+                    throw new NotSupportedException("Unsupported property setter: " + type.FullName + "." + name);
+            }
             output.AppendLine("        // " + MemberInterface(type, setter).FullName + "::" + setter.Name + ", slot " +
                 Literal(Slot(MemberInterface(type, setter), setter)));
         }
@@ -553,8 +564,12 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("                using (var invocation = " + Runtime + "Errors.Begin())");
             output.AppendLine("                {");
             receiver = Receiver(output, type, writer, setter.IsStatic, composable);
-            output.AppendLine("                using (var argument = " + Argument(setter.Parameters[0].ParameterType, "value") + ")");
-            output.AppendLine("                    " + receiver + ".Call(" + Literal(Slot(writer, setter)) + ", argument);");
+            if (boolean) output.AppendLine("                    " + receiver + ".SetBoolean(" + Literal(Slot(writer, setter)) + ", value);");
+            else
+            {
+                output.AppendLine("                using (var argument = " + Argument(setter.Parameters[0].ParameterType, "value") + ")");
+                output.AppendLine("                    " + receiver + ".Call(" + Literal(Slot(writer, setter)) + ", argument);");
+            }
             output.AppendLine("                }");
             output.AppendLine("            }");
         }

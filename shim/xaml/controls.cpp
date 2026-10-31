@@ -141,6 +141,71 @@ HRESULT MakeBackgroundPanel(IInspectable** value) {
     panel->Release();
     return hr;
 }
+class ProgressRing final : public Element<ProgressRing, IProgressRing, DefaultIControl> {
+    bool active_ = false, hasForeground_ = false;
+    ComPtr<ABI::Windows::UI::Xaml::Media::IBrush> foreground_;
+    HRESULT Missing(const wchar_t* member) {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        Log("UNIMPL", "ProgressRing.%ls hr=%08lx", member, E_NOTIMPL);
+        return E_NOTIMPL;
+    }
+
+public:
+    static constexpr auto Name = L"Windows.UI.Xaml.Controls.ProgressRing";
+    explicit ProgressRing(IInspectable* outer) : Element(outer) {}
+    HRESULT STDMETHODCALLTYPE get_IsActive(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        auto hr = CheckSourceThread();
+        if (SUCCEEDED(hr)) *value = active_;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE put_IsActive(boolean value) override {
+        auto hr = CheckSourceThread();
+        if (SUCCEEDED(hr)) active_ = value != 0;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE get_TemplateSettings(Primitives::IProgressRingTemplateSettings** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return Missing(L"TemplateSettings");
+    }
+    HRESULT STDMETHODCALLTYPE get_Foreground(ABI::Windows::UI::Xaml::Media::IBrush** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        return hasForeground_ ? foreground_.CopyTo(value) : Missing(L"Foreground theme value");
+    }
+    HRESULT STDMETHODCALLTYPE put_Foreground(ABI::Windows::UI::Xaml::Media::IBrush* value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        foreground_ = value;
+        hasForeground_ = true;
+        return S_OK;
+    }
+};
+class ProgressRingFactory final : public Factory<> {
+public:
+    ProgressRingFactory() : Factory<>(ProgressRing::Name) {}
+    HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        try {
+            ComPtr<IProgressRing> ring;
+            auto hr = Compose<ProgressRing>(nullptr, nullptr, ring.GetAddressOf());
+            return FAILED(hr) ? hr : ring.CopyTo(value);
+        } catch (const std::bad_alloc&) {
+            return E_OUTOFMEMORY;
+        }
+    }
+};
+HRESULT MakeProgressRingFactory(IActivationFactory** value) {
+    auto factory = Make<ProgressRingFactory>();
+    return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
+}
+const ShimClass progressRingClass{ProgressRing::Name, MakeProgressRingFactory, ShimPolicy::FillMissing};
 // MainPage's root Grid. InitializeComponent safe_casts FindName's result to
 // Grid^, so a null or non-Grid object breaks the generated field binding.
 class Grid final : public Element<Grid, DefaultIGrid, DefaultIPanel> {

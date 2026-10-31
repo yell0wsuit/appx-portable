@@ -506,7 +506,7 @@ the overloaded signatures from metadata and emits separate ABI delegates for
 the two SDK slots. Native games keep the existing loader path; Windows Islands
 continues to use system XAML.
 
-The source loader supports Page, Frame, Grid and Image elements, implicit content
+The source loader supports Page, Frame, Grid, Image and ProgressRing elements, implicit content
 and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
 ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
 attributes in a declared ignorable Blend namespace are skipped. Inline resource
@@ -633,11 +633,12 @@ work. Background brush data is described below.
 
 ## Linear gradient background data
 
-The source loader accepts Grid.Background containing LinearGradientBrush, with
-StartPoint, EndPoint and Opacity literals. Stops can appear directly or in a sole
+The source loader accepts Grid.Background containing LinearGradientBrush or
+SolidColorBrush. LinearGradientBrush supports StartPoint, EndPoint and Opacity
+literals. Stops can appear directly or in a sole
 LinearGradientBrush.GradientStops container. GradientStop supports finite Offset
-values and #RGB, #ARGB, #RRGGBB and #AARRGGBB colors. Points use two finite,
-float-representable coordinates separated by a comma. Other color syntaxes and
+values and named or #RGB, #ARGB, #RRGGBB and #AARRGGBB colors. Points use two finite,
+float-representable coordinates separated by a comma. scRGB literals and other
 brush types remain unsupported. Resources may contain these brush data objects;
 actual names participate in FindName and component callbacks.
 
@@ -696,3 +697,38 @@ clears Image references, deletes the PNG and replaces the tree before reading
 pixels again. Regressions cover missing/corrupt files, unsupported URIs and markup,
 malformed layout values and content on leaf Image elements. This proves pixel
 preparation and ownership, not rendering or the game's complete splash.
+
+
+## ProgressRing state and solid foreground data
+
+ProgressRing activation exposes its SDK
+[IsActive property](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.controls.progressring.isactive)
+and inherited Control
+and FrameworkElement interfaces. Source IsActive literals and a selected managed
+property call the same native state; the default is false. Explicit Foreground
+values retain their brush, including explicit null from native callers. An unset
+foreground fails by name because theme/style inheritance is unimplemented.
+TemplateSettings also fails explicitly. Drawing and spinning remain open gates.
+
+Source Foreground accepts a color literal or a sole ProgressRing.Foreground brush
+element. SolidColorBrush supports default and color-specific native activation,
+Color and inherited opacity/local dependency data. Its omitted Color preserves
+its Transparent default. Both solid and linear brushes share opacity and
+unsupported-transform handling. Source resources, Grid backgrounds and gradient
+stops can use the same color parser, which recognizes all 141 names in the public
+Windows.UI.IColorsStatics contract. RGB values reference public D2D SDK constants;
+[Transparent](https://learn.microsoft.com/en-us/uwp/api/windows.ui.colors.transparent)
+is #00FFFFFF. Names accept ASCII case differences and surrounding
+whitespace; existing hex forms remain supported. scRGB, resource/theme markup,
+brush constructors in managed code and additional source properties remain gaps.
+
+Selected Boolean properties now use shared native helpers with explicit one-byte
+WinRT boolean delegates, rather than Win32 BOOL marshalling or object arguments.
+Metadata supplies accessor slots and IIDs; SDK constants independently check the
+ProgressRing getter/setter. Property errors and wrong-thread failures propagate.
+
+The fixture verifies typed callbacks, managed/native true/false round trips,
+foreground brush identity and ownership, named/default/hex colors, native solid
+brush constructors and property setters, invalid source preserving root state,
+and explicit theme/template failures. These checks establish control data and
+projection behavior; they do not demonstrate a rendered progress indicator.

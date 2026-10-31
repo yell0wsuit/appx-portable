@@ -42,6 +42,11 @@ namespace AppxPortable.WinRT
         private delegate int GetPointer(IntPtr self, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int GetUInt32(IntPtr self, out uint value);
+        // WinRT boolean is one byte, unlike Win32 BOOL.
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int GetBooleanProperty(IntPtr self, out byte value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int PutBooleanProperty(IntPtr self, byte value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int Invoke0(IntPtr self);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -210,6 +215,22 @@ namespace AppxPortable.WinRT
                 Errors.Check(call.Method<GetUInt32>(slot)(call.Self, out value));
                 return value;
             }
+        }
+
+        internal bool Boolean(int slot)
+        {
+            using (var call = new Access(this))
+            {
+                byte value;
+                Errors.Check(call.Method<GetBooleanProperty>(slot)(call.Self, out value));
+                return value != 0;
+            }
+        }
+
+        internal void SetBoolean(int slot, bool value)
+        {
+            using (var call = new Access(this))
+                Errors.Check(call.Method<PutBooleanProperty>(slot)(call.Self, value ? (byte)1 : (byte)0));
         }
 
         internal string String(int slot)

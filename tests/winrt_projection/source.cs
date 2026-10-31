@@ -41,6 +41,8 @@ class SourceApp : Application
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateImageData(int stage);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateProgressData(int stage);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedResources(int stage);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     static void Bad(SourcePage page, string body, int hr)
@@ -138,6 +140,34 @@ class SourceApp : Application
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid.xaml"));
         root = new WeakReference(page);
         return page.FindName("first");
+    }
+    static void VerifyProgress(SourcePage page)
+    {
+        File.WriteAllText("Fixtures/progress.xaml", "<Page" + Ns + " x:Name=\"root\"><Page.Resources><SolidColorBrush x:Name=\"transparentBrush\" Color=\"Transparent\"/><SolidColorBrush x:Name=\"defaultSolid\"/><SolidColorBrush x:Name=\"slate\" Color=\"DarkSlateGray\"/></Page.Resources><Grid x:Name=\"leaf\"><ProgressRing x:Name=\"ring\" x:ConnectionId=\"25\" IsActive=\"True\" Foreground=\" white \" Margin=\"0,420,0,0\" Width=\"100\" Height=\"100\"/><ProgressRing x:Name=\"inactive\" IsActive=\"false\"><ProgressRing.Foreground><SolidColorBrush x:Name=\"paint\" x:ConnectionId=\"26\" Color=\"#80123456\" Opacity=\"0.5\"/></ProgressRing.Foreground></ProgressRing><ProgressRing x:Name=\"themeDefault\"/></Grid></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/progress.xaml"));
+        var ring = page.FindName("ring") as ProgressRing;
+        Check(ring != null && ReferenceEquals(ring, page.Targets[25]) && ring.IsActive, "typed ProgressRing and active property");
+        Check(ReferenceEquals(page.FindName("paint"), page.Targets[26]), "foreground brush name and callback identity");
+        ring.IsActive = false; Check(!ring.IsActive, "managed ProgressRing false round trip");
+        ring.IsActive = true;
+        WrongThread(() => ring.IsActive = false);
+        Check(ValidateProgressData(0) == 0, "native progress and solid foreground ABI");
+        Bad(page, "<Page" + Ns + " Width=\"999\"><ProgressRing IsActive=\"Maybe\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><ProgressRing IsActive=\"{Binding Active}\"/></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><ProgressRing Foreground=\"{StaticResource Brush}\"/></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><ProgressRing Foreground=\"UnknownColor\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><ProgressRing><ProgressRing.Foreground><Grid/></ProgressRing.Foreground></ProgressRing></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><ProgressRing Foreground=\"Red\"><ProgressRing.Foreground><SolidColorBrush/></ProgressRing.Foreground></ProgressRing></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><ProgressRing><ProgressRing.Foreground/><ProgressRing.Foreground><SolidColorBrush/></ProgressRing.Foreground></ProgressRing></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><ProgressRing Foreground=\"sc#1,0,0,0\"/></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><SolidColorBrush><Grid/></SolidColorBrush></Grid.Background></Grid></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><ProgressRing><Grid/></ProgressRing></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Grid><SolidColorBrush/></Grid></Page>", unchecked((int)0x80070057));
+        File.WriteAllText("Fixtures/progress-empty.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid/></Page>");
+        page.Targets.Remove(25);
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/progress-empty.xaml"));
+        Check(ValidateProgressData(1) == 0, "foreground survives ring and tree replacement");
+        Console.WriteLine("PASS: ProgressRing active state and solid foreground data preserve identity, colors and ownership");
     }
     static void VerifyImage(SourcePage page)
     {
@@ -291,6 +321,7 @@ class SourceApp : Application
         VerifyGrid(page);
         VerifyBrush(page);
         VerifyImage(page);
+        VerifyProgress(page);
         VerifyAnimations(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");

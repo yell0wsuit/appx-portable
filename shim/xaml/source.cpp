@@ -35,6 +35,10 @@ struct Node {
     std::vector<std::unique_ptr<Node>> children;
     Node* content = nullptr;
     Node* background = nullptr;
+    Node* foregroundNode = nullptr;
+    bool hasForeground = false, hasActive = false, active = false;
+    ABI::Windows::UI::Color foregroundColor{};
+    ComPtr<ABI::Windows::UI::Xaml::Media::IBrush> foreground;
     std::vector<Node*> stops;
     bool explicitStops = false;
     BrushSourceData brushData;
@@ -150,7 +154,8 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     const bool brush = BrushDataType(node.type);
     const bool nonvisual = animation || brush;
     if (root && nonvisual) return Fail(L"nonvisual root", E_INVALIDARG);
-    if (!nonvisual && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid" && node.type != L"Image")
+    if (!nonvisual && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid" && node.type != L"Image" &&
+        node.type != L"ProgressRing")
         return Fail(node.type);
     for (const auto& attr : node.attributes)
         if (attr.space == Xmlns) spaces[attr.name] = attr.value;
@@ -206,6 +211,16 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         } else if (brush && attr.space.empty()) {
             auto hr = ParseBrushAttribute(node.type, attr.name, attr.value, node.brushData);
             if (FAILED(hr)) return Fail(member, hr);
+        } else if (node.type == L"ProgressRing" && attr.space.empty() && attr.name == L"IsActive") {
+            if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
+            if (_wcsicmp(attr.value.c_str(), L"True") != 0 && _wcsicmp(attr.value.c_str(), L"False") != 0)
+                return Fail(member, E_INVALIDARG);
+            node.active = _wcsicmp(attr.value.c_str(), L"True") == 0;
+            node.hasActive = true;
+        } else if (node.type == L"ProgressRing" && attr.space.empty() && attr.name == L"Foreground") {
+            auto hr = ParseSourceColor(attr.value, node.foregroundColor);
+            if (FAILED(hr)) return Fail(member, hr);
+            node.hasForeground = true;
         } else if (node.type == L"Image" && attr.space.empty() && attr.name == L"Source") {
             if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
             node.imageUri = attr.value;
@@ -297,9 +312,24 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             auto* value = child->children[0].get();
             auto hr = Prepare(*value, backgroundSpaces, ignoreDesign, names, connections, false);
             if (FAILED(hr)) return hr;
-            if (value->type != L"LinearGradientBrush")
-                return Fail(L"Grid.Background type " + value->type, E_INVALIDARG);
+            if (!BrushType(value->type)) return Fail(L"Grid.Background type " + value->type, E_INVALIDARG);
             node.background = value;
+            continue;
+        }
+        if (node.type == L"ProgressRing" && child->space == Presentation && child->type == L"ProgressRing.Foreground") {
+            if (node.hasForeground || child->children.size() != 1)
+                return Fail(L"ProgressRing.Foreground multiple values", E_INVALIDARG);
+            auto foregroundSpaces = spaces;
+            for (const auto& attr : child->attributes) {
+                if (attr.space != Xmlns) return Fail(L"ProgressRing.Foreground." + attr.name);
+                foregroundSpaces[attr.name] = attr.value;
+            }
+            auto* value = child->children[0].get();
+            auto hr = Prepare(*value, foregroundSpaces, ignoreDesign, names, connections, false);
+            if (FAILED(hr)) return hr;
+            if (!BrushType(value->type)) return Fail(L"ProgressRing.Foreground type " + value->type, E_INVALIDARG);
+            node.foregroundNode = value;
+            node.hasForeground = true;
             continue;
         }
         if (node.type == L"LinearGradientBrush") {
@@ -334,7 +364,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             }
             continue;
         }
-        if (node.type == L"GradientStop") return Fail(L"GradientStop.Children");
+        if (node.type == L"GradientStop" || node.type == L"SolidColorBrush") return Fail(node.type + L".Children");
         if (node.type == L"Storyboard") {
             Node* holder = nullptr;
             if (child->space == Presentation && child->type == L"Storyboard.Children") {
@@ -364,7 +394,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             }
             continue;
         }
-        if (animation || node.type == L"Image") return Fail(node.type + L".Children");
+        if (animation || node.type == L"Image" || node.type == L"ProgressRing") return Fail(node.type + L".Children");
         if (node.type == L"Grid") {
             Node* holder = nullptr;
             auto childSpaces = spaces;
@@ -417,9 +447,10 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     return S_OK;
 }
 HRESULT Create(Node& node) {
-    if (node.type == L"Image") {
+    if (node.type == L"Image" || node.type == L"ProgressRing") {
         ComPtr<IActivationFactory> factory;
-        auto hr = ShimGetFactory(Wrappers::HStringReference(L"Windows.UI.Xaml.Controls.Image").Get(), &factory);
+        auto name = L"Windows.UI.Xaml.Controls." + node.type;
+        auto hr = ShimGetFactory(Wrappers::HStringReference(name.c_str()).Get(), &factory);
         return FAILED(hr) ? hr : factory->ActivateInstance(&node.value);
     }
     if (BrushDataType(node.type)) {
@@ -506,10 +537,30 @@ HRESULT Apply(Node& node) {
         if (SUCCEEDED(hr) && node.hasStretch) hr = image->put_Stretch(node.stretch);
         return hr;
     }
+    if (node.type == L"ProgressRing") {
+        ComPtr<IProgressRing> ring;
+        if (SUCCEEDED(hr)) hr = node.value.As(&ring);
+        if (SUCCEEDED(hr) && node.hasActive) hr = ring->put_IsActive(node.active);
+        if (SUCCEEDED(hr) && node.hasForeground) {
+            ComPtr<IControl> control;
+            hr = node.value.As(&control);
+            if (SUCCEEDED(hr)) hr = control->put_Foreground(node.foreground.Get());
+        }
+        return hr;
+    }
     return FAILED(hr) ? hr : SetContent(node);
 }
 HRESULT Build(Node& node);
 HRESULT BuildParts(Node& node) {
+    if (node.type == L"ProgressRing" && node.hasForeground) {
+        HRESULT hr;
+        if (node.foregroundNode) {
+            hr = Build(*node.foregroundNode);
+            if (SUCCEEDED(hr)) hr = node.foregroundNode->value.As(&node.foreground);
+        } else
+            hr = MakeSolidColorBrush(node.foregroundColor, node.foreground.GetAddressOf());
+        if (FAILED(hr)) return hr;
+    }
     if (node.type == L"Image" && node.hasImageSource) {
         auto hr = MakePackageImageSource(node.imageUri, node.imageSource.GetAddressOf());
         if (FAILED(hr)) return Fail(L"Image.Source", hr);
@@ -583,6 +634,10 @@ HRESULT AttachNames(Node& node, const std::shared_ptr<SourceNameScope>& scope, b
     }
     if (FAILED(hr)) return hr;
     if (!root && !node.name.empty()) scope->elements[node.name] = node.value;
+    if (node.foregroundNode) {
+        hr = AttachNames(*node.foregroundNode, scope, false);
+        if (FAILED(hr)) return hr;
+    }
     if (node.background) {
         hr = AttachNames(*node.background, scope, false);
         if (FAILED(hr)) return hr;
@@ -609,6 +664,10 @@ HRESULT Connect(Node& node, ABI::Windows::UI::Xaml::Markup::IComponentConnector*
     if (node.connection && !connector) return Fail(L"IComponentConnector", E_NOINTERFACE);
     auto hr = node.connection ? connector->Connect(node.connection, node.value.Get()) : S_OK;
     if (FAILED(hr)) return hr;
+    if (node.foregroundNode) {
+        hr = Connect(*node.foregroundNode, connector);
+        if (FAILED(hr)) return hr;
+    }
     if (node.background) {
         hr = Connect(*node.background, connector);
         if (FAILED(hr)) return hr;
@@ -692,10 +751,11 @@ HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRu
         hr = component->QueryInterface(IID_PPV_ARGS(&element));
         ComPtr<IInspectable> kind;
         if (SUCCEEDED(hr))
-            hr = root->type == L"Page"    ? component->QueryInterface(__uuidof(IPage), &kind)
-                 : root->type == L"Frame" ? component->QueryInterface(__uuidof(IFrame), &kind)
-                 : root->type == L"Image" ? component->QueryInterface(__uuidof(IImage), &kind)
-                                          : component->QueryInterface(__uuidof(IGrid), &kind);
+            hr = root->type == L"Page"           ? component->QueryInterface(__uuidof(IPage), &kind)
+                 : root->type == L"Frame"        ? component->QueryInterface(__uuidof(IFrame), &kind)
+                 : root->type == L"Image"        ? component->QueryInterface(__uuidof(IImage), &kind)
+                 : root->type == L"ProgressRing" ? component->QueryInterface(__uuidof(IProgressRing), &kind)
+                                                 : component->QueryInterface(__uuidof(IGrid), &kind);
         if (FAILED(hr)) return Fail(L"root type " + root->type, E_INVALIDARG);
         if (!root->className.empty()) {
             Wrappers::HString name;
