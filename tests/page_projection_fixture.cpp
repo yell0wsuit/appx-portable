@@ -141,3 +141,5 @@ extern "C" HRESULT __cdecl ValidateLoadedSource() {
 #include "brush_projection_fixture.h"
 
 #include "image_projection_fixture.h"
+
+#include "progress_projection_fixture.h"

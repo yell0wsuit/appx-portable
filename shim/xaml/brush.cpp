@@ -5,6 +5,7 @@
 #include "com/factory.h"
 #include "registry.h"
 #include <algorithm>
+#include <d2d1.h>
 #include <cmath>
 #include <locale>
 #include <limits>
@@ -240,44 +241,16 @@ public:
         return S_OK;
     }
 };
-class Linear final : public BrushObject<Linear, ILinearGradientBrush, IGradientBrush, IBrush> {
-    Point start_{0, 0}, end_{1, 1};
+template <class Derived, class Primary, class... Interfaces>
+class PaintBrush : public BrushObject<Derived, Primary, IBrush, Interfaces...> {
     double opacity_ = 1;
-    GradientSpreadMethod spread_ = GradientSpreadMethod_Pad;
-    BrushMappingMode mapping_ = BrushMappingMode_RelativeToBoundingBox;
-    ColorInterpolationMode interpolation_ = ColorInterpolationMode_SRgbLinearInterpolation;
-    ComPtr<Vector> stops_;
-    HRESULT PointValue(Point value, Point& target) {
-        auto hr = CheckThread();
-        if (FAILED(hr)) return hr;
-        if (!std::isfinite(value.X) || !std::isfinite(value.Y)) return E_INVALIDARG;
-        target = value;
-        return S_OK;
-    }
+
+protected:
+    using Base = BrushObject<Derived, Primary, IBrush, Interfaces...>;
+    using Base::CheckThread;
+    explicit PaintBrush(IInspectable* outer) : Base(outer) {}
 
 public:
-    static constexpr auto Name = L"Windows.UI.Xaml.Media.LinearGradientBrush";
-    explicit Linear(IInspectable* outer) : BrushObject(outer) {
-        auto collection = Make<StopsCollection>(std::make_shared<StopItems>());
-        if (!collection) throw std::bad_alloc();
-        stops_ = collection;
-    }
-    HRESULT STDMETHODCALLTYPE get_StartPoint(Point* value) override {
-        if (!value) return E_POINTER;
-        *value = {};
-        auto hr = CheckThread();
-        if (SUCCEEDED(hr)) *value = start_;
-        return hr;
-    }
-    HRESULT STDMETHODCALLTYPE put_StartPoint(Point value) override { return PointValue(value, start_); }
-    HRESULT STDMETHODCALLTYPE get_EndPoint(Point* value) override {
-        if (!value) return E_POINTER;
-        *value = {};
-        auto hr = CheckThread();
-        if (SUCCEEDED(hr)) *value = end_;
-        return hr;
-    }
-    HRESULT STDMETHODCALLTYPE put_EndPoint(Point value) override { return PointValue(value, end_); }
     HRESULT STDMETHODCALLTYPE get_Opacity(double* value) override {
         if (!value) return E_POINTER;
         *value = 0;
@@ -306,6 +279,92 @@ public:
         auto hr = CheckThread();
         return FAILED(hr) ? hr : value ? Unsupported(L"Brush.RelativeTransform") : S_OK;
     }
+};
+class Solid final : public PaintBrush<Solid, ISolidColorBrush> {
+    ABI::Windows::UI::Color color_{0, 255, 255, 255};
+
+public:
+    static constexpr auto Name = L"Windows.UI.Xaml.Media.SolidColorBrush";
+    explicit Solid(IInspectable* outer) : PaintBrush(outer) {}
+    HRESULT STDMETHODCALLTYPE get_Color(ABI::Windows::UI::Color* value) override {
+        if (!value) return E_POINTER;
+        *value = {};
+        auto hr = CheckThread();
+        if (SUCCEEDED(hr)) *value = color_;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE put_Color(ABI::Windows::UI::Color value) override {
+        auto hr = CheckThread();
+        if (SUCCEEDED(hr)) color_ = value;
+        return hr;
+    }
+};
+HRESULT NewSolid(const ABI::Windows::UI::Color* color, ISolidColorBrush** value) {
+    if (!value) return E_POINTER;
+    *value = nullptr;
+    return Guard([&]() -> HRESULT {
+        ComPtr<ISolidColorBrush> brush;
+        auto hr = Compose<Solid>(nullptr, nullptr, brush.GetAddressOf());
+        if (SUCCEEDED(hr) && color) hr = brush->put_Color(*color);
+        return FAILED(hr) ? hr : brush.CopyTo(value);
+    });
+}
+class SolidFactory final : public Factory<ISolidColorBrushFactory> {
+public:
+    SolidFactory() : Factory<ISolidColorBrushFactory>(Solid::Name) {}
+    HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        ComPtr<ISolidColorBrush> brush;
+        auto hr = NewSolid(nullptr, brush.GetAddressOf());
+        return FAILED(hr) ? hr : brush.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE CreateInstanceWithColor(ABI::Windows::UI::Color color,
+                                                      ISolidColorBrush** value) override {
+        return NewSolid(&color, value);
+    }
+};
+HRESULT MakeSolidFactory(IActivationFactory** value) {
+    auto factory = Make<SolidFactory>();
+    return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
+}
+class Linear final : public PaintBrush<Linear, ILinearGradientBrush, IGradientBrush> {
+    Point start_{0, 0}, end_{1, 1};
+    GradientSpreadMethod spread_ = GradientSpreadMethod_Pad;
+    BrushMappingMode mapping_ = BrushMappingMode_RelativeToBoundingBox;
+    ColorInterpolationMode interpolation_ = ColorInterpolationMode_SRgbLinearInterpolation;
+    ComPtr<Vector> stops_;
+    HRESULT PointValue(Point value, Point& target) {
+        auto hr = CheckThread();
+        if (FAILED(hr)) return hr;
+        if (!std::isfinite(value.X) || !std::isfinite(value.Y)) return E_INVALIDARG;
+        target = value;
+        return S_OK;
+    }
+
+public:
+    static constexpr auto Name = L"Windows.UI.Xaml.Media.LinearGradientBrush";
+    explicit Linear(IInspectable* outer) : PaintBrush(outer) {
+        auto collection = Make<StopsCollection>(std::make_shared<StopItems>());
+        if (!collection) throw std::bad_alloc();
+        stops_ = collection;
+    }
+    HRESULT STDMETHODCALLTYPE get_StartPoint(Point* value) override {
+        if (!value) return E_POINTER;
+        *value = {};
+        auto hr = CheckThread();
+        if (SUCCEEDED(hr)) *value = start_;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE put_StartPoint(Point value) override { return PointValue(value, start_); }
+    HRESULT STDMETHODCALLTYPE get_EndPoint(Point* value) override {
+        if (!value) return E_POINTER;
+        *value = {};
+        auto hr = CheckThread();
+        if (SUCCEEDED(hr)) *value = end_;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE put_EndPoint(Point value) override { return PointValue(value, end_); }
     HRESULT STDMETHODCALLTYPE get_GradientStops(Vector** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
@@ -402,7 +461,176 @@ HRESULT ParsePoint(const std::wstring& text, Point& value) {
     value = next;
     return S_OK;
 }
-HRESULT ParseColor(const std::wstring& text, ABI::Windows::UI::Color& color) {
+// Names follow Windows.UI.IColorsStatics; RGB values use the public D2D SDK enum.
+struct NamedColor {
+    const wchar_t* name;
+    UINT32 rgb;
+};
+constexpr NamedColor namedColors[] = {
+    {L"AliceBlue", D2D1::ColorF::AliceBlue},
+    {L"AntiqueWhite", D2D1::ColorF::AntiqueWhite},
+    {L"Aqua", D2D1::ColorF::Aqua},
+    {L"Aquamarine", D2D1::ColorF::Aquamarine},
+    {L"Azure", D2D1::ColorF::Azure},
+    {L"Beige", D2D1::ColorF::Beige},
+    {L"Bisque", D2D1::ColorF::Bisque},
+    {L"Black", D2D1::ColorF::Black},
+    {L"BlanchedAlmond", D2D1::ColorF::BlanchedAlmond},
+    {L"Blue", D2D1::ColorF::Blue},
+    {L"BlueViolet", D2D1::ColorF::BlueViolet},
+    {L"Brown", D2D1::ColorF::Brown},
+    {L"BurlyWood", D2D1::ColorF::BurlyWood},
+    {L"CadetBlue", D2D1::ColorF::CadetBlue},
+    {L"Chartreuse", D2D1::ColorF::Chartreuse},
+    {L"Chocolate", D2D1::ColorF::Chocolate},
+    {L"Coral", D2D1::ColorF::Coral},
+    {L"CornflowerBlue", D2D1::ColorF::CornflowerBlue},
+    {L"Cornsilk", D2D1::ColorF::Cornsilk},
+    {L"Crimson", D2D1::ColorF::Crimson},
+    {L"Cyan", D2D1::ColorF::Cyan},
+    {L"DarkBlue", D2D1::ColorF::DarkBlue},
+    {L"DarkCyan", D2D1::ColorF::DarkCyan},
+    {L"DarkGoldenrod", D2D1::ColorF::DarkGoldenrod},
+    {L"DarkGray", D2D1::ColorF::DarkGray},
+    {L"DarkGreen", D2D1::ColorF::DarkGreen},
+    {L"DarkKhaki", D2D1::ColorF::DarkKhaki},
+    {L"DarkMagenta", D2D1::ColorF::DarkMagenta},
+    {L"DarkOliveGreen", D2D1::ColorF::DarkOliveGreen},
+    {L"DarkOrange", D2D1::ColorF::DarkOrange},
+    {L"DarkOrchid", D2D1::ColorF::DarkOrchid},
+    {L"DarkRed", D2D1::ColorF::DarkRed},
+    {L"DarkSalmon", D2D1::ColorF::DarkSalmon},
+    {L"DarkSeaGreen", D2D1::ColorF::DarkSeaGreen},
+    {L"DarkSlateBlue", D2D1::ColorF::DarkSlateBlue},
+    {L"DarkSlateGray", D2D1::ColorF::DarkSlateGray},
+    {L"DarkTurquoise", D2D1::ColorF::DarkTurquoise},
+    {L"DarkViolet", D2D1::ColorF::DarkViolet},
+    {L"DeepPink", D2D1::ColorF::DeepPink},
+    {L"DeepSkyBlue", D2D1::ColorF::DeepSkyBlue},
+    {L"DimGray", D2D1::ColorF::DimGray},
+    {L"DodgerBlue", D2D1::ColorF::DodgerBlue},
+    {L"Firebrick", D2D1::ColorF::Firebrick},
+    {L"FloralWhite", D2D1::ColorF::FloralWhite},
+    {L"ForestGreen", D2D1::ColorF::ForestGreen},
+    {L"Fuchsia", D2D1::ColorF::Fuchsia},
+    {L"Gainsboro", D2D1::ColorF::Gainsboro},
+    {L"GhostWhite", D2D1::ColorF::GhostWhite},
+    {L"Gold", D2D1::ColorF::Gold},
+    {L"Goldenrod", D2D1::ColorF::Goldenrod},
+    {L"Gray", D2D1::ColorF::Gray},
+    {L"Green", D2D1::ColorF::Green},
+    {L"GreenYellow", D2D1::ColorF::GreenYellow},
+    {L"Honeydew", D2D1::ColorF::Honeydew},
+    {L"HotPink", D2D1::ColorF::HotPink},
+    {L"IndianRed", D2D1::ColorF::IndianRed},
+    {L"Indigo", D2D1::ColorF::Indigo},
+    {L"Ivory", D2D1::ColorF::Ivory},
+    {L"Khaki", D2D1::ColorF::Khaki},
+    {L"Lavender", D2D1::ColorF::Lavender},
+    {L"LavenderBlush", D2D1::ColorF::LavenderBlush},
+    {L"LawnGreen", D2D1::ColorF::LawnGreen},
+    {L"LemonChiffon", D2D1::ColorF::LemonChiffon},
+    {L"LightBlue", D2D1::ColorF::LightBlue},
+    {L"LightCoral", D2D1::ColorF::LightCoral},
+    {L"LightCyan", D2D1::ColorF::LightCyan},
+    {L"LightGoldenrodYellow", D2D1::ColorF::LightGoldenrodYellow},
+    {L"LightGreen", D2D1::ColorF::LightGreen},
+    {L"LightGray", D2D1::ColorF::LightGray},
+    {L"LightPink", D2D1::ColorF::LightPink},
+    {L"LightSalmon", D2D1::ColorF::LightSalmon},
+    {L"LightSeaGreen", D2D1::ColorF::LightSeaGreen},
+    {L"LightSkyBlue", D2D1::ColorF::LightSkyBlue},
+    {L"LightSlateGray", D2D1::ColorF::LightSlateGray},
+    {L"LightSteelBlue", D2D1::ColorF::LightSteelBlue},
+    {L"LightYellow", D2D1::ColorF::LightYellow},
+    {L"Lime", D2D1::ColorF::Lime},
+    {L"LimeGreen", D2D1::ColorF::LimeGreen},
+    {L"Linen", D2D1::ColorF::Linen},
+    {L"Magenta", D2D1::ColorF::Magenta},
+    {L"Maroon", D2D1::ColorF::Maroon},
+    {L"MediumAquamarine", D2D1::ColorF::MediumAquamarine},
+    {L"MediumBlue", D2D1::ColorF::MediumBlue},
+    {L"MediumOrchid", D2D1::ColorF::MediumOrchid},
+    {L"MediumPurple", D2D1::ColorF::MediumPurple},
+    {L"MediumSeaGreen", D2D1::ColorF::MediumSeaGreen},
+    {L"MediumSlateBlue", D2D1::ColorF::MediumSlateBlue},
+    {L"MediumSpringGreen", D2D1::ColorF::MediumSpringGreen},
+    {L"MediumTurquoise", D2D1::ColorF::MediumTurquoise},
+    {L"MediumVioletRed", D2D1::ColorF::MediumVioletRed},
+    {L"MidnightBlue", D2D1::ColorF::MidnightBlue},
+    {L"MintCream", D2D1::ColorF::MintCream},
+    {L"MistyRose", D2D1::ColorF::MistyRose},
+    {L"Moccasin", D2D1::ColorF::Moccasin},
+    {L"NavajoWhite", D2D1::ColorF::NavajoWhite},
+    {L"Navy", D2D1::ColorF::Navy},
+    {L"OldLace", D2D1::ColorF::OldLace},
+    {L"Olive", D2D1::ColorF::Olive},
+    {L"OliveDrab", D2D1::ColorF::OliveDrab},
+    {L"Orange", D2D1::ColorF::Orange},
+    {L"OrangeRed", D2D1::ColorF::OrangeRed},
+    {L"Orchid", D2D1::ColorF::Orchid},
+    {L"PaleGoldenrod", D2D1::ColorF::PaleGoldenrod},
+    {L"PaleGreen", D2D1::ColorF::PaleGreen},
+    {L"PaleTurquoise", D2D1::ColorF::PaleTurquoise},
+    {L"PaleVioletRed", D2D1::ColorF::PaleVioletRed},
+    {L"PapayaWhip", D2D1::ColorF::PapayaWhip},
+    {L"PeachPuff", D2D1::ColorF::PeachPuff},
+    {L"Peru", D2D1::ColorF::Peru},
+    {L"Pink", D2D1::ColorF::Pink},
+    {L"Plum", D2D1::ColorF::Plum},
+    {L"PowderBlue", D2D1::ColorF::PowderBlue},
+    {L"Purple", D2D1::ColorF::Purple},
+    {L"Red", D2D1::ColorF::Red},
+    {L"RosyBrown", D2D1::ColorF::RosyBrown},
+    {L"RoyalBlue", D2D1::ColorF::RoyalBlue},
+    {L"SaddleBrown", D2D1::ColorF::SaddleBrown},
+    {L"Salmon", D2D1::ColorF::Salmon},
+    {L"SandyBrown", D2D1::ColorF::SandyBrown},
+    {L"SeaGreen", D2D1::ColorF::SeaGreen},
+    {L"SeaShell", D2D1::ColorF::SeaShell},
+    {L"Sienna", D2D1::ColorF::Sienna},
+    {L"Silver", D2D1::ColorF::Silver},
+    {L"SkyBlue", D2D1::ColorF::SkyBlue},
+    {L"SlateBlue", D2D1::ColorF::SlateBlue},
+    {L"SlateGray", D2D1::ColorF::SlateGray},
+    {L"Snow", D2D1::ColorF::Snow},
+    {L"SpringGreen", D2D1::ColorF::SpringGreen},
+    {L"SteelBlue", D2D1::ColorF::SteelBlue},
+    {L"Tan", D2D1::ColorF::Tan},
+    {L"Teal", D2D1::ColorF::Teal},
+    {L"Thistle", D2D1::ColorF::Thistle},
+    {L"Tomato", D2D1::ColorF::Tomato},
+    {L"Turquoise", D2D1::ColorF::Turquoise},
+    {L"Violet", D2D1::ColorF::Violet},
+    {L"Wheat", D2D1::ColorF::Wheat},
+    {L"White", D2D1::ColorF::White},
+    {L"WhiteSmoke", D2D1::ColorF::WhiteSmoke},
+    {L"Yellow", D2D1::ColorF::Yellow},
+    {L"YellowGreen", D2D1::ColorF::YellowGreen},
+};
+bool ColorName(const std::wstring& text, const wchar_t* name) {
+    if (text.size() != wcslen(name)) return false;
+    auto lower = [](wchar_t c) { return c >= L'A' && c <= L'Z' ? c - L'A' + L'a' : c; };
+    for (size_t i = 0; i < text.size(); ++i)
+        if (lower(text[i]) != lower(name[i])) return false;
+    return true;
+}
+HRESULT ParseColor(const std::wstring& input, ABI::Windows::UI::Color& color) {
+    auto first = input.find_first_not_of(L" \t\r\n"), last = input.find_last_not_of(L" \t\r\n");
+    if (first == std::wstring::npos) return E_INVALIDARG;
+    auto text = input.substr(first, last - first + 1);
+    if (text.front() == L'{' || text.starts_with(L"sc#")) return E_NOTIMPL;
+    if (ColorName(text, L"Transparent")) {
+        color = {0, 255, 255, 255};
+        return S_OK;
+    }
+    for (const auto& named : namedColors)
+        if (ColorName(text, named.name)) {
+            color = {255, static_cast<BYTE>(named.rgb >> 16), static_cast<BYTE>(named.rgb >> 8),
+                     static_cast<BYTE>(named.rgb)};
+            return S_OK;
+        }
+
     if (text.empty() || text[0] != L'#' ||
         (text.size() != 4 && text.size() != 5 && text.size() != 7 && text.size() != 9))
         return E_INVALIDARG;
@@ -427,16 +655,29 @@ HRESULT ParseColor(const std::wstring& text, ABI::Windows::UI::Color& color) {
     return S_OK;
 }
 }
-bool BrushDataType(const std::wstring& type) { return type == L"LinearGradientBrush" || type == L"GradientStop"; }
+bool BrushType(const std::wstring& type) { return type == L"LinearGradientBrush" || type == L"SolidColorBrush"; }
+bool BrushDataType(const std::wstring& type) { return BrushType(type) || type == L"GradientStop"; }
+HRESULT ParseSourceColor(const std::wstring& text, ABI::Windows::UI::Color& color) { return ParseColor(text, color); }
+HRESULT MakeSolidColorBrush(ABI::Windows::UI::Color color, IBrush** value) {
+    if (!value) return E_POINTER;
+    *value = nullptr;
+    ComPtr<ISolidColorBrush> brush;
+    auto hr = NewSolid(&color, brush.GetAddressOf());
+    return FAILED(hr) ? hr : brush.CopyTo(value);
+}
 HRESULT ParseBrushAttribute(const std::wstring& type, const std::wstring& name, const std::wstring& text,
                             BrushSourceData& data) {
     if (!text.empty() && text.front() == L'{') return E_NOTIMPL;
+    if (name == L"Color" && (type == L"GradientStop" || type == L"SolidColorBrush")) {
+        auto hr = ParseColor(text, data.color);
+        if (SUCCEEDED(hr)) data.hasColor = true;
+        return hr;
+    }
     if (type == L"GradientStop") {
-        if (name == L"Color") return ParseColor(text, data.color);
         if (name == L"Offset") return Number(text, data.offset) ? S_OK : E_INVALIDARG;
     } else {
-        if (name == L"StartPoint") return ParsePoint(text, data.start);
-        if (name == L"EndPoint") return ParsePoint(text, data.end);
+        if (type == L"LinearGradientBrush" && name == L"StartPoint") return ParsePoint(text, data.start);
+        if (type == L"LinearGradientBrush" && name == L"EndPoint") return ParsePoint(text, data.end);
         if (name == L"Opacity")
             return Number(text, data.opacity) && data.opacity >= 0 && data.opacity <= 1 ? S_OK : E_INVALIDARG;
     }
@@ -447,14 +688,21 @@ HRESULT ConfigureBrushData(IInspectable* object, const std::wstring& type, const
     if (type == L"GradientStop") {
         ComPtr<IGradientStop> stop;
         auto hr = object->QueryInterface(IID_PPV_ARGS(&stop));
-        if (SUCCEEDED(hr)) hr = stop->put_Color(data.color);
+        if (SUCCEEDED(hr) && data.hasColor) hr = stop->put_Color(data.color);
         if (SUCCEEDED(hr)) hr = stop->put_Offset(data.offset);
         return hr;
     }
-    ComPtr<ILinearGradientBrush> linear;
-    auto hr = object->QueryInterface(IID_PPV_ARGS(&linear));
-    if (SUCCEEDED(hr)) hr = linear->put_StartPoint(data.start);
-    if (SUCCEEDED(hr)) hr = linear->put_EndPoint(data.end);
+    HRESULT hr = S_OK;
+    if (type == L"SolidColorBrush") {
+        ComPtr<ISolidColorBrush> solid;
+        hr = object->QueryInterface(IID_PPV_ARGS(&solid));
+        if (SUCCEEDED(hr) && data.hasColor) hr = solid->put_Color(data.color);
+    } else {
+        ComPtr<ILinearGradientBrush> linear;
+        hr = object->QueryInterface(IID_PPV_ARGS(&linear));
+        if (SUCCEEDED(hr)) hr = linear->put_StartPoint(data.start);
+        if (SUCCEEDED(hr)) hr = linear->put_EndPoint(data.end);
+    }
     ComPtr<IBrush> brush;
     if (SUCCEEDED(hr)) hr = object->QueryInterface(IID_PPV_ARGS(&brush));
     return FAILED(hr) ? hr : brush->put_Opacity(data.opacity);
@@ -469,6 +717,7 @@ HRESULT SetSourceGradientStops(IInspectable* brush, StopItems stops) {
         return collection ? gradient->put_GradientStops(collection.Get()) : E_OUTOFMEMORY;
     });
 }
+const ShimClass solidBrushClass{Solid::Name, MakeSolidFactory, ShimPolicy::FillMissing};
 const ShimClass linearBrushClass{Linear::Name, LinearFactory, ShimPolicy::FillMissing};
 const ShimClass gradientStopClass{Stop::Name, StopFactory, ShimPolicy::FillMissing};
 }
