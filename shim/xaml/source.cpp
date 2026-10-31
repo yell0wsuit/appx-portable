@@ -1,5 +1,6 @@
 #include "source.h"
 #include "animation.h"
+#include "grid.h"
 #include "element.h"
 #include "registry.h"
 #include "package/resources.h"
@@ -31,7 +32,9 @@ struct Node {
     std::vector<Attribute> attributes;
     std::vector<std::unique_ptr<Node>> children;
     Node* content = nullptr;
-    std::vector<Node*> resources, timelines;
+    std::vector<Node*> resources, timelines, visuals;
+    bool explicitVisuals = false;
+    std::shared_ptr<const VisualChildren> visualValues;
     bool explicitTimelines = false, hasDuration = false, hasTargetName = false, hasThemeName = false,
          hasTargetProperty = false;
     Duration duration{};
@@ -237,13 +240,47 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             continue;
         }
         if (animation) return Fail(node.type + L".Children");
+        if (node.type == L"Grid") {
+            Node* holder = nullptr;
+            auto childSpaces = spaces;
+            if (child->space == Presentation && child->type == L"Grid.Children") {
+                if (node.explicitVisuals || !node.visuals.empty())
+                    return Fail(L"Grid.Children multiple values", E_INVALIDARG);
+                for (const auto& attr : child->attributes) {
+                    if (attr.space != Xmlns) return Fail(L"Grid.Children." + attr.name);
+                    childSpaces[attr.name] = attr.value;
+                }
+                node.explicitVisuals = true;
+                holder = child.get();
+            } else {
+                if (child->space == Presentation && child->type.find(L'.') != std::wstring::npos)
+                    return Fail(child->type);
+                if (node.explicitVisuals) return Fail(L"Grid.Children mixed values", E_INVALIDARG);
+            }
+            auto prepareVisual = [&](Node& entry) -> HRESULT {
+                auto hr = Prepare(entry, childSpaces, ignoreDesign, names, connections, false);
+                if (FAILED(hr)) return hr;
+                if (AnimationType(entry.type)) return Fail(L"Grid.Children nonvisual value", E_INVALIDARG);
+                node.visuals.push_back(&entry);
+                return S_OK;
+            };
+            if (holder) {
+                for (auto& entry : holder->children) {
+                    auto hr = prepareVisual(*entry);
+                    if (FAILED(hr)) return hr;
+                }
+            } else {
+                auto hr = prepareVisual(*child);
+                if (FAILED(hr)) return hr;
+            }
+            continue;
+        }
         Node* content = child.get();
         if (child->space == Presentation && child->type == node.type + L".Content") {
             if (node.type == L"Grid") return Fail(child->type);
             if (!child->attributes.empty() || child->children.size() != 1) return Fail(child->type, E_INVALIDARG);
             content = child->children[0].get();
         }
-        if (node.type == L"Grid") return Fail(L"Grid.Children");
         if (node.content) return Fail(node.type + L".Content multiple values", E_INVALIDARG);
         auto hr = Prepare(*content, spaces, ignoreDesign, names, connections, false);
         if (FAILED(hr)) return hr;
@@ -280,7 +317,7 @@ HRESULT Create(Node& node) {
     return FAILED(hr) ? hr : value.As(&node.value);
 }
 HRESULT SetContent(Node& node) {
-    if (node.type == L"Grid") return S_OK;
+    if (node.type == L"Grid") return SetGridChildren(node.value.Get(), node.visualValues);
     auto* child = node.content ? node.content->value.Get() : nullptr;
     if (node.type == L"Frame") {
         ComPtr<IContentControl> content;
@@ -315,6 +352,23 @@ HRESULT Apply(Node& node) {
 }
 HRESULT Build(Node& node);
 HRESULT BuildParts(Node& node) {
+    if (node.type == L"Grid") {
+        auto values = std::make_shared<VisualChildren>();
+        for (auto* visual : node.visuals) {
+            auto hr = Build(*visual);
+            ComPtr<IUIElement> child;
+            if (SUCCEEDED(hr)) hr = visual->value.As(&child);
+            if (FAILED(hr)) return hr;
+            values->push_back(std::move(child));
+        }
+        node.visualValues = std::move(values);
+        // Allocate the stable collection before root properties can change.
+        ComPtr<IPanel> panel;
+        auto hr = node.value.As(&panel);
+        ComPtr<GridChildren> collection;
+        if (SUCCEEDED(hr)) hr = panel->get_Children(&collection);
+        if (FAILED(hr)) return hr;
+    }
     for (auto* timeline : node.timelines) {
         auto hr = Build(*timeline);
         if (SUCCEEDED(hr)) hr = AppendAnimation(node.value.Get(), timeline->value.Get());
@@ -351,6 +405,10 @@ HRESULT AttachNames(Node& node, const std::shared_ptr<SourceNameScope>& scope, b
     }
     if (FAILED(hr)) return hr;
     if (!root && !node.name.empty()) scope->elements[node.name] = node.value;
+    for (auto* visual : node.visuals) {
+        hr = AttachNames(*visual, scope, false);
+        if (FAILED(hr)) return hr;
+    }
     for (auto* timeline : node.timelines) {
         hr = AttachNames(*timeline, scope, false);
         if (FAILED(hr)) return hr;
@@ -365,6 +423,10 @@ HRESULT Connect(Node& node, ABI::Windows::UI::Xaml::Markup::IComponentConnector*
     if (node.connection && !connector) return Fail(L"IComponentConnector", E_NOINTERFACE);
     auto hr = node.connection ? connector->Connect(node.connection, node.value.Get()) : S_OK;
     if (FAILED(hr)) return hr;
+    for (auto* visual : node.visuals) {
+        hr = Connect(*visual, connector);
+        if (FAILED(hr)) return hr;
+    }
     for (auto* timeline : node.timelines) {
         hr = Connect(*timeline, connector);
         if (FAILED(hr)) return hr;
