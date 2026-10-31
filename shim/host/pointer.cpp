@@ -6,6 +6,7 @@
 #include "generated/pointer_device.h"
 #include <windowsx.h>
 #include <wrl.h>
+#include <atomic>
 #include <map>
 #include <vector>
 #include <winrt/Windows.Foundation.Collections.h>
@@ -295,6 +296,9 @@ HRESULT ReleaseElementPointer(IInspectable* target) {
     }
     return S_OK;
 }
+static std::atomic<long> elementHandlers;
+void CountElementPointerHandlers(long delta) noexcept { elementHandlers += delta; }
+bool ElementPointerHandlers() noexcept { return elementHandlers > 0; }
 void RegisterPointerTarget(IInspectable* target, PointerCallback callback) { targets[target] = std::move(callback); }
 void UnregisterPointerTarget(IInspectable* target) noexcept {
     if (captureOwner == target) {

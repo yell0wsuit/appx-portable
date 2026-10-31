@@ -243,6 +243,7 @@ public:
     HRESULT STDMETHODCALLTYPE add_PointerMoved(
         __FITypedEventHandler_2_Windows__CUI__CCore__CCoreWindow_Windows__CUI__CCore__CPointerEventArgs* handler,
         EventRegistrationToken* token) override {
+        Log("TRACE", "CoreWindow PointerMoved subscribed");
         return eventPointerMoved_.Add(handler, token);
     }
     HRESULT STDMETHODCALLTYPE remove_PointerMoved(EventRegistrationToken token) override {
@@ -251,6 +252,7 @@ public:
     HRESULT STDMETHODCALLTYPE add_PointerPressed(
         __FITypedEventHandler_2_Windows__CUI__CCore__CCoreWindow_Windows__CUI__CCore__CPointerEventArgs* handler,
         EventRegistrationToken* token) override {
+        Log("TRACE", "CoreWindow PointerPressed subscribed");
         return eventPointerPressed_.Add(handler, token);
     }
     HRESULT STDMETHODCALLTYPE remove_PointerPressed(EventRegistrationToken token) override {
@@ -259,6 +261,7 @@ public:
     HRESULT STDMETHODCALLTYPE add_PointerReleased(
         __FITypedEventHandler_2_Windows__CUI__CCore__CCoreWindow_Windows__CUI__CCore__CPointerEventArgs* handler,
         EventRegistrationToken* token) override {
+        Log("TRACE", "CoreWindow PointerReleased subscribed");
         return eventPointerReleased_.Add(handler, token);
     }
     HRESULT STDMETHODCALLTYPE remove_PointerReleased(EventRegistrationToken token) override {
@@ -402,7 +405,8 @@ void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (coreWindow) coreWindow->OnMessage(message, wparam, lparam);
 }
 // Pointer input uses either CoreWindow or the XAML panel. Keyboard events
-// still reach CoreWindow in native XAML games, including UWP DirectX pages.
+// still reach CoreWindow in native XAML games, including UWP DirectX pages,
+// and so does the mouse while no XAML element handles pointer events.
 static bool coreInput = false;
 void EnableCoreWindowInput() noexcept { coreInput = true; }
 void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
@@ -411,7 +415,7 @@ void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (message == WM_KEYDOWN && TextInputKey(wparam)) return;
     const bool keyboard = message == WM_KEYDOWN || message == WM_KEYUP || message == WM_SYSKEYDOWN ||
                           message == WM_SYSKEYUP || message == WM_CHAR;
-    if ((coreInput || keyboard) && coreWindow) coreWindow->OnInput(message, wparam, lparam);
+    if ((coreInput || keyboard || !ElementPointerHandlers()) && coreWindow) coreWindow->OnInput(message, wparam, lparam);
 }
 // CoreWindow.GetForCurrentThread: the game's window on the UI thread, as on
 // Windows, and none on any other thread.
