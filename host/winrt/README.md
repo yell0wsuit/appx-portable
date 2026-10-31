@@ -152,12 +152,12 @@ constructor subscribes to `Suspending`, and the shim then calls the game's
 With the Xbox, settings, task, stream and connectivity projections below, the
 game constructs its Xbox wrapper and returns to `App.OnApplicationStarted`.
 It retrieves the native launch splash and composes the game's `ExtendedSplash`
-Page. Its LoadComponent call now opens and parses `ExtendedSplash.xaml`, then
-accepts the resource container and fails explicitly at `Storyboard`
-(E_NOTIMPL in `appx-portable.log`). The
-managed stack points to `ExtendedSplash.InitializeComponent` (offset 0x1b),
-called by its constructor and `App.OnApplicationStarted` (offset 0x3f). No menu or
-game round has been displayed by this path.
+Page. Its LoadComponent call now builds `ExtendedSplash.xaml`, including its
+resources and Viewbox children, and decodes both package wordmark images. It
+then fails with InvalidCastException in `ExtendedSplash.InitializeComponent`
+(offset 0x6f): the game's `FindName("unsnappedGrid")` result lacks a selected
+managed Grid wrapper. Grid/Panel projection is the next construction gap.
+No menu or game round has been displayed by this path.
 
 The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
 and `System.Runtime.WindowsRuntime.UI.Xaml`, still missing from Wine Mono, plus
@@ -198,7 +198,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error 'Windows.UI.Xaml.Application.LoadComponent'
+  --expected-game-error 'Bejeweled3.ExtendedSplash.InitializeComponent'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -506,8 +506,8 @@ the overloaded signatures from metadata and emits separate ABI delegates for
 the two SDK slots. Native games keep the existing loader path; Windows Islands
 continues to use system XAML.
 
-The source loader supports Page, Frame, Grid, Image, ProgressRing and TextBlock elements, implicit content
-and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
+The source loader supports Page, Frame, Grid, Image, ProgressRing, TextBlock and Viewbox elements,
+implicit content and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
 ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
 attributes in a declared ignorable Blend namespace are skipped. Inline resource
 dictionaries, Grid child trees and storyboard data are supported as described below.
@@ -766,3 +766,26 @@ thread rejection, explicit dimensions/style, font descriptor retention after
 TextBlock replacement, cross-thread descriptor reads, aggregated factory
 ownership, invalid arguments and Start/End alignment aliases. SDK constants
 check ITextBlock and its Text accessor slots independently of metadata.
+
+## Source-loaded Viewbox data
+
+Viewbox accepts one implicit visual child or a sole Viewbox.Child property
+element, including namespace declarations on that wrapper. Empty Viewboxes are
+valid; multiple children, empty/duplicate child property elements, nonvisual
+values and unsupported wrapper attributes fail before root mutation. Children
+participate in the component namescope and connection traversal.
+
+The native SDK interface returns counted child references and stores validated
+Stretch/StretchDirection values. Defaults are
+[Uniform](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.controls.viewbox.stretch)
+and [Both](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.controls.viewbox.stretchdirection).
+Source construction uses an internal child installer. Public Child mutations
+return named E_NOTIMPL errors until visual parenting/reparenting is implemented.
+Reads and data setters enforce the creating thread. A selected managed wrapper
+preserves Viewbox identity; its constructor and properties remain unselected.
+
+The SDK fixture checks implicit/explicit/empty children, names and callbacks,
+default and explicit stretch data, invalid setter preservation, dimensions and
+visibility, wrong-thread reads and child ownership after tree replacement.
+These are tree and scaling-input contracts. Measure/arrange, scale calculation,
+transforms and drawing remain separate work.

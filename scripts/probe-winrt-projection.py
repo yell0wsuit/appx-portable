@@ -37,6 +37,7 @@ HEADER_IIDS = {
     "ITimeline": "0bc465dc-be4d-4d0d-9549-2208b715f40d", "IStoryboard": "d45c1e6e-3594-460e-981a-32271bd3aa06",
     "IComponentConnector": "f6790987-e6e5-47f2-92c6-eccce4ba159a",
     "IUriRuntimeClass": "9e365e57-48b2-4160-956f-c7385120bbfc", "IUriRuntimeClassFactory": "44a9796f-723e-4fdf-a218-033e75b0c084",
+    "IViewbox": "05252c58-ba9d-4809-9ec3-fa0d16710ba1",
     "ITextBlock": "ae2d9271-3b4a-45fc-8468-f7949548f4d5",
     "IProgressRing": "6da5e49e-6e9d-425c-bd7c-02173e39763f",
     "IImage": "495b7402-9af3-4e50-aa90-03388f3086d2",
@@ -267,7 +268,7 @@ def main():
 
     def probe_page(projection):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
-        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock"):
+        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
             if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::")):
