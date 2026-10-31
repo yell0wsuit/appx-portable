@@ -194,6 +194,24 @@ int main() {
     const unsigned stopped = frames;
     pump(65);
     CHECK(frames == stopped);
+    // Angry Birds Space presents with vsync inside Rendering. The next event
+    // must be due when that frame ends, or 60 Hz slips to every other vblank.
+    LARGE_INTEGER frequency{}, start{};
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&start);
+    unsigned vsynced = 0;
+    auto present = Callback<ABI::Windows::Foundation::IEventHandler<IInspectable*>>(
+        [&](IInspectable*, IInspectable*) -> HRESULT {
+            const LONGLONG vblank = start.QuadPart + ++vsynced * frequency.QuadPart / 60;
+            LARGE_INTEGER now{};
+            do QueryPerformanceCounter(&now);
+            while (now.QuadPart < vblank);
+            return S_OK;
+        });
+    CHECK(SUCCEEDED(composition->add_Rendering(present.Get(), &renderingToken)));
+    pump(500);
+    CHECK(SUCCEEDED(composition->remove_Rendering(renderingToken)));
+    CHECK(vsynced >= 28);
     printf("controltest: %d failure(s)\n", failures);
     return failures ? 1 : 0;
 }
