@@ -45,6 +45,8 @@ class SourceApp : Application
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateTextData(int stage);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateViewboxData(int stage);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedResources(int stage);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     static void Bad(SourcePage page, string body, int hr)
@@ -142,6 +144,26 @@ class SourceApp : Application
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid.xaml"));
         root = new WeakReference(page);
         return page.FindName("first");
+    }
+    static void VerifyViewbox(SourcePage page)
+    {
+        File.WriteAllText("Fixtures/viewbox.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid x:Name=\"leaf\"><Viewbox x:Name=\"box\" x:ConnectionId=\"29\" HorizontalAlignment=\"Left\" Stretch=\"None\" StretchDirection=\"DownOnly\" Width=\"320\" Visibility=\"Collapsed\"><Grid x:Name=\"inside\" x:ConnectionId=\"30\"/></Viewbox><Viewbox x:Name=\"explicitBox\"><Viewbox.Child><TextBlock x:Name=\"insideText\" Text=\"caption\"/></Viewbox.Child></Viewbox><Viewbox x:Name=\"emptyBox\"/></Grid></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/viewbox.xaml"));
+        Check(page.FindName("box") is Viewbox && ReferenceEquals(page.FindName("box"), page.Targets[29]) && ReferenceEquals(page.FindName("inside"), page.Targets[30]), "Viewbox names and connection identities");
+        Check(page.FindName("insideText") is TextBlock, "explicit Viewbox child namescope");
+        Check(ValidateViewboxData(0) == 0, "native Viewbox child and stretch data");
+        Bad(page, "<Page" + Ns + " Width=\"999\"><Viewbox><Grid/><Grid/></Viewbox></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Viewbox><Viewbox.Child/><Grid/></Viewbox></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Viewbox><Storyboard/></Viewbox></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Viewbox Stretch=\"Bad\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Viewbox StretchDirection=\"Bad\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Viewbox Stretch=\"{Binding Scale}\"/></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Viewbox><Viewbox.Child Width=\"1\"><Grid/></Viewbox.Child></Viewbox></Page>", unchecked((int)0x80004001));
+        page.Targets.Remove(29); page.Targets.Remove(30);
+        File.WriteAllText("Fixtures/viewbox-empty.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid/></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/viewbox-empty.xaml"));
+        Check(ValidateViewboxData(1) == 0, "Viewbox child survives tree replacement");
+        Console.WriteLine("PASS: Viewbox source children retain names, ownership and validated stretch data");
     }
     static void VerifyText(SourcePage page)
     {
@@ -350,6 +372,7 @@ class SourceApp : Application
         VerifyImage(page);
         VerifyProgress(page);
         VerifyText(page);
+        VerifyViewbox(page);
         VerifyAnimations(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");
