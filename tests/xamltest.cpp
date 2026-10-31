@@ -320,6 +320,36 @@ int main() {
                         CHECK(SUCCEEDED(backgroundUi->remove_PointerPressed(pressed)));
                         CHECK(SUCCEEDED(backgroundUi->remove_PointerMoved(moved)));
                         CHECK(SUCCEEDED(backgroundUi->remove_PointerReleased(released)));
+                        // Angry Birds Space reads the mouse from CoreWindow and
+                        // subscribes to no element. Element handlers take it back.
+                        std::vector<int> coreEvents;
+                        auto coreHandler = Callback<ABI::Windows::Foundation::ITypedEventHandler<
+                            ABI::Windows::UI::Core::CoreWindow*, ABI::Windows::UI::Core::PointerEventArgs*>>(
+                            [&](ABI::Windows::UI::Core::ICoreWindow*,
+                                ABI::Windows::UI::Core::IPointerEventArgs* args) -> HRESULT {
+                                ComPtr<ABI::Windows::UI::Input::IPointerPoint> point;
+                                CHECK(SUCCEEDED(args->get_CurrentPoint(&point)));
+                                boolean contact{};
+                                CHECK(point && SUCCEEDED(point->get_IsInContact(&contact)));
+                                coreEvents.push_back(contact ? 1 : 0);
+                                return S_OK;
+                            });
+                        EventRegistrationToken corePressed{}, coreReleased{};
+                        CHECK(SUCCEEDED(coreWindow->add_PointerPressed(coreHandler.Get(), &corePressed)));
+                        CHECK(SUCCEEDED(coreWindow->add_PointerReleased(coreHandler.Get(), &coreReleased)));
+                        SendMessageW(host, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(37, 59));
+                        SendMessageW(host, WM_LBUTTONUP, 0, MAKELPARAM(37, 59));
+                        CHECK((coreEvents == std::vector<int>{1, 0}));
+                        CHECK(SUCCEEDED(window->put_Content(pageUi.Get())));
+                        CHECK(SUCCEEDED(backgroundUi->add_PointerPressed(backgroundHandler.Get(), &pressed)));
+                        SendMessageW(host, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(37, 59));
+                        SendMessageW(host, WM_LBUTTONUP, 0, MAKELPARAM(37, 59));
+                        CHECK(coreEvents.size() == 2);
+                        CHECK(backgroundEvents.size() == 4);
+                        CHECK(SUCCEEDED(backgroundUi->remove_PointerPressed(pressed)));
+                        CHECK(SUCCEEDED(window->put_Content(nullptr)));
+                        CHECK(SUCCEEDED(coreWindow->remove_PointerPressed(corePressed)));
+                        CHECK(SUCCEEDED(coreWindow->remove_PointerReleased(coreReleased)));
                         CHECK(activated == 0);
                         ComPtr<IActivationFactory> userActivation;
                         CHECK(SUCCEEDED(

@@ -128,7 +128,18 @@ using RenderHandler = ABI::Windows::Foundation::IEventHandler<IInspectable*>;
 class RenderingArgs final
     : public RuntimeClass<RuntimeClassFlags<WinRt>, ABI::Windows::UI::Xaml::Media::IRenderingEventArgs> {
     InspectableClass(L"Windows.UI.Xaml.Media.RenderingEventArgs", BaseTrust);
-    ABI::Windows::Foundation::TimeSpan time_{static_cast<INT64>(GetTickCount64()) * 10000};
+    ABI::Windows::Foundation::TimeSpan time_{Now()};
+    // In 100 ns units; GetTickCount64 steps every 15.6 ms, coarser than a frame.
+    static INT64 Now() {
+        static const INT64 frequency = [] {
+            LARGE_INTEGER value;
+            QueryPerformanceFrequency(&value);
+            return value.QuadPart;
+        }();
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+        return now.QuadPart / frequency * 10000000 + now.QuadPart % frequency * 10000000 / frequency;
+    }
 
 public:
     HRESULT STDMETHODCALLTYPE get_RenderingTime(ABI::Windows::Foundation::TimeSpan* value) override {
@@ -139,6 +150,10 @@ public:
 };
 // The OS CompositionTarget has no XAML compositor in the desktop host. Deliver
 // its rendering events from the subscribing UI thread's message loop instead.
+// Games present inside the event, so Present's vsync and [options] FrameRate
+// pace the frames; the timer only has to be due again when a frame ends. A
+// 16 ms timer is not: it rounds up to the 15.6 ms system tick and fires every
+// other tick, which drops a 60 Hz game to 32-40 frames a second.
 class CompositionTargetFactory final : public Factory<ABI::Windows::UI::Xaml::Media::ICompositionTargetStatics> {
     EventSource<RenderHandler> rendering_, lost_;
     UINT_PTR timer_ = 0;
@@ -163,7 +178,7 @@ public:
         if (GetCurrentThreadId() != thread_) return RPC_E_WRONG_THREAD;
         auto hr = rendering_.Add(handler, token);
         if (FAILED(hr) || timer_) return hr;
-        timer_ = SetTimer(nullptr, 0, 16, Tick);
+        timer_ = SetTimer(nullptr, 0, USER_TIMER_MINIMUM, Tick);
         if (!timer_) {
             hr = HRESULT_FROM_WIN32(GetLastError());
             rendering_.Remove(*token);

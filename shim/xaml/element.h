@@ -174,32 +174,46 @@ public:
     // NOLINTNEXTLINE(bugprone-exception-escape): the constructor built both maps; erase() does not throw.
     ~Element() {
         UnregisterPointerTarget(static_cast<ABI::Windows::UI::Xaml::IFrameworkElement*>(this));
+        CountElementPointerHandlers(-static_cast<long>(PointerHandlerCount()));
         LoadedCallbacks().erase(this);
         SizeCallbacks().erase(this);
     }
+
+private:
+    size_t PointerHandlerCount() const noexcept {
+        return eventPointerPressed_.GetSize() + eventPointerMoved_.GetSize() + eventPointerReleased_.GetSize();
+    }
+    template <typename Change> HRESULT CountPointerHandlers(Change change) {
+        const auto before = PointerHandlerCount();
+        const auto hr = change();
+        CountElementPointerHandlers(static_cast<long>(PointerHandlerCount()) - static_cast<long>(before));
+        return hr;
+    }
+
+public:
     HRESULT STDMETHODCALLTYPE add_PointerPressed(ABI::Windows::UI::Xaml::Input::IPointerEventHandler* handler,
                                                  EventRegistrationToken* token) override {
         Log("TRACE", "%ls PointerPressed subscribed", Derived::Name);
-        return eventPointerPressed_.Add(handler, token);
+        return CountPointerHandlers([&] { return eventPointerPressed_.Add(handler, token); });
     }
     HRESULT STDMETHODCALLTYPE remove_PointerPressed(EventRegistrationToken token) override {
-        return eventPointerPressed_.Remove(token);
+        return CountPointerHandlers([&] { return eventPointerPressed_.Remove(token); });
     }
     HRESULT STDMETHODCALLTYPE add_PointerMoved(ABI::Windows::UI::Xaml::Input::IPointerEventHandler* handler,
                                                EventRegistrationToken* token) override {
         Log("TRACE", "%ls PointerMoved subscribed", Derived::Name);
-        return eventPointerMoved_.Add(handler, token);
+        return CountPointerHandlers([&] { return eventPointerMoved_.Add(handler, token); });
     }
     HRESULT STDMETHODCALLTYPE remove_PointerMoved(EventRegistrationToken token) override {
-        return eventPointerMoved_.Remove(token);
+        return CountPointerHandlers([&] { return eventPointerMoved_.Remove(token); });
     }
     HRESULT STDMETHODCALLTYPE add_PointerReleased(ABI::Windows::UI::Xaml::Input::IPointerEventHandler* handler,
                                                   EventRegistrationToken* token) override {
         Log("TRACE", "%ls PointerReleased subscribed", Derived::Name);
-        return eventPointerReleased_.Add(handler, token);
+        return CountPointerHandlers([&] { return eventPointerReleased_.Add(handler, token); });
     }
     HRESULT STDMETHODCALLTYPE remove_PointerReleased(EventRegistrationToken token) override {
-        return eventPointerReleased_.Remove(token);
+        return CountPointerHandlers([&] { return eventPointerReleased_.Remove(token); });
     }
     HRESULT STDMETHODCALLTYPE add_PointerEntered(ABI::Windows::UI::Xaml::Input::IPointerEventHandler* handler,
                                                  EventRegistrationToken* token) override {

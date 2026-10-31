@@ -346,6 +346,38 @@ static void TestMediaElement() {
         sourceOuter->Release();
         CHECK(DeleteFileW(sourcePath.c_str()));
     }
+    // Angry Birds Space names its Windows 8 panel DXSwapChainPanel, with no
+    // connection ID, and binds the field by FindName after LoadComponent.
+    const auto namedPath = std::filesystem::path(exePath).parent_path() / L"NamedPanelPage.xaml";
+    HANDLE namedFile =
+        CreateFileW(namedPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    CHECK(namedFile != INVALID_HANDLE_VALUE);
+    if (namedFile != INVALID_HANDLE_VALUE) {
+        const char source[] = "<Page xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' "
+                              "xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>"
+                              "<SwapChainBackgroundPanel x:Name='DXSwapChainPanel'/></Page>";
+        DWORD written = 0;
+        CHECK(WriteFile(namedFile, source, sizeof(source) - 1, &written, nullptr) && written == sizeof(source) - 1);
+        CloseHandle(namedFile);
+        auto* namedOuter = new PageOuter("NamedPanelPage");
+        ComPtr<IPage> namedPage;
+        CHECK(SUCCEEDED(
+            pageFactory->CreateInstance(static_cast<IPageOverrides*>(namedOuter), &namedOuter->inner, &namedPage)));
+        CHECK(SUCCEEDED(
+            componentUris->CreateUri(HStringReference(L"ms-appx:///NamedPanelPage.xaml").Get(), &componentUri)));
+        CHECK(SUCCEEDED(appStatics->LoadComponent(namedPage.Get(), componentUri.Get())));
+        CHECK(namedOuter->connections == 0);
+        ComPtr<IFrameworkElement> namedElement;
+        ComPtr<IInspectable> panel;
+        CHECK(SUCCEEDED(namedPage.As(&namedElement)));
+        CHECK(namedElement && SUCCEEDED(namedElement->FindName(HStringReference(L"DXSwapChainPanel").Get(), &panel)) &&
+              panel);
+        ComPtr<ISwapChainBackgroundPanelNative> native;
+        CHECK(panel && SUCCEEDED(panel.As(&native)));
+        namedPage.Reset();
+        namedOuter->Release();
+        CHECK(DeleteFileW(namedPath.c_str()));
+    }
     ComPtr<IMediaElement> media;
     ComPtr<IMediaElement2> media2;
     if (!object || FAILED(object.As(&media)) || FAILED(object.As(&media2))) {
