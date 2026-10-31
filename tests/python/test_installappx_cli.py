@@ -432,7 +432,7 @@ class CliTests(unittest.TestCase):
             installer, "install_managed_wine", return_value=selected
         ) as runtime:
             code = self.main([str(package), "--dest", str(self.dest), "--build", str(self.build),
-                              "--release", "v-test", "--vclibs", str(self.vclibs), "--yes"])
+                              "--release", "v-test", "--dependencies", str(self.vclibs), "--yes"])
         self.assertEqual(code, 0, self.stderr.getvalue())
         runtime.assert_called_once_with("v-test")
         text = (self.dest / "00_click2startme.command").read_text()
