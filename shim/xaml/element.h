@@ -15,6 +15,7 @@
 #include <string>
 #include <functional>
 #include <memory>
+#include <cmath>
 namespace appx {
 // The component root owns its scope and named children; descendants borrow it.
 // Excluding the root from the retained map avoids a COM reference cycle.
@@ -115,6 +116,9 @@ class Element
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerCanceled_;
     Microsoft::WRL::EventSource<ABI::Windows::UI::Xaml::Input::IPointerEventHandler> eventPointerWheelChanged_;
     double width_ = 1024, height_ = 768;
+    ABI::Windows::UI::Xaml::Thickness margin_{};
+    ABI::Windows::UI::Xaml::HorizontalAlignment horizontal_ = ABI::Windows::UI::Xaml::HorizontalAlignment_Stretch;
+    ABI::Windows::UI::Xaml::VerticalAlignment vertical_ = ABI::Windows::UI::Xaml::VerticalAlignment_Stretch;
     PropertyValues properties_;
     Microsoft::WRL::ComPtr<ABI::Windows::UI::Xaml::IResourceDictionary> resources_;
     bool loadedRaised_ = false;
@@ -358,6 +362,54 @@ public:
     }
     HRESULT STDMETHODCALLTYPE put_Height(DOUBLE value) override {
         height_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_HorizontalAlignment(ABI::Windows::UI::Xaml::HorizontalAlignment* value) override {
+        if (!value) return E_POINTER;
+        *value = {};
+        auto hr = CheckSourceThread();
+        if (SUCCEEDED(hr)) *value = horizontal_;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE put_HorizontalAlignment(ABI::Windows::UI::Xaml::HorizontalAlignment value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        if (value < ABI::Windows::UI::Xaml::HorizontalAlignment_Left ||
+            value > ABI::Windows::UI::Xaml::HorizontalAlignment_Stretch)
+            return E_INVALIDARG;
+        horizontal_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_VerticalAlignment(ABI::Windows::UI::Xaml::VerticalAlignment* value) override {
+        if (!value) return E_POINTER;
+        *value = {};
+        auto hr = CheckSourceThread();
+        if (SUCCEEDED(hr)) *value = vertical_;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE put_VerticalAlignment(ABI::Windows::UI::Xaml::VerticalAlignment value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        if (value < ABI::Windows::UI::Xaml::VerticalAlignment_Top ||
+            value > ABI::Windows::UI::Xaml::VerticalAlignment_Stretch)
+            return E_INVALIDARG;
+        vertical_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Margin(ABI::Windows::UI::Xaml::Thickness* value) override {
+        if (!value) return E_POINTER;
+        *value = {};
+        auto hr = CheckSourceThread();
+        if (SUCCEEDED(hr)) *value = margin_;
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE put_Margin(ABI::Windows::UI::Xaml::Thickness value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        if (!std::isfinite(value.Left) || !std::isfinite(value.Top) || !std::isfinite(value.Right) ||
+            !std::isfinite(value.Bottom))
+            return E_INVALIDARG;
+        margin_ = value;
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override {

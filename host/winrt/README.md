@@ -506,7 +506,7 @@ the overloaded signatures from metadata and emits separate ABI delegates for
 the two SDK slots. Native games keep the existing loader path; Windows Islands
 continues to use system XAML.
 
-The source loader supports Page, Frame and Grid elements, implicit content
+The source loader supports Page, Frame, Grid and Image elements, implicit content
 and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
 ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
 attributes in a declared ignorable Blend namespace are skipped. Inline resource
@@ -559,7 +559,7 @@ unselected; native map behavior is verified through the SDK ABI.
 
 The source loader accepts `<Page.Resources>`, `<Frame.Resources>` and
 `<Grid.Resources>` with implicit entries or a sole explicit ResourceDictionary.
-Resource values currently use the supported Page/Frame/Grid and animation source types.
+Resource values use the supported visual, animation and brush source types.
 Literal x:Key selects a key; x:Name supplies a fallback key under the documented
 [XAML naming convention](https://learn.microsoft.com/en-us/windows/apps/develop/platform/xaml/x-name-attribute).
 Keys do not register names for FindName. Actual names enter the component's
@@ -627,8 +627,8 @@ callbacks in source order. Names are available before callbacks run, and retaine
 children do not keep the component Page alive. The SDK fixture checks child order,
 nested/empty children, identity, iteration/GetMany, bounds, thread rejection,
 unsupported mutations and lifetime across Page replacement. This checkpoint adds
-tree data; layout, drawing, Loaded traversal through panels and background brushes
-remain separate work.
+tree data; layout, drawing and Loaded traversal through panels remain separate
+work. Background brush data is described below.
 
 
 ## Linear gradient background data
@@ -662,3 +662,37 @@ containers, markup expressions and nonvisual Page/Grid children before changing
 the root tree. The SDK fixture verifies exact color bytes, default and explicit
 values, names, resources, ownership, bounds, property setters and thread errors.
 These are data contracts; gradient drawing and visual acceptance remain pending.
+
+
+## Package image data
+
+Source Image elements support absolute package-local ms-appx:/// PNG sources,
+Stretch, dimensions, alignment and margin data. Image names and callbacks use a
+selected managed Image wrapper; managed construction and Source/Stretch property
+projection remain unselected. FrameworkElement alignment and finite margins use
+native storage, including the one-, two- and four-value XAML margin forms. These
+properties prepare layout inputs; measure/arrange and drawing remain pending.
+
+The package reader resolves loose files and existing PRI candidates. URI handling
+shares the source loader's authority, query, fragment and escaped-path checks.
+WIC detects the container and frame count, accepts a single decoded PNG frame,
+converts it to 32-bit premultiplied BGRA and copies pixels into an owned bitmap.
+Decoded pixel dimensions stay separate from the Image's declared dimensions.
+Failed loads leave the existing component tree and root properties intact.
+
+The native Image exposes source ownership and
+[Stretch data](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.controls.image.stretch),
+with Uniform as its default. Its package source is an internal
+AppxPortable.Xaml.PackageBitmapSource implementing IImageSource and the SDK
+IBitmapSource dimension getters. It is not a substitute BitmapImage class.
+The internal IImagePixels bridge provides counted WIC bitmap access for a future
+renderer. Objects enforce their creating thread. Image events, NineGrid, casting,
+stream replacement and general BitmapImage construction remain explicit gaps.
+
+The SDK fixture decodes an independent two-pixel RGBA PNG and checks exact BGRA
+premultiplication, dimensions, source replacement, all margin forms, alignment,
+thread rejection and explicit event failure. It retains only the decoded source,
+clears Image references, deletes the PNG and replaces the tree before reading
+pixels again. Regressions cover missing/corrupt files, unsupported URIs and markup,
+malformed layout values and content on leaf Image elements. This proves pixel
+preparation and ownership, not rendering or the game's complete splash.

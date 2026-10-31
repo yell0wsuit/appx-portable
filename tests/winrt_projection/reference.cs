@@ -77,6 +77,7 @@ namespace Windows.UI.Xaml
 }
 namespace Windows.UI.Xaml.Controls
 {
+    public class Image : global::Windows.UI.Xaml.FrameworkElement { internal Image() { } }
     public class Control : global::Windows.UI.Xaml.FrameworkElement { internal Control() { } }
     public class ContentControl : Control { internal ContentControl() { } }
     public class UserControl : Control

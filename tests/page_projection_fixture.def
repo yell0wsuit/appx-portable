@@ -12,3 +12,4 @@ EXPORTS
   ValidateSourceRootFields
   ValidateGridChildren
   ValidateBrushData
+  ValidateImageData

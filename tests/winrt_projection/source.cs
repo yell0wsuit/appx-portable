@@ -39,6 +39,8 @@ class SourceApp : Application
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateBrushData(int stage);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateImageData(int stage);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedResources(int stage);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     static void Bad(SourcePage page, string body, int hr)
@@ -136,6 +138,33 @@ class SourceApp : Application
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid.xaml"));
         root = new WeakReference(page);
         return page.FindName("first");
+    }
+    static void VerifyImage(SourcePage page)
+    {
+        File.WriteAllBytes("Fixtures/É pixels.png", Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAD0lEQVR4nGP4z8DwHwgbABB5A359Y87XAAAAAElFTkSuQmCC"));
+        File.WriteAllText("Fixtures/image.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid x:Name=\"leaf\"><Image x:Name=\"picture\" x:ConnectionId=\"24\" Source=\"ms-appx:///Fixtures/%C3%89%20pixels.png\" Width=\"620\" Height=\"300\" VerticalAlignment=\"Center\" HorizontalAlignment=\"Right\" Margin=\"1,2,3,4\"/><Image x:Name=\"emptyImage\" Stretch=\"None\" Margin=\"3,5\"/><Image Margin=\"3\"/></Grid></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/image.xaml"));
+        Check(page.FindName("picture") is Image && ReferenceEquals(page.FindName("picture"), page.Targets[24]), "typed Image and callback identity");
+        Check(ValidateImageData(0) == 0, "SDK Image data and decoded premultiplied pixels");
+        Bad(page, "<Page" + Ns + " Width=\"999\"><Image Source=\"ms-appx:///missing.png\"/></Page>", unchecked((int)0x80070002));
+        File.WriteAllText("Fixtures/corrupt.png", "invalid PNG");
+        Bad(page, "<Page" + Ns + " Width=\"999\"><Image Source=\"ms-appx:///Fixtures/corrupt.png\"/></Page>", 0);
+        Bad(page, "<Page" + Ns + "><Image Source=\"https://example.test/image.png\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Image Source=\"ms-appx:///Fixtures/%2e%2e%5c%2e%2e%5cfile.png\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Image Source=\"{Binding Picture}\"/></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Image Source=\"ms-appx:///Fixtures/file.png?query=1\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Image Source=\"ms-appx:///Fixtures/file.png#part\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Image Source=\"ms-appx:///Fixtures/%00.png\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Image Stretch=\"Bad\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Image Margin=\"1,2,3\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Image VerticalAlignment=\"Bad\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Image><Grid/></Image></Page>", unchecked((int)0x80004001));
+        page.Targets.Remove(24);
+        File.Delete("Fixtures/É pixels.png");
+        File.WriteAllText("Fixtures/image-empty.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid/></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/image-empty.xaml"));
+        Check(ValidateImageData(1) == 0, "decoded source survives Image, tree and file replacement");
+        Console.WriteLine("PASS: source Images retain decoded package PNG pixels, dimensions and layout data");
     }
     static void VerifyBrush(SourcePage page)
     {
@@ -261,6 +290,7 @@ class SourceApp : Application
         VerifyResources(page);
         VerifyGrid(page);
         VerifyBrush(page);
+        VerifyImage(page);
         VerifyAnimations(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");

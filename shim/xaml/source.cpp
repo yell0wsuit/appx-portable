@@ -1,6 +1,7 @@
 #include "source.h"
 #include "animation.h"
 #include "brush.h"
+#include "image.h"
 #include "grid.h"
 #include "element.h"
 #include "registry.h"
@@ -50,6 +51,13 @@ struct Node {
     bool hasWidth = false, hasHeight = false, hasVisibility = false;
     double width = 0, height = 0;
     Visibility visibility = Visibility_Visible;
+    bool hasImageSource = false, hasStretch = false, hasMargin = false, hasHorizontal = false, hasVertical = false;
+    std::wstring imageUri;
+    Microsoft::WRL::ComPtr<ABI::Windows::UI::Xaml::Media::IImageSource> imageSource;
+    ABI::Windows::UI::Xaml::Media::Stretch stretch = ABI::Windows::UI::Xaml::Media::Stretch_Uniform;
+    Thickness margin{};
+    HorizontalAlignment horizontal = HorizontalAlignment_Stretch;
+    VerticalAlignment vertical = VerticalAlignment_Stretch;
     int connection = 0;
     ComPtr<IInspectable> value;
 };
@@ -102,6 +110,39 @@ HRESULT Read(IXmlReader* reader, std::unique_ptr<Node>& root) {
     }
     return FAILED(hr) ? hr : root && stack.empty() ? S_OK : E_INVALIDARG;
 }
+int Choice(const std::wstring& text, std::initializer_list<const wchar_t*> names) {
+    int value = 0;
+    for (auto* name : names) {
+        if (text == name) return value;
+        ++value;
+    }
+    return -1;
+}
+HRESULT ParseMargin(const std::wstring& text, Thickness& value) {
+    std::vector<double> parts;
+    size_t start = 0;
+    do {
+        auto end = text.find(L',', start);
+        auto part = text.substr(start, end == std::wstring::npos ? end : end - start);
+        double number = 0;
+        std::wistringstream input(part);
+        input.imbue(std::locale::classic());
+        if (!(input >> number) || !(input >> std::ws).eof() || !std::isfinite(number)) return E_INVALIDARG;
+        parts.push_back(number);
+        if (parts.size() > 4) return E_INVALIDARG;
+        if (end == std::wstring::npos) break;
+        start = end + 1;
+    } while (true);
+    if (parts.size() == 1)
+        value = {parts[0], parts[0], parts[0], parts[0]};
+    else if (parts.size() == 2)
+        value = {parts[0], parts[1], parts[0], parts[1]};
+    else if (parts.size() == 4)
+        value = {parts[0], parts[1], parts[2], parts[3]};
+    else
+        return E_INVALIDARG;
+    return S_OK;
+}
 HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
                 std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource = false) {
     if (node.space != Presentation) return Fail(node.space + L":" + node.type);
@@ -109,7 +150,8 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     const bool brush = BrushDataType(node.type);
     const bool nonvisual = animation || brush;
     if (root && nonvisual) return Fail(L"nonvisual root", E_INVALIDARG);
-    if (!nonvisual && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid") return Fail(node.type);
+    if (!nonvisual && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid" && node.type != L"Image")
+        return Fail(node.type);
     for (const auto& attr : node.attributes)
         if (attr.space == Xmlns) spaces[attr.name] = attr.value;
     for (const auto& attr : node.attributes)
@@ -164,6 +206,29 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
         } else if (brush && attr.space.empty()) {
             auto hr = ParseBrushAttribute(node.type, attr.name, attr.value, node.brushData);
             if (FAILED(hr)) return Fail(member, hr);
+        } else if (node.type == L"Image" && attr.space.empty() && attr.name == L"Source") {
+            if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
+            node.imageUri = attr.value;
+            node.hasImageSource = true;
+        } else if (node.type == L"Image" && attr.space.empty() && attr.name == L"Stretch") {
+            auto value = Choice(attr.value, {L"None", L"Fill", L"Uniform", L"UniformToFill"});
+            if (value < 0) return Fail(member, E_INVALIDARG);
+            node.stretch = static_cast<ABI::Windows::UI::Xaml::Media::Stretch>(value);
+            node.hasStretch = true;
+        } else if (!nonvisual && attr.space.empty() && attr.name == L"Margin") {
+            auto hr = ParseMargin(attr.value, node.margin);
+            if (FAILED(hr)) return Fail(member, hr);
+            node.hasMargin = true;
+        } else if (!nonvisual && attr.space.empty() && attr.name == L"HorizontalAlignment") {
+            auto value = Choice(attr.value, {L"Left", L"Center", L"Right", L"Stretch"});
+            if (value < 0) return Fail(member, E_INVALIDARG);
+            node.horizontal = static_cast<HorizontalAlignment>(value);
+            node.hasHorizontal = true;
+        } else if (!nonvisual && attr.space.empty() && attr.name == L"VerticalAlignment") {
+            auto value = Choice(attr.value, {L"Top", L"Center", L"Bottom", L"Stretch"});
+            if (value < 0) return Fail(member, E_INVALIDARG);
+            node.vertical = static_cast<VerticalAlignment>(value);
+            node.hasVertical = true;
         } else if (!nonvisual && attr.space.empty() && (attr.name == L"Width" || attr.name == L"Height")) {
             double value;
             std::wistringstream number(attr.value);
@@ -299,7 +364,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             }
             continue;
         }
-        if (animation) return Fail(node.type + L".Children");
+        if (animation || node.type == L"Image") return Fail(node.type + L".Children");
         if (node.type == L"Grid") {
             Node* holder = nullptr;
             auto childSpaces = spaces;
@@ -352,6 +417,11 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     return S_OK;
 }
 HRESULT Create(Node& node) {
+    if (node.type == L"Image") {
+        ComPtr<IActivationFactory> factory;
+        auto hr = ShimGetFactory(Wrappers::HStringReference(L"Windows.UI.Xaml.Controls.Image").Get(), &factory);
+        return FAILED(hr) ? hr : factory->ActivateInstance(&node.value);
+    }
     if (BrushDataType(node.type)) {
         auto name = L"Windows.UI.Xaml.Media." + node.type;
         ComPtr<IActivationFactory> factory;
@@ -421,15 +491,29 @@ HRESULT Apply(Node& node) {
     if (SUCCEEDED(hr) && node.hasResources) hr = element->put_Resources(node.dictionary.Get());
     if (SUCCEEDED(hr) && node.hasWidth) hr = element->put_Width(node.width);
     if (SUCCEEDED(hr) && node.hasHeight) hr = element->put_Height(node.height);
+    if (SUCCEEDED(hr) && node.hasMargin) hr = element->put_Margin(node.margin);
+    if (SUCCEEDED(hr) && node.hasHorizontal) hr = element->put_HorizontalAlignment(node.horizontal);
+    if (SUCCEEDED(hr) && node.hasVertical) hr = element->put_VerticalAlignment(node.vertical);
     if (SUCCEEDED(hr) && node.hasVisibility) {
         ComPtr<IUIElement> ui;
         hr = node.value.As(&ui);
         if (SUCCEEDED(hr)) hr = ui->put_Visibility(node.visibility);
     }
+    if (node.type == L"Image") {
+        ComPtr<IImage> image;
+        if (SUCCEEDED(hr)) hr = node.value.As(&image);
+        if (SUCCEEDED(hr) && node.hasImageSource) hr = image->put_Source(node.imageSource.Get());
+        if (SUCCEEDED(hr) && node.hasStretch) hr = image->put_Stretch(node.stretch);
+        return hr;
+    }
     return FAILED(hr) ? hr : SetContent(node);
 }
 HRESULT Build(Node& node);
 HRESULT BuildParts(Node& node) {
+    if (node.type == L"Image" && node.hasImageSource) {
+        auto hr = MakePackageImageSource(node.imageUri, node.imageSource.GetAddressOf());
+        if (FAILED(hr)) return Fail(L"Image.Source", hr);
+    }
     if (node.background) {
         auto hr = Build(*node.background);
         if (FAILED(hr)) return hr;
@@ -574,6 +658,9 @@ HRESULT ResourcePath(ABI::Windows::Foundation::IUriRuntimeClass* uri, std::wstri
     return S_OK;
 }
 }
+HRESULT ResolveSourceResourceUri(ABI::Windows::Foundation::IUriRuntimeClass* uri, std::wstring& path) {
+    return uri ? ResourcePath(uri, path) : E_INVALIDARG;
+}
 HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRuntimeClass* uri) {
     try {
         if (!component || !uri) return E_INVALIDARG;
@@ -607,6 +694,7 @@ HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRu
         if (SUCCEEDED(hr))
             hr = root->type == L"Page"    ? component->QueryInterface(__uuidof(IPage), &kind)
                  : root->type == L"Frame" ? component->QueryInterface(__uuidof(IFrame), &kind)
+                 : root->type == L"Image" ? component->QueryInterface(__uuidof(IImage), &kind)
                                           : component->QueryInterface(__uuidof(IGrid), &kind);
         if (FAILED(hr)) return Fail(L"root type " + root->type, E_INVALIDARG);
         if (!root->className.empty()) {
