@@ -200,8 +200,8 @@ int main() {
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&start);
     unsigned vsynced = 0;
-    auto present = Callback<ABI::Windows::Foundation::IEventHandler<IInspectable*>>(
-        [&](IInspectable*, IInspectable*) -> HRESULT {
+    auto present =
+        Callback<ABI::Windows::Foundation::IEventHandler<IInspectable*>>([&](IInspectable*, IInspectable*) -> HRESULT {
             const LONGLONG vblank = start.QuadPart + ++vsynced * frequency.QuadPart / 60;
             LARGE_INTEGER now{};
             do QueryPerformanceCounter(&now);

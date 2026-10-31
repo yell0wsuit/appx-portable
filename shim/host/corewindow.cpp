@@ -415,7 +415,8 @@ void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (message == WM_KEYDOWN && TextInputKey(wparam)) return;
     const bool keyboard = message == WM_KEYDOWN || message == WM_KEYUP || message == WM_SYSKEYDOWN ||
                           message == WM_SYSKEYUP || message == WM_CHAR;
-    if ((coreInput || keyboard || !ElementPointerHandlers()) && coreWindow) coreWindow->OnInput(message, wparam, lparam);
+    if ((coreInput || keyboard || !ElementPointerHandlers()) && coreWindow)
+        coreWindow->OnInput(message, wparam, lparam);
 }
 // CoreWindow.GetForCurrentThread: the game's window on the UI thread, as on
 // Windows, and none on any other thread.

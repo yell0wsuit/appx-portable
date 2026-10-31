@@ -370,8 +370,8 @@ static void TestMediaElement() {
         ComPtr<IFrameworkElement> namedElement;
         ComPtr<IInspectable> panel;
         CHECK(SUCCEEDED(namedPage.As(&namedElement)));
-        CHECK(namedElement &&
-              SUCCEEDED(namedElement->FindName(HStringReference(L"DXSwapChainPanel").Get(), &panel)) && panel);
+        CHECK(namedElement && SUCCEEDED(namedElement->FindName(HStringReference(L"DXSwapChainPanel").Get(), &panel)) &&
+              panel);
         ComPtr<ISwapChainBackgroundPanelNative> native;
         CHECK(panel && SUCCEEDED(panel.As(&native)));
         namedPage.Reset();
