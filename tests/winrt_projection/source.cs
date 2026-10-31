@@ -37,6 +37,8 @@ class SourceApp : Application
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateGridChildren(int stage);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateBrushData(int stage);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedResources(int stage);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     static void Bad(SourcePage page, string body, int hr)
@@ -135,6 +137,29 @@ class SourceApp : Application
         root = new WeakReference(page);
         return page.FindName("first");
     }
+    static void VerifyBrush(SourcePage page)
+    {
+        File.WriteAllText("Fixtures/brush.xaml", "<Page" + Ns + " x:Name=\"root\"><Page.Resources><GradientStop x:Name=\"shortRGB\" Color=\"#aBc\"/><GradientStop x:Name=\"shortARGB\" Color=\"#1234\"/><LinearGradientBrush x:Name=\"resourceBrush\"><LinearGradientBrush.GradientStops><GradientStop Color=\"#F00\"/></LinearGradientBrush.GradientStops></LinearGradientBrush></Page.Resources><Grid x:Name=\"leaf\"><Grid.Background><LinearGradientBrush x:Name=\"brush\" x:ConnectionId=\"23\" StartPoint=\"0.5,0\" EndPoint=\"0.5,1\" Opacity=\"0.75\"><GradientStop Color=\"#ED1C24\" Offset=\"1\"/><GradientStop x:Name=\"stop\" Color=\"#80123456\" Offset=\"-0.25\"/></LinearGradientBrush></Grid.Background><Grid/></Grid></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/brush.xaml"));
+        Check(ReferenceEquals(page.FindName("brush"), page.Targets[23]) && page.FindName("stop") != null, "brush names and callback identity");
+        Check(ValidateBrushData(0) == 0, "native gradient brush ABI and ownership");
+        Bad(page, "<Page" + Ns + " Width=\"999\"><Grid><Grid.Background><Grid/></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background/><Grid/></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><LinearGradientBrush StartPoint=\"NaN,0\"/></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><LinearGradientBrush><GradientStop Color=\"#12ZZ34\"/></LinearGradientBrush></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><LinearGradientBrush><Grid/></LinearGradientBrush></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><LinearGradientBrush Opacity=\"{Binding Opacity}\"/></Grid.Background></Grid></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><LinearGradientBrush EndPoint=\"1e300,0\"/></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><LinearGradientBrush><GradientStop/><LinearGradientBrush.GradientStops/></LinearGradientBrush></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><LinearGradientBrush><LinearGradientBrush.GradientStops/><GradientStop/></LinearGradientBrush></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><LinearGradientBrush/></Grid.Background><Grid.Background><LinearGradientBrush/></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><LinearGradientBrush/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><Grid><GradientStop/></Grid></Page>", unchecked((int)0x80070057));
+        File.WriteAllText("Fixtures/brush-empty.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid><Grid.Background><LinearGradientBrush><LinearGradientBrush.GradientStops/></LinearGradientBrush></Grid.Background></Grid></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/brush-empty.xaml"));
+        Check(ValidateBrushData(1) == 0, "retained brush and empty explicit stops");
+        Console.WriteLine("PASS: source gradient brushes preserve data, stop order, names and ownership");
+    }
     static void VerifyGrid(SourcePage page)
     {
         int connectionStart = page.Connections.Count;
@@ -148,7 +173,7 @@ class SourceApp : Application
         Bad(page, "<Page" + Ns + "><Grid><Grid.Children/><Grid/></Grid></Page>", unchecked((int)0x80070057));
         Bad(page, "<Page" + Ns + "><Grid><Grid.Children/><Grid.Children/></Grid></Page>", unchecked((int)0x80070057));
         Bad(page, "<Page" + Ns + "><Grid><Grid.Children Width=\"1\"/></Grid></Page>", unchecked((int)0x80004001));
-        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><Grid/></Grid.Background></Grid></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><Grid><Grid.Background><Grid/></Grid.Background></Grid></Page>", unchecked((int)0x80070057));
         Bad(page, "<Page" + Ns + "><Grid><Grid x:Name=\"same\"/><Grid x:Name=\"same\"/></Grid></Page>", unchecked((int)0x80070057));
         File.WriteAllText("Fixtures/grid-empty.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid><Grid.Children/></Grid></Page>");
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid-empty.xaml"));
@@ -235,6 +260,7 @@ class SourceApp : Application
         catch (NotImplementedException) { }
         VerifyResources(page);
         VerifyGrid(page);
+        VerifyBrush(page);
         VerifyAnimations(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");
