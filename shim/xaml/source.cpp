@@ -2,6 +2,7 @@
 #include "animation.h"
 #include "brush.h"
 #include "image.h"
+#include "text.h"
 #include "grid.h"
 #include "element.h"
 #include "registry.h"
@@ -62,6 +63,12 @@ struct Node {
     Thickness margin{};
     HorizontalAlignment horizontal = HorizontalAlignment_Stretch;
     VerticalAlignment vertical = VerticalAlignment_Stretch;
+    bool hasText = false, hasFontSize = false, hasFontFamily = false, hasWrapping = false, hasTextAlignment = false;
+    std::wstring textValue, familyName;
+    double fontSize = 0;
+    ComPtr<ABI::Windows::UI::Xaml::Media::IFontFamily> fontFamily;
+    TextWrapping wrapping = TextWrapping_NoWrap;
+    TextAlignment textAlignment = TextAlignment_Left;
     int connection = 0;
     ComPtr<IInspectable> value;
 };
@@ -155,7 +162,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     const bool nonvisual = animation || brush;
     if (root && nonvisual) return Fail(L"nonvisual root", E_INVALIDARG);
     if (!nonvisual && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid" && node.type != L"Image" &&
-        node.type != L"ProgressRing")
+        node.type != L"ProgressRing" && node.type != L"TextBlock")
         return Fail(node.type);
     for (const auto& attr : node.attributes)
         if (attr.space == Xmlns) spaces[attr.name] = attr.value;
@@ -217,10 +224,39 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
                 return Fail(member, E_INVALIDARG);
             node.active = _wcsicmp(attr.value.c_str(), L"True") == 0;
             node.hasActive = true;
-        } else if (node.type == L"ProgressRing" && attr.space.empty() && attr.name == L"Foreground") {
+        } else if ((node.type == L"ProgressRing" || node.type == L"TextBlock") && attr.space.empty() &&
+                   attr.name == L"Foreground") {
             auto hr = ParseSourceColor(attr.value, node.foregroundColor);
             if (FAILED(hr)) return Fail(member, hr);
             node.hasForeground = true;
+        } else if (node.type == L"TextBlock" && attr.space.empty() && attr.name == L"Text") {
+            if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
+            node.textValue = attr.value;
+            node.hasText = true;
+        } else if (node.type == L"TextBlock" && attr.space.empty() && attr.name == L"FontFamily") {
+            if (attr.value.empty()) return Fail(member, E_INVALIDARG);
+            if (attr.value.front() == L'{') return Fail(member);
+            node.familyName = attr.value;
+            node.hasFontFamily = true;
+        } else if (node.type == L"TextBlock" && attr.space.empty() && attr.name == L"FontSize") {
+            std::wistringstream number(attr.value);
+            number.imbue(std::locale::classic());
+            if (!(number >> node.fontSize) || !(number >> std::ws).eof() || !std::isfinite(node.fontSize) ||
+                node.fontSize < 0)
+                return Fail(member, E_INVALIDARG);
+            node.hasFontSize = true;
+        } else if (node.type == L"TextBlock" && attr.space.empty() && attr.name == L"TextWrapping") {
+            auto value = Choice(attr.value, {L"NoWrap", L"Wrap", L"WrapWholeWords"});
+            if (value < 0) return Fail(member, E_INVALIDARG);
+            node.wrapping = static_cast<TextWrapping>(value + 1);
+            node.hasWrapping = true;
+        } else if (node.type == L"TextBlock" && attr.space.empty() && attr.name == L"TextAlignment") {
+            auto value = Choice(attr.value, {L"Center", L"Left", L"Right", L"Justify", L"DetectFromContent"});
+            if (attr.value == L"Start") value = TextAlignment_Start;
+            if (attr.value == L"End") value = TextAlignment_End;
+            if (value < 0) return Fail(member, E_INVALIDARG);
+            node.textAlignment = static_cast<TextAlignment>(value);
+            node.hasTextAlignment = true;
         } else if (node.type == L"Image" && attr.space.empty() && attr.name == L"Source") {
             if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
             node.imageUri = attr.value;
@@ -316,18 +352,19 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             node.background = value;
             continue;
         }
-        if (node.type == L"ProgressRing" && child->space == Presentation && child->type == L"ProgressRing.Foreground") {
+        if ((node.type == L"ProgressRing" || node.type == L"TextBlock") && child->space == Presentation &&
+            child->type == node.type + L".Foreground") {
             if (node.hasForeground || child->children.size() != 1)
-                return Fail(L"ProgressRing.Foreground multiple values", E_INVALIDARG);
+                return Fail(node.type + L".Foreground multiple values", E_INVALIDARG);
             auto foregroundSpaces = spaces;
             for (const auto& attr : child->attributes) {
-                if (attr.space != Xmlns) return Fail(L"ProgressRing.Foreground." + attr.name);
+                if (attr.space != Xmlns) return Fail(node.type + L".Foreground." + attr.name);
                 foregroundSpaces[attr.name] = attr.value;
             }
             auto* value = child->children[0].get();
             auto hr = Prepare(*value, foregroundSpaces, ignoreDesign, names, connections, false);
             if (FAILED(hr)) return hr;
-            if (!BrushType(value->type)) return Fail(L"ProgressRing.Foreground type " + value->type, E_INVALIDARG);
+            if (!BrushType(value->type)) return Fail(node.type + L".Foreground type " + value->type, E_INVALIDARG);
             node.foregroundNode = value;
             node.hasForeground = true;
             continue;
@@ -394,7 +431,8 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             }
             continue;
         }
-        if (animation || node.type == L"Image" || node.type == L"ProgressRing") return Fail(node.type + L".Children");
+        if (animation || node.type == L"Image" || node.type == L"ProgressRing" || node.type == L"TextBlock")
+            return Fail(node.type + L".Children");
         if (node.type == L"Grid") {
             Node* holder = nullptr;
             auto childSpaces = spaces;
@@ -447,7 +485,7 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     return S_OK;
 }
 HRESULT Create(Node& node) {
-    if (node.type == L"Image" || node.type == L"ProgressRing") {
+    if (node.type == L"Image" || node.type == L"ProgressRing" || node.type == L"TextBlock") {
         ComPtr<IActivationFactory> factory;
         auto name = L"Windows.UI.Xaml.Controls." + node.type;
         auto hr = ShimGetFactory(Wrappers::HStringReference(name.c_str()).Get(), &factory);
@@ -537,6 +575,18 @@ HRESULT Apply(Node& node) {
         if (SUCCEEDED(hr) && node.hasStretch) hr = image->put_Stretch(node.stretch);
         return hr;
     }
+    if (node.type == L"TextBlock") {
+        ComPtr<ITextBlock> block;
+        if (SUCCEEDED(hr)) hr = node.value.As(&block);
+        if (SUCCEEDED(hr) && node.hasText)
+            hr = block->put_Text(Wrappers::HStringReference(node.textValue.c_str()).Get());
+        if (SUCCEEDED(hr) && node.hasFontSize) hr = block->put_FontSize(node.fontSize);
+        if (SUCCEEDED(hr) && node.hasFontFamily) hr = block->put_FontFamily(node.fontFamily.Get());
+        if (SUCCEEDED(hr) && node.hasForeground) hr = block->put_Foreground(node.foreground.Get());
+        if (SUCCEEDED(hr) && node.hasWrapping) hr = block->put_TextWrapping(node.wrapping);
+        if (SUCCEEDED(hr) && node.hasTextAlignment) hr = block->put_TextAlignment(node.textAlignment);
+        return hr;
+    }
     if (node.type == L"ProgressRing") {
         ComPtr<IProgressRing> ring;
         if (SUCCEEDED(hr)) hr = node.value.As(&ring);
@@ -552,7 +602,12 @@ HRESULT Apply(Node& node) {
 }
 HRESULT Build(Node& node);
 HRESULT BuildParts(Node& node) {
-    if (node.type == L"ProgressRing" && node.hasForeground) {
+    if (node.type == L"TextBlock" && node.hasFontFamily) {
+        auto hr =
+            MakeFontFamily(Wrappers::HStringReference(node.familyName.c_str()).Get(), node.fontFamily.GetAddressOf());
+        if (FAILED(hr)) return hr;
+    }
+    if ((node.type == L"ProgressRing" || node.type == L"TextBlock") && node.hasForeground) {
         HRESULT hr;
         if (node.foregroundNode) {
             hr = Build(*node.foregroundNode);
@@ -754,6 +809,7 @@ HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRu
             hr = root->type == L"Page"           ? component->QueryInterface(__uuidof(IPage), &kind)
                  : root->type == L"Frame"        ? component->QueryInterface(__uuidof(IFrame), &kind)
                  : root->type == L"Image"        ? component->QueryInterface(__uuidof(IImage), &kind)
+                 : root->type == L"TextBlock"    ? component->QueryInterface(__uuidof(ITextBlock), &kind)
                  : root->type == L"ProgressRing" ? component->QueryInterface(__uuidof(IProgressRing), &kind)
                                                  : component->QueryInterface(__uuidof(IGrid), &kind);
         if (FAILED(hr)) return Fail(L"root type " + root->type, E_INVALIDARG);

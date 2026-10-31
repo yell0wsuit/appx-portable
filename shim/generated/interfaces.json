@@ -261,5 +261,11 @@
       "ABI::Windows::Devices::Enumeration::IDeviceInformation",
       "ABI::Windows::Devices::Enumeration::IDeviceWatcher"
     ]
+  },
+  "text.h": {
+    "header": "windows.ui.xaml.controls.h",
+    "interfaces": [
+      "ABI::Windows::UI::Xaml::Controls::ITextBlock"
+    ]
   }
 }

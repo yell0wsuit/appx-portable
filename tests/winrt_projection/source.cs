@@ -43,6 +43,8 @@ class SourceApp : Application
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateProgressData(int stage);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateTextData(int stage);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedResources(int stage);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     static void Bad(SourcePage page, string body, int hr)
@@ -140,6 +142,31 @@ class SourceApp : Application
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/grid.xaml"));
         root = new WeakReference(page);
         return page.FindName("first");
+    }
+    static void VerifyText(SourcePage page)
+    {
+        File.WriteAllText("Fixtures/text.xaml", "<Page" + Ns + " x:Name=\"root\"><Grid x:Name=\"leaf\"><TextBlock x:Name=\"tips\" x:ConnectionId=\"28\" Text=\"Éclair &amp; Ω\" FontFamily=\"/Fonts/MetaOT-Bold.otf#Meta OT\" FontSize=\"40\" Foreground=\"White\" TextWrapping=\"Wrap\" TextAlignment=\"Center\" HorizontalAlignment=\"Center\" VerticalAlignment=\"Bottom\" Width=\"1300\" Height=\"65\" Margin=\"0,40\"/><TextBlock TextAlignment=\"Start\"/><TextBlock TextAlignment=\"End\"/></Grid></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/text.xaml"));
+        var tips = page.FindName("tips") as TextBlock;
+        Check(tips != null && ReferenceEquals(tips, page.Targets[28]) && tips.Text == "Éclair & Ω", "typed TextBlock and Unicode text");
+        Check(ValidateTextData(0) == 0, "SDK text, font descriptor and explicit style data");
+        tips.Text = "updated\0tail Ω"; Check(tips.Text == "updated\0tail Ω", "length-preserving HSTRING text setter");
+        tips.Text = null; Check(tips.Text == "", "null Text becomes empty HSTRING");
+        tips.Text = "restored";
+        WrongThread(() => tips.Text = "wrong thread");
+        Check(tips.Text == "restored", "wrong thread changed Text");
+        Bad(page, "<Page" + Ns + " Width=\"999\"><TextBlock FontSize=\"-1\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><TextBlock FontFamily=\"\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><TextBlock TextWrapping=\"Bad\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><TextBlock TextAlignment=\"Bad\"/></Page>", unchecked((int)0x80070057));
+        Bad(page, "<Page" + Ns + "><TextBlock Foreground=\"{Binding Brush}\"/></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><TextBlock Text=\"{Binding Caption}\"/></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + "><TextBlock><Grid/></TextBlock></Page>", unchecked((int)0x80004001));
+        File.WriteAllText("Fixtures/text-empty.xaml", "<Page" + Ns + " x:Name=\"root\"><TextBlock/></Page>");
+        page.Targets.Remove(28);
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/text-empty.xaml"));
+        Check(ValidateTextData(1) == 0, "retained font descriptor and explicit unavailable font metrics");
+        Console.WriteLine("PASS: TextBlock text and explicit font/style data preserve HSTRING values and ownership");
     }
     static void VerifyProgress(SourcePage page)
     {
@@ -300,7 +327,7 @@ class SourceApp : Application
         WrongThread(() => page.FindName("root"));
         WrongThread(() => Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/Éntry%20space.xaml")));
         VerifyRootLifetime();
-        Bad(page, "<Page" + Ns + " Width=\"999\"><TextBlock/></Page>", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + " Width=\"999\"><RichTextBlock/></Page>", unchecked((int)0x80004001));
         Bad(page, "<Page" + Ns + " Opacity=\"0.5\"/>", unchecked((int)0x80004001));
         Bad(page, "<Page" + Ns + "><Grid Width=\"-1\"/></Page>", unchecked((int)0x80070057));
         Bad(page, "<Page" + Ns + " x:Name=\"same\"><Frame x:Name=\"same\"/></Page>", unchecked((int)0x80070057));
@@ -322,6 +349,7 @@ class SourceApp : Application
         VerifyBrush(page);
         VerifyImage(page);
         VerifyProgress(page);
+        VerifyText(page);
         VerifyAnimations(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");

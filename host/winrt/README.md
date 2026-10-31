@@ -506,7 +506,7 @@ the overloaded signatures from metadata and emits separate ABI delegates for
 the two SDK slots. Native games keep the existing loader path; Windows Islands
 continues to use system XAML.
 
-The source loader supports Page, Frame, Grid, Image and ProgressRing elements, implicit content
+The source loader supports Page, Frame, Grid, Image, ProgressRing and TextBlock elements, implicit content
 and explicit Page.Content/Frame.Content, numeric Width/Height, Visibility,
 ASCII names, a matching root x:Class, and x:ConnectionId callbacks. Design
 attributes in a declared ignorable Blend namespace are skipped. Inline resource
@@ -732,3 +732,37 @@ foreground brush identity and ownership, named/default/hex colors, native solid
 brush constructors and property setters, invalid source preserving root state,
 and explicit theme/template failures. These checks establish control data and
 projection behavior; they do not demonstrate a rendered progress indicator.
+
+
+## TextBlock and font descriptor data
+
+Source TextBlock accepts Text, explicit FontSize/FontFamily/Foreground,
+TextWrapping and TextAlignment plus existing visual properties. Text can be
+updated through a selected managed Text property. Generic string-property setters
+now hold a NativeString through the ABI call; Unicode, embedded NULs and null
+values preserve the HSTRING contract. TextBlock construction and further managed
+property projection remain unselected.
+
+Native text, wrapping and alignment values use the SDK interface. Font sizes are
+finite and nonnegative; explicit font family and foreground assignments retain
+their objects, including native null values. Unset font/style values fail by name.
+The native FontFamily name factory retains an immutable source descriptor with
+its hashed family suffix. The
+[SDK FontFamily constructor](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.media.fontfamily.-ctor)
+defines this descriptor form. It follows the SDK's composable factory shape and is
+readable across threads. String allocation completes before composition, and
+cleanup keeps the ordinary interface alive only while its inner is retained.
+FontFamily is a descriptor, not a loaded font or a DependencyObject.
+
+The SDK-generated TextBlock defaults keep inlines, selection, baseline metrics
+and other unsupported members explicit. Font resolution, package font loading,
+text measurement, wrapping execution and drawing remain open work. Source body
+text/Run content and markup expressions also remain unsupported; the implemented
+source text form is the Text attribute. No font substitution or measurement is
+reported as successful.
+
+The fixture checks XML/Unicode text, managed embedded-NUL/null round trips,
+thread rejection, explicit dimensions/style, font descriptor retention after
+TextBlock replacement, cross-thread descriptor reads, aggregated factory
+ownership, invalid arguments and Start/End alignment aliases. SDK constants
+check ITextBlock and its Text accessor slots independently of metadata.
