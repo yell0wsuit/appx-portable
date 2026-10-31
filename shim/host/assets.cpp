@@ -1,4 +1,6 @@
 #include "assets.h"
+#include <wincodec.h>
+#include <wrl/client.h>
 #include <algorithm>
 #include <new>
 #include <vector>
@@ -79,5 +81,64 @@ HRESULT DecodePackageNames(const std::filesystem::path& gameDirectory, unsigned*
     } catch (...) {
         return E_FAIL;
     }
+}
+// WIC decodes whichever image format the package used; GDI then needs the
+// pixels as a 32-bit top-down DIB with straight alpha.
+HICON LoadGameIcon(const std::filesystem::path& path, int width, int height) noexcept {
+    using Microsoft::WRL::ComPtr;
+    if (width <= 0 || height <= 0) return nullptr;
+    // Callers' threads usually have an apartment already; keep it.
+    const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    HICON icon = nullptr;
+    try {
+        ComPtr<IWICImagingFactory> factory;
+        ComPtr<IWICBitmapDecoder> decoder;
+        ComPtr<IWICBitmapFrameDecode> frame;
+        ComPtr<IWICBitmapScaler> scaler;
+        ComPtr<IWICFormatConverter> converter;
+        std::vector<BYTE> pixels(static_cast<size_t>(width) * height * 4);
+        if (SUCCEEDED(
+                CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) &&
+            SUCCEEDED(factory->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ,
+                                                         WICDecodeMetadataCacheOnDemand, &decoder)) &&
+            SUCCEEDED(decoder->GetFrame(0, &frame)) && SUCCEEDED(factory->CreateBitmapScaler(&scaler)) &&
+            SUCCEEDED(scaler->Initialize(frame.Get(), width, height, WICBitmapInterpolationModeFant)) &&
+            SUCCEEDED(factory->CreateFormatConverter(&converter)) &&
+            SUCCEEDED(converter->Initialize(scaler.Get(), GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone,
+                                            nullptr, 0, WICBitmapPaletteTypeCustom)) &&
+            SUCCEEDED(converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(pixels.size()), pixels.data()))) {
+            BITMAPV5HEADER header{};
+            header.bV5Size = sizeof header;
+            header.bV5Width = width;
+            header.bV5Height = -height;
+            header.bV5Planes = 1;
+            header.bV5BitCount = 32;
+            header.bV5Compression = BI_BITFIELDS;
+            header.bV5RedMask = 0x00FF0000;
+            header.bV5GreenMask = 0x0000FF00;
+            header.bV5BlueMask = 0x000000FF;
+            header.bV5AlphaMask = 0xFF000000;
+            void* bits = nullptr;
+            HDC screen = GetDC(nullptr);
+            HBITMAP color =
+                CreateDIBSection(screen, reinterpret_cast<BITMAPINFO*>(&header), DIB_RGB_COLORS, &bits, nullptr, 0);
+            ReleaseDC(nullptr, screen);
+            // The alpha channel decides transparency; the mask only has to exist.
+            // Monochrome rows are WORD-aligned.
+            std::vector<BYTE> maskBits(static_cast<size_t>((width + 15) / 16 * 2) * height);
+            HBITMAP mask = CreateBitmap(width, height, 1, 1, maskBits.data());
+            if (color && mask && bits) {
+                memcpy(bits, pixels.data(), pixels.size());
+                ICONINFO info{TRUE, 0, 0, mask, color};
+                icon = CreateIconIndirect(&info);
+            }
+            if (color) DeleteObject(color);
+            if (mask) DeleteObject(mask);
+        }
+    } catch (...) {
+        icon = nullptr;
+    }
+    if (SUCCEEDED(initialized)) CoUninitialize();
+    return icon;
 }
 }

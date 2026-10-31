@@ -196,9 +196,50 @@ public:
 };
 class NetworkFactory final : public Factory<ABI::Windows::Networking::Connectivity::DefaultINetworkInformationStatics> {
     EventSource<ABI::Windows::Networking::Connectivity::INetworkStatusChangedEventHandler> changed_;
+    // Windows' own class works outside a package. It answers the queries about
+    // the local machine; connectivity stays the shim's offline answer.
+    static HRESULT Os(ComPtr<ABI::Windows::Networking::Connectivity::INetworkInformationStatics>& statics) {
+        return OsGetActivationFactory(
+            Microsoft::WRL::Wrappers::HStringReference(L"Windows.Networking.Connectivity.NetworkInformation").Get(),
+            IID_PPV_ARGS(&statics));
+    }
 
 public:
     NetworkFactory() : Factory(L"Windows.Networking.Connectivity.NetworkInformation") {}
+    HRESULT STDMETHODCALLTYPE
+    GetConnectionProfiles(__FIVectorView_1_Windows__CNetworking__CConnectivity__CConnectionProfile** value) override {
+        ComPtr<ABI::Windows::Networking::Connectivity::INetworkInformationStatics> statics;
+        auto hr = Os(statics);
+        return SUCCEEDED(hr) ? statics->GetConnectionProfiles(value) : hr;
+    }
+    HRESULT STDMETHODCALLTYPE
+    GetLanIdentifiers(__FIVectorView_1_Windows__CNetworking__CConnectivity__CLanIdentifier** value) override {
+        ComPtr<ABI::Windows::Networking::Connectivity::INetworkInformationStatics> statics;
+        auto hr = Os(statics);
+        return SUCCEEDED(hr) ? statics->GetLanIdentifiers(value) : hr;
+    }
+    // Unity's .NET networking (Dns.GetHostName) asks for these on a worker
+    // thread, and a failure there ends the game.
+    HRESULT STDMETHODCALLTYPE GetHostNames(__FIVectorView_1_Windows__CNetworking__CHostName** value) override {
+        ComPtr<ABI::Windows::Networking::Connectivity::INetworkInformationStatics> statics;
+        auto hr = Os(statics);
+        return SUCCEEDED(hr) ? statics->GetHostNames(value) : hr;
+    }
+    HRESULT STDMETHODCALLTYPE GetProxyConfigurationAsync(
+        ABI::Windows::Foundation::IUriRuntimeClass* uri,
+        __FIAsyncOperation_1_Windows__CNetworking__CConnectivity__CProxyConfiguration** value) override {
+        ComPtr<ABI::Windows::Networking::Connectivity::INetworkInformationStatics> statics;
+        auto hr = Os(statics);
+        return SUCCEEDED(hr) ? statics->GetProxyConfigurationAsync(uri, value) : hr;
+    }
+    HRESULT STDMETHODCALLTYPE
+    GetSortedEndpointPairs(__FIIterable_1_Windows__CNetworking__CEndpointPair* destinations,
+                           ABI::Windows::Networking::HostNameSortOptions options,
+                           __FIVectorView_1_Windows__CNetworking__CEndpointPair** value) override {
+        ComPtr<ABI::Windows::Networking::Connectivity::INetworkInformationStatics> statics;
+        auto hr = Os(statics);
+        return SUCCEEDED(hr) ? statics->GetSortedEndpointPairs(destinations, options, value) : hr;
+    }
     HRESULT STDMETHODCALLTYPE
     GetInternetConnectionProfile(ABI::Windows::Networking::Connectivity::IConnectionProfile** value) override {
         if (!value) return E_POINTER;

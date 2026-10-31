@@ -8,6 +8,7 @@
 #include <wrl/event.h>
 #include "host/dispatcher.h"
 #include "platform/cursor.h"
+#include "platform/text_input.h"
 #include "com/factory.h"
 #include "host/pointer.h"
 #include <windowsx.h>
@@ -405,6 +406,9 @@ void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam) {
 static bool coreInput = false;
 void EnableCoreWindowInput() noexcept { coreInput = true; }
 void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    // Text goes to a focused text edit context instead, as on Windows.
+    if (message == WM_CHAR && TextInputCharacter(wparam)) return;
+    if (message == WM_KEYDOWN && TextInputKey(wparam)) return;
     const bool keyboard = message == WM_KEYDOWN || message == WM_KEYUP || message == WM_SYSKEYDOWN ||
                           message == WM_SYSKEYUP || message == WM_CHAR;
     if ((coreInput || keyboard) && coreWindow) coreWindow->OnInput(message, wparam, lparam);
@@ -417,7 +421,11 @@ public:
     HRESULT STDMETHODCALLTYPE GetForCurrentThread(ICoreWindow** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
-        if (!HostThread() || GetCurrentThreadId() != HostThread()) return S_OK;
+        if (!HostThread() || GetCurrentThreadId() != HostThread()) {
+            Log("TRACE", "CoreWindow.GetForCurrentThread: none on thread %lu (UI thread %lu)", GetCurrentThreadId(),
+                HostThread());
+            return S_OK;
+        }
         return MakeCoreWindow(value);
     }
 };

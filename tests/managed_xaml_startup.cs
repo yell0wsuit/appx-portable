@@ -109,7 +109,17 @@ sealed class StartupApp : Application {
                 throw new Exception("incorrect detached popup foreground");
             popup.IsOpen = false;
             File.WriteAllText("startup-passed.txt", "constructor, identity, prelaunch, dispatcher, shell, launch count, layout");
+#if APPLICATION_EXIT
+            // Simulate an engine that already tore down before requesting exit.
+            Window.Current.CoreWindow.VisibilityChanged += (sender, visibility) => {
+                if (!visibility.Visible) Environment.Exit(91);
+            };
+            Suspending += (sender, suspension) => Environment.Exit(92);
+            Application.Current.Exit();
+            Environment.Exit(93);
+#else
             Window.Current.Close();
+#endif
         };
         timer.Start();
     }

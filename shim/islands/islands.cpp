@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <thread>
 #include <vector>
 #include <map>
 #include <optional>
@@ -58,6 +59,7 @@ static ComPtr<IInspectable> appInstance;
 // The system Application itself: its managed outer may still be constructing.
 static ComPtr<IApplication> systemApplication;
 HRESULT ConnectIslandScrolling(IInspectable* root);
+HRESULT ConnectIslandPanels(IInspectable* root);
 HRESULT MakeIslandGridFactory(IActivationFactory** value);
 static ComPtr<IUIElement> pendingContent;
 static ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> islandDispatcher;
@@ -161,6 +163,10 @@ static HRESULT InitXaml(const char* where) {
         initializingXaml = true;
         hr = statics->InitializeForCurrentThread(&xamlManager);
         initializingXaml = false;
+        // Islands refuse a process whose manifest lacks maxversiontested
+        // 10.0.18362, which the installer writes beside a native XAML game.
+        if (hr == E_UNEXPECTED)
+            appx::Log("FAIL", "XAML Islands refused this process; its manifest may lack maxversiontested");
         if (SUCCEEDED(hr)) ApplyApplicationTheme();
         if (SUCCEEDED(hr) && !islandDispatcher) {
             ComPtr<ABI::Windows::UI::Core::ICoreDispatcher> dispatcher;
@@ -238,6 +244,8 @@ public:
         // island exists; hold the content until it is attached.
         content_ = v;
         HRESULT hr = ConnectIslandScrolling(v);
+        if (FAILED(hr)) return hr;
+        hr = ConnectIslandPanels(v);
         if (FAILED(hr)) return hr;
         if (v) {
             hr = ApplyRootTheme(v);
@@ -619,8 +627,34 @@ bool IslandPreTranslate(MSG* message) {
     if (xamlNative) xamlNative->PreTranslateMessage(message, &handled);
     return handled != FALSE;
 }
+static HRESULT RunIslandView(IApplicationInitializationCallback* callback);
+// XAML Islands need an STA. C++/CX starts XAML from its MTA main thread, as
+// Windows then runs the view on a thread of its own; do the same.
 static HRESULT RunIsland(IApplicationInitializationCallback* callback) {
     if (!callback) return E_INVALIDARG;
+    APTTYPE type{};
+    APTTYPEQUALIFIER qualifier{};
+    const auto queried = CoGetApartmentType(&type, &qualifier);
+    if (SUCCEEDED(queried) && (type == APTTYPE_STA || type == APTTYPE_MAINSTA)) return RunIslandView(callback);
+    appx::Log("TRACE", "island view: starting an STA thread (caller apartment %d hr=%08lx)", type, queried);
+    HRESULT hr = E_FAIL;
+    ComPtr<IApplicationInitializationCallback> retained(callback);
+    try {
+        std::thread view([&] {
+            hr = RoInitialize(RO_INIT_SINGLETHREADED);
+            if (FAILED(hr)) return;
+            hr = RunIslandView(retained.Get());
+            RoUninitialize();
+        });
+        view.join();
+    } catch (const std::bad_alloc&) {
+        hr = E_OUTOFMEMORY;
+    } catch (...) {
+        hr = E_FAIL;
+    }
+    return hr;
+}
+static HRESULT RunIslandView(IApplicationInitializationCallback* callback) {
     return RunHost([&]() -> HRESULT {
         HRESULT hr = callback->Invoke(nullptr);
         if (FAILED(hr)) return hr;
@@ -677,6 +711,17 @@ static HRESULT STDMETHODCALLTYPE AddSuspending(IApplication*, ISuspendingEventHa
 static HRESULT STDMETHODCALLTYPE RemoveSuspending(IApplication*, EventRegistrationToken token) {
     return suspending.Remove(token);
 }
+static HRESULT STDMETHODCALLTYPE ExitApplication(IApplication*) {
+    // Application.Exit is called after engines such as Unity have cleaned up.
+    // Sending visibility or suspension callbacks now reenters dead engine state.
+    if (CurrentPackage().loaded) {
+        SaveHostPlacement();
+        appx::Log("INFO", "Application.Exit: ending the process without suspension");
+        TerminateProcess(GetCurrentProcess(), 0);
+    }
+    PostMessageW(HostWindow(), WM_CLOSE, 0, 0);
+    return S_OK;
+}
 static HRESULT STDMETHODCALLTYPE RequestTheme(IApplication* application, ApplicationTheme theme) {
     if (theme != ApplicationTheme_Dark && theme != ApplicationTheme_Light) return E_INVALIDARG;
     // Constructor requests before XAML runs are applied when it starts.
@@ -701,7 +746,7 @@ void RaiseIslandSuspending(ABI::Windows::ApplicationModel::ISuspendingEventArgs*
 static HRESULT CaptureSuspending(IApplication* application) {
     void** table = *reinterpret_cast<void***>(application);
     DWORD protection;
-    if (!VirtualProtect(table + 9, 6 * sizeof(void*), PAGE_READWRITE, &protection))
+    if (!VirtualProtect(table + 9, 9 * sizeof(void*), PAGE_READWRITE, &protection))
         return HRESULT_FROM_WIN32(GetLastError());
     if (!realRequestedTheme) {
         realRequestedTheme = reinterpret_cast<RequestedThemeCall>(table[10]);
@@ -711,8 +756,9 @@ static HRESULT CaptureSuspending(IApplication* application) {
     }
     InterlockedExchangePointer(table + 13, reinterpret_cast<void*>(&AddSuspending));
     InterlockedExchangePointer(table + 14, reinterpret_cast<void*>(&RemoveSuspending));
+    InterlockedExchangePointer(table + 17, reinterpret_cast<void*>(&ExitApplication));
     DWORD ignored;
-    VirtualProtect(table + 9, 6 * sizeof(void*), protection, &ignored);
+    VirtualProtect(table + 9, 9 * sizeof(void*), protection, &ignored);
     return S_OK;
 }
 // ---- Application factory wrapper ----------------------------------------------

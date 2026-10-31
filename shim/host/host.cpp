@@ -30,6 +30,11 @@ static constexpr UINT FullscreenMessage = WM_APP + 3;
 static constexpr UINT ActivateMessage = WM_APP + 4;
 static constexpr UINT SettingsMenuId = 0x1F00;
 static WindowPlacement placement;
+static std::atomic<float> minimumWidth{0}, minimumHeight{0};
+void SetHostMinimumSize(float width, float height) noexcept {
+    minimumWidth = width;
+    minimumHeight = height;
+}
 static std::atomic<bool> cursorChosen{false};
 static std::atomic<HCURSOR> cursor{nullptr};
 static HCURSOR HostCursor() { return cursorChosen ? cursor.load() : LoadCursorW(nullptr, IDC_ARROW); }
@@ -207,6 +212,20 @@ static void ForwardWindowMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     });
 }
 static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+    if (message == WM_GETMINMAXINFO && !placement.IsFullscreen()) {
+        DefWindowProcW(hwnd, message, wparam, lparam);
+        auto* limits = reinterpret_cast<MINMAXINFO*>(lparam);
+        using GetDpi = UINT(WINAPI*)(HWND);
+        static auto dpi = reinterpret_cast<GetDpi>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
+        const float scale = dpi ? dpi(hwnd) / 96.0f : 1.0f;
+        RECT bounds{0, 0, static_cast<LONG>(minimumWidth.load() * scale),
+                    static_cast<LONG>(minimumHeight.load() * scale)};
+        AdjustWindowRectEx(&bounds, static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE)), FALSE,
+                           static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE)));
+        limits->ptMinTrackSize.x = (std::max)(limits->ptMinTrackSize.x, bounds.right - bounds.left);
+        limits->ptMinTrackSize.y = (std::max)(limits->ptMinTrackSize.y, bounds.bottom - bounds.top);
+        return 0;
+    }
     if (message == WM_SYSCOMMAND && (wparam & 0xFFF0) == SettingsMenuId) {
         ShowGameSettings();
         return 0;
@@ -297,25 +316,6 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
     }
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
-// Store packages supply PNG shell icons rather than executable icon resources:
-// the manifest's small logo, at the file resources.pri picks for this display.
-static HICON LoadGameIcon(const std::filesystem::path& path, int width, int height) {
-    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                              FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE) return nullptr;
-    const DWORD sizeBytes = GetFileSize(file, nullptr);
-    // Bound the allocation for missing, corrupt, or unexpectedly large assets.
-    if (!sizeBytes || sizeBytes > 1024 * 1024) {
-        CloseHandle(file);
-        return nullptr;
-    }
-    std::vector<BYTE> bytes(sizeBytes);
-    DWORD read{};
-    const bool loaded = ReadFile(file, bytes.data(), sizeBytes, &read, nullptr) && read == sizeBytes;
-    CloseHandle(file);
-    if (!loaded) return nullptr;
-    return CreateIconFromResourceEx(bytes.data(), sizeBytes, TRUE, 0x00030000, width, height, LR_DEFAULTCOLOR);
-}
 HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     InitializeDiagnostics();
     if (window) return E_ILLEGAL_METHOD_CALL;
@@ -358,6 +358,8 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_STRING, SettingsMenuId, L"Game settings\tCtrl+,");
         InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_SEPARATOR, 0, nullptr);
     }
+    // The window icon is the manifest's small logo, at the file resources.pri
+    // picks for this display.
     const auto& package = CurrentPackage();
     const auto logo =
         package.smallLogo.empty() ? std::filesystem::path{} : ResolvePackageFile(package, package.smallLogo);

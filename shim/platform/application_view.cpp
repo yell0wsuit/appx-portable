@@ -139,6 +139,12 @@ public:
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE ExitFullScreenMode() override { return HostWindow() ? SetHostFullscreen(false) : S_OK; }
+    HRESULT STDMETHODCALLTYPE SetPreferredMinSize(ABI::Windows::Foundation::Size size) override {
+        if (!std::isfinite(size.Width) || !std::isfinite(size.Height) || size.Width < 0 || size.Height < 0)
+            return E_INVALIDARG;
+        SetHostMinimumSize(size.Width, size.Height);
+        return S_OK;
+    }
 };
 class ViewFactory final
     : public Factory<DefaultIApplicationViewStatics, DefaultIApplicationViewStatics2, IApplicationViewStatics3> {
@@ -208,5 +214,8 @@ HRESULT MakeApplicationViewFactory(IActivationFactory** v) {
     static auto factory = Make<ViewFactory>();
     return factory ? factory.CopyTo(v) : E_OUTOFMEMORY;
 }
-const ShimClass applicationViewClass{L"Windows.UI.ViewManagement.ApplicationView", MakeApplicationViewFactory};
+// Desktop XAML Islands also need the portable view: the system view describes
+// the island rather than the game's host and reports it as not fullscreen.
+const ShimClass applicationViewClass{L"Windows.UI.ViewManagement.ApplicationView", MakeApplicationViewFactory,
+                                     ShimPolicy::Replace, InIslands};
 }

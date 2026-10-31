@@ -10,6 +10,7 @@
 #undef GetCurrentTime
 #include <windows.ui.xaml.h>
 #include <windows.ui.viewmanagement.h>
+#include <windows.ui.text.core.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <filesystem>
@@ -106,12 +107,82 @@ int wmain(int argc, wchar_t** argv) {
         CHECK(SUCCEEDED(viewFactory.As(&views)));
         CHECK(SUCCEEDED(views->GetForCurrentView(&view)));
         CHECK(SUCCEEDED(view.As(&view3)));
+        // The view's input pane is the host window's (Unity's text input uses it).
+        ComPtr<IActivationFactory> paneFactory;
+        ComPtr<IInputPaneStatics> panes;
+        ComPtr<IInputPane> pane;
+        ComPtr<IInputPane2> pane2;
+        CHECK(SUCCEEDED(get(HStringReference(L"Windows.UI.ViewManagement.InputPane").Get(), &paneFactory)));
+        CHECK(SUCCEEDED(paneFactory.As(&panes)));
+        CHECK(SUCCEEDED(panes->GetForCurrentView(&pane)) && pane);
+        CHECK(pane && SUCCEEDED(pane.As(&pane2)));
         auto* host = TestWindow();
         CHECK(host);
         CHECK(!IsWindowVisible(host)); // Restore must not show the host during construction.
+        {
+            // Typing reaches the focused text edit context (Unity's text fields
+            // take text only from one), replacing the selection the game reports.
+            using namespace ABI::Windows::UI::Text::Core;
+            ComPtr<IActivationFactory> textFactory;
+            ComPtr<ICoreTextServicesManagerStatics> textStatics;
+            ComPtr<ICoreTextServicesManager> textManager;
+            ComPtr<ICoreTextEditContext> edit;
+            CHECK(
+                SUCCEEDED(get(HStringReference(L"Windows.UI.Text.Core.CoreTextServicesManager").Get(), &textFactory)));
+            CHECK(SUCCEEDED(textFactory.As(&textStatics)));
+            CHECK(SUCCEEDED(textStatics->GetForCurrentView(&textManager)));
+            CHECK(textManager && SUCCEEDED(textManager->CreateEditContext(&edit)));
+            std::wstring typed;
+            CoreTextRange range{-1, -1};
+            int updates = 0;
+            auto updating = Callback<
+                __FITypedEventHandler_2_Windows__CUI__CText__CCore__CCoreTextEditContext_Windows__CUI__CText__CCore__CCoreTextTextUpdatingEventArgs>(
+                [&](ICoreTextEditContext*, ICoreTextTextUpdatingEventArgs* args) -> HRESULT {
+                    HString text;
+                    args->get_Text(text.GetAddressOf());
+                    args->get_Range(&range);
+                    typed = text.GetRawBuffer(nullptr);
+                    ++updates;
+                    return S_OK;
+                });
+            auto selection = Callback<
+                __FITypedEventHandler_2_Windows__CUI__CText__CCore__CCoreTextEditContext_Windows__CUI__CText__CCore__CCoreTextSelectionRequestedEventArgs>(
+                [&](ICoreTextEditContext*, ICoreTextSelectionRequestedEventArgs* args) -> HRESULT {
+                    ComPtr<ICoreTextSelectionRequest> request;
+                    auto hr = args->get_Request(&request);
+                    return SUCCEEDED(hr) ? request->put_Selection({2, 2}) : hr;
+                });
+            EventRegistrationToken updatingToken{}, selectionToken{};
+            if (edit) {
+                CHECK(SUCCEEDED(edit->add_TextUpdating(updating.Get(), &updatingToken)));
+                CHECK(SUCCEEDED(edit->add_SelectionRequested(selection.Get(), &selectionToken)));
+                CHECK(SUCCEEDED(edit->NotifyFocusEnter()));
+                SendMessageW(host, WM_CHAR, L'x', 0);
+                CHECK(updates == 1 && typed == L"x" && range.StartCaretPosition == 2 && range.EndCaretPosition == 2);
+                // Backspace deletes when the key goes down, as Windows' text
+                // service does; its character then changes nothing.
+                SendMessageW(host, WM_KEYDOWN, VK_BACK, 0);
+                CHECK(updates == 2 && typed.empty() && range.StartCaretPosition == 2 && range.EndCaretPosition == 3);
+                SendMessageW(host, WM_CHAR, L'\b', 0);
+                CHECK(updates == 2);
+                SendMessageW(host, WM_CHAR, L'z', 0);
+                CHECK(updates == 3 && typed == L"z" && range.StartCaretPosition == 2 && range.EndCaretPosition == 2);
+                CHECK(SUCCEEDED(edit->NotifyFocusLeave()));
+                SendMessageW(host, WM_CHAR, L'y', 0);
+                SendMessageW(host, WM_KEYDOWN, VK_BACK, 0);
+                CHECK(updates == 3);
+            }
+        }
         CHECK(SUCCEEDED(window->Activate()));
         boolean fullscreen = false;
         CHECK(SUCCEEDED(view3->get_IsFullScreenMode(&fullscreen)));
+        if (!fullscreen) {
+            CHECK(SUCCEEDED(view3->SetPreferredMinSize({640, 480})));
+            MINMAXINFO limits{};
+            SendMessageW(host, WM_GETMINMAXINFO, 0, reinterpret_cast<LPARAM>(&limits));
+            CHECK(limits.ptMinTrackSize.x >= 640 && limits.ptMinTrackSize.y >= 480);
+            CHECK(SUCCEEDED(view3->SetPreferredMinSize({0, 0})));
+        }
         if (action == L"write") {
             CHECK(SUCCEEDED(view3->ExitFullScreenMode()));
             ShowWindow(host, SW_RESTORE);

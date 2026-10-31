@@ -70,7 +70,7 @@ class PackageTests(unittest.TestCase):
             ('resource', '', 'Game_scale-140.appx', resource),
         ])
         installer.extract_game(package, self.dest)
-        self.assertEqual((self.dest / 'Game.exe').read_bytes(), pe(0x14C))
+        self.assertEqual((self.dest / 'Game.exe').read_bytes(), x86['Game.exe'])
         self.assertEqual((self.dest / 'Assets' / 'Logo.scale-140.png').read_bytes(), b'logo')
         self.assertEqual((self.dest / 'resources.pri').read_bytes(), b'main')
         self.assertIn(b'Example.Game', (self.dest / 'AppxManifest.xml').read_bytes())
@@ -82,7 +82,7 @@ class PackageTests(unittest.TestCase):
         ])
         manifest = installer.extract_game(package, self.dest)
         self.assertEqual(manifest.architecture, 'neutral')
-        self.assertEqual((self.dest / 'Game.exe').read_bytes(), pe(0x14C, managed=True))
+        self.assertEqual((self.dest / 'Game.exe').read_bytes(), game_files(managed=True)['Game.exe'])
 
     def test_windows10_bundle_prefers_x64(self):
         package = bundle(self.base / 'game.appxbundle', [
@@ -92,7 +92,7 @@ class PackageTests(unittest.TestCase):
         manifest = installer.extract_game(package, self.dest)
         self.assertTrue(manifest.universal)
         self.assertEqual(manifest.architecture, 'x64')
-        self.assertEqual((self.dest / 'Game.exe').read_bytes(), pe(0x8664))
+        self.assertEqual((self.dest / 'Game.exe').read_bytes(), game_files(machine=0x8664)['Game.exe'])
 
     def test_windows10_bundle_on_32bit_windows_takes_x86(self):
         package = bundle(self.base / 'game.appxbundle', [

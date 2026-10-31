@@ -165,6 +165,10 @@ HRESULT MakeIndependentInputSource(CoreInputDeviceTypes devices, ICoreInputSourc
     auto hr = source->Initialize();
     return FAILED(hr) ? hr : source.CopyTo(value);
 }
+void IndependentInputPanelMessage(UINT message, WPARAM buttons, LPARAM position) {
+    std::lock_guard<std::mutex> lock(windowsMutex);
+    for (HWND window : inputWindows) PostMessageW(window, WM_APP + message, buttons, position);
+}
 void IndependentInputHostMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (message != WM_LBUTTONDOWN && message != WM_LBUTTONUP && message != WM_MOUSEMOVE && message != WM_MOUSEWHEEL &&
         message != WM_MOUSEHWHEEL && message != WM_CAPTURECHANGED)

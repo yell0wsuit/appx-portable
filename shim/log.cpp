@@ -26,7 +26,8 @@ static const std::wstring& LogPath() noexcept {
 }
 // Each logging run starts a new appx-portable.log. The two before it are kept as
 // appx-portable.1.log and appx-portable.2.log; older ones are replaced. Runs without
-// logging leave them alone.
+// logging leave them alone. A game started by appx-native-host.exe continues
+// the host's log.
 static void RotateLogs(const std::wstring& path) noexcept {
     static constexpr int kept = 2;
     std::wstring older[kept + 1];
@@ -58,7 +59,7 @@ void Log(const char* level, const char* format, ...) noexcept {
     static bool rotated = false;
     if (!rotated) {
         rotated = true;
-        RotateLogs(path);
+        if (!options.hosted) RotateLogs(path);
     }
     HANDLE file = CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
                               FILE_ATTRIBUTE_NORMAL, nullptr);

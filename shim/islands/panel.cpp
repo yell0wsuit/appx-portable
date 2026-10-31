@@ -15,20 +15,57 @@
 #include <wrl.h>
 #include <atomic>
 #include <initializer_list>
+#include <vector>
+#include <winrt/Windows.UI.Xaml.Controls.h>
+#include <winrt/Windows.UI.Xaml.Media.h>
 using namespace Microsoft::WRL;
 namespace C = ABI::Windows::UI::Xaml::Controls;
 
 #include "registry.h"
 #include "log.h"
 #include "com/factory.h"
+#include "compat/win10/input.h"
 namespace appx {
 void IslandPointerEvent(UINT message, ABI::Windows::UI::Input::IPointerPoint* point,
                         ABI::Windows::System::VirtualKeyModifiers modifiers);
+static HRESULT STDMETHODCALLTYPE PanelIndependentInput(C::ISwapChainPanel*,
+                                                       ABI::Windows::UI::Core::CoreInputDeviceTypes devices,
+                                                       ABI::Windows::UI::Core::ICoreInputSourceBase** value) {
+    Log("TRACE", "island panel independent input requested");
+    return MakeIndependentInputSource(devices, value);
+}
 static HRESULT ConnectIslandPointerInput(IInspectable* inner, bool capturePointers = true) {
     using namespace ABI::Windows::UI::Xaml;
     ComPtr<IUIElement> element;
     auto hr = inner->QueryInterface(IID_PPV_ARGS(&element));
     if (FAILED(hr)) return hr;
+    ComPtr<C::ISwapChainPanel> swapPanel;
+    if (SUCCEEDED(inner->QueryInterface(IID_PPV_ARGS(&swapPanel)))) {
+        // The real independent source has no packaged input site in an island.
+        // Its ABI is IInspectable + scale X/Y + scale changed add/remove.
+        void** slot = *reinterpret_cast<void***>(swapPanel.Get()) + 10;
+        DWORD old;
+        if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old)) return HRESULT_FROM_WIN32(GetLastError());
+        *slot = reinterpret_cast<void*>(&PanelIndependentInput);
+        VirtualProtect(slot, sizeof(void*), old, &old);
+    }
+    // A panel can be found both by its factory and by the loaded visual tree.
+    // Weak references avoid retaining pages after navigation.
+    static std::vector<ComPtr<IWeakReference>> connected;
+    ComPtr<IUnknown> identity;
+    element.As(&identity);
+    for (auto it = connected.begin(); it != connected.end();) {
+        ComPtr<IInspectable> resolved;
+        (*it)->Resolve(__uuidof(IInspectable), &resolved);
+        if (!resolved) {
+            it = connected.erase(it);
+        } else {
+            ComPtr<IUnknown> existing;
+            resolved.As(&existing);
+            if (existing.Get() == identity.Get()) return S_OK;
+            ++it;
+        }
+    }
     // SwapChainPanel rejects Background. A transparent child supplies a
     // hit-test surface without altering the composition swap chain itself.
     ComPtr<C::IPanel> panel;
@@ -65,6 +102,24 @@ static HRESULT ConnectIslandPointerInput(IInspectable* inner, bool capturePointe
                 if (SUCCEEDED(result)) result = args->get_KeyModifiers(&modifiers);
                 if (FAILED(result)) return result;
                 IslandPointerEvent(message, point.Get(), modifiers);
+                ABI::Windows::Foundation::Point position{};
+                ComPtr<ABI::Windows::UI::Input::IPointerPointProperties> properties;
+                if (SUCCEEDED(point->get_Position(&position)) && SUCCEEDED(point->get_Properties(&properties))) {
+                    boolean left = false, right = false, middle = false;
+                    properties->get_IsLeftButtonPressed(&left);
+                    properties->get_IsRightButtonPressed(&right);
+                    properties->get_IsMiddleButtonPressed(&middle);
+                    WPARAM buttons = (left ? MK_LBUTTON : 0) | (right ? MK_RBUTTON : 0) | (middle ? MK_MBUTTON : 0);
+                    if (modifiers & ABI::Windows::System::VirtualKeyModifiers_Control) buttons |= MK_CONTROL;
+                    if (modifiers & ABI::Windows::System::VirtualKeyModifiers_Shift) buttons |= MK_SHIFT;
+                    if (message == WM_MOUSEWHEEL) {
+                        INT32 delta = 0;
+                        properties->get_MouseWheelDelta(&delta);
+                        buttons = MAKEWPARAM(buttons, delta);
+                    }
+                    IndependentInputPanelMessage(
+                        message, buttons, MAKELPARAM(static_cast<int>(position.X), static_cast<int>(position.Y)));
+                }
                 // Retain drags outside the panel through XAML, not SetCapture
                 // on the desktop frame, which takes input away from the island.
                 if (capturePointers && SUCCEEDED(args->get_Pointer(&pointer))) {
@@ -89,7 +144,48 @@ static HRESULT ConnectIslandPointerInput(IInspectable* inner, bool capturePointe
             hr = element->add_PointerMoved(handler.Get(), &token);
         if (FAILED(hr)) return hr;
     }
+    ComPtr<IWeakReferenceSource> weakSource;
+    ComPtr<IWeakReference> weak;
+    if (SUCCEEDED(element.As(&weakSource)) && SUCCEEDED(weakSource->GetWeakReference(&weak))) connected.push_back(weak);
+    Log("TRACE", "connected island swap-chain panel pointer input");
     return S_OK;
+}
+// Compiled XAML constructs built-in panels without calling the game's
+// activation factory. Find those after templates and page content are loaded.
+static void ConnectLoadedPanels(winrt::Windows::UI::Xaml::DependencyObject const& root) {
+    namespace Xaml = winrt::Windows::UI::Xaml;
+    if (auto panel = root.try_as<Xaml::Controls::SwapChainPanel>()) {
+        winrt::check_hresult(ConnectIslandPointerInput(reinterpret_cast<IInspectable*>(winrt::get_abi(panel)), false));
+        return;
+    }
+    int count = Xaml::Media::VisualTreeHelper::GetChildrenCount(root);
+    for (int i = 0; i < count; ++i) ConnectLoadedPanels(Xaml::Media::VisualTreeHelper::GetChild(root, i));
+}
+HRESULT ConnectIslandPanels(IInspectable* root) {
+    if (!root) return S_OK;
+    try {
+        winrt::Windows::Foundation::IInspectable object{nullptr};
+        winrt::copy_from_abi(object, root);
+        ConnectLoadedPanels(object.as<winrt::Windows::UI::Xaml::DependencyObject>());
+    } catch (...) {
+        return winrt::to_hresult();
+    }
+    ComPtr<ABI::Windows::UI::Xaml::IFrameworkElement> element;
+    auto hr = root->QueryInterface(IID_PPV_ARGS(&element));
+    if (FAILED(hr)) return hr;
+    auto loaded = Callback<ABI::Windows::UI::Xaml::IRoutedEventHandler>(
+        [](IInspectable* sender, ABI::Windows::UI::Xaml::IRoutedEventArgs*) -> HRESULT {
+            try {
+                winrt::Windows::Foundation::IInspectable object{nullptr};
+                winrt::copy_from_abi(object, sender);
+                ConnectLoadedPanels(object.as<winrt::Windows::UI::Xaml::DependencyObject>());
+                return S_OK;
+            } catch (...) {
+                return winrt::to_hresult();
+            }
+        });
+    EventRegistrationToken token{};
+    return element->add_Loaded(loaded.Get(), &token);
 }
 class PanelShim {
     // Non-delegating IInspectable handed to the outer as its inner.

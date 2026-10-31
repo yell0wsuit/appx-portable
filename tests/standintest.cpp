@@ -57,7 +57,7 @@ struct OperationAbi : IInspectable {
     virtual HRESULT STDMETHODCALLTYPE GetResults(void* results) = 0;
 };
 
-int main() {
+int main(int argc, char**) {
     RoInitialize(RO_INIT_MULTITHREADED);
     // Reference IIDs: IAsyncOperation<Int32> from the Windows SDK, and two Xbox
     // instances from midl's output for Microsoft.Xbox.winmd.
@@ -101,25 +101,39 @@ int main() {
         ComPtr<IInspectable> client;
         CHECK(SUCCEEDED(live->get_ServiceClient(&client)) && client);
     }
-    ComPtr<appx::xbox::IUser10> user; // no Microsoft.Xbox.dll beside the test: the SDK 1.0 layout
     CHECK(SUCCEEDED(Factory(L"Microsoft.Xbox.User", factory)));
     if (factory) {
         ComPtr<IInspectable> instance;
-        CHECK(SUCCEEDED(factory->ActivateInstance(&instance)) && SUCCEEDED(instance.As(&user)));
-        ComPtr<IInspectable> friends;
-        CHECK(user && SUCCEEDED(user->GetFriendsAsync(&friends)) && friends);
-        // SDK 1.0 and 1.1 keep GetAchievementsAsync after SetProfileAsync.
-        // Exercise the slot and projected async IID used by Gravity Guy.
-        ComPtr<IInspectable> achievements;
-        CHECK(user && SUCCEEDED(user->GetAchievementsAsync(0, 100, false, nullptr, &achievements)) && achievements);
-        ComPtr<IUnknown> typed;
-        const auto achievementOperation = appx::ParameterizedIid(appx::AsyncOperationOfClass(
-            "Microsoft.Xbox.AchievementCollection", appx::xbox::defaults::AchievementCollection));
-        CHECK(achievements && SUCCEEDED(achievements->QueryInterface(achievementOperation, &typed)));
-        ComPtr<ABI::Windows::Foundation::IAsyncInfo> info;
-        CHECK(achievements && SUCCEEDED(achievements.As(&info)));
-        HRESULT error{};
-        CHECK(info && SUCCEEDED(info->get_ErrorCode(&error)) && error == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
+        CHECK(SUCCEEDED(factory->ActivateInstance(&instance)));
+        auto checkUser = [&](auto* user) {
+            ComPtr<IInspectable> friends;
+            CHECK(user && SUCCEEDED(user->GetFriendsAsync(&friends)) && friends);
+            // Exercise both SDK layouts: SetProfileAsync precedes this slot
+            // only in 1.0/1.1. A wrong layout also produces the wrong async IID.
+            ComPtr<IInspectable> achievements;
+            CHECK(user && SUCCEEDED(user->GetAchievementsAsync(0, 100, false, nullptr, &achievements)) && achievements);
+            ComPtr<IUnknown> typed;
+            const auto achievementOperation = appx::ParameterizedIid(appx::AsyncOperationOfClass(
+                "Microsoft.Xbox.AchievementCollection", appx::xbox::defaults::AchievementCollection));
+            CHECK(achievements && SUCCEEDED(achievements->QueryInterface(achievementOperation, &typed)));
+            ComPtr<ABI::Windows::Foundation::IAsyncInfo> info;
+            CHECK(achievements && SUCCEEDED(achievements.As(&info)));
+            HRESULT error{};
+            CHECK(info && SUCCEEDED(info->get_ErrorCode(&error)) &&
+                  error == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
+        };
+        if (argc > 1) {
+            ComPtr<appx::xbox::IUser12> user;
+            CHECK(SUCCEEDED(instance.As(&user)));
+            checkUser(user.Get());
+            ComPtr<IInspectable> operation;
+            CHECK(user && SUCCEEDED(user->JoinMultiplayerSessionWithBufferAsync(nullptr, 0, nullptr, &operation)) &&
+                  operation);
+        } else {
+            ComPtr<appx::xbox::IUser10> user;
+            CHECK(SUCCEEDED(instance.As(&user)));
+            checkUser(user.Get());
+        }
     }
     // Xbox classes without a stand-in are "not registered", never the real DLL.
     factory.Reset();

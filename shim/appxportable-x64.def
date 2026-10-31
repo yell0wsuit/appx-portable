@@ -5,3 +5,4 @@ EXPORTS
   DllCanUnloadNow PRIVATE
   ShimBootstrap
   ShimSetManagedCoreWindowMode
+  ShimRunNativeApplication

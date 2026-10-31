@@ -41,11 +41,29 @@ add_custom_target(appxportable_version
 add_executable(shimtest tests/shimtest.cpp)
 target_link_libraries(shimtest PRIVATE runtimeobject ole32)
 if(EXISTS "${CMAKE_SOURCE_DIR}/shim/registry.cpp")
-  add_library(appxportable SHARED shim/registry.cpp shim/compat/win10/titlebar.cpp shim/compat/win10/input.cpp shim/compat/win10/xaml.cpp shim/compat/win10/memory.cpp shim/compat/win10/api_information.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/islands/webview.cpp shim/islands/webview_markup.cpp shim/islands/xbf_loader.cpp shim/xaml/xbf_webview.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/package/resources.cpp shim/xaml/xbf.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/input_capabilities.cpp shim/platform/sensors.cpp shim/platform/media_device.cpp shim/platform/device_information.cpp shim/platform/signal_notifier.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/storage_file.cpp shim/platform/file_stream.cpp shim/platform/mf_stream.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/search.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/xaml/data.cpp ${APPX_EXPORTS} shim/version.rc)
+  add_library(appxportable SHARED shim/registry.cpp shim/compat/win10/titlebar.cpp shim/compat/win10/input.cpp shim/compat/win10/xaml.cpp shim/compat/win10/memory.cpp shim/compat/win10/api_information.cpp shim/islands/islands.cpp shim/islands/panel.cpp shim/islands/scroll.cpp shim/islands/appearance.cpp shim/islands/mode.cpp shim/islands/webview.cpp shim/islands/webview_markup.cpp shim/islands/xbf_loader.cpp shim/xaml/xbf_webview.cpp shim/log.cpp shim/options.cpp shim/gpu/dxgi_redirect.cpp shim/entry/activation_hook.cpp shim/package/package.cpp shim/package/resources.cpp shim/xaml/xbf.cpp shim/platform/package_identity.cpp shim/xbox/xbox.cpp shim/com/failed_operation.cpp shim/com/pinterface.cpp shim/entry/diagnostics.cpp shim/platform/threading.cpp shim/platform/hardware.cpp shim/platform/input_capabilities.cpp shim/platform/sensors.cpp shim/platform/media_device.cpp shim/platform/device_information.cpp shim/platform/signal_notifier.cpp shim/platform/device_info.cpp shim/platform/data_reader.cpp shim/platform/application_view.cpp shim/platform/input_pane.cpp shim/platform/text_input.cpp shim/platform/cursor.cpp shim/platform/visualization.cpp shim/platform/storage.cpp shim/platform/storage_file.cpp shim/platform/file_stream.cpp shim/platform/mf_stream.cpp shim/platform/settings.cpp shim/stubs/vungle.cpp shim/stubs/charms.cpp shim/stubs/search.cpp shim/stubs/http_client_csharp.cpp shim/stubs/store.cpp shim/stubs/notifications.cpp shim/stubs/xml.cpp shim/stubs/http.cpp shim/platform/display.cpp shim/platform/coreapp.cpp shim/platform/causality.cpp shim/platform/calendar.cpp shim/host/host.cpp shim/host/assets.cpp shim/host/placement.cpp shim/host/pointer.cpp shim/host/dispatcher.cpp shim/host/corewindow.cpp shim/xaml/application.cpp shim/xaml/controls.cpp shim/xaml/media.cpp shim/xaml/timer.cpp shim/xaml/window.cpp shim/xaml/data.cpp ${APPX_EXPORTS} shim/version.rc)
   target_include_directories(appxportable PRIVATE shim "${APPX_GENERATED}")
   add_dependencies(appxportable appxportable_version)
-  target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi)
+  target_link_libraries(appxportable PRIVATE runtimeobject ole32 oleaut32 dxgi d3d11 mfuuid shell32 shlwapi xmllite bcrypt psapi windowscodecs)
   include(cmake/webview2.cmake)
+  add_executable(appx-native-host WIN32 host/native.cpp host/managed.manifest)
+  target_link_libraries(appx-native-host PRIVATE appxportable)
+  add_library(nativeappfixture SHARED tests/native_application.cpp tests/native_application.def)
+  target_link_libraries(nativeappfixture PRIVATE runtimeobject ole32)
+  add_test(NAME native_application_host COMMAND "${CMAKE_COMMAND}"
+    "-DTEST_DLL=$<TARGET_FILE:nativeappfixture>" "-DHOST=$<TARGET_FILE:appx-native-host>"
+    "-DSHIM=$<TARGET_FILE:appxportable>" "-DARCH=${APPX_HOST_ARCH}"
+    "-DFIXTURE=${CMAKE_BINARY_DIR}/native-application-fixture"
+    -P "${CMAKE_SOURCE_DIR}/tests/native_application.cmake")
+  set_tests_properties(native_application_host PROPERTIES TIMEOUT 30)
+  add_executable(nativelaunchfixture WIN32 tests/native_launch.cpp)
+  target_link_libraries(nativelaunchfixture PRIVATE runtimeobject)
+  add_test(NAME native_executable_launch COMMAND "${CMAKE_COMMAND}"
+    "-DTEST_EXE=$<TARGET_FILE:nativelaunchfixture>" "-DPLUGIN=$<TARGET_FILE:nativeappfixture>"
+    "-DHOST=$<TARGET_FILE:appx-native-host>" "-DSHIM=$<TARGET_FILE:appxportable>" "-DARCH=${APPX_HOST_ARCH}"
+    "-DFIXTURE=${CMAKE_BINARY_DIR}/native-launch-fixture"
+    -P "${CMAKE_SOURCE_DIR}/tests/native_launch.cmake")
+  set_tests_properties(native_executable_launch PROPERTIES TIMEOUT 30)
   # One proxy per system DLL a game imports from its folder (see scripts/gen_proxy.py).
   set(APPX_PROXIES d3dcompiler_47 XAudio2_8 XAudio2_9 DWrite)
   foreach(proxy IN LISTS APPX_PROXIES)
@@ -83,6 +101,7 @@ if(APPX_MAKEPRI)
 endif()
 add_executable(assettest tests/assettest.cpp shim/host/assets.cpp)
 target_include_directories(assettest PRIVATE shim)
+target_link_libraries(assettest PRIVATE ole32 gdi32 user32 windowscodecs)
 add_executable(packagetest tests/packagetest.cpp shim/package/package.cpp)
 target_include_directories(packagetest PRIVATE shim)
 target_link_libraries(packagetest PRIVATE xmllite bcrypt shlwapi)
@@ -154,6 +173,20 @@ add_test(NAME islands_settings_contract COMMAND "${CMAKE_COMMAND}"
   "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
   "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-settings-fixture"
   -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
+add_test(NAME islands_view_contract COMMAND "${CMAKE_COMMAND}"
+  "-DTEST_EXE=$<TARGET_FILE:viewtest>"
+  "-DSHIM=$<TARGET_FILE:appxportable>"
+  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+  "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-view-fixture"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
+set_tests_properties(islands_view_contract PROPERTIES TIMEOUT 60 LABELS managed-clr)
+add_test(NAME islands_hardware_contract COMMAND "${CMAKE_COMMAND}"
+  "-DTEST_EXE=$<TARGET_FILE:hardwaretest>"
+  "-DSHIM=$<TARGET_FILE:appxportable>"
+  "-DHOST=${CMAKE_CURRENT_BINARY_DIR}/appx-host.exe" "-DARCH=${APPX_HOST_ARCH}"
+  "-DFIXTURE=${CMAKE_CURRENT_BINARY_DIR}/islands-hardware-fixture"
+  -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/islands_runtime.cmake")
+set_tests_properties(islands_hardware_contract PROPERTIES TIMEOUT 60 LABELS managed-clr)
 set_tests_properties(xaml_settings_contract islands_settings_contract PROPERTIES TIMEOUT 60)
 add_executable(searchtest tests/searchtest.cpp host/managed.manifest)
 target_link_libraries(searchtest PRIVATE runtimeobject ole32)
@@ -208,6 +241,9 @@ add_store_settings_test(unlocked_ini "[options]\\nUnlockTrial=1"
     "--unset=APPX_PORTABLE_UNLOCK_TRIAL|APPX_PORTABLE_STUB_IAP=0" --expect-unlocked)
 add_store_settings_test(stub_iap_ini "[options]\\nStubIap=1"
     "--unset=APPX_PORTABLE_STUB_IAP|APPX_PORTABLE_UNLOCK_TRIAL=0" --expect-stub-iap)
+add_store_settings_test(stub_iap_products_ini "[options]\\nStubIap=1\\nStubIapProducts=test.pack, test.hints,test.pack"
+    "--unset=APPX_PORTABLE_STUB_IAP|--unset=APPX_PORTABLE_STUB_IAP_PRODUCTS|APPX_PORTABLE_UNLOCK_TRIAL=0"
+    "--expect-stub-iap --expect-catalog")
 add_store_settings_test(ini_env_off "[options]\\nUnlockTrial=1\\nStubIap=1"
     "APPX_PORTABLE_UNLOCK_TRIAL=0|APPX_PORTABLE_STUB_IAP=0" "")
 add_store_settings_test(ini_absent_section "[storage]\\nSaveLocation=game"
@@ -302,6 +338,12 @@ if(NOT CMAKE_CROSSCOMPILING)
     "-DSHIM=$<TARGET_FILE:appxportable>" "-DFIXTURE=${CMAKE_BINARY_DIR}/xbox11-fixture"
     -P "${CMAKE_SOURCE_DIR}/tests/xbox11_runtime.cmake")
   set_tests_properties(xbox11_standins PROPERTIES TIMEOUT 60)
+  add_test(NAME xbox20_standins COMMAND "${CMAKE_COMMAND}"
+    "-DCSC=${APPX_CSC}" "-DTEST_EXE=$<TARGET_FILE:standintest>"
+    "-DSHIM=$<TARGET_FILE:appxportable>" "-DFIXTURE=${CMAKE_BINARY_DIR}/xbox20-fixture"
+    "-DSDK_VERSION=2.0.0.0" "-DTEST_ARGS=--modern-user"
+    -P "${CMAKE_SOURCE_DIR}/tests/xbox11_runtime.cmake")
+  set_tests_properties(xbox20_standins PROPERTIES TIMEOUT 60)
   foreach(mode COREWINDOW XAML)
     add_test(NAME managed_host_${mode} COMMAND "${CMAKE_COMMAND}"
       "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
@@ -393,7 +435,7 @@ if(NOT CMAKE_CROSSCOMPILING)
       "-DFIXTURE=${CMAKE_BINARY_DIR}/managed-scroll"
       -P "${CMAKE_SOURCE_DIR}/tests/managed_xaml_startup.cmake")
     set_tests_properties(managed_scroll PROPERTIES TIMEOUT 60 LABELS managed-clr)
-    foreach(mode CONSTRUCTOR_CONTROLS LAUNCH_CONTROLS LIGHT_THEME ROOT_LIGHT_THEME XAML_LIGHT_THEME)
+    foreach(mode CONSTRUCTOR_CONTROLS LAUNCH_CONTROLS LIGHT_THEME ROOT_LIGHT_THEME XAML_LIGHT_THEME APPLICATION_EXIT)
       add_test(NAME managed_xaml_startup_${mode} COMMAND "${CMAKE_COMMAND}"
         "-DCSC=${APPX_CSC}" "-DDEFINE=/define:${mode}"
         "-DMETADATA=${APPX_WINDOWS_METADATA}" "-DFACADES=${APPX_FRAMEWORK_FACADES}"
@@ -430,4 +472,4 @@ foreach(target IN LISTS appx_targets)
     target_precompile_headers(${target} REUSE_FROM appx_pch)
   endif()
 endforeach()
-set_source_files_properties(shim/islands/islands.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+set_source_files_properties(shim/islands/islands.cpp shim/platform/input_pane.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)

@@ -202,7 +202,8 @@ HRESULT MakeUser(IInspectable** value) {
     const int version = SdkVersion();
     // SDK 1.1 retains the 1.0 IUser slots (including SetProfileAsync).
     if (version == 100 || version == 101 || version == 0) return Make<User10>().CopyTo(value);
-    if (version == 102) return Make<User12>().CopyTo(value);
+    // Hitman GO's SDK 2.0 metadata retains the 1.2 IID and complete slot layout.
+    if (version == 102 || version == 200) return Make<User12>().CopyTo(value);
     Log("FAIL", "Xbox LIVE SDK %d.%d: Microsoft.Xbox.User layout unknown; not provided", version / 100, version % 100);
     return REGDB_E_CLASSNOTREG;
 }

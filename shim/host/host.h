@@ -13,6 +13,7 @@ bool IsHostFullscreen() noexcept;
 // Writes the window's size, position and mode now (normally saved on changes and on exit).
 void SaveHostPlacement() noexcept;
 HRESULT SetHostFullscreen(bool value);
+void SetHostMinimumSize(float width, float height) noexcept;
 // The pointer shown over the game's client area; nullptr hides it. The arrow
 // until this is first called.
 void SetHostCursor(HCURSOR value) noexcept;

@@ -308,7 +308,7 @@ git commit -m "feat(installappx): Windows 8 desktop copy and launchers"
 - Arguments:
   - `package` (optional positional)
   - `--dest DIR`
-  - `--vclibs PATH` (repeatable; each source is tried for every missing dependency)
+  - `--dependencies PATH` (repeatable; each source is tried for every missing dependency)
   - `--build DIR`
   - `--release TAG`
   - `--store {none,trial,iap,both}`
@@ -320,7 +320,7 @@ git commit -m "feat(installappx): Windows 8 desktop copy and launchers"
   1. Package.
   2. Destination: the default is `<package folder>/<identity name>`, or `<name>-portable` when that equals the source folder.
   3. `extract_game`.
-  4. Each missing VCLibs dependency, from the `--vclibs` sources first and then a prompt that prints `VCLIBS_DOWNLOADS`.
+  4. Each missing VCLibs dependency, from the `--dependencies` sources first and then a prompt that prints `VCLIBS_DOWNLOADS`.
   5. Runtime: `--build`, or resolve and download into a temporary folder.
   6. `stage_runtime`.
   7. The patch, unless `--no-patch`. `local` is `Path(__file__).parent / "patch"` when that folder exists.
@@ -333,7 +333,7 @@ git commit -m "feat(installappx): Windows 8 desktop copy and launchers"
 - When `argv` was empty (a double-click), it ends with `ask("Press Enter to close.")`, also after an error.
 
 - [ ] **Step 1: Write the failing tests in `test_installappx_cli.py`.** Use the Task 2/3 fixtures, a fake build folder through `--build`, and a fake `ask` that serves queued answers and fails if more are asked for.
-  - `test_noninteractive_install`: `main([appx, "--dest", d, "--build", b, "--vclibs", v, "--store", "both", "--launcher", "--yes"])` returns 0. The game, DLLs, VCLibs, ini (`UnlockTrial=1`, `StubIap=1`) and the platform's launcher all exist.
+  - `test_noninteractive_install`: `main([appx, "--dest", d, "--build", b, "--dependencies", v, "--store", "both", "--launcher", "--yes"])` returns 0. The game, DLLs, VCLibs, ini (`UnlockTrial=1`, `StubIap=1`) and the platform's launcher all exist.
   - `test_prompts_accept_quoted_paths`: `main([], ask)` with answers `'"<appx>"'`, `'"<dest>"'`, `'"<vclibs.appx>"'`, `"3"`, `""` (launcher default yes) and `""` (close). It returns 0 and the ini has both options on.
   - `test_store_prompt_choices`: the answers `"1"`, `"2"`, `"3"` and `""` give `trial`, `iap`, `both`, and the existing choice kept.
   - `test_yes_without_vclibs_fails`: a missing VCLibs dependency with `--yes` returns 1, and stderr names the dependency and contains the download link.

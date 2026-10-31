@@ -479,6 +479,22 @@ int main(int argc, char** argv) {
                     return 53;
                 if (FAILED(map->Remove(HStringReference(key.c_str()).Get()))) return 54;
             }
+            // A null value removes the key, as on Windows (Human Anatomy Atlas
+            // clears its share link this way at launch, then reads it back).
+            // Neither inserting null for nor looking up a missing key is an error;
+            // the lookup returns null.
+            HStringReference cleared(L"__appxportable_test_null");
+            ComPtr<IInspectable> stored;
+            props->CreateInt32(1, &stored);
+            if (FAILED(map->Insert(cleared.Get(), stored.Get(), &replaced))) return 67;
+            boolean present{true};
+            if (FAILED(map->Insert(cleared.Get(), nullptr, &replaced)) || replaced ||
+                FAILED(map->HasKey(cleared.Get(), &present)) || present)
+                return 68;
+            if (FAILED(map->Insert(cleared.Get(), nullptr, &replaced)) || replaced) return 69;
+            ComPtr<IInspectable> missing;
+            props->CreateInt32(2, &missing);
+            if (map->Lookup(cleared.Get(), &missing) != S_OK || missing) return 71;
             if (FAILED(observable->remove_MapChanged(token))) return 55;
             continue;
         }

@@ -115,7 +115,7 @@ class CliTests(unittest.TestCase):
 
     def test_noninteractive_install(self):
         code = self.main(
-            self.scripted("--vclibs", str(self.vclibs), "--store", "both", "--launcher")
+            self.scripted("--dependencies", str(self.vclibs), "--store", "both", "--launcher")
         )
         self.assertEqual(code, 0, self.stderr.getvalue())
         for name in [
@@ -129,15 +129,33 @@ class CliTests(unittest.TestCase):
             self.assertTrue((self.dest / name).is_file(), name)
         self.assertEqual(self.options(), (True, True))
 
+    @unittest.skipUnless(sys.platform == "win32", "native hosting requires Windows")
+    def test_game_without_proxy_starts_through_native_host(self):
+        # XAML games also get the manifest XAML Islands need; CoreWindow games do not.
+        for xaml in (True, False):
+            with self.subTest(xaml=xaml):
+                files = game_files()
+                files["Game.exe"] = pe(imports=["vccorlib120_app.dll"])
+                if xaml:
+                    files["App.xbf"] = b"XBF"
+                self.package = appx(self.base / f"native-{xaml}.appx", files)
+                self.dest = self.base / f"native-{xaml}"
+                self.build.joinpath("appx-native-host.exe").write_bytes(pe())
+                code = self.main(self.scripted("--dependencies", str(self.vclibs), "--launcher"))
+                self.assertEqual(code, 0, self.stderr.getvalue())
+                self.assertTrue((self.dest / "appx-native-host.exe").is_file())
+                self.assertEqual((self.dest / "Game.exe.manifest").is_file(), xaml)
+                self.assertIn("appx-native-host.exe", (self.dest / LAUNCHER).read_text())
+
     def test_long_folder_warns(self):
         self.dest = self.base / ("x" * (installer.LONG_FOLDER - len(str(self.base))))
-        code = self.main(self.scripted("--vclibs", str(self.vclibs)))
+        code = self.main(self.scripted("--dependencies", str(self.vclibs)))
         self.assertEqual(code, 0, self.stderr.getvalue())
         self.assertIn("Warning:", self.stdout.getvalue())
         self.assertIn("shorter folder", self.stdout.getvalue())
 
     def test_short_folder_does_not_warn(self):
-        code = self.main(self.scripted("--vclibs", str(self.vclibs)))
+        code = self.main(self.scripted("--dependencies", str(self.vclibs)))
         self.assertEqual(code, 0, self.stderr.getvalue())
         self.assertNotIn("Warning:", self.stdout.getvalue())
 
@@ -153,7 +171,7 @@ class CliTests(unittest.TestCase):
         wrong = vclibs_folder(self.base / "v140", "140")
         code = self.main(
             self.scripted(
-                "--vclibs", str(wrong), "--vclibs", str(self.vclibs), "--no-launcher"
+                "--dependencies", str(wrong), "--dependencies", str(self.vclibs), "--no-launcher"
             )
         )
         self.assertEqual(code, 0, self.stderr.getvalue())
@@ -236,7 +254,7 @@ class CliTests(unittest.TestCase):
         self.assertIn(
             installer.VCLIBS_DOWNLOADS[("Microsoft.VCLibs.120.00", "x86")], message
         )
-        self.assertIn("--vclibs", message)
+        self.assertIn("--dependencies", message)
         self.assertNotIn("--build", message)
         self.assertNotIn("Traceback", message)
 
@@ -259,7 +277,7 @@ class CliTests(unittest.TestCase):
 
     def test_vclibs_option_skips_the_download(self):
         self.serve_vclibs(vclibs_appx_bytes("120"))
-        code = self.main(self.scripted("--vclibs", str(self.vclibs), "--no-launcher"))
+        code = self.main(self.scripted("--dependencies", str(self.vclibs), "--no-launcher"))
         self.assertEqual(code, 0, self.stderr.getvalue())
         self.assertEqual(self.web.requested, [])
         self.assertNotIn("Downloading Microsoft.VCLibs", self.stdout.getvalue())
@@ -278,7 +296,7 @@ class CliTests(unittest.TestCase):
                 str(self.package),
                 "--build",
                 str(self.build),
-                "--vclibs",
+                "--dependencies",
                 str(self.vclibs),
                 "--yes",
             ]
@@ -294,7 +312,7 @@ class CliTests(unittest.TestCase):
                 str(source),
                 "--build",
                 str(self.build),
-                "--vclibs",
+                "--dependencies",
                 str(self.vclibs),
                 "--yes",
             ]
@@ -307,7 +325,7 @@ class CliTests(unittest.TestCase):
             installer, "apply_known_patch", return_value="patched it"
         ) as apply:
             self.assertEqual(
-                self.main(self.scripted("--vclibs", str(self.vclibs))),
+                self.main(self.scripted("--dependencies", str(self.vclibs))),
                 0,
                 self.stderr.getvalue(),
             )
@@ -319,7 +337,7 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("patched it", self.stdout.getvalue())
         with mock.patch.object(installer, "apply_known_patch") as apply:
-            self.main(self.scripted("--vclibs", str(self.vclibs), "--no-patch"))
+            self.main(self.scripted("--dependencies", str(self.vclibs), "--no-patch"))
         apply.assert_not_called()
 
     def test_downloads_runtime_without_build(self):
@@ -338,7 +356,7 @@ class CliTests(unittest.TestCase):
                     str(self.package),
                     "--dest",
                     str(self.dest),
-                    "--vclibs",
+                    "--dependencies",
                     str(self.vclibs),
                     "--release",
                     "v9",
@@ -392,7 +410,7 @@ class CliTests(unittest.TestCase):
                 str(self.dest),
                 "--build",
                 str(self.build),
-                "--vclibs",
+                "--dependencies",
                 str(self.vclibs),
                 "--yes",
             ]
@@ -407,7 +425,7 @@ class CliTests(unittest.TestCase):
 
     def test_desktop_copy_flag(self):
         package = appx(
-            self.base / "win8.appx", {**game_files(), "Game.exe": pe(appcontainer=True)}
+            self.base / "win8.appx", {**game_files(), "Game.exe": pe(appcontainer=True, imports=["DWrite.dll"])}
         )
         code = self.main(
             [
@@ -416,7 +434,7 @@ class CliTests(unittest.TestCase):
                 str(self.dest),
                 "--build",
                 str(self.build),
-                "--vclibs",
+                "--dependencies",
                 str(self.vclibs),
                 "--yes",
                 "--desktop-copy",
@@ -436,7 +454,7 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("Traceback", self.stderr.getvalue())
 
     def test_rerun_keeps_store_choice(self):
-        self.main(self.scripted("--vclibs", str(self.vclibs), "--store", "trial"))
+        self.main(self.scripted("--dependencies", str(self.vclibs), "--store", "trial"))
         self.assertEqual(self.main(self.scripted()), 0, self.stderr.getvalue())
         self.assertEqual(self.options(), (True, False))
 
@@ -450,7 +468,7 @@ class CliTests(unittest.TestCase):
                 str(self.dest),
                 "--build",
                 str(build),
-                "--vclibs",
+                "--dependencies",
                 str(self.vclibs),
                 "--yes",
             ]
@@ -497,7 +515,7 @@ class CliTests(unittest.TestCase):
                     "relative",
                     "--build",
                     str(self.build),
-                    "--vclibs",
+                    "--dependencies",
                     str(self.vclibs),
                     "--yes",
                 ]
