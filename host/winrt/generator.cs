@@ -530,15 +530,16 @@ internal static partial class WinrtProjectionGenerator
             throw new NotSupportedException("Unsupported property: " + type.FullName + "." + name);
         MethodDefinition getter = definition.GetMethod, setter = definition.SetMethod;
         bool boolean = getter.ReturnType.FullName == "System.Boolean";
+        bool text = getter.ReturnType.FullName == "System.String";
         TypeDefinition owner = MemberInterface(type, getter);
         int slot = Slot(owner, getter);
         output.AppendLine("        // " + owner.FullName + "::" + getter.Name + ", slot " + Literal(slot));
         if (setter != null)
         {
-            if (boolean)
+            if (boolean || text)
             {
-                if (setter.Parameters[0].ParameterType.FullName != "System.Boolean")
-                    throw new NotSupportedException("Boolean property setter type differs: " + type.FullName + "." + name);
+                if (setter.Parameters[0].ParameterType.FullName != getter.ReturnType.FullName)
+                    throw new NotSupportedException("Primitive property setter type differs: " + type.FullName + "." + name);
             }
             else
             {
@@ -565,6 +566,11 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("                {");
             receiver = Receiver(output, type, writer, setter.IsStatic, composable);
             if (boolean) output.AppendLine("                    " + receiver + ".SetBoolean(" + Literal(Slot(writer, setter)) + ", value);");
+            else if (text)
+            {
+                output.AppendLine("                using (var argument = new " + Runtime + "NativeString(value))");
+                output.AppendLine("                    " + receiver + ".Call(" + Literal(Slot(writer, setter)) + ", argument.Value);");
+            }
             else
             {
                 output.AppendLine("                using (var argument = " + Argument(setter.Parameters[0].ParameterType, "value") + ")");
