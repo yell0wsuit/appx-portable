@@ -1,7 +1,8 @@
 // Build-time completion of a compiled projection. No SDK metadata or Cecil assembly ships with games.
 // Every Windows type a consumer references is defined with its WinMD shape, and every
 // referenced member gets the consumer's exact signature. Members the projection does
-// not implement throw NotImplementedException naming themselves.
+// not implement throw NotImplementedException naming themselves, after naming
+// themselves in the shim log, where a swallowed exception still leaves a trace.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,7 +25,7 @@ internal static class WinrtProjectionCompleter
         "Windows.UI.Xaml.Interop.TypeName", "Windows.UI.Xaml.Thickness", "Windows.UI.Xaml.CornerRadius",
         "Windows.UI.Xaml.Duration", "Windows.UI.Xaml.GridLength" };
     private static ModuleDefinition projection;
-    private static MethodReference notImplemented;
+    private static MethodReference unimplemented;
 
     private static IMetadataScope Scope(TypeReference type)
     {
@@ -198,7 +199,7 @@ internal static class WinrtProjectionCompleter
     {
         ILProcessor il = method.Body.GetILProcessor();
         il.Emit(OpCodes.Ldstr, name);
-        il.Emit(OpCodes.Newobj, notImplemented);
+        il.Emit(OpCodes.Call, unimplemented);
         il.Emit(OpCodes.Throw);
     }
 
@@ -223,7 +224,8 @@ internal static class WinrtProjectionCompleter
             }
             projection = ModuleDefinition.ReadModule(args[1], new ReaderParameters { InMemory = true });
             modules.Add(projection);
-            notImplemented = projection.ImportReference(typeof(NotImplementedException).GetConstructor(new[] { typeof(string) }));
+            // Stubs report themselves through the projection runtime before throwing.
+            unimplemented = projection.Types.Single(t => t.FullName == "AppxPortable.WinRT.Errors").Methods.Single(m => m.Name == "Unimplemented");
             int before = projection.Types.Count;
             foreach (string path in args.Skip(3))
             {

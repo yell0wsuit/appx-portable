@@ -20,6 +20,17 @@ namespace AppxPortable.WinRT
         }
         [ThreadStatic] private static Scope current;
         internal static Scope Current { get { return current; } }
+        [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern void ShimReportUnimplemented(string member);
+        // What a completion stub throws. The shim log keeps the name even when the
+        // caller swallows the exception; without the shim it is only the exception.
+        internal static NotImplementedException Unimplemented(string member)
+        {
+            try { ShimReportUnimplemented(member); }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+            return new NotImplementedException(member);
+        }
 
         internal sealed class Scope : IDisposable
         {

@@ -6,3 +6,4 @@ EXPORTS
   ShimBootstrap
   ShimSetManagedCoreWindowMode
   ShimRunNativeApplication
+  ShimReportUnimplemented
