@@ -69,25 +69,30 @@ namespace AppxPortable.WinRT
     }
     internal sealed class NativeFuture<T> : NativeAsync, IAsyncOperation<T> where T : class
     {
-        private readonly Func<NativeObject, T> convert;
-        private NativeFuture(NativeObject value, FutureAbi abi, Func<NativeObject, T> convert) : base(value, abi) { this.convert = convert; }
+        // Reads GetResults from the operation itself, so results need not be objects.
+        private readonly Func<NativeObject, T> read;
+        private NativeFuture(NativeObject value, FutureAbi abi, Func<NativeObject, T> read) : base(value, abi) { this.read = read; }
         internal static IAsyncOperation<T> FromNative(NativeObject value, FutureAbi abi, Func<NativeObject, T> convert)
         {
-            return NativeObject.Wrap<IAsyncOperation<T>>(value, abi.Iid, v => new NativeFuture<T>(v, abi, convert));
+            return Wrap(value, abi, operation => convert(operation.Object(abi.Results)));
         }
-        public T GetResults() { return convert(native.Object(abi.Results)); }
+        internal static IAsyncOperation<T> Wrap(NativeObject value, FutureAbi abi, Func<NativeObject, T> read)
+        {
+            return NativeObject.Wrap<IAsyncOperation<T>>(value, abi.Iid, v => new NativeFuture<T>(v, abi, read));
+        }
+        public T GetResults() { return read(native); }
         public AsyncOperationCompletedHandler<T> Completed
         {
             get { return Get<AsyncOperationCompletedHandler<T>>(abi.GetCompleted); }
             set
             {
-                var layout = abi; var factory = convert;
+                var layout = abi; var reader = read;
                 Set(abi.PutCompleted, value == null ? null : new Callback
                 {
                     Original = value,
                     // Reconstruct from the native callback argument. Capturing
                     // this wrapper would create a native/CCW reference cycle.
-                    Completed = (pointer, status) => value(FromNative(NativeObject.Borrow(pointer), layout, factory), (AsyncStatus)status)
+                    Completed = (pointer, status) => value(Wrap(NativeObject.Borrow(pointer), layout, reader), (AsyncStatus)status)
                 }, abi.Completed);
             }
         }
@@ -128,6 +133,7 @@ namespace AppxPortable.WinRT
     internal static class StorageCalls
     {
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int TextCall(IntPtr self, IntPtr text, out IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int ObjectCall(IntPtr self, IntPtr argument, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int UIntCall(IntPtr self, uint number, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int SetUIntCall(IntPtr self, uint number);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int GetWideCall(IntPtr self, out ulong value);
@@ -181,7 +187,9 @@ namespace AppxPortable.WinRT
 namespace Windows.Storage
 {
     using AppxPortable.WinRT;
-    public sealed class StorageFolder : INativeWrapper
+    public interface IStorageItem { string Name { get; } string Path { get; } }
+    public interface IStorageFile : IStorageItem { }
+    public sealed class StorageFolder : IStorageItem, INativeWrapper
     {
         private readonly NativeObject native;
         private StorageFolder(NativeObject value) { native = value; }
@@ -191,7 +199,7 @@ namespace Windows.Storage
         public string Name { get { using (var item = native.QueryInterface(StorageAbi.Item)) return item.String(StorageAbi.Item_get_Name); } }
         public IAsyncOperation<StorageFile> GetFileAsync(string name) { return NativeFuture<StorageFile>.FromNative(StorageCalls.Text(native, StorageAbi.Folder_GetFileAsync, name), StorageAbi.FileFuture, StorageFile.FromNative); }
     }
-    public sealed class StorageFile : INativeWrapper
+    public sealed class StorageFile : IStorageFile, INativeWrapper
     {
         private readonly NativeObject native;
         private StorageFile(NativeObject value) { native = value; }
@@ -208,6 +216,21 @@ namespace Windows.Storage
         {
             using (var reference = native.QueryInterface(StorageAbi.FileReference))
                 return NativeFuture<IRandomAccessStreamWithContentType>.FromNative(reference.Object(StorageAbi.FileReference_OpenReadAsync), StorageAbi.StreamFuture, RandomStream.FromContent);
+        }
+    }
+    public static class FileIO
+    {
+        public static IAsyncOperation<string> ReadTextAsync(IStorageFile file)
+        {
+            if (file == null) throw new ArgumentNullException("file");
+            using (var factory = NativeObject.Factory("Windows.Storage.FileIO", StorageAbi.FileIO))
+            using (var argument = NativeObject.Argument(file, StorageAbi.File))
+            using (var access = new NativeObject.Access(factory))
+            using (var target = new NativeObject.Access(argument))
+            {
+                IntPtr result; int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.FileIO_ReadTextAsync)(access.Self, target.Self, out result);
+                return NativeFuture<string>.Wrap(NativeObject.TakeResult(hr, result), StorageAbi.TextFuture, operation => operation.String(StorageAbi.TextFuture.Results));
+            }
         }
     }
 }

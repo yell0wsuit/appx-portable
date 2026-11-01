@@ -377,7 +377,8 @@ def main():
     def probe_io(projection, bridge):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
         # Independent closed generic IID constants from windows.storage(.streams).h.
-        for iid in ("5e52f8ce-aced-5a42-95b4-f674dd84885e", "c4a57c5e-32b0-55b3-ad13-ce1c23041ed6", "d26b2819-897f-5c7d-84d6-56d796561431", "e521c894-2c26-5946-9e61-2b5e188d01ed", "3dddecf4-1d39-58e8-83b1-dbed541c7f35", "06386a7a-e009-5b0b-ab68-a8e48b516647", "bf666554-7605-5d9a-b14e-18d8c8472afe"):
+        for iid in ("5e52f8ce-aced-5a42-95b4-f674dd84885e", "c4a57c5e-32b0-55b3-ad13-ce1c23041ed6", "d26b2819-897f-5c7d-84d6-56d796561431", "e521c894-2c26-5946-9e61-2b5e188d01ed", "3dddecf4-1d39-58e8-83b1-dbed541c7f35", "06386a7a-e009-5b0b-ab68-a8e48b516647", "bf666554-7605-5d9a-b14e-18d8c8472afe",
+                    "3e1fe603-f897-5263-b328-0806426b8a79", "b79a741f-7fb5-50ae-9e99-911201ec3d41", "887411eb-7f54-4732-a5f0-5e43e3b8c2f5", "fa3f6186-4214-428c-a64c-14c9ac7315ea"):
             require(iid in generated, "storage async IID differs from SDK header: " + iid)
         # Slots independently counted from the SDK ABI declarations.
         expected_slots = {"Item_get_Name": 11, "Item_get_Path": 12, "Folder_GetFileAsync": 10,
@@ -386,7 +387,8 @@ def main():
                           "Buffer_get_Capacity": 6, "Buffer_get_Length": 7, "Buffer_put_Length": 8, "BufferFactory_Create": 6,
                           "Input_ReadAsync": 6, "Random_get_Size": 6, "Random_put_Size": 7, "Random_GetInputStreamAt": 8,
                           "Random_GetOutputStreamAt": 9, "Random_get_Position": 10, "Random_Seek": 11, "Random_CloneStream": 12,
-                          "Random_get_CanRead": 13, "Random_get_CanWrite": 14, "Content_get_ContentType": 6, "Closable_Close": 6}
+                          "Random_get_CanRead": 13, "Random_get_CanWrite": 14, "Content_get_ContentType": 6, "Closable_Close": 6,
+                          "FileIO_ReadTextAsync": 6}
         for member, slot in expected_slots.items():
             require("int " + member + " = " + str(slot) + ";" in generated, "storage ABI slot differs from SDK header: " + member)
         consumer = compile_file("storage-io.exe", [repo / "tests/winrt_projection/storage_io.cs"],
