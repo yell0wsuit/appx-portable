@@ -99,7 +99,11 @@ namespace Windows.UI.Xaml.Controls
         internal ProgressRing() { }
         public bool IsActive { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
-    public class ContentControl : Control { internal ContentControl() { } }
+    public class ContentControl : Control
+    {
+        internal ContentControl() { }
+        public object Content { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public class UserControl : Control
     {
         internal UserControl() { }

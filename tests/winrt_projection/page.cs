@@ -66,6 +66,26 @@ class PageApp : Application
     }
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectWindowContent(int id);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ConnectFrameContent(int id);
+    // The game's splash shape: a Frame already in the Window gets a managed Page as Content.
+    static void VerifyFrameContent(DerivedPage page)
+    {
+        var frame = new Frame();
+        Check(frame.Content == null, "empty Frame content");
+        Window.Current.Content = frame;
+        frame.Content = page;
+        Check(ReferenceEquals(frame.Content, page), "Frame preserves derived Page content identity");
+        Check(page.Frame == null, "direct Frame content does not navigate");
+        Check(ConnectFrameContent(41) == 0, "native Frame content callback HRESULT");
+        Check(page.ConnectionId == 41 && ReferenceEquals(page.Connected, page), "native Frame content is the managed Page identity");
+        page.Connected = null;
+        frame.Content = "frame text";
+        Check((string)frame.Content == "frame text", "Frame boxed content");
+        frame.Content = null;
+        Check(frame.Content == null, "Frame content clear");
+        Console.WriteLine("PASS: Frame content preserves managed Page identity, boxed values and clearing");
+    }
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
 #if NATIVE_ABI
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -172,10 +192,12 @@ class PageApp : Application
             try { Invoke(page); throw new Exception("Page override error accepted"); }
             catch (InvalidOperationException error) { Check(ReferenceEquals(error, page.Failure), "Page override exception identity"); }
         }
+        page.Failure = null;
         Console.WriteLine("PASS: native Page callbacks dispatch through derived managed overrides and base methods");
 #else
         Check(partial.Frame == null, "partial Page construction");
 #endif
+        VerifyFrameContent(page);
         VerifyWindowSize();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");

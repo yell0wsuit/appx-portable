@@ -75,7 +75,9 @@
   </Class>
   <Enum Name="Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation" />
   <Class Name="Windows.UI.Xaml.Controls.Control" />
-  <Class Name="Windows.UI.Xaml.Controls.ContentControl" />
+  <Class Name="Windows.UI.Xaml.Controls.ContentControl">
+    <Property Name="Content" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Controls.UserControl">
     <Property Name="Content" />
   </Class>

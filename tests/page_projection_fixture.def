@@ -5,6 +5,7 @@ EXPORTS
   InvokePageOverrides
   InvokeComponentConnector
   ConnectWindowContent
+  ConnectFrameContent
   ConnectNavigationArgs
   ConnectNamelessTarget
   CheckNamelessTarget

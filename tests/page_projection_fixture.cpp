@@ -63,6 +63,18 @@ extern "C" HRESULT __cdecl ConnectWindowContent(INT32 id) {
     return FAILED(hr) ? hr : InvokeComponentConnector(content.Get(), id, target.Get());
 }
 
+// The Window holds a Frame; its ContentControl.Content must be the managed Page's controlling outer.
+extern "C" HRESULT __cdecl ConnectFrameContent(INT32 id) {
+    ComPtr<ABI::Windows::UI::Xaml::IUIElement> root;
+    auto hr = WindowContent(&root);
+    ComPtr<ABI::Windows::UI::Xaml::Controls::IContentControl> frame;
+    if (SUCCEEDED(hr)) hr = root.As(&frame);
+    ComPtr<IInspectable> content;
+    if (SUCCEEDED(hr)) hr = frame->get_Content(&content);
+    if (SUCCEEDED(hr) && !content) hr = E_FAIL;
+    return FAILED(hr) ? hr : InvokeComponentConnector(content.Get(), id, content.Get());
+}
+
 extern "C" HRESULT __cdecl ConnectNavigationArgs(IUnknown* page, INT32 id) {
     auto args = Make<TestNavigationArgs>();
     return args ? InvokeComponentConnector(page, id, args.Get()) : E_OUTOFMEMORY;
