@@ -132,6 +132,27 @@ class PageApp : Application
         timer.Start();
     }
     // The game's splash shape: a Frame already in the Window gets a managed Page as Content.
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int CheckElementVisibility(int child, int value);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int SetElementVisibility(int child, int value);
+    static void VerifyVisibility(DerivedPage page)
+    {
+        Check((int)Visibility.Visible == 0 && (int)Visibility.Collapsed == 1, "Visibility SDK values");
+        var frame = new Frame(); Window.Current.Content = frame; frame.Content = page;
+        UIElement inherited = page;
+        Check(inherited.Visibility == Visibility.Visible, "default Page visibility");
+        inherited.Visibility = Visibility.Collapsed;
+        Check(CheckElementVisibility(1, 1) == 0 && frame.Visibility == Visibility.Visible, "native Page visibility or independent Frame state");
+        frame.Visibility = Visibility.Collapsed;
+        Check(CheckElementVisibility(0, 1) == 0, "native Frame visibility");
+        Check(SetElementVisibility(1, 0) == 0 && inherited.Visibility == Visibility.Visible, "native visibility update was cached");
+        try { inherited.Visibility = (Visibility)(-1); throw new Exception("invalid enum accepted"); }
+        catch (ArgumentException error) { Check(error.HResult == unchecked((int)0x80070057), "native enum setter HRESULT"); }
+        Check(inherited.Visibility == Visibility.Visible && CheckElementVisibility(1, 0) == 0, "invalid setter changed visibility");
+        frame.Visibility = Visibility.Visible;
+        Console.WriteLine("PASS: inherited Visibility properties preserve native enum state and validation");
+    }
     static void VerifyFrameContent(DerivedPage page)
     {
         var frame = new Frame();
@@ -260,6 +281,7 @@ class PageApp : Application
 #else
         Check(partial.Frame == null, "partial Page construction");
 #endif
+        VerifyVisibility(page);
         VerifyFrameContent(page);
         VerifyWindowSize();
         VerifyApplicationView();

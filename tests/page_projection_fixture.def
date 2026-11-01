@@ -23,3 +23,5 @@ EXPORTS
   ValidateViewboxData
   SetApplicationViewOrientation
   CheckApplicationViewState
+  CheckElementVisibility
+  SetElementVisibility

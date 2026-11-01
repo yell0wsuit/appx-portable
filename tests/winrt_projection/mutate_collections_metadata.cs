@@ -17,6 +17,7 @@ class MutateCollectionsMetadata
                 string name;
                 switch (args[2])
                 {
+                    case "visibility-width": name = "Windows.UI.Xaml.Visibility"; break;
                     case "connector-id": name = "Windows.UI.Xaml.Markup.IComponentConnector"; break;
                     case "uri-return": name = "Windows.Foundation.IUriRuntimeClass"; break;
                     case "uri-factory": name = "Windows.Foundation.IUriRuntimeClassFactory"; break;
@@ -31,7 +32,8 @@ class MutateCollectionsMetadata
                 }
                 var type = module.Types.SingleOrDefault(t => t.FullName == name);
                 if (type == null) { File.Copy(path, target, true); continue; }
-                if (args[2] == "connector-id") type.Methods.Single(m => m.Name == "Connect").Parameters[0].ParameterType = module.TypeSystem.Int64;
+                if (args[2] == "visibility-width") type.Fields.Single(f => f.Name == "value__").FieldType = module.TypeSystem.Int64;
+                else if (args[2] == "connector-id") type.Methods.Single(m => m.Name == "Connect").Parameters[0].ParameterType = module.TypeSystem.Int64;
                 else if (args[2] == "uri-return") type.Methods.Single(m => m.Name == "get_AbsoluteUri").ReturnType = module.TypeSystem.Object;
                 else if (args[2] == "uri-factory") type.Methods.Single(m => m.Name == "CreateUri").Parameters[0].ParameterType = module.TypeSystem.IntPtr;
                 else if (args[2] == "typed-event") type.Methods.Single(m => m.Name == "Invoke").Parameters[1].ParameterType = module.TypeSystem.UInt32;

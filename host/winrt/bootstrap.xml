@@ -54,7 +54,8 @@
     <Property Name="UnsetValue" />
   </Class>
   <Class Name="Windows.UI.Xaml.PropertyMetadata" />
-  <Class Name="Windows.UI.Xaml.UIElement" />
+  <Enum Name="Windows.UI.Xaml.Visibility" />
+  <Class Name="Windows.UI.Xaml.UIElement"><Property Name="Visibility" /></Class>
   <Class Name="Windows.UI.Xaml.Controls.Panel" />
   <Class Name="Windows.UI.Xaml.Controls.Grid" />
   <Class Name="Windows.UI.Xaml.Controls.Image" />
