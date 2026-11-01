@@ -1,4 +1,7 @@
 EXPORTS
+  SendWindowSize
+  FlushWindowEvents
+  ValidateWindowSizeArgs
   InvokePageOverrides
   InvokeComponentConnector
   ConnectWindowContent

@@ -42,6 +42,7 @@ namespace Windows.UI.Xaml
 }
 namespace Windows.UI.Xaml
 {
+    public delegate void WindowSizeChangedEventHandler(object sender, global::Windows.UI.Core.WindowSizeChangedEventArgs args);
     public sealed class Window
     {
         public static Window Current { get { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Current"); } }
@@ -51,6 +52,8 @@ namespace Windows.UI.Xaml
             set { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Content"); }
         }
         public void Activate() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Activate"); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_SizeChanged(WindowSizeChangedEventHandler handler) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.add_SizeChanged"); }
+        public void remove_SizeChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.remove_SizeChanged"); }
     }
     public sealed class PropertyMetadata { }
     public sealed class DependencyProperty
@@ -74,6 +77,10 @@ namespace Windows.UI.Xaml
         public ResourceDictionary Resources { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public object FindName(string name) { throw new global::System.NotImplementedException(); }
     }
+}
+namespace Windows.UI.Core
+{
+    public sealed class WindowSizeChangedEventArgs { internal WindowSizeChangedEventArgs() { } }
 }
 namespace Windows.UI.Xaml.Controls
 {

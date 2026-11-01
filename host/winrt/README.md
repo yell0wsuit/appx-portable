@@ -155,9 +155,9 @@ It retrieves the native launch splash and composes the game's `ExtendedSplash`
 Page. Its LoadComponent call now builds `ExtendedSplash.xaml`, including its
 resources and Viewbox children, and decodes both package wordmark images. It
 then completes `ExtendedSplash.InitializeComponent`, including typed Grid
-namescope lookups. Its constructor next fails explicitly when subscribing to
-`Window.SizeChanged` (`Windows.UI.Xaml.Window.add_SizeChanged`). Window event
-projection is the next construction gap.
+namescope lookups. Its constructor subscribes to Window.SizeChanged and then
+fails explicitly at `Storyboard.Begin` (E_NOTIMPL in the native trace, constructor
+offset0x3b in the managed stack). Animation clocks are the next measured gap.
 No menu or game round has been displayed by this path.
 
 The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
@@ -199,7 +199,7 @@ python3 scripts/probe-winrt-projection.py \
   --consumer /path/to/game/Bejeweled3.exe \
   --consumer /path/to/game/DT.GoogleAnalytics.Metro.dll \
   --game /path/to/game --xbox-metadata /path/to/game/Microsoft.Xbox.winmd \
-  --expected-game-error 'Windows.UI.Xaml.Window.add_SizeChanged'
+  --expected-game-error 'Windows.UI.Xaml.Media.Animation.Storyboard.Begin'
 ```
 
 The focused runtime regressions cover delegate ABI, concurrent wrapper identity,
@@ -804,3 +804,18 @@ IGrid and IPanel independently of the generator's WinMD inputs.
 Constructors, Panel.Children, Grid row/column definitions and attached layout
 properties remain unselected. This adds managed type identity; it does not add
 layout or rendering behavior.
+
+## Window SizeChanged subscriptions
+
+Window.SizeChanged add/remove methods and WindowSizeChangedEventHandler use the
+existing native Window event source. Callback senders resolve to the cached
+Window wrapper; WindowSizeChangedEventArgs is a typed, owned wrapper. Native
+resize delivery remains queued on the host UI thread.
+
+The Page fixture sends WM_SIZE through the host window, drains queued work, and
+checks the SDK delegate/interface contract, native size data, managed sender
+identity, callback thread, subscriber retention across collection, handler
+removal and argument ownership after callback delivery. SDK constants check
+add/remove slots16/17 and both interface IDs independently of WinMD generation.
+Managed Size/Handled argument accessors remain unselected. This checkpoint adds
+event projection; it does not implement managed resize layout or rendering.
