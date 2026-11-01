@@ -83,7 +83,12 @@ namespace Windows.UI.Xaml
         public void ClearValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.ClearValue"); }
         public object ReadLocalValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.ReadLocalValue"); }
     }
-    public class UIElement : DependencyObject { internal UIElement() { } }
+    public enum Visibility { Visible = 0, Collapsed = 1 }
+    public class UIElement : DependencyObject
+    {
+        internal UIElement() { }
+        public Visibility Visibility { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public class FrameworkElement : UIElement
     {
         internal FrameworkElement() { }

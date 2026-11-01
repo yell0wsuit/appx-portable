@@ -52,6 +52,9 @@ namespace AppxPortable.WinRT
         private delegate int GetBooleanProperty(IntPtr self, out byte value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int PutBooleanProperty(IntPtr self, byte value);
+        // WinRT enums are signed or unsigned 32-bit values; preserve their raw bits.
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int PutUInt32Property(IntPtr self, uint value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int Invoke0(IntPtr self);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -284,6 +287,12 @@ namespace AppxPortable.WinRT
                 Errors.Check(call.Method<GetBooleanProperty>(slot)(call.Self, out value));
                 return value != 0;
             }
+        }
+
+        internal void SetUInt32(int slot, uint value)
+        {
+            using (var call = new Access(this))
+                Errors.Check(call.Method<PutUInt32Property>(slot)(call.Self, value));
         }
 
         internal void SetBoolean(int slot, bool value)

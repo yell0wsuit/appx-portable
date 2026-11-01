@@ -165,3 +165,5 @@ extern "C" HRESULT __cdecl ValidateLoadedSource() {
 #include "window_size_projection_fixture.h"
 
 #include "application_view_projection_fixture.h"
+
+#include "visibility_projection_fixture.h"

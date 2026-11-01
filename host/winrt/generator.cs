@@ -625,12 +625,22 @@ internal static partial class WinrtProjectionGenerator
         bool text = getter.ReturnType.FullName == "System.String";
         bool inspectable = getter.ReturnType.FullName == "System.Object";
         bool interval = getter.ReturnType.FullName == "Windows.Foundation.TimeSpan";
+        bool enumValue = Available(getter.ReturnType.FullName) && Find(getter.ReturnType.FullName).IsEnum;
+        if (enumValue)
+        {
+            string width = Find(getter.ReturnType.FullName).Fields.Single(f => f.Name == "value__").FieldType.FullName;
+            if (width != "System.Int32" && width != "System.UInt32")
+                throw new NotSupportedException("Unsupported enum property ABI: " + getter.ReturnType.FullName);
+        }
         TypeDefinition owner = MemberInterface(type, getter);
         int slot = Slot(owner, getter);
         output.AppendLine("        // " + owner.FullName + "::" + getter.Name + ", slot " + Literal(slot));
         if (setter != null)
         {
-            if (boolean || text || inspectable || interval)
+            if (setter.Parameters.Count != 1 || setter.ReturnType.FullName != "System.Void" || setter.IsStatic != getter.IsStatic)
+                throw new NotSupportedException("Unsupported property setter signature: " + type.FullName + "." + name);
+            ValidateExternalIdentity(setter.Parameters[0].ParameterType);
+            if (boolean || text || inspectable || interval || enumValue)
             {
                 if (setter.Parameters[0].ParameterType.FullName != getter.ReturnType.FullName)
                     throw new NotSupportedException("Primitive property setter type differs: " + type.FullName + "." + name);
@@ -661,6 +671,7 @@ internal static partial class WinrtProjectionGenerator
             receiver = Receiver(output, type, writer, setter.IsStatic, composable);
             if (boolean) output.AppendLine("                    " + receiver + ".SetBoolean(" + Literal(Slot(writer, setter)) + ", value);");
             else if (interval) output.AppendLine("                    " + receiver + ".SetInt64(" + Literal(Slot(writer, setter)) + ", value.Ticks);");
+            else if (enumValue) output.AppendLine("                    " + receiver + ".SetUInt32(" + Literal(Slot(writer, setter)) + ", unchecked((uint)value));");
             else if (text)
             {
                 output.AppendLine("                using (var argument = new " + Runtime + "NativeString(value))");
