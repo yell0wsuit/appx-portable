@@ -262,3 +262,12 @@ namespace Windows.UI.Xaml.Media.Animation
     public class FadeInThemeAnimation : Timeline { internal FadeInThemeAnimation() { } }
     public class FadeOutThemeAnimation : Timeline { internal FadeOutThemeAnimation() { } }
 }
+
+namespace Windows.UI.ViewManagement
+{
+    public enum ApplicationViewState { FullScreenLandscape = 0, Filled = 1, Snapped = 2, FullScreenPortrait = 3 }
+    public sealed class ApplicationView
+    {
+        public static ApplicationViewState Value { get { throw new global::System.NotImplementedException("ApplicationView.Value"); } }
+    }
+}

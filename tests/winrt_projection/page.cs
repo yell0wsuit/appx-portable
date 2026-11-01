@@ -36,6 +36,28 @@ class PageApp : Application
     static extern int SendWindowSize();
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int FlushWindowEvents();
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int SetApplicationViewOrientation(int portrait);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int CheckApplicationViewState(int value);
+    static void VerifyApplicationView()
+    {
+        Check((int)Windows.UI.ViewManagement.ApplicationViewState.FullScreenLandscape == 0 &&
+              (int)Windows.UI.ViewManagement.ApplicationViewState.Filled == 1 &&
+              (int)Windows.UI.ViewManagement.ApplicationViewState.Snapped == 2 &&
+              (int)Windows.UI.ViewManagement.ApplicationViewState.FullScreenPortrait == 3, "ApplicationViewState SDK values");
+        Check(SetApplicationViewOrientation(0) == 0, "landscape host resize");
+        var landscape = Windows.UI.ViewManagement.ApplicationView.Value;
+        Check(landscape == Windows.UI.ViewManagement.ApplicationViewState.FullScreenLandscape &&
+              CheckApplicationViewState((int)landscape) == 0, "managed landscape Value differs from native SDK call");
+        Check(SetApplicationViewOrientation(1) == 0, "portrait host resize");
+        var portrait = Windows.UI.ViewManagement.ApplicationView.Value;
+        Check(portrait == Windows.UI.ViewManagement.ApplicationViewState.FullScreenPortrait &&
+              CheckApplicationViewState((int)portrait) == 0, "managed portrait Value differs from native SDK call");
+        Check(SetApplicationViewOrientation(0) == 0, "restore landscape host");
+        Check(Windows.UI.ViewManagement.ApplicationView.Value == landscape, "ApplicationView.Value was cached");
+        Console.WriteLine("PASS: ApplicationView.Value uses the native SDK enum and follows host orientation");
+    }
     static void VerifyWindowSize()
     {
         var window = Window.Current;
@@ -240,6 +262,7 @@ class PageApp : Application
 #endif
         VerifyFrameContent(page);
         VerifyWindowSize();
+        VerifyApplicationView();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
         VerifyTimer();
