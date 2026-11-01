@@ -819,3 +819,36 @@ removal and argument ownership after callback delivery. SDK constants check
 add/remove slots16/17 and both interface IDs independently of WinMD generation.
 Managed Size/Handled argument accessors remain unselected. This checkpoint adds
 event projection; it does not implement managed resize layout or rendering.
+
+## Package-native component projections
+
+The generator also accepts `--component INPUT_WINMD OUTPUT_CS`. It selects the
+component's public WinRT types and members directly, with no per-game surface
+XML. The initial supported shapes include default activation, scalar method
+arguments/results, strings, input byte arrays, and custom delegate callbacks
+(including string results). WinMD supplies interface IIDs, slots, assembly version
+and activation metadata. Unsupported types/signatures and signed or non-neutral
+assembly identities fail generation by name; no completion stubs are used.
+External Windows types in component signatures remain unsupported by this mode.
+
+`scripts/package-winrt-tools.py` creates `appx-portable-winrt-tools.zip`, a
+source-only installer tool bundle with per-file hashes and the project license.
+Cecil, the compiler and .NET reference assemblies come from the selected Wine
+Mono installation. They remain installation tools and are not copied to games.
+`pyappxportable` discovers native InProcessServer DLLs and adjacent WinMDs from
+AppxManifest.xml, generates in staging, and publishes managed assemblies under
+`appx-projections/`. Local `--build` installs need this ZIP in their build folder;
+release installs obtain the matching SHA-256-verified release asset. Older
+releases lacking the tool asset report the missing prerequisite explicitly.
+
+The native implementation DLL keeps its original location and contents.
+`appx-host` resolves a missing managed assembly from `appx-projections/`, checking
+name, version, culture and public-key token before loading. Explicit ABI
+activation uses `ShimGetPackageFactory`, sharing the native manifest activation
+loader rather than depending on Wine export hooks.
+
+`winrt_component_projection` / the probe's `--component-only` mode builds synthetic
+WinMD and an independent native component. It checks mixed-width calls, Unicode
+and embedded NUL strings, byte arrays, retained custom callbacks and string
+results, removal/GC, HRESULTs, callback failure logging, unsupported signatures
+and assembly identity. This is component ABI evidence, not game rendering proof.

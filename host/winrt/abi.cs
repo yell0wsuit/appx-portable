@@ -33,6 +33,8 @@ namespace AppxPortable.WinRT
     {
         [DllImport("appxportable.dll", CallingConvention = CallingConvention.StdCall)]
         private static extern int ShimGetFactory(IntPtr name, out IntPtr factory);
+        [DllImport("appxportable.dll", CallingConvention = CallingConvention.StdCall)]
+        private static extern int ShimGetPackageFactory(IntPtr name, out IntPtr factory);
         [DllImport("combase.dll")]
         private static extern IntPtr WindowsGetStringRawBuffer(IntPtr value, out uint length);
         [DllImport("combase.dll")]
@@ -104,6 +106,15 @@ namespace AppxPortable.WinRT
             {
                 IntPtr pointer;
                 int hr = ShimGetFactory(name.Value, out pointer);
+                // Package-native components use the same manifest resolver as
+                // native activation, without depending on a Wine export hotpatch.
+                if (hr == unchecked((int)0x80040111))
+                {
+                    int packageResult = ShimGetPackageFactory(name.Value, out pointer);
+                    // Preserve the existing missing-factory contract when neither
+                    // the shim registry nor the package declares this class.
+                    if (packageResult != unchecked((int)0x80040154)) hr = packageResult;
+                }
                 using (NativeObject factory = TakeResult(hr, pointer))
                     return factory.QueryInterface(iid);
             }
@@ -358,12 +369,44 @@ namespace AppxPortable.WinRT
         }
     }
 
+    internal sealed class PinnedBytes : IDisposable
+    {
+        private GCHandle pin;
+        internal uint Length { get; private set; }
+        internal IntPtr Pointer { get; private set; }
+        internal PinnedBytes(byte[] value)
+        {
+            Length = value == null ? 0 : checked((uint)value.Length);
+            if (Length == 0) return;
+            pin = GCHandle.Alloc(value, GCHandleType.Pinned);
+            Pointer = pin.AddrOfPinnedObject();
+        }
+        public void Dispose()
+        {
+            if (pin.IsAllocated) pin.Free();
+            Pointer = IntPtr.Zero;
+        }
+    }
+
     internal sealed class NativeString : IDisposable
     {
         [DllImport("combase.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         private static extern int WindowsCreateString(string text, uint length, out IntPtr value);
         [DllImport("combase.dll")]
         private static extern int WindowsDeleteString(IntPtr value);
+        [DllImport("combase.dll")]
+        private static extern IntPtr WindowsGetStringRawBuffer(IntPtr value, out uint length);
+        internal static string Read(IntPtr value)
+        {
+            uint length;
+            IntPtr text = WindowsGetStringRawBuffer(value, out length);
+            return length == 0 ? string.Empty : Marshal.PtrToStringUni(text, checked((int)length));
+        }
+        internal static string TakeResult(int hr, IntPtr value)
+        {
+            try { Errors.Check(hr); return Read(value); }
+            finally { WindowsDeleteString(value); }
+        }
         internal IntPtr Value { get; private set; }
         internal NativeString(string text)
         {

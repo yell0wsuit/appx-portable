@@ -132,6 +132,7 @@ def main():
     for name in ("wine", "prefix", "metadata", "shim", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--page-fixture", type=Path, help="test-only native Page callback DLL (default beside shim)")
+    parser.add_argument("--component-only", action="store_true", help="run generic package component projection fixtures")
     parser.add_argument("--page-only", action="store_true", help="run native Page composition and override fixtures")
     parser.add_argument("--splash-only", action="store_true", help="run the native splash activation fixture")
     parser.add_argument("--network-fixture", type=Path, help="test-only native network callback DLL (default beside shim)")
@@ -148,9 +149,9 @@ def main():
     parser.add_argument("--consumer", type=Path, action="append", default=[])
     parser.add_argument("--architecture", choices=("x86", "x64"), default="x86")
     args = parser.parse_args()
-    if sum((args.page_only, args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
+    if sum((args.component_only, args.page_only, args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
         parser.error("focused probe modes cannot be combined")
-    if (args.page_only or args.splash_only or args.network_only or args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
+    if (args.component_only or args.page_only or args.splash_only or args.network_only or args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
         parser.error("focused projection probes cannot include game or Xbox inputs")
     if args.xbox_only and (not args.xbox_metadata or args.game):
         parser.error("--xbox-only requires --xbox-metadata and cannot launch a game")
@@ -158,10 +159,10 @@ def main():
     wine, prefix, metadata, shim, output = (getattr(args, name).resolve()
                                           for name in ("wine", "prefix", "metadata", "shim", "output"))
     network_fixture = args.network_fixture.resolve() if args.network_fixture else shim.parent / "network_projection_fixture.dll"
-    if (args.network_only or not any((args.page_only, args.splash_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not network_fixture.is_file():
+    if (args.network_only or not any((args.component_only, args.page_only, args.splash_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not network_fixture.is_file():
         parser.error("build network_projection_fixture or pass --network-fixture")
     page_fixture = args.page_fixture.resolve() if args.page_fixture else shim.parent / "page_projection_fixture.dll"
-    if (args.page_only or not any((args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not page_fixture.is_file():
+    if (args.page_only or not any((args.component_only, args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not page_fixture.is_file():
         parser.error("build page_projection_fixture or pass --page-fixture")
     if args.game:
         args.game = args.game.resolve()
@@ -480,7 +481,7 @@ def main():
 
     try:
         if args.page_only:
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
             run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
             runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
@@ -488,7 +489,7 @@ def main():
             probe_page(projection)
             return 0
         if args.splash_only:
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
             run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
             runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
@@ -496,7 +497,7 @@ def main():
             probe_splash(projection, generator)
             return 0
         if args.network_only:
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
             run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
             runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
@@ -504,7 +505,7 @@ def main():
             probe_network(projection, generator)
             return 0
         if args.io_only:
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
             run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
             runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
@@ -514,7 +515,7 @@ def main():
             probe_io(projection, bridge)
             return 0
         if args.async_only:
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
             run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
             runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
@@ -523,7 +524,7 @@ def main():
             return 0
         if args.storage_only:
             marker = compile_file("mark-reference.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
             generated = output / "Windows.generated.cs"
             run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated)])
             check_storage_metadata(generator)
@@ -531,9 +532,48 @@ def main():
             projection = compile_file("projection/Windows.dll", runtime + [repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", generated], ["/target:library"])
             probe_storage(marker, projection)
             return 0
+        if args.component_only:
+            metadata_builder = compile_file("component-metadata.exe", [repo / "tests/winrt_projection/component_metadata.cs"], ["/r:Mono.Cecil.dll"])
+            component_metadata = output / "Example.Component.winmd"
+            run("component-metadata", [metadata_builder.name, windows(component_metadata)])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generated = output / "Component.generated.cs"
+            run("generate-component", [generator.name, "--component", windows(component_metadata), windows(generated)])
+            runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
+            projection = compile_file("component-projection/Example.Component.dll", runtime + [generated], ["/target:library"])
+            consumer = compile_file("component.exe", [repo / "tests/winrt_projection/component.cs"], ["/r:" + windows(projection)])
+            marker = compile_file("mark-component.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
+            run("mark-component", [marker.name, consumer.name, "component-winrt.exe", "--assembly", "Example.Component"], marker="flags=WindowsRuntime")
+            host = compile_file("appx-host.exe", [repo / "host/managed.cs", repo / "host/projections.cs"], ["/nowarn:0219", "/r:" + windows(references / "System.Windows.Forms.dll")])
+            folder = fixture("component-game", consumer.name, "ComponentProjectionTest", "CN=projection")
+            manifest = folder / "AppxManifest.xml"
+            text = manifest.read_text().replace("</Applications>", '</Applications><Extensions><Extension Category="windows.activatableClass.inProcessServer"><InProcessServer><Path>Example.Component.dll</Path><ActivatableClass ActivatableClassId="Example.Component.Engine" ThreadingModel="both"/></InProcessServer></Extension></Extensions>')
+            manifest.write_text(text)
+            copy_owned_file(output / "component-winrt.exe", folder / consumer.name)
+            copy_owned_file(host, folder / host.name)
+            native = shim.parent / "component_projection_fixture.dll"
+            require(native.is_file(), "build component_projection_fixture first")
+            copy_owned_file(native, folder / "Example.Component.dll")
+            projected = folder / "appx-projections"
+            projected.mkdir(exist_ok=True)
+            copy_owned_file(projection, projected / projection.name)
+            run("component-native", [host.name, "--log"], cwd=folder, marker="PASS: generic component ABI", evidence=folder / "managed.log")
+            require("component callback failure" in (folder / "appx-portable.log").read_text(), "retained callback failure was not logged")
+            (output / "unsupported").mkdir(exist_ok=True)
+            run("mismatched-component-reference", [metadata_builder.name, "--bad-reference", windows(output / "component-winrt.exe"), windows(output / "component-mismatch.exe")])
+            copy_owned_file(output / "component-mismatch.exe", folder / consumer.name)
+            run("reject-component-reference", [host.name, "--log"], cwd=folder, succeeds=False, marker="Generated component projection identity does not match", evidence=folder / "managed.log")
+            copy_owned_file(output / "component-winrt.exe", folder / consumer.name)
+            run("unsupported-component-metadata", [metadata_builder.name, windows(output / "unsupported/Example.Component.winmd"), "unsupported"])
+            run("reject-component-signature", [generator.name, "--component", windows(output / "unsupported/Example.Component.winmd"), windows(output / "unsupported.cs")], succeeds=False, marker="Unsupported parameter:")
+            for identity in ("culture", "signed"):
+                run("component-identity-" + identity, [metadata_builder.name, windows(output / "unsupported/Example.Component.winmd"), identity])
+                run("reject-component-identity-" + identity, [generator.name, "--component", windows(output / "unsupported/Example.Component.winmd"), windows(output / "identity.cs")], succeeds=False, marker="Unsupported component assembly identity:")
+
+            return 0
         if args.xbox_only:
             marker = compile_file("mark-reference.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
-            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
             completer = compile_file("complete.exe", [repo / "host/winrt/complete.cs"], ["/r:Mono.Cecil.dll"])
             probe_xbox(marker, generator, completer)
             return 0
@@ -563,7 +603,7 @@ def main():
         copy_owned_file(reference, folder / "Windows.dll")
         run("unimplemented-contract", [consumer.name], cwd=folder, succeeds=False,
             marker="NotImplementedException: Windows.ApplicationModel.Package.Current")
-        generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs"], ["/r:Mono.Cecil.dll"])
+        generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
         generated = output / "Windows.generated.cs"
         surface = repo / "host/winrt/bootstrap.xml"
         run("generate", [generator.name, windows(metadata), windows(surface), windows(generated)])

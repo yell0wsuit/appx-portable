@@ -135,6 +135,7 @@ internal static class Host
                 throw new InvalidDataException("Executable escapes game folder");
             }
 
+            ComponentProjections.Install(dir);
             Assembly assembly = Assembly.LoadFrom(target);
             bool coreWindow = assembly.EntryPoint.IsDefined(typeof(MTAThreadAttribute), false);
             AppendLog(log, coreWindow ? "[host] managed CoreWindow (MTA)\n" : "[host] managed XAML Islands (STA)\n");
