@@ -40,13 +40,16 @@ internal static partial class WinrtProjectionGenerator
         if (generic != null)
         {
             if (!selected.Contains(generic.ElementType.FullName)) throw new NotSupportedException("Generic type is not selected: " + type.FullName);
-            return "global::" + generic.ElementType.FullName.Split('`')[0] + "<" + string.Join(", ", generic.GenericArguments.Select(Name)) + ">";
+            // The CLR projects Windows.Foundation.EventHandler<T> as System.EventHandler<T>.
+            string element = generic.ElementType.FullName == EventHandlerName ? "System.EventHandler" : generic.ElementType.FullName.Split('`')[0];
+            return "global::" + element + "<" + string.Join(", ", generic.GenericArguments.Select(Name)) + ">";
         }
         if (type.FullName == "System.Boolean") return "bool";
         if (type.FullName == "System.String") return "string";
         if (type.FullName == "System.Object") return "object";
         if (type.FullName == "Windows.Foundation.Uri") return "global::System.Uri";
         if (type.FullName == "Windows.UI.Xaml.Interop.TypeName") return "global::System.Type";
+        if (type.FullName == "Windows.Foundation.TimeSpan") return "global::System.TimeSpan";
         if (!selected.Contains(type.FullName))
             throw new NotSupportedException("Type is not selected: " + type.FullName);
         return "global::" + type.FullName;
@@ -178,6 +181,7 @@ internal static partial class WinrtProjectionGenerator
         if (result.FullName == "System.Boolean") return receiver + ".Boolean(" + number + ")";
         if (result.FullName == "System.String") return receiver + ".String(" + number + ")";
         if (result.FullName == "System.Object") return Inspectable(receiver + ".Object(" + number + ")");
+        if (result.FullName == "Windows.Foundation.TimeSpan") return "new global::System.TimeSpan(" + receiver + ".Int64(" + number + "))";
         TypeDefinition definition = Find(result.FullName);
         if (definition.IsEnum)
         {
@@ -362,6 +366,34 @@ internal static partial class WinrtProjectionGenerator
         if (IsDelegate(definition)) throw new NotSupportedException("Delegate argument in typed event: " + type.FullName);
         return definition.IsInterface ? "{" + Iid(definition) + "}" : "rc(" + type.FullName + ";{" + Iid(DefaultInterface(definition)) + "})";
     }
+    private const string EventHandlerName = "Windows.Foundation.EventHandler`1";
+    private static void ValidateEventHandler(TypeDefinition type)
+    {
+        var invoke = type.Methods.SingleOrDefault(m => m.Name == "Invoke");
+        if (type.FullName != EventHandlerName || !IsDelegate(type) || type.GenericParameters.Count != 1 ||
+            invoke == null || !invoke.HasThis || invoke.IsStatic || invoke.HasGenericParameters || invoke.ReturnType.FullName != "System.Void" ||
+            !invoke.Parameters.Select(p => CollectionType(p.ParameterType)).SequenceEqual(new[] { "System.Object", "!0" }))
+            throw new NotSupportedException("Unsupported event handler delegate: " + type.FullName);
+    }
+    // EventHandler<T> has an IInspectable sender and a T argument.
+    private static string EventHandlerCallback(StringBuilder output, GenericInstanceType handler, string eventName)
+    {
+        TypeDefinition definition = Find(handler.ElementType.FullName);
+        ValidateEventHandler(definition);
+        if (!selected.Contains(definition.FullName) || handler.GenericArguments.Count != 1)
+            throw new NotSupportedException("Unselected event handler: " + handler.FullName);
+        string iid = Parameterized(definition, EventSignature(handler.GenericArguments[0]));
+        string helper = "Native_" + eventName + "_Handler";
+        output.AppendLine("        private static class " + helper);
+        output.AppendLine("        {");
+        output.AppendLine("            " + StdCall);
+        output.AppendLine("            private delegate int InvokeCall(global::System.IntPtr self, global::System.IntPtr sender, global::System.IntPtr args);");
+        output.AppendLine("            private static readonly InvokeCall invoke = (self, sender, args) => " + Runtime + "ManagedObject.Call(self, target => ((" + Name(handler) + ")target)(" +
+            Inspectable(Runtime + "NativeObject.Borrow(sender)") + ", " + Unwrap(handler.GenericArguments[0], "args") + "));");
+        output.AppendLine("            internal static readonly " + Runtime + "NativeInterface Interface = new " + Runtime + "NativeInterface(new global::System.Guid(\"" + iid + "\"), false, invoke);");
+        output.AppendLine("        }");
+        return helper;
+    }
     private static string TypedEventCallback(StringBuilder output, GenericInstanceType handler, string eventName)
     {
         TypeDefinition definition = Find(handler.ElementType.FullName);
@@ -392,7 +424,8 @@ internal static partial class WinrtProjectionGenerator
         TypeDefinition handler = Find(definition.EventType.GetElementType().FullName);
         if (!IsDelegate(handler) || !selected.Contains(handler.FullName))
             throw new NotSupportedException("Unsupported event handler: " + type.FullName + "." + name);
-        string callback = closed == null ? Projected(handler) : TypedEventCallback(output, closed, name);
+        string callback = closed == null ? Projected(handler)
+            : handler.FullName == EventHandlerName ? EventHandlerCallback(output, closed, name) : TypedEventCallback(output, closed, name);
         const string Token = "global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken";
         foreach (MethodDefinition accessor in new[] { definition.AddMethod, definition.RemoveMethod })
         {
@@ -532,12 +565,13 @@ internal static partial class WinrtProjectionGenerator
         bool boolean = getter.ReturnType.FullName == "System.Boolean";
         bool text = getter.ReturnType.FullName == "System.String";
         bool inspectable = getter.ReturnType.FullName == "System.Object";
+        bool interval = getter.ReturnType.FullName == "Windows.Foundation.TimeSpan";
         TypeDefinition owner = MemberInterface(type, getter);
         int slot = Slot(owner, getter);
         output.AppendLine("        // " + owner.FullName + "::" + getter.Name + ", slot " + Literal(slot));
         if (setter != null)
         {
-            if (boolean || text || inspectable)
+            if (boolean || text || inspectable || interval)
             {
                 if (setter.Parameters[0].ParameterType.FullName != getter.ReturnType.FullName)
                     throw new NotSupportedException("Primitive property setter type differs: " + type.FullName + "." + name);
@@ -567,6 +601,7 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("                {");
             receiver = Receiver(output, type, writer, setter.IsStatic, composable);
             if (boolean) output.AppendLine("                    " + receiver + ".SetBoolean(" + Literal(Slot(writer, setter)) + ", value);");
+            else if (interval) output.AppendLine("                    " + receiver + ".SetInt64(" + Literal(Slot(writer, setter)) + ", value.Ticks);");
             else if (text)
             {
                 output.AppendLine("                using (var argument = new " + Runtime + "NativeString(value))");
@@ -1058,6 +1093,12 @@ internal static partial class WinrtProjectionGenerator
                     ComponentConnectorContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "Storage")
                     StorageContract(output, type, element);
+                else if (element.GetAttribute("Adapter") == "EventHandler")
+                {
+                    // System.EventHandler<T> is the projection; only its ABI shape is checked.
+                    if (element.Name != "Delegate" || element.HasChildNodes) throw new NotSupportedException("Unsupported event handler surface");
+                    ValidateEventHandler(type);
+                }
                 else if (element.GetAttribute("Adapter") == "TypedEvent")
                 {
                     if (element.Name != "Delegate" || element.HasChildNodes) throw new NotSupportedException("Unsupported typed event surface");

@@ -47,6 +47,7 @@ HEADER_IIDS = {
     "IPage": "c4b27075-e641-453e-824d-012fc7cf95cf", "IPageFactory": "dfa149ac-1849-445e-937c-40a9590cc076",
     "IPageOverrides": "230b9cb8-3419-4306-aabe-4a8e680d3627", "IUserControl": "a7a69ec9-ea35-4679-bf29-f4f09286d314",
     "IContentControl": "a26dd1dc-cd44-435c-be94-01d6241c231c",
+    "IDispatcherTimer": "d160ce46-cd22-4f5f-8c97-40e61da3e2dc", "EventHandler<IInspectable>": "c50898f6-c536-5f47-8583-8b2c2438a13b",
     "INavigationEventArgs": "b6aa9834-6691-44d1-bdf7-58820c27b0d0", "INavigatingCancelEventArgs": "fd1d67ae-eafb-4079-be80-6dc92a03aedf",
     "INetworkInformationStatics": "5074f851-950d-4165-9c15-365619481eea",
     "IConnectionProfile": "71ba143c-598e-49d0-84eb-8febaedcc195", "INetworkStatusChangedEventHandler": "71ba143f-598e-49d0-84eb-8febaedcc195"}
@@ -100,6 +101,9 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatingFrom, slot 8", "Windows.UI.Xaml.Controls.IUserControl::get_Content, slot 6",
     "Windows.UI.Xaml.Controls.IUserControl::put_Content, slot 7",
     "Windows.UI.Xaml.Controls.IContentControl::get_Content, slot 6", "Windows.UI.Xaml.Controls.IContentControl::put_Content, slot 7",
+    "Windows.UI.Xaml.IDispatcherTimer::get_Interval, slot 6", "Windows.UI.Xaml.IDispatcherTimer::put_Interval, slot 7",
+    "Windows.UI.Xaml.IDispatcherTimer::add_Tick, slot 9", "Windows.UI.Xaml.IDispatcherTimer::remove_Tick, slot 10",
+    "Windows.UI.Xaml.IDispatcherTimer::Start, slot 11", "Windows.UI.Xaml.IDispatcherTimer::Stop, slot 12",
     "Windows.UI.Xaml.Markup.IComponentConnector::Connect, slot 6",
     "Windows.Foundation.IUriRuntimeClass::get_AbsoluteUri, slot 6", "Windows.Foundation.IUriRuntimeClassFactory::CreateUri, slot 6",
     "Windows.UI.Xaml.Navigation.INavigationEventArgs::get_Uri, slot 10", "Windows.UI.Xaml.Navigation.INavigationEventArgs::put_Uri, slot 11"]
@@ -275,10 +279,10 @@ def main():
 
     def probe_page(projection):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
-        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs"):
+        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "IDispatcherTimer", "EventHandler<IInspectable>", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
-            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged")):
+            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IDispatcherTimer::", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
         mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri")):
@@ -293,7 +297,7 @@ def main():
         copy_owned_file(output / "page-winrt.exe", folder / consumer.name)
         copy_owned_file(projection, folder / "Windows.dll")
         copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
-        run("page", [consumer.name], cwd=folder, marker="PASS: managed Page composes native inheritance, content and window identity")
+        run("page", [consumer.name], cwd=folder, marker="PASS: DispatcherTimer ticks managed handlers on the UI thread with TimeSpan intervals and removal")
         runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
         abi = compile_file("page-abi.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/page.cs"], ["/define:NATIVE_ABI"])
         copy_owned_file(abi, folder / abi.name)

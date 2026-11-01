@@ -68,6 +68,44 @@ class PageApp : Application
     static extern int ConnectWindowContent(int id);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectFrameContent(int id);
+    // The game's tip rotation: ticks arrive from the host's own message loop
+    // after OnLaunched returns, so this test exits only when they do.
+    void VerifyTimer()
+    {
+        var timer = new DispatcherTimer();
+        Check(timer.Interval == TimeSpan.Zero, "default DispatcherTimer interval");
+        var large = TimeSpan.FromDays(3) + TimeSpan.FromTicks(7);
+        timer.Interval = large;
+        Check(timer.Interval == large, "64-bit TimeSpan interval round trip");
+        try { timer.Interval = TimeSpan.FromTicks(-1); throw new Exception("negative interval accepted"); }
+        catch (ArgumentException) { }
+        Check(timer.Interval == large, "rejected interval preserves value");
+        timer.Interval = TimeSpan.FromMilliseconds(20);
+        int thread = global::System.Threading.Thread.CurrentThread.ManagedThreadId;
+        int early = 0, late = 0;
+        var earlyToken = default(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken);
+        Action<object, object> observe = (sender, args) =>
+        {
+            Check(ReferenceEquals(sender, timer) && args == null, "Tick sender identity and null arguments");
+            Check(global::System.Threading.Thread.CurrentThread.ManagedThreadId == thread, "Tick thread");
+        };
+        Func<Action, EventHandler<object>> guarded = body => (sender, args) =>
+        {
+            try { observe(sender, args); body(); }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.Exit(1); }
+        };
+        earlyToken = timer.add_Tick(guarded(() => { if (++early == 2) timer.remove_Tick(earlyToken); }));
+        timer.add_Tick(guarded(() =>
+        {
+            if (++late < 4) return;
+            Check(early == 2, "removed Tick handler was called");
+            timer.Stop();
+            Console.WriteLine("PASS: DispatcherTimer ticks managed handlers on the UI thread with TimeSpan intervals and removal");
+            Exit();
+        }));
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        timer.Start();
+    }
     // The game's splash shape: a Frame already in the Window gets a managed Page as Content.
     static void VerifyFrameContent(DerivedPage page)
     {
@@ -201,7 +239,7 @@ class PageApp : Application
         VerifyWindowSize();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
-        Exit();
+        VerifyTimer();
     }
     protected override void OnLaunched(Windows.ApplicationModel.Activation.LaunchActivatedEventArgs args) { Verify(new DerivedPage()); }
 }
