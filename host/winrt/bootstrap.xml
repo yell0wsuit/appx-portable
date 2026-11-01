@@ -35,7 +35,10 @@
     <Property Name="Current" />
     <Property Name="Content" />
     <Method Name="Activate" />
+    <Event Name="SizeChanged" />
   </Class>
+  <Delegate Name="Windows.UI.Xaml.WindowSizeChangedEventHandler" />
+  <Class Name="Windows.UI.Core.WindowSizeChangedEventArgs" />
   <!-- Frame's class chain; each base is a typed wrapper until its members are needed. -->
   <Class Name="Windows.UI.Xaml.DependencyObject">
     <Method Name="GetValue" />

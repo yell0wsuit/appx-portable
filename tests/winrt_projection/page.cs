@@ -33,9 +33,43 @@ class PartialPage : Page
 class PageApp : Application
 {
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int SendWindowSize();
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int FlushWindowEvents();
+    static void VerifyWindowSize()
+    {
+        var window = Window.Current;
+        Check(FlushWindowEvents() == 0, "initial Window queue did not drain");
+        int calls = 0;
+        object sender = null;
+        Windows.UI.Core.WindowSizeChangedEventArgs retained = null;
+        int thread = global::System.Threading.Thread.CurrentThread.ManagedThreadId;
+        WindowSizeChangedEventHandler handler = (s, e) =>
+        {
+            Check(global::System.Threading.Thread.CurrentThread.ManagedThreadId == thread, "Window callback thread");
+            sender = s; retained = e; ++calls;
+        };
+        var token = window.add_SizeChanged(handler);
+        handler = null;
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        Check(SendWindowSize() == 0 && calls == 1, "Window SizeChanged native delivery and handler lifetime");
+        Check(ReferenceEquals(sender, window) && retained != null, "Window sender identity and typed arguments");
+        window.remove_SizeChanged(token);
+        Check(SendWindowSize() == 0 && calls == 1, "removed Window handler was called");
+#if NATIVE_ABI
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        using (var args = NativeObject.Argument(retained, new Guid("5a200ec7-0426-47dc-b86c-6f475915e451")))
+            Check(ValidateWindowSizeArgs(args.DangerousGetHandle()) == 0, "retained Window arguments lost native size data");
+#endif
+        GC.KeepAlive(retained);
+        Console.WriteLine("PASS: Window SizeChanged subscriptions preserve typed callbacks, identity, lifetime and removal");
+    }
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectWindowContent(int id);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
 #if NATIVE_ABI
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateWindowSizeArgs(IntPtr args);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int InvokePageOverrides(IntPtr page);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -142,6 +176,7 @@ class PageApp : Application
 #else
         Check(partial.Frame == null, "partial Page construction");
 #endif
+        VerifyWindowSize();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
         Exit();
