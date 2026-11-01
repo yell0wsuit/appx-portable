@@ -634,7 +634,12 @@ def main():
         run("complete", [completer.name, windows(metadata), windows(projection), windows(completed)] + [windows(p) for p in consumers], marker="Completed ")
         run("resolve-completed", [resolver.name, windows(completed.parent)] + [windows(p) for p in consumers], marker="0 unresolved")
         copy_owned_file(completed, missing / "Windows.dll")
-        run("after-completion", [unimplemented.name], cwd=missing, marker="UNIMPLEMENTED: Windows.Devices.Geolocation.Geolocator..ctor")
+        run("after-completion", [unimplemented.name], cwd=missing, marker="UNIMPLEMENTED: Windows.Devices.Geolocation.Geolocator..ctor",
+            environment={"APPX_PORTABLE_LOG": "1"})
+        # A stub names itself in the native log even when the game swallows the exception.
+        trace = (missing / "appx-portable.log").read_text(errors="replace") if (missing / "appx-portable.log").is_file() else ""
+        require("UNIMPL managed Windows.Devices.Geolocation.Geolocator..ctor" in trace,
+                "completion stub did not report itself to the native log")
         # Completion must keep implemented members native, not replace them with stubs.
         copy_owned_file(completed, folder / "Windows.dll")
         run("completed-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")

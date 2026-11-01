@@ -90,10 +90,13 @@ public:
         static std::atomic<unsigned> posted{0};
         const unsigned count = ++posted;
         if (count <= 5 || count % 500 == 0) Log("TRACE", "CoreDispatcher RunAsync %u priority=%d", count, priority);
-        auto hr = Post(priority, [action, callback] {
+        auto hr = Post(priority, [action, callback, count] {
             ABI::Windows::Foundation::AsyncStatus status;
             action->get_Status(&status);
-            if (status == ABI::Windows::Foundation::AsyncStatus::Started) action->Finish(callback->Invoke());
+            if (status != ABI::Windows::Foundation::AsyncStatus::Started) return;
+            auto result = callback->Invoke();
+            if (count <= 5 || FAILED(result)) Log("TRACE", "CoreDispatcher RunAsync %u ran hr=%08lx", count, result);
+            action->Finish(result);
         });
         return FAILED(hr) ? hr : action.CopyTo(value);
     }

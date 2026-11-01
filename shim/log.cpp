@@ -89,3 +89,8 @@ void LogActivation(HSTRING name, REFIID iid, HRESULT result) noexcept {
         iid.Data4[7], result);
 }
 }
+// Completion stubs in the managed projection name the member they stand in for,
+// so a call the game swallows (a discarded Task) still leaves a trace.
+extern "C" void __cdecl ShimReportUnimplemented(const wchar_t* member) noexcept {
+    appx::Log("UNIMPL", "managed %ls", member ? member : L"(unnamed)");
+}
