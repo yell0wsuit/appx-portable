@@ -36,7 +36,8 @@ internal static partial class WinrtProjectionGenerator
                 throw new System.NotSupportedException("Unsupported component struct: " + type.FullName);
             var element = document.CreateElement(kind); element.SetAttribute("Name", type.FullName); root.AppendChild(element);
             if (kind != "Class" && kind != "Interface") continue;
-            System.Action<string, string> add = (member, name) => {
+            System.Action<string, string> add = (member, name) =>
+            {
                 var item = document.CreateElement(member);
                 if (name != null) item.SetAttribute("Name", name);
                 element.AppendChild(item);
@@ -82,7 +83,7 @@ internal static partial class WinrtProjectionGenerator
         if (!System.String.Equals(System.IO.Path.GetFileNameWithoutExtension(path), module.Assembly.Name.Name, System.StringComparison.OrdinalIgnoreCase))
             throw new System.IO.InvalidDataException("Projection reference filename does not match assembly identity: " + module.Assembly.Name.Name);
         var bridge = module.AssemblyReferences.SingleOrDefault(a => a.Name == "AppxPortable.WinRT.Interop");
-        if (bridge == null || bridge.Version != new System.Version(1,0,0,0) || bridge.PublicKeyToken.Length != 0 || !System.String.IsNullOrEmpty(bridge.Culture) ||
+        if (bridge == null || bridge.Version != new System.Version(1, 0, 0, 0) || bridge.PublicKeyToken.Length != 0 || !System.String.IsNullOrEmpty(bridge.Culture) ||
             Attribute(module.Assembly, "AppxPortable.WinRT.Interop.ProjectionProviderAttribute") == null)
             throw new System.NotSupportedException("Reference is not an interop projection: " + path);
         foreach (var type in module.Types.Where(t => t.IsPublic))

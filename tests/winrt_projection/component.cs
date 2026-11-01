@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+
 using Example.Component;
 class ComponentTest
 {
@@ -24,7 +25,7 @@ class ComponentTest
         Require(engine.EchoText(null) == "", "null HSTRING");
         Require(engine.SumBytes(new byte[] { 0, 1, 128, 255 }) == 384, "array length and unsigned bytes");
         Require(engine.SumBytes(new byte[0]) == 0 && engine.SumBytes(null) == 0, "empty arrays");
-        var large = new byte[1024*1024]; large[large.Length-1] = 255;
+        var large = new byte[1024 * 1024]; large[large.Length - 1] = 255;
         Require(engine.SumBytes(large) == 255, "large pinned array");
         System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token;
         var weak = Subscribe(engine, out token);

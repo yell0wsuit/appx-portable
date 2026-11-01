@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+
 using AppxPortable.WinRT.Interop;
 [assembly: ProjectionProvider(typeof(TestProvider))]
 sealed class TestHandle : SafeHandle
