@@ -297,7 +297,11 @@ def main():
         copy_owned_file(output / "page-winrt.exe", folder / consumer.name)
         copy_owned_file(projection, folder / "Windows.dll")
         copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
-        run("page", [consumer.name], cwd=folder, marker="PASS: DispatcherTimer ticks managed handlers on the UI thread with TimeSpan intervals and removal")
+        run("page", [consumer.name], cwd=folder, marker="PASS: DispatcherTimer ticks managed handlers on the UI thread with TimeSpan intervals and removal",
+            environment={"APPX_PORTABLE_LOG": "1"})
+        trace = (folder / "appx-portable.log").read_text(errors="replace") if (folder / "appx-portable.log").is_file() else ""
+        require("managed callback threw System.InvalidOperationException: tick handler failure" in trace,
+                "a managed event handler failure was not reported to the native log")
         runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
         abi = compile_file("page-abi.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/page.cs"], ["/define:NATIVE_ABI"])
         copy_owned_file(abi, folder / abi.name)

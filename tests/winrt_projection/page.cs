@@ -95,6 +95,9 @@ class PageApp : Application
             catch (Exception error) { Console.Error.WriteLine(error); Environment.Exit(1); }
         };
         earlyToken = timer.add_Tick(guarded(() => { if (++early == 2) timer.remove_Tick(earlyToken); }));
+        // A handler failure has no managed caller to rethrow it; the shim log must name it.
+        bool failed = false;
+        timer.add_Tick((sender, args) => { if (!failed) { failed = true; throw new InvalidOperationException("tick handler failure"); } });
         timer.add_Tick(guarded(() =>
         {
             if (++late < 4) return;
