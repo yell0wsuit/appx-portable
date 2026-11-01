@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+
 using Example.Component;
 using Example.External;
 class ExternalComponentTest
