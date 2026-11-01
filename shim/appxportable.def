@@ -7,3 +7,4 @@ EXPORTS
   ShimSetManagedCoreWindowMode
   ShimRunNativeApplication
   ShimReportUnimplemented
+  ShimReportException

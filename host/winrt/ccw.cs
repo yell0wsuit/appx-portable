@@ -22,6 +22,8 @@ namespace AppxPortable.WinRT
         internal static Scope Current { get { return current; } }
         [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode, ExactSpelling = true)]
         private static extern void ShimReportUnimplemented(string member);
+        [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern void ShimReportException(string text);
         // What a completion stub throws. The shim log keeps the name even when the
         // caller swallows the exception; without the shim it is only the exception.
         internal static NotImplementedException Unimplemented(string member)
@@ -39,11 +41,15 @@ namespace AppxPortable.WinRT
             private Failure pending;
             private bool active = true;
             internal Scope() { previous = current; current = this; }
-            internal void Report(int hr, Exception error)
+            // False when the invocation has ended, so no caller will rethrow the error.
+            internal bool Report(int hr, Exception error)
             {
                 lock (gate)
-                    if (active && pending == null)
-                        pending = new Failure { HResult = hr, Error = ExceptionDispatchInfo.Capture(error) };
+                {
+                    if (!active) return false;
+                    if (pending == null) pending = new Failure { HResult = hr, Error = ExceptionDispatchInfo.Capture(error) };
+                    return true;
+                }
             }
             internal void Check(int hr)
             {
@@ -69,7 +75,14 @@ namespace AppxPortable.WinRT
         {
             int hr = Marshal.GetHRForException(error);
             if (hr >= 0) hr = unchecked((int)0x80004005);
-            if (current != null) current.Report(hr, error);
+            // Native event raisers (WRL EventSource) discard handler HRESULTs, so a
+            // failure no managed caller will rethrow is logged rather than lost.
+            if (current == null || !current.Report(hr, error))
+            {
+                try { ShimReportException(error.ToString()); }
+                catch (DllNotFoundException) { }
+                catch (EntryPointNotFoundException) { }
+            }
             return hr;
         }
         internal static void Check(int hr)

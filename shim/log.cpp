@@ -94,3 +94,8 @@ void LogActivation(HSTRING name, REFIID iid, HRESULT result) noexcept {
 extern "C" void __cdecl ShimReportUnimplemented(const wchar_t* member) noexcept {
     appx::Log("UNIMPL", "managed %ls", member ? member : L"(unnamed)");
 }
+// A managed callback's exception that no managed caller will rethrow, such as an
+// event handler's: native event raisers discard handler failures.
+extern "C" void __cdecl ShimReportException(const wchar_t* text) noexcept {
+    appx::Log("FAIL", "managed callback threw %ls", text ? text : L"(no description)");
+}
