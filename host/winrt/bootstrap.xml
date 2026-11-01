@@ -2,6 +2,7 @@
   <Class Name="Windows.ApplicationModel.Package">
     <Property Name="Current" />
     <Property Name="Id" />
+    <Property Name="InstalledLocation" />
   </Class>
   <Class Name="Windows.ApplicationModel.PackageId">
     <Property Name="Name" />
@@ -136,6 +137,9 @@
   <Delegate Name="Windows.Foundation.AsyncOperationWithProgressCompletedHandler`2" Adapter="Async" />
   <Class Name="Windows.Storage.StorageFolder" Adapter="Storage" />
   <Class Name="Windows.Storage.StorageFile" Adapter="Storage" />
+  <Interface Name="Windows.Storage.IStorageItem" Adapter="Storage" />
+  <Interface Name="Windows.Storage.IStorageFile" Adapter="Storage" />
+  <Class Name="Windows.Storage.FileIO" Adapter="Storage" />
   <Class Name="Windows.Storage.Streams.Buffer" Adapter="Storage" />
   <Interface Name="Windows.Storage.Streams.IBuffer" Adapter="Storage" />
   <Interface Name="Windows.Storage.Streams.IInputStream" Adapter="Storage" />

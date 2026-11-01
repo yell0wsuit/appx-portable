@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
@@ -67,6 +68,32 @@ class StorageIoProjectionTest
         try { await missing; throw new Exception("missing file accepted"); }
         catch (FileNotFoundException) { }
         Check(missing.Status == Windows.Foundation.AsyncStatus.Error && missing.ErrorCode != null, "native async ErrorCode");
+        // The game's tips path: package folder, file lookup, then FileIO text.
+        StorageFolder installed = Windows.ApplicationModel.Package.Current.InstalledLocation;
+        Check(string.Equals(Path.GetFullPath(installed.Path).TrimEnd('\\'), Path.GetFullPath(".").TrimEnd('\\'), StringComparison.OrdinalIgnoreCase),
+            "InstalledLocation is the package folder");
+        Check((await installed.GetFileAsync(Path.GetFileName(path))).Path == path, "InstalledLocation file lookup");
+        string text = "tips 💎 é\r\nsecond line\r\n";
+        var encodings = new[] {
+            new { Name = "text-plain.txt", Bytes = System.Text.Encoding.UTF8.GetBytes(text) },
+            new { Name = "text-utf8.txt", Bytes = new byte[] { 0xef, 0xbb, 0xbf }.Concat(System.Text.Encoding.UTF8.GetBytes(text)).ToArray() },
+            new { Name = "text-utf16le.txt", Bytes = new byte[] { 0xff, 0xfe }.Concat(System.Text.Encoding.Unicode.GetBytes(text)).ToArray() },
+            new { Name = "text-utf16be.txt", Bytes = new byte[] { 0xfe, 0xff }.Concat(System.Text.Encoding.BigEndianUnicode.GetBytes(text)).ToArray() } };
+        foreach (var encoded in encodings)
+        {
+            File.WriteAllBytes(encoded.Name, encoded.Bytes);
+            Check(await FileIO.ReadTextAsync(await installed.GetFileAsync(encoded.Name)) == text, "FileIO text decoding " + encoded.Name);
+        }
+        File.WriteAllBytes("text-empty.txt", new byte[0]);
+        Check(await FileIO.ReadTextAsync(await installed.GetFileAsync("text-empty.txt")) == "", "FileIO empty text");
+        // Windows rejects bytes that are not UTF-8 when no BOM names another encoding.
+        File.WriteAllBytes("text-invalid.txt", new byte[] { 0x41, 0xff, 0x42 });
+        try { await FileIO.ReadTextAsync(await installed.GetFileAsync("text-invalid.txt")); throw new Exception("invalid UTF-8 accepted"); }
+        catch (Exception error) { if (error.HResult != unchecked((int)0x80070459)) throw; }
+        StorageFile vanished = await installed.GetFileAsync("text-empty.txt");
+        File.Delete("text-empty.txt");
+        try { await FileIO.ReadTextAsync(vanished); throw new Exception("deleted file read"); } catch (FileNotFoundException) { }
+        try { GC.KeepAlive(FileIO.ReadTextAsync(null)); throw new Exception("null file accepted"); } catch (ArgumentNullException) { }
         byte[] copied = bytes.AsBuffer().ToArray();
         Check(copied.Length == bytes.Length && copied[0] == bytes[0], "buffer extensions");
         Console.WriteLine("PASS: managed storage awaits native files and reads seekable streams and buffers");

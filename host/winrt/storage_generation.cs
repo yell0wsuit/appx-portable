@@ -26,6 +26,9 @@ internal static partial class WinrtProjectionGenerator
             "GetFileAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
         StorageInterface(output, "FileStatics", "Windows.Storage.IStorageFileStatics", new[] {
             "GetFileFromPathAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
+        StorageInterface(output, "File", "Windows.Storage.IStorageFile", new string[0]);
+        StorageInterface(output, "FileIO", "Windows.Storage.IFileIOStatics", new[] {
+            "ReadTextAsync|(Windows.Storage.IStorageFile)->Windows.Foundation.IAsyncOperation`1<System.String>" });
         StorageInterface(output, "FileReference", "Windows.Storage.Streams.IRandomAccessStreamReference", new[] {
             "OpenReadAsync|()->Windows.Foundation.IAsyncOperation`1<Windows.Storage.Streams.IRandomAccessStreamWithContentType>" });
         StorageInterface(output, "Info", "Windows.Foundation.IAsyncInfo", new[] {
@@ -49,6 +52,7 @@ internal static partial class WinrtProjectionGenerator
         StorageFuture(output, "File", "Windows.Storage.StorageFile", false);
         StorageFuture(output, "Stream", "Windows.Storage.Streams.IRandomAccessStreamWithContentType", false);
         StorageFuture(output, "Read", "Windows.Storage.Streams.IBuffer", true);
+        StorageFuture(output, "Text", "System.String", false);
         output.AppendLine("    }");
     }
     private static void StorageInterface(StringBuilder output, string label, string name, string[] methods)
@@ -58,10 +62,25 @@ internal static partial class WinrtProjectionGenerator
         foreach (string entry in methods)
         {
             string[] parts = entry.Split('|');
-            CollectionMethod(type, 0, parts[0], parts[1]);
-            output.AppendLine("        // " + name + "::" + parts[0] + ", slot " + NamedSlot(type, parts[0]));
-            output.AppendLine("        internal const int " + label + "_" + parts[0] + " = " + NamedSlot(type, parts[0]) + ";");
+            int slot = Slot(type, StorageMethod(type, parts[0], parts[1]));
+            output.AppendLine("        // " + name + "::" + parts[0] + ", slot " + slot);
+            output.AppendLine("        internal const int " + label + "_" + parts[0] + " = " + slot + ";");
         }
+    }
+    // Overloads share a metadata name; their ABI names come from OverloadAttribute.
+    private static MethodDefinition StorageMethod(TypeDefinition type, string name, string signature)
+    {
+        var found = type.Methods.Where(m => AbiName(m) == name).ToList();
+        string actual = found.Count == 1 ? "(" + string.Join(",", found[0].Parameters.Select(p => CollectionType(p.ParameterType))) + ")->" + CollectionType(found[0].ReturnType) : null;
+        if (!type.IsInterface || type.HasGenericParameters || found.Count != 1 || found[0].IsStatic || !found[0].HasThis ||
+            found[0].HasGenericParameters || actual != signature)
+            throw new NotSupportedException("Unsupported storage ABI: " + type.FullName + "." + name);
+        return found[0];
+    }
+    private static string AbiName(MethodDefinition method)
+    {
+        CustomAttribute overload = Attribute(method, "Windows.Foundation.Metadata.OverloadAttribute");
+        return overload == null ? method.Name : (string)overload.ConstructorArguments[0].Value;
     }
     private static void StorageFuture(StringBuilder output, string label, string result, bool progress)
     {
@@ -79,8 +98,12 @@ internal static partial class WinrtProjectionGenerator
         if (CollectionType(invoke.ReturnType) != "System.Void" || !invoke.Parameters.Select(p => CollectionType(p.ParameterType)).SequenceEqual(new[] {
             type.FullName + (progress ? "<!0,!1>" : "<!0>"), "Windows.Foundation.AsyncStatus" }))
             throw new NotSupportedException("Unsupported storage completion ABI");
-        TypeDefinition resultType = Find(result);
-        string signature = resultType.IsInterface ? "{" + Iid(resultType) + "}" : "rc(" + result + ";{" + Iid(DefaultInterface(resultType)) + "})";
+        string signature = "string";
+        if (result != "System.String")
+        {
+            TypeDefinition resultType = Find(result);
+            signature = resultType.IsInterface ? "{" + Iid(resultType) + "}" : "rc(" + result + ";{" + Iid(DefaultInterface(resultType)) + "})";
+        }
         string[] arguments = progress ? new[] { signature, "u4" } : new[] { signature };
         string progressIid = "global::System.Guid.Empty";
         if (progress)
