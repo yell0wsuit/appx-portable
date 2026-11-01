@@ -531,12 +531,13 @@ internal static partial class WinrtProjectionGenerator
         MethodDefinition getter = definition.GetMethod, setter = definition.SetMethod;
         bool boolean = getter.ReturnType.FullName == "System.Boolean";
         bool text = getter.ReturnType.FullName == "System.String";
+        bool inspectable = getter.ReturnType.FullName == "System.Object";
         TypeDefinition owner = MemberInterface(type, getter);
         int slot = Slot(owner, getter);
         output.AppendLine("        // " + owner.FullName + "::" + getter.Name + ", slot " + Literal(slot));
         if (setter != null)
         {
-            if (boolean || text)
+            if (boolean || text || inspectable)
             {
                 if (setter.Parameters[0].ParameterType.FullName != getter.ReturnType.FullName)
                     throw new NotSupportedException("Primitive property setter type differs: " + type.FullName + "." + name);
@@ -573,7 +574,9 @@ internal static partial class WinrtProjectionGenerator
             }
             else
             {
-                output.AppendLine("                using (var argument = " + Argument(setter.Parameters[0].ParameterType, "value") + ")");
+                // Object values box primitives and pass managed objects by controlling identity, as method arguments do.
+                string prepare = inspectable ? Runtime + "NativeObject.Box(value)" : Argument(setter.Parameters[0].ParameterType, "value");
+                output.AppendLine("                using (var argument = " + prepare + ")");
                 output.AppendLine("                    " + receiver + ".Call(" + Literal(Slot(writer, setter)) + ", argument);");
             }
             output.AppendLine("                }");
