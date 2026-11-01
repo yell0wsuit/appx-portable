@@ -84,6 +84,13 @@ class StorageIoProjectionTest
             File.WriteAllBytes(encoded.Name, encoded.Bytes);
             Check(await FileIO.ReadTextAsync(await installed.GetFileAsync(encoded.Name)) == text, "FileIO text decoding " + encoded.Name);
         }
+        // Windows (windows.storage.dll CEncodingHelpers) checks for a byte-order mark only when
+        // at least 3 bytes exist, and decodes UTF-16 as ReadString(bytes / 2).
+        File.WriteAllBytes("text-short-bom.txt", new byte[] { 0xff, 0xfe });
+        try { await FileIO.ReadTextAsync(await installed.GetFileAsync("text-short-bom.txt")); throw new Exception("2-byte BOM decoded as UTF-16"); }
+        catch (Exception error) { if (error.HResult != unchecked((int)0x80070459)) throw; }
+        File.WriteAllBytes("text-odd.txt", new byte[] { 0xff, 0xfe, 0x41, 0x00, 0x42 });
+        Check(await FileIO.ReadTextAsync(await installed.GetFileAsync("text-odd.txt")) == "A", "odd UTF-16 trailing byte is dropped");
         File.WriteAllBytes("text-empty.txt", new byte[0]);
         Check(await FileIO.ReadTextAsync(await installed.GetFileAsync("text-empty.txt")) == "", "FileIO empty text");
         // Windows rejects bytes that are not UTF-8 when no BOM names another encoding.
@@ -93,7 +100,8 @@ class StorageIoProjectionTest
         StorageFile vanished = await installed.GetFileAsync("text-empty.txt");
         File.Delete("text-empty.txt");
         try { await FileIO.ReadTextAsync(vanished); throw new Exception("deleted file read"); } catch (FileNotFoundException) { }
-        try { GC.KeepAlive(FileIO.ReadTextAsync(null)); throw new Exception("null file accepted"); } catch (ArgumentNullException) { }
+        // Windows fails a null file synchronously with E_POINTER.
+        try { GC.KeepAlive(FileIO.ReadTextAsync(null)); throw new Exception("null file accepted"); } catch (NullReferenceException) { }
         byte[] copied = bytes.AsBuffer().ToArray();
         Check(copied.Length == bytes.Length && copied[0] == bytes[0], "buffer extensions");
         Console.WriteLine("PASS: managed storage awaits native files and reads seekable streams and buffers");

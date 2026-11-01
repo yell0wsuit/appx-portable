@@ -222,13 +222,13 @@ namespace Windows.Storage
     {
         public static IAsyncOperation<string> ReadTextAsync(IStorageFile file)
         {
-            if (file == null) throw new ArgumentNullException("file");
+            // Null reaches the native call, which fails with E_POINTER as Windows does.
             using (var factory = NativeObject.Factory("Windows.Storage.FileIO", StorageAbi.FileIO))
-            using (var argument = NativeObject.Argument(file, StorageAbi.File))
+            using (var argument = file == null ? null : NativeObject.Argument(file, StorageAbi.File))
             using (var access = new NativeObject.Access(factory))
-            using (var target = new NativeObject.Access(argument))
+            using (var target = argument == null ? null : new NativeObject.Access(argument))
             {
-                IntPtr result; int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.FileIO_ReadTextAsync)(access.Self, target.Self, out result);
+                IntPtr result; int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.FileIO_ReadTextAsync)(access.Self, target == null ? IntPtr.Zero : target.Self, out result);
                 return NativeFuture<string>.Wrap(NativeObject.TakeResult(hr, result), StorageAbi.TextFuture, operation => operation.String(StorageAbi.TextFuture.Results));
             }
         }
