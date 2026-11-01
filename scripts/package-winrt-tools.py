@@ -12,9 +12,9 @@ RUNTIME = ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.
 
 def package(destination):
     root = Path(__file__).resolve().parents[1]
-    files = {name: (root / "host/winrt" / name).read_bytes() for name in GENERATOR + RUNTIME}
+    files = {name: (root / "host/winrt" / name).read_bytes() for name in GENERATOR + RUNTIME + ("interop.cs",)}
     files["LICENSE"] = (root / "LICENSE").read_bytes()
-    manifest = dict(schema=1, generator=GENERATOR, runtime=RUNTIME,
+    manifest = dict(schema=2, generator=GENERATOR, runtime=RUNTIME, interop=("interop.cs",),
                     sha256={name: hashlib.sha256(data).hexdigest() for name, data in files.items()})
     files["tools.json"] = json.dumps(manifest, sort_keys=True).encode()
     destination = Path(destination)

@@ -829,7 +829,9 @@ arguments/results, strings, input byte arrays, and custom delegate callbacks
 (including string results). WinMD supplies interface IIDs, slots, assembly version
 and activation metadata. Unsupported types/signatures and signed or non-neutral
 assembly identities fail generation by name; no completion stubs are used.
-External Windows types in component signatures remain unsupported by this mode.
+External runtime classes and 32-bit enums can come from explicitly referenced
+interop projections. Foreign interfaces, delegates, structs and CLR-redirected
+types remain unsupported.
 
 `scripts/package-winrt-tools.py` creates `appx-portable-winrt-tools.zip`, a
 source-only installer tool bundle with per-file hashes and the project license.
@@ -852,3 +854,37 @@ WinMD and an independent native component. It checks mixed-width calls, Unicode
 and embedded NUL strings, byte arrays, retained custom callbacks and string
 results, removal/GC, HRESULTs, callback failure logging, unsupported signatures
 and assembly identity. This is component ABI evidence, not game rendering proof.
+
+
+## External projection references
+
+`generator --component INPUT_WINMD OUTPUT_CS --reference PROJECTION.dll` reads
+explicit descriptors from a generated interop projection. Generate that reference
+with `--interop` and compile it with `APPX_PORTABLE_INTEROP`, referencing the shared
+`AppxPortable.WinRT.Interop.dll` built from `interop.cs`. Reference filenames and
+CLR assembly identities must match; descriptors carry metadata-derived interface
+IIDs, and source WinMD scopes must match the reference identity. Ordinary generator
+output and runtime compilation continue to work without interop enabled.
+
+The shared contract passes disposable SafeHandle interface leases. Results and
+callback parameters return through the owning assembly's generated provider and
+wrapper cache; no arbitrary private fields are inspected. Default-activated
+wrappers now enter that cache as well. The synthetic two-assembly fixture checks
+class/enum calls, nulls, callbacks, wrapper identity and native retention after
+managed wrappers are collected. Separate tests check lease disposal on provider
+failure, invalid descriptors/references and a mutated IID rejected by native QI.
+
+The component probe also creates `windows-interop/Windows.dll` from the supplied
+SDK contracts. Its selected parameter wrappers include SwapChainBackgroundPanel,
+CoreWindow and PointerEventArgs, plus VirtualKey. This adds typed ABI wrappers;
+it does not implement native swap-chain presentation or pointer events.
+`--component-metadata PATH` additionally generates and compiles an arbitrary local
+component against that Windows reference without executing its implementation.
+
+For installer use, put prepared reference DLLs in the local build's
+`projection-references/` directory. The schema-2 source bundle supplies `interop.cs`;
+the installer compiles the contract once and stages it with components and their
+explicit references under `appx-projections/`. Schema-1 bundles remain readable
+for components with no external references. References conflicting with package
+DLLs are refused. SDK reference generation is a build step; the installer does not
+download SDK metadata or invent missing external type definitions.

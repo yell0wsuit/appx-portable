@@ -132,6 +132,7 @@ def main():
     for name in ("wine", "prefix", "metadata", "shim", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--page-fixture", type=Path, help="test-only native Page callback DLL (default beside shim)")
+    parser.add_argument("--component-metadata", type=Path, help="validate this native component metadata against the generated Windows interop reference")
     parser.add_argument("--component-only", action="store_true", help="run generic package component projection fixtures")
     parser.add_argument("--page-only", action="store_true", help="run native Page composition and override fixtures")
     parser.add_argument("--splash-only", action="store_true", help="run the native splash activation fixture")
@@ -569,6 +570,60 @@ def main():
             for identity in ("culture", "signed"):
                 run("component-identity-" + identity, [metadata_builder.name, windows(output / "unsupported/Example.Component.winmd"), identity])
                 run("reject-component-identity-" + identity, [generator.name, "--component", windows(output / "unsupported/Example.Component.winmd"), windows(output / "identity.cs")], succeeds=False, marker="Unsupported component assembly identity:")
+
+            run("external-metadata", [metadata_builder.name, windows(output / "Example.External.winmd"), "external"])
+            run("generate-external", [generator.name, "--component", windows(output / "Example.External.winmd"), windows(output / "External.generated.cs"), "--interop"])
+            bridge = compile_file("interop/AppxPortable.WinRT.Interop.dll", [repo / "host/winrt/interop.cs"], ["/target:library"])
+            interop_flags = ["/target:library", "/define:APPX_PORTABLE_INTEROP", "/r:" + windows(bridge)]
+            lifetime = compile_file("interop-lifetime.exe", [repo / "tests/winrt_projection/interop_lifetime.cs"], ["/r:" + windows(bridge)])
+            copy_owned_file(bridge, output / bridge.name)
+            run("interop-lease-lifetime", [lifetime.name], marker="PASS: interop lease ownership")
+            windows_generated = output / "Windows.interop.cs"
+            run("generate-windows-interop", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(windows_generated), "--interop"])
+            windows_runtime = runtime + [repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs"]
+            windows_interop = compile_file("windows-interop/Windows.dll", windows_runtime + [windows_generated], interop_flags)
+
+            external_projection = compile_file("external-projection/Example.External.dll", runtime + [output / "External.generated.cs"], interop_flags)
+            cross_metadata = output / "cross/Example.Component.winmd"
+            cross_metadata.parent.mkdir(exist_ok=True)
+            run("cross-metadata", [metadata_builder.name, windows(cross_metadata), "cross"])
+            run("generate-cross", [generator.name, "--component", windows(cross_metadata), windows(output / "Cross.generated.cs"), "--reference", windows(external_projection)])
+            run("reject-unmarked-reference", [generator.name, "--component", windows(cross_metadata), windows(output / "unmarked.cs"), "--reference", windows(projection)], succeeds=False, marker="Reference is not an interop projection:")
+            copy_owned_file(external_projection, output / "Renamed.dll")
+            run("reject-renamed-reference", [generator.name, "--component", windows(cross_metadata), windows(output / "renamed.cs"), "--reference", windows(output / "Renamed.dll")], succeeds=False, marker="Projection reference filename does not match assembly identity:")
+            for identity in ("version", "culture", "token"):
+                source = output / ("cross-" + identity) / "Example.Component.winmd"
+                source.parent.mkdir(exist_ok=True)
+                run("cross-metadata-" + identity, [metadata_builder.name, windows(source), "cross-" + identity])
+                run("reject-cross-identity-" + identity, [generator.name, "--component", windows(source), windows(output / "identity-cross.cs"), "--reference", windows(external_projection)], succeeds=False, marker="External projection identity mismatch for")
+            cross = compile_file("cross-projection/Example.Component.dll", runtime + [output / "Cross.generated.cs"], interop_flags + ["/r:" + windows(external_projection)])
+            cross_consumer = compile_file("component-external.exe", [repo / "tests/winrt_projection/component_external.cs"], ["/r:" + windows(cross), "/r:" + windows(external_projection), "/r:" + windows(bridge)])
+            run("mark-cross-component", [marker.name, cross_consumer.name, "cross-marked.exe", "--assembly", "Example.Component"], marker="flags=WindowsRuntime")
+            run("mark-cross-external", [marker.name, "cross-marked.exe", "cross-winrt.exe", "--assembly", "Example.External"], marker="flags=WindowsRuntime")
+            folder = fixture("cross-game", cross_consumer.name, "ExternalProjectionTest", "CN=projection")
+            manifest = folder / "AppxManifest.xml"
+            manifest.write_text(manifest.read_text().replace("</Applications>", '</Applications><Extensions><Extension Category="windows.activatableClass.inProcessServer"><InProcessServer><Path>Example.Component.dll</Path><ActivatableClass ActivatableClassId="Example.Component.Engine" ThreadingModel="both"/><ActivatableClass ActivatableClassId="Example.External.Node" ThreadingModel="both"/></InProcessServer></Extension></Extensions>'))
+            for source in (host, cross_consumer): copy_owned_file(source, folder / source.name)
+            copy_owned_file(output / "cross-winrt.exe", folder / cross_consumer.name)
+            copy_owned_file(native, folder / "Example.Component.dll")
+            target = folder / "appx-projections"
+            target.mkdir(exist_ok=True)
+            for source in (bridge, cross, external_projection): copy_owned_file(source, target / source.name)
+            run("external-component-native", [host.name, "--log"], cwd=folder, marker="PASS: external component projection", evidence=folder / "managed.log")
+            wrong_reference = output / "wrong-reference/Example.External.dll"
+            wrong_reference.parent.mkdir(exist_ok=True)
+            run("mutate-external-iid", [metadata_builder.name, "--bad-projection-iid", windows(external_projection), windows(wrong_reference)])
+            run("generate-wrong-external-iid", [generator.name, "--component", windows(cross_metadata), windows(output / "WrongCross.cs"), "--reference", windows(wrong_reference)])
+            wrong_cross = compile_file("wrong-cross/Example.Component.dll", runtime + [output / "WrongCross.cs"], interop_flags + ["/r:" + windows(external_projection)])
+            copy_owned_file(wrong_cross, target / cross.name)
+            run("reject-external-iid", [host.name, "--log", "reject-iid"], cwd=folder, marker="PASS: external IID rejection", evidence=folder / "managed.log")
+            copy_owned_file(cross, target / cross.name)
+            if args.component_metadata:
+                source = args.component_metadata.resolve()
+                real_generated = output / "PackageComponent.generated.cs"
+                run("generate-package-component", [generator.name, "--component", windows(source), windows(real_generated), "--reference", windows(windows_interop)])
+                compile_file("package-component/" + source.stem + ".dll", runtime + [real_generated], interop_flags + ["/r:" + windows(windows_interop)])
+
 
             return 0
         if args.xbox_only:

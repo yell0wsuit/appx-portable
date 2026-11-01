@@ -5,9 +5,10 @@ using Mono.Cecil;
 class ComponentMetadata
 {
     static ModuleDefinition module;
+    static string space = "Example.Component";
     static TypeDefinition Type(string name, TypeAttributes flags, TypeReference parent)
     {
-        var type = new TypeDefinition("Example.Component", name, flags | TypeAttributes.WindowsRuntime, parent);
+        var type = new TypeDefinition(space, name, flags | TypeAttributes.WindowsRuntime, parent);
         module.Types.Add(type); return type;
     }
     static void Attribute(ICustomAttributeProvider owner, string name, TypeReference parameter, object value)
@@ -24,8 +25,47 @@ class ComponentMetadata
         for (int i=0; i<arguments.Length; i++) method.Parameters.Add(new ParameterDefinition("p"+i, ParameterAttributes.In, arguments[i]));
         owner.Methods.Add(method); return method;
     }
+    static void Default(TypeDefinition type, TypeDefinition iface)
+    {
+        var implementation = new InterfaceImplementation(iface);
+        var attr = new TypeReference("Windows.Foundation.Metadata", "DefaultAttribute", module, module.TypeSystem.CoreLibrary);
+        implementation.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, attr) { HasThis = true }));
+        type.Interfaces.Add(implementation);
+    }
+    static int External(string path)
+    {
+        using (var assembly = AssemblyDefinition.CreateAssembly(new AssemblyNameDefinition("Example.External", new Version(255,255,255,255)), "Example.External.winmd", ModuleKind.Dll))
+        {
+            module = assembly.MainModule; space = "Example.External";
+            var ts = module.TypeSystem;
+            var iface = Type("INode", TypeAttributes.Interface | TypeAttributes.Abstract | TypeAttributes.NotPublic, null);
+            Attribute(iface, "Guid", ts.String, "239635fc-88f0-4fd6-80b1-b21ac63c939a");
+            Method(iface, "Read", ts.Int32);
+            var node = Type("Node", TypeAttributes.Public | TypeAttributes.Sealed, ts.Object);
+            Default(node, iface); Attribute(node, "Activatable", ts.UInt32, (uint)1);
+            var ctor = Method(node, ".ctor", ts.Void); ctor.Attributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName;
+            Method(node, "Read", ts.Int32);
+            var mode = Type("Mode", TypeAttributes.Public | TypeAttributes.Sealed, module.ImportReference(typeof(Enum)));
+            mode.Fields.Add(new FieldDefinition("value__", FieldAttributes.Public | FieldAttributes.SpecialName | FieldAttributes.RTSpecialName, ts.Int32));
+            mode.Fields.Add(new FieldDefinition("First", FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.Literal | FieldAttributes.HasDefault, mode) { Constant = 7 });
+            mode.Fields.Add(new FieldDefinition("Second", FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.Literal | FieldAttributes.HasDefault, mode) { Constant = 19 });
+            assembly.Write(path);
+        }
+        return 0;
+    }
     static int Main(string[] args)
     {
+        if (args.Length > 1 && args[1] == "external") return External(args[0]);
+        if (args[0] == "--bad-projection-iid")
+        {
+            using (var input = AssemblyDefinition.ReadAssembly(args[1]))
+            {
+                var descriptor = input.MainModule.Types.Single(t => t.FullName == "Example.External.Node").CustomAttributes.Single(a => a.AttributeType.Name == "ProjectionTypeAttribute");
+                descriptor.ConstructorArguments[0] = new CustomAttributeArgument(input.MainModule.TypeSystem.String, "6b043574-7239-4c43-bbb1-42822f4451fb");
+                input.Write(args[2]);
+            }
+            return 0;
+        }
         if (args[0] == "--bad-reference")
         {
             using (var input = AssemblyDefinition.ReadAssembly(args[1]))
@@ -55,6 +95,27 @@ class ComponentMetadata
             Method(iface,"Raise",ts.String,ts.Int32,ts.Boolean,ts.String);
             Method(iface,"Fail",ts.Void);
             iface.Events.Add(new EventDefinition("Changed",EventAttributes.None,handler) { AddMethod=add,RemoveMethod=remove });
+            TypeDefinition externalHandler = null;
+            if (args.Length > 1 && args[1].StartsWith("cross", StringComparison.Ordinal))
+            {
+                var reference = new AssemblyNameReference("Example.External", new Version(255,255,255,255));
+                module.AssemblyReferences.Add(reference);
+                if (args[1] == "cross-version") reference.Version = new Version(1,0,0,0);
+                if (args[1] == "cross-culture") reference.Culture = "fr";
+                if (args[1] == "cross-token") reference.PublicKeyToken = new byte[] { 1,2,3,4,5,6,7,8 };
+                var node = new TypeReference("Example.External", "Node", module, reference);
+                var mode = new TypeReference("Example.External", "Mode", module, reference, true);
+                externalHandler = Type("ExternalChanged", TypeAttributes.Public | TypeAttributes.Sealed, module.ImportReference(typeof(MulticastDelegate)));
+                Attribute(externalHandler,"Guid",ts.String,"45684efa-c695-4027-8fc4-51bf12a079ac");
+                Method(externalHandler, "Invoke", ts.Void, node);
+                Method(iface,"SetNode",ts.Void,node);
+                Method(iface,"GetNode",node);
+                Method(iface,"NextMode",mode,mode);
+                var externalAdd = Method(iface,"add_ExternalChanged",token,externalHandler);
+                var externalRemove = Method(iface,"remove_ExternalChanged",ts.Void,token);
+                Method(iface,"RaiseExternal",ts.Void);
+                iface.Events.Add(new EventDefinition("ExternalChanged",EventAttributes.None,externalHandler) { AddMethod=externalAdd,RemoveMethod=externalRemove });
+            }
             var engine=Type("Engine",TypeAttributes.Public | TypeAttributes.Sealed,ts.Object);
             var implementation=new InterfaceImplementation(iface);
             // DefaultAttribute has no arguments.
@@ -69,6 +130,9 @@ class ComponentMetadata
                 foreach(var p in method.Parameters) copy.Parameters.Add(new ParameterDefinition(p.Name,p.Attributes,p.ParameterType));
             }
             engine.Events.Add(new EventDefinition("Changed",EventAttributes.None,handler) { AddMethod=engine.Methods[6], RemoveMethod=engine.Methods[7] });
+            if (externalHandler != null)
+                engine.Events.Add(new EventDefinition("ExternalChanged", EventAttributes.None, externalHandler) {
+                    AddMethod=engine.Methods.Single(m=>m.Name=="add_ExternalChanged"), RemoveMethod=engine.Methods.Single(m=>m.Name=="remove_ExternalChanged") });
             if(args.Length>1 && args[1]=="unsupported") { engine.Methods[1].Parameters[0].ParameterType=new ByReferenceType(ts.Int32); iface.Methods[0].Parameters[0].ParameterType=new ByReferenceType(ts.Int32); }
             if (args.Length > 1 && args[1] == "culture") assembly.Name.Culture = "fr";
             if (args.Length > 1 && args[1] == "signed") { assembly.Name.PublicKey = new byte[] { 1,2,3,4,5,6,7,8 }; assembly.Name.HasPublicKey = true; }

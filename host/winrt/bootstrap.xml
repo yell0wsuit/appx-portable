@@ -102,6 +102,9 @@
   <!-- A typed wrapper only: its referenced members are completion stubs. -->
   <Class Name="Windows.ApplicationModel.SuspendingEventArgs" />
   <Delegate Name="Windows.UI.Xaml.SuspendingEventHandler" />
+  <Class Name="Windows.UI.Xaml.Controls.SwapChainBackgroundPanel" />
+  <Class Name="Windows.UI.Core.PointerEventArgs" />
+  <Enum Name="Windows.System.VirtualKey" />
   <Class Name="Windows.UI.Core.CoreWindow">
     <Method Name="GetForCurrentThread" />
     <Property Name="Dispatcher" />

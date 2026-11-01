@@ -20,8 +20,9 @@ class ProjectionToolsTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             with zipfile.ZipFile(first) as archive:
                 manifest = json.loads(archive.read("tools.json"))
-                self.assertEqual(manifest["schema"], 1)
-                self.assertEqual(set(archive.namelist()), set(manifest["generator"] + manifest["runtime"] + ["tools.json", "LICENSE"]))
+                self.assertEqual(manifest["schema"], 2)
+                self.assertEqual(manifest["interop"], ["interop.cs"])
+                self.assertEqual(set(archive.namelist()), set(manifest["generator"] + manifest["runtime"] + manifest["interop"] + ["tools.json", "LICENSE"]))
                 self.assertTrue(all(not name.endswith((".dll", ".exe", ".winmd")) for name in archive.namelist()))
                 for name, digest in manifest["sha256"].items():
                     self.assertEqual(hashlib.sha256(archive.read(name)).hexdigest(), digest)
