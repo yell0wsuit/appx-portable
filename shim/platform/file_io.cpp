@@ -1,6 +1,7 @@
 // Windows.Storage.FileIO for Wine, whose Windows.Storage has none. Text reads
-// follow Windows: a byte-order mark selects UTF-8 or UTF-16, otherwise UTF-8,
-// and bytes without a Unicode mapping fail the operation.
+// follow windows.storage.dll: with at least 3 bytes, a byte-order mark selects
+// UTF-8 or UTF-16 and is skipped; otherwise UTF-8. UTF-16 reads bytes / 2 code
+// units, dropping an odd trailing byte. Bytes without a Unicode mapping fail.
 #include "com/completed_operation.h"
 #include "com/factory.h"
 #include "com/failed_operation.h"
@@ -49,13 +50,14 @@ HRESULT ReadBytes(IStorageFile* file, std::wstring& path, std::vector<BYTE>& byt
 }
 HRESULT Decode(const std::vector<BYTE>& bytes, UnicodeEncoding encoding, bool detect, std::wstring& text) {
     size_t start = 0;
-    if (detect && bytes.size() >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf) {
+    detect = detect && bytes.size() >= 3;
+    if (detect && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf) {
         encoding = UnicodeEncoding_Utf8;
         start = 3;
-    } else if (detect && bytes.size() >= 2 && bytes[0] == 0xff && bytes[1] == 0xfe) {
+    } else if (detect && bytes[0] == 0xff && bytes[1] == 0xfe) {
         encoding = UnicodeEncoding_Utf16LE;
         start = 2;
-    } else if (detect && bytes.size() >= 2 && bytes[0] == 0xfe && bytes[1] == 0xff) {
+    } else if (detect && bytes[0] == 0xfe && bytes[1] == 0xff) {
         encoding = UnicodeEncoding_Utf16BE;
         start = 2;
     }
@@ -72,7 +74,6 @@ HRESULT Decode(const std::vector<BYTE>& bytes, UnicodeEncoding encoding, bool de
         return S_OK;
     }
     if (encoding != UnicodeEncoding_Utf16LE && encoding != UnicodeEncoding_Utf16BE) return E_INVALIDARG;
-    if (count % 2) return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
     text.resize(count / 2);
     for (size_t i = 0; i < text.size(); ++i) {
         const BYTE first = bytes[start + i * 2], second = bytes[start + i * 2 + 1];
@@ -84,7 +85,7 @@ HRESULT Decode(const std::vector<BYTE>& bytes, UnicodeEncoding encoding, bool de
 HRESULT ReadText(IStorageFile* file, UnicodeEncoding encoding, bool detect, TextOperation** operation) {
     if (!operation) return E_POINTER;
     *operation = nullptr;
-    if (!file) return E_INVALIDARG;
+    if (!file) return E_POINTER;
     std::wstring path, text;
     std::vector<BYTE> bytes;
     HRESULT error = S_OK;
