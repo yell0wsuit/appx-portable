@@ -162,4 +162,12 @@
     <Event Name="Dismissed" />
   </Class>
   <Delegate Name="Windows.Foundation.TypedEventHandler`2" Adapter="TypedEvent" />
+  <Delegate Name="Windows.Foundation.EventHandler`1" Adapter="EventHandler" />
+  <Class Name="Windows.UI.Xaml.DispatcherTimer">
+    <Constructor />
+    <Property Name="Interval" />
+    <Method Name="Start" />
+    <Method Name="Stop" />
+    <Event Name="Tick" />
+  </Class>
 </Projection>

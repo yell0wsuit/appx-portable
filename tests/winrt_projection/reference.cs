@@ -55,6 +55,19 @@ namespace Windows.UI.Xaml
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_SizeChanged(WindowSizeChangedEventHandler handler) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.add_SizeChanged"); }
         public void remove_SizeChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.remove_SizeChanged"); }
     }
+    public class DispatcherTimer
+    {
+        public DispatcherTimer() { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer..ctor"); }
+        public global::System.TimeSpan Interval
+        {
+            get { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer.Interval"); }
+            set { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer.Interval"); }
+        }
+        public void Start() { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer.Start"); }
+        public void Stop() { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer.Stop"); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Tick(global::System.EventHandler<object> handler) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer.add_Tick"); }
+        public void remove_Tick(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer.remove_Tick"); }
+    }
     public sealed class PropertyMetadata { }
     public sealed class DependencyProperty
     {

@@ -42,6 +42,9 @@ namespace AppxPortable.WinRT
         private delegate int GetPointer(IntPtr self, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int GetUInt32(IntPtr self, out uint value);
+        // TimeSpan setters; a by-value struct of one INT64 is passed as one. GetInt64 is in property_abi.cs.
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int PutInt64(IntPtr self, long value);
         // WinRT boolean is one byte, unlike Win32 BOOL.
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int GetBooleanProperty(IntPtr self, out byte value);
@@ -215,6 +218,22 @@ namespace AppxPortable.WinRT
                 Errors.Check(call.Method<GetUInt32>(slot)(call.Self, out value));
                 return value;
             }
+        }
+
+        internal long Int64(int slot)
+        {
+            using (var call = new Access(this))
+            {
+                long value;
+                Errors.Check(call.Method<GetInt64>(slot)(call.Self, out value));
+                return value;
+            }
+        }
+
+        internal void SetInt64(int slot, long value)
+        {
+            using (var call = new Access(this))
+                Errors.Check(call.Method<PutInt64>(slot)(call.Self, value));
         }
 
         internal bool Boolean(int slot)
