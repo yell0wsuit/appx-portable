@@ -105,6 +105,10 @@
   <Class Name="Windows.UI.Xaml.Controls.SwapChainBackgroundPanel" />
   <Class Name="Windows.UI.Core.PointerEventArgs" />
   <Enum Name="Windows.System.VirtualKey" />
+  <Enum Name="Windows.UI.ViewManagement.ApplicationViewState" />
+  <Class Name="Windows.UI.ViewManagement.ApplicationView">
+    <Property Name="Value" />
+  </Class>
   <Class Name="Windows.UI.Core.CoreWindow">
     <Method Name="GetForCurrentThread" />
     <Property Name="Dispatcher" />

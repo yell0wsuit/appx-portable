@@ -888,3 +888,9 @@ explicit references under `appx-projections/`. Schema-1 bundles remain readable
 for components with no external references. References conflicting with package
 DLLs are refused. SDK reference generation is a build step; the installer does not
 download SDK metadata or invent missing external type definitions.
+
+`ApplicationView.Value` is selected with its metadata-defined ApplicationViewState
+enum. The managed static getter uses the existing native view policy; it does not
+cache the state or synthesize a managed orientation. The Page fixture compares it
+with an independent SDK IApplicationViewStatics call after landscape and portrait
+host resizes, through both an external consumer and the direct ABI build.

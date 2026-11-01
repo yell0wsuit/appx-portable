@@ -21,3 +21,5 @@ EXPORTS
   ValidateProgressData
   ValidateTextData
   ValidateViewboxData
+  SetApplicationViewOrientation
+  CheckApplicationViewState
