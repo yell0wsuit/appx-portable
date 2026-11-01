@@ -33,6 +33,8 @@ class SourceApp : Application
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ExerciseAnimationData();
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ExerciseAnimationClock(int stage);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateSourceRootFields();
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateGridChildren(int stage);
@@ -318,8 +320,7 @@ class SourceApp : Application
         Check(page.FindName("fade") is FadeInThemeAnimation, "named theme animation projection");
         Bad(page, "<Page" + Ns + " x:Name=\"changed\" Width=\"999\"><Page.Resources><Grid x:Key=\"new\"/></Page.Resources><Storyboard/></Page>", unchecked((int)0x80070057));
         Check(ExerciseAnimationData() == 0, "native timeline properties, children and collection lifetime");
-        try { storyboard.Begin(); throw new Exception("unimplemented storyboard clock accepted"); }
-        catch (NotImplementedException) { }
+        storyboard.Begin();
         WrongThread(() => storyboard.Begin());
         Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><FadeInThemeAnimation Duration=\"0:0:-1\"/></Storyboard></Page.Resources></Page>", unchecked((int)0x80070057));
         Bad(page, "<Page" + Ns + "><Page.Resources><Storyboard x:Name=\"invalid\"><Grid/></Storyboard></Page.Resources></Page>", unchecked((int)0x80070057));
@@ -336,7 +337,36 @@ class SourceApp : Application
         File.WriteAllText("Fixtures/frame-data.xaml", "<Page" + Ns + " x:Name=\"root\"><Frame><Storyboard x:Name=\"contentData\"/></Frame></Page>");
         Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/frame-data.xaml"));
         Check(page.Content is Frame && page.FindName("contentData") is Storyboard, "Frame object-typed timeline content");
-        Console.WriteLine("PASS: storyboard data loads with typed names, timeline properties and owned children; unsupported clocks fail explicitly");
+        Console.WriteLine("PASS: storyboard data loads with typed names, timeline properties and owned children");
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static void VerifyClock(SourcePage page)
+    {
+        File.WriteAllText("Fixtures/clock.xaml", "<Page" + Ns + " x:Name=\"splashRoot\"><Page.Resources>" +
+            "<Storyboard x:Name=\"enter\"><FadeInThemeAnimation Storyboard.TargetName=\"splashRoot\" Duration=\"0:0:0.2\"/></Storyboard>" +
+            "<Storyboard x:Name=\"inherited\" Storyboard.TargetName=\"leaf\"><FadeOutThemeAnimation Duration=\"0:0:0.05\"/>" +
+            "<FadeInThemeAnimation TargetName=\"leaf\" Storyboard.TargetName=\"nobody\" Duration=\"0:0:0.15\"/></Storyboard>" +
+            "<Storyboard x:Name=\"automatic\"><FadeOutThemeAnimation Storyboard.TargetName=\"leaf\"/></Storyboard>" +
+            "<Storyboard x:Name=\"missing\"><FadeInThemeAnimation Storyboard.TargetName=\"nobody\" Duration=\"0:0:1\"/></Storyboard>" +
+            "<Storyboard x:Name=\"untargeted\"><FadeInThemeAnimation Duration=\"0:0:1\"/></Storyboard>" +
+            "<Storyboard x:Name=\"nonvisual\"><FadeInThemeAnimation Storyboard.TargetName=\"enter\" Duration=\"0:0:1\"/></Storyboard>" +
+            "<Storyboard x:Name=\"clipped\" Duration=\"0:0:0.05\"><FadeInThemeAnimation Storyboard.TargetName=\"leaf\" Duration=\"0:0:10\"/></Storyboard>" +
+            "<Storyboard x:Name=\"forever\"><FadeInThemeAnimation Storyboard.TargetName=\"leaf\" Duration=\"Forever\"/></Storyboard>" +
+            "<Storyboard x:Name=\"empty\"/>" +
+            "</Page.Resources><Grid x:Name=\"leaf\"/></Page>");
+        Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/clock.xaml"));
+        for (int stage = 0; stage < 5; ++stage)
+        {
+            int hr = ExerciseAnimationClock(stage);
+            Check(hr == 0, "native storyboard clock stage " + stage + " failed at fixture line " + (hr & 0xffff));
+        }
+        // The game's splash shape: a theme fade targeting its own named Page root.
+        var enter = (Storyboard)page.FindName("enter");
+        enter.Begin();
+        try { ((Storyboard)page.FindName("missing")).Begin(); throw new Exception("unresolved animation target accepted"); }
+        catch (Exception error) { if (Marshal.GetHRForException(error) != unchecked((int)0x800F1000)) throw; }
+        WrongThread(() => enter.Begin());
+        Console.WriteLine("PASS: storyboard clocks resolve theme targets, complete on the UI thread, restart, stop and keep running storyboards alive");
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
     void Verify(SourcePage page)
@@ -384,6 +414,7 @@ class SourceApp : Application
         VerifyText(page);
         VerifyViewbox(page);
         VerifyAnimations(page);
+        VerifyClock(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");
         try { Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/error.xaml")); throw new Exception("callback error accepted"); }

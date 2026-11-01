@@ -1,4 +1,4 @@
-// SDK-typed checks for timeline data; clock execution is a separate contract.
+// SDK-typed checks for timeline data; clock execution is clock_projection_fixture.h.
 #undef GetCurrentTime
 #include <windows.ui.xaml.media.animation.h>
 #include <limits>
@@ -162,7 +162,8 @@ HRESULT Exercise() {
     std::thread worker([&] { wrong = children->Append(first.Get()); });
     worker.join();
     if (wrong != RPC_E_WRONG_THREAD) return E_FAIL;
-    if (parent->Begin() != E_NOTIMPL || parent->Pause() != E_NOTIMPL || parent->Stop() != E_NOTIMPL) return E_FAIL;
+    // This data carries timing modifiers the clock does not model.
+    if (parent->Begin() != E_NOTIMPL || parent->Pause() != E_NOTIMPL || FAILED(parent->Stop())) return E_FAIL;
     parent.Reset();
     parentTimeline.Reset();
     object.Reset();
