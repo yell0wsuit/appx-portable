@@ -157,6 +157,19 @@ namespace AppxPortable.WinRT
             }
         }
 
+        // A default-activated wrapper must participate in the same cache as
+        // wrappers first encountered through native results or callbacks.
+        internal static void Remember(object value, NativeObject native)
+        {
+            IntPtr identity = native.Identity();
+            lock (gate)
+            {
+                WeakReference previous;
+                if (!wrappers.TryGetValue(identity, out previous) || !previous.IsAlive)
+                    wrappers[identity] = new WeakReference(value);
+            }
+        }
+
         // The native object behind a projected argument. Managed implementations of
         // WinRT interfaces need their own native identity, which is not built yet.
         internal static NativeObject Of(object value)
@@ -180,9 +193,25 @@ namespace AppxPortable.WinRT
         // A projected argument as the interface the callee expects; dispose after the call.
         internal static NativeObject Argument(object value, Guid iid)
         {
+#if APPX_PORTABLE_INTEROP
+            if (value != null && !(value is INativeWrapper) && value is Interop.INativeObject)
+            {
+                using (var lease = ((Interop.INativeObject)value).AcquireInterface(iid)) return FromLease(lease);
+            }
+#endif
             NativeObject native = Of(value);
             return native == null ? null : ManagedObject.ComposedArgument(value, iid) ?? native.QueryInterface(iid);
         }
+
+#if APPX_PORTABLE_INTEROP
+        internal static NativeObject FromLease(SafeHandle borrowed)
+        {
+            if (borrowed == null) return null;
+            bool held = false;
+            try { borrowed.DangerousAddRef(ref held); return Borrow(borrowed.DangerousGetHandle()); }
+            finally { if (held) borrowed.DangerousRelease(); }
+        }
+#endif
 
         // IInspectable::GetRuntimeClassName, slot 4.
         internal string RuntimeClassName() { return String(4); }

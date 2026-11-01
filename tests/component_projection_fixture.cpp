@@ -9,6 +9,27 @@ using Microsoft::WRL::Wrappers::HString;
 MIDL_INTERFACE("723d9b38-bb73-463e-adc8-25b46f56121a") IChanged : IUnknown {
     virtual HRESULT STDMETHODCALLTYPE Invoke(INT32, BYTE, HSTRING, HSTRING*) = 0;
 };
+MIDL_INTERFACE("239635fc-88f0-4fd6-80b1-b21ac63c939a") INode : IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE Read(INT32*) = 0;
+};
+MIDL_INTERFACE("45684efa-c695-4027-8fc4-51bf12a079ac") IExternalChanged : IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE Invoke(INode*) = 0;
+};
+class Node final : public RuntimeClass<RuntimeClassFlags<WinRt>, INode> {
+    InspectableClass(L"Example.External.Node", BaseTrust);
+
+public:
+    HRESULT STDMETHODCALLTYPE Read(INT32* result) override {
+        *result = 73;
+        return S_OK;
+    }
+};
+class NodeFactory final : public ActivationFactory<Implements<IActivationFactory>> {
+public:
+    HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) noexcept override {
+        return Make<Node>().CopyTo(value);
+    }
+};
 MIDL_INTERFACE("2fc62e47-e1ce-471d-9098-014b39ca938e") IEngine : IInspectable {
     virtual HRESULT STDMETHODCALLTYPE Echo(INT32, INT32*) = 0;
     virtual HRESULT STDMETHODCALLTYPE SetState(BYTE, DOUBLE, UINT32) = 0;
@@ -19,9 +40,17 @@ MIDL_INTERFACE("2fc62e47-e1ce-471d-9098-014b39ca938e") IEngine : IInspectable {
     virtual HRESULT STDMETHODCALLTYPE Remove(INT64) = 0;
     virtual HRESULT STDMETHODCALLTYPE Raise(INT32, BYTE, HSTRING, HSTRING*) = 0;
     virtual HRESULT STDMETHODCALLTYPE Fail() = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetNode(INode*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetNode(INode**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE NextMode(INT32, INT32*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE AddExternal(IExternalChanged*, INT64*) = 0;
+    virtual HRESULT STDMETHODCALLTYPE RemoveExternal(INT64) = 0;
+    virtual HRESULT STDMETHODCALLTYPE RaiseExternal() = 0;
 };
 class Engine final : public RuntimeClass<RuntimeClassFlags<WinRt>, IEngine> {
     InspectableClass(L"Example.Component.Engine", BaseTrust);
+    ComPtr<INode> node_;
+    ComPtr<IExternalChanged> external_;
     DOUBLE state_ = 0;
     INT64 token_ = 0;
     std::vector<std::pair<INT64, ComPtr<IChanged>>> handlers_;
@@ -80,6 +109,28 @@ public:
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE Fail() override { return E_INVALIDARG; }
+    HRESULT STDMETHODCALLTYPE SetNode(INode* node) override {
+        // Validate the independently declared IID rather than accepting a layout cast.
+        node_.Reset();
+        return node ? node->QueryInterface(IID_PPV_ARGS(&node_)) : S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetNode(INode** result) override { return node_.CopyTo(result); }
+    HRESULT STDMETHODCALLTYPE NextMode(INT32 mode, INT32* result) override {
+        if (mode != 7) return E_INVALIDARG;
+        *result = 19;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE AddExternal(IExternalChanged* handler, INT64* token) override {
+        external_ = handler;
+        *token = 9001;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE RemoveExternal(INT64 token) override {
+        if (token != 9001) return E_INVALIDARG;
+        external_.Reset();
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE RaiseExternal() override { return external_ ? external_->Invoke(node_.Get()) : S_OK; }
 };
 class EngineFactory final : public ActivationFactory<Implements<IActivationFactory>> {
 public:
@@ -89,6 +140,8 @@ public:
 };
 extern "C" HRESULT WINAPI DllGetActivationFactory(HSTRING name, IActivationFactory** factory) {
     *factory = nullptr;
+    if (wcscmp(WindowsGetStringRawBuffer(name, nullptr), L"Example.External.Node") == 0)
+        return Make<NodeFactory>().CopyTo(factory);
     if (wcscmp(WindowsGetStringRawBuffer(name, nullptr), L"Example.Component.Engine") != 0)
         return CLASS_E_CLASSNOTAVAILABLE;
     return Make<EngineFactory>().CopyTo(factory);

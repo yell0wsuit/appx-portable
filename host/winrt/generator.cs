@@ -36,6 +36,7 @@ internal static partial class WinrtProjectionGenerator
 
     private static string Name(TypeReference type)
     {
+        ValidateExternalIdentity(type);
         if (Scalar(type) != null) return type.FullName == "System.Boolean" ? "bool" : type.FullName == "System.Char" ? "char" : Scalar(type);
         var array = type as ArrayType;
         if (array != null && array.IsVector && array.ElementType.FullName == "System.Byte") return "byte[]";
@@ -53,7 +54,7 @@ internal static partial class WinrtProjectionGenerator
         if (type.FullName == "Windows.Foundation.Uri") return "global::System.Uri";
         if (type.FullName == "Windows.UI.Xaml.Interop.TypeName") return "global::System.Type";
         if (type.FullName == "Windows.Foundation.TimeSpan") return "global::System.TimeSpan";
-        if (!selected.Contains(type.FullName))
+        if (!Available(type.FullName))
             throw new NotSupportedException("Type is not selected: " + type.FullName);
         return "global::" + type.FullName;
     }
@@ -81,13 +82,15 @@ internal static partial class WinrtProjectionGenerator
     {
         string borrowed = Runtime + "NativeObject.Borrow(" + pointer + ")";
         return type.FullName == "System.Object" ? Inspectable(borrowed)
-            : Wrapper(type) + ".FromNative(" + borrowed + ")";
+            : Wrapped(type, borrowed);
     }
 
     // The interface a class or interface parameter is passed as.
     private static string ArgumentIid(TypeReference type)
     {
         TypeDefinition definition = Find(type.FullName);
+        if (external.ContainsKey(type.FullName))
+            return "new global::System.Guid(\"" + (string)Attribute(definition, TypeDescriptor).ConstructorArguments[0].Value + "\")";
         return Guid(definition.IsInterface ? definition : DefaultInterface(definition));
     }
 
@@ -193,7 +196,7 @@ internal static partial class WinrtProjectionGenerator
                 throw new NotSupportedException("Unsupported enum ABI: " + definition.FullName);
             return "unchecked((" + Name(result) + ")" + receiver + ".UInt32(" + number + "))";
         }
-        return Wrapper(result) + ".FromNative(" + receiver + ".Object(" + number + "))";
+        return Wrapped(result, receiver + ".Object(" + number + ")");
     }
 
     // Opens the receiver for an ABI call and returns its name: a static factory,
@@ -215,6 +218,7 @@ internal static partial class WinrtProjectionGenerator
         string width = type.Fields.Single(f => f.Name == "value__").FieldType.FullName;
         string underlying = width == "System.Int32" ? "int" : width == "System.UInt32" ? "uint" : null;
         if (underlying == null) throw new NotSupportedException("Unsupported enum ABI: " + type.FullName);
+        if (interop) output.AppendLine("    [" + Interop + "ProjectionType(\"\")]");
         output.AppendLine("    public enum " + type.Name + " : " + underlying);
         output.AppendLine("    {");
         foreach (FieldDefinition field in type.Fields.Where(f => f.IsLiteral))
@@ -227,7 +231,7 @@ internal static partial class WinrtProjectionGenerator
     private static TypeDefinition Parameter(TypeReference type, string use)
     {
         TypeDefinition definition = Find(type.FullName);
-        if (!selected.Contains(type.FullName) || definition.IsEnum || definition.IsValueType)
+        if (!Available(type.FullName) || definition.IsEnum || definition.IsValueType)
             throw new NotSupportedException("Unsupported parameter type: " + type.FullName + " in " + use);
         return definition;
     }
@@ -296,7 +300,7 @@ internal static partial class WinrtProjectionGenerator
     {
         string name = method.Name;
         bool returns = method.ReturnType.FullName != "System.Void";
-        bool enumResult = returns && selected.Contains(method.ReturnType.FullName) && Find(method.ReturnType.FullName).IsEnum;
+        bool enumResult = returns && Available(method.ReturnType.FullName) && Find(method.ReturnType.FullName).IsEnum;
         string scalarResult = Scalar(method.ReturnType);
         bool stringResult = method.ReturnType.FullName == "System.String";
         string resultAbi = scalarResult ?? "global::System.IntPtr";
@@ -345,7 +349,7 @@ internal static partial class WinrtProjectionGenerator
                 native = Runtime + "NativeTypeName.Abi";
             }
             else if (full == "System.Object") prepare = Runtime + "NativeObject.Box(" + value + ")";
-            else if (selected.Contains(full) && Find(full).IsEnum)
+            else if (Available(full) && Find(full).IsEnum)
             {
                 string width = Find(full).Fields.Single(f => f.Name == "value__").FieldType.FullName;
                 if (width != "System.Int32" && width != "System.UInt32") throw new NotSupportedException("Unsupported enum parameter: " + full);
@@ -398,7 +402,7 @@ internal static partial class WinrtProjectionGenerator
         else if (returns)
         {
             string result = Runtime + "NativeObject.ObjectResult(hr, result)";
-            output.AppendLine("                    return " + (method.ReturnType.FullName == "System.Object" ? Inspectable(result) : Wrapper(method.ReturnType) + ".FromNative(" + result + ")") + ";");
+            output.AppendLine("                    return " + (method.ReturnType.FullName == "System.Object" ? Inspectable(result) : Wrapped(method.ReturnType, result)) + ";");
         }
         else output.AppendLine("                    " + Runtime + "Errors.Check(hr);");
         output.AppendLine("                }");
@@ -952,6 +956,12 @@ internal static partial class WinrtProjectionGenerator
         if (!root) bases.Add("global::" + baseClass.FullName);
         bases.AddRange(implemented.Select(i => "global::" + i));
         if (root) bases.Add(Runtime + "INativeWrapper");
+        if (interop)
+        {
+            providers.Add(type);
+            output.AppendLine("    [" + Interop + "ProjectionType(\"" + Iid(primary) + "\")]");
+            if (root) bases.Add(Interop + "INativeObject");
+        }
         output.AppendLine("    public " + (type.IsSealed ? "sealed " : "") + "class " + type.Name +
             (bases.Count == 0 ? "" : " : " + string.Join(", ", bases)));
         output.AppendLine("    {");
@@ -961,6 +971,7 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("        internal " + Runtime + "NativeObject native;");
             if (composable) output.AppendLine("        internal " + Runtime + "ManagedObject outer;");
             output.AppendLine("        " + Runtime + "NativeObject " + Runtime + "INativeWrapper.Native { get { return native; } }");
+            if (interop) output.AppendLine("        global::System.Runtime.InteropServices.SafeHandle " + Interop + "INativeObject.AcquireInterface(global::System.Guid iid) { return " + Runtime + "NativeObject.Argument(this, iid); }");
             output.AppendLine("        internal " + type.Name + "(" + Runtime + "NativeObject value) { native = value; }");
             if (composable) output.AppendLine("        internal " + type.Name + "(" + Runtime + "Composing marker) { }");
         }
@@ -996,6 +1007,7 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("            using (var factory = " + Runtime + "NativeObject.Factory(\"" + type.FullName + "\", new global::System.Guid(\"00000035-0000-0000-c000-000000000046\")))");
             output.AppendLine("            using (var value = factory.Object(6))");
             output.AppendLine("                native = value.QueryInterface(" + Guid(primary) + ");");
+            output.AppendLine("            " + Runtime + "NativeObject.Remember(this, native);");
             output.AppendLine("        }");
         }
         if (constructor && composable)
@@ -1096,7 +1108,7 @@ internal static partial class WinrtProjectionGenerator
     {
         try
         {
-            if (args.Length != 3) throw new ArgumentException("generator METADATA_DIRECTORY SURFACE_XML OUTPUT_CS | generator --component INPUT_WINMD OUTPUT_CS");
+            if (args.Length < 3) throw new ArgumentException("generator METADATA_DIRECTORY SURFACE_XML OUTPUT_CS | generator --component INPUT_WINMD OUTPUT_CS");
             bool component = args[0] == "--component";
             string metadata = component ? Path.GetDirectoryName(Path.GetFullPath(args[1])) : args[0];
             var resolver = new DefaultAssemblyResolver();
@@ -1116,12 +1128,19 @@ internal static partial class WinrtProjectionGenerator
                     types.Add(type.FullName, type);
                 }
             }
-            if (component && (modules.Single().Assembly.Name.HasPublicKey || modules.Single().Assembly.Name.PublicKeyToken.Length != 0 ||
-                !string.IsNullOrEmpty(modules.Single().Assembly.Name.Culture)))
-                throw new NotSupportedException("Unsupported component assembly identity: " + modules.Single().Assembly.Name.FullName);
-            if (component && !string.Equals(Path.GetFileNameWithoutExtension(args[1]), modules.Single().Assembly.Name.Name, StringComparison.Ordinal))
-                throw new InvalidDataException("Component metadata filename does not match assembly identity: " + modules.Single().Assembly.Name.Name);
-            var document = component ? ComponentSurface(modules.Single()) : new XmlDocument { XmlResolver = null };
+            var sourceModule = component ? modules.Single() : null;
+            for (int index = 3; index < args.Length; ++index)
+            {
+                if (args[index] == "--interop") interop = true;
+                else if (args[index] == "--reference" && index + 1 < args.Length) { interop = true; ReferenceProjection(args[++index]); }
+                else throw new ArgumentException("Unsupported generator option: " + args[index]);
+            }
+            if (component && (sourceModule.Assembly.Name.HasPublicKey || sourceModule.Assembly.Name.PublicKeyToken.Length != 0 ||
+                !string.IsNullOrEmpty(sourceModule.Assembly.Name.Culture)))
+                throw new NotSupportedException("Unsupported component assembly identity: " + sourceModule.Assembly.Name.FullName);
+            if (component && !string.Equals(Path.GetFileNameWithoutExtension(args[1]), sourceModule.Assembly.Name.Name, StringComparison.Ordinal))
+                throw new InvalidDataException("Component metadata filename does not match assembly identity: " + sourceModule.Assembly.Name.Name);
+            var document = component ? ComponentSurface(sourceModule) : new XmlDocument { XmlResolver = null };
             if (!component) using (XmlReader reader = XmlReader.Create(args[1], new XmlReaderSettings
             {
                 DtdProcessing = DtdProcessing.Prohibit,
@@ -1143,7 +1162,9 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine((component ? "// Component SHA256 " : "// Surface SHA256 ") + Hash(args[1]));
             foreach (ModuleDefinition module in selected.Select(n => Find(n).Module).Distinct().OrderBy(m => m.Name, StringComparer.Ordinal))
                 output.AppendLine("// " + module.Name + " SHA256 " + Hash(module.FileName));
-            output.AppendLine("[assembly: global::System.Reflection.AssemblyVersion(\"" + (component ? modules.Single().Assembly.Name.Version.ToString() : "255.255.255.255") + "\")]");
+            output.AppendLine("[assembly: global::System.Reflection.AssemblyVersion(\"" + (component ? sourceModule.Assembly.Name.Version.ToString() : "255.255.255.255") + "\")]");
+            if (interop) output.AppendLine("[assembly: " + Interop + "ProjectionProvider(typeof(global::AppxPortable.WinRT.Projected.CrossAssemblyProvider))]");
+            foreach (var reference in external.Values.Select(t => t.Module).Distinct()) output.AppendLine("// Reference " + reference.Name + " SHA256 " + Hash(reference.FileName));
             foreach (XmlElement element in elements.OrderBy(e => e.GetAttribute("Name"), StringComparer.Ordinal))
             {
                 TypeDefinition type = Find(element.GetAttribute("Name"));
@@ -1182,6 +1203,7 @@ internal static partial class WinrtProjectionGenerator
                 else throw new InvalidDataException("Surface kind does not match metadata: " + type.FullName);
                 output.AppendLine("}");
             }
+            if (interop) Provider(output);
             File.WriteAllText(args[2], output.ToString(), new UTF8Encoding(false));
             Console.WriteLine("Generated " + selected.Count + " metadata types into " + args[2]);
             return 0;
