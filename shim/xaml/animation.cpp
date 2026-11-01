@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <set>
 #include <vector>
 using namespace Microsoft::WRL;
@@ -34,6 +35,29 @@ HRESULT Unsupported(const wchar_t* member) {
     Log("UNIMPL", "%ls hr=%08lx", member, E_NOTIMPL);
     return E_NOTIMPL;
 }
+// Windows.UI.Xaml originates this when Begin cannot resolve an animation target.
+constexpr HRESULT AnimationError = static_cast<HRESULT>(0x800F1000L);
+HRESULT TargetFailure(const wchar_t* reason, const std::wstring& name) {
+    Log("FAIL", "Storyboard.Begin %ls '%ls' hr=%08lx", reason, name.c_str(), AnimationError);
+    return AnimationError;
+}
+constexpr INT64 Never = std::numeric_limits<INT64>::max();
+// Windows' aero.msstyles Animations storyboards 4 (FadeIn) and 5 (FadeOut), target 1,
+// hold one opacity transform: linear, start 0 ms, 167 ms, to 1.0 or 0.0 from the
+// current opacity. Wine's uxtheme has no GetThemeAnimationProperty to read it from.
+constexpr INT64 ThemeFadeDuration = 1670000;
+INT64 Add(INT64 a, INT64 b) { return a == Never || b == Never || a > Never - b ? Never : a + b; }
+// In 100 ns units, the TimeSpan scale.
+INT64 Now() {
+    static const INT64 frequency = [] {
+        LARGE_INTEGER value;
+        QueryPerformanceFrequency(&value);
+        return value.QuadPart;
+    }();
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    return now.QuadPart / frequency * 10000000 + now.QuadPart % frequency * 10000000 / frequency;
+}
 class TimeValue final : public RuntimeClass<RuntimeClassFlags<WinRt>, TimeReference> {
     InspectableClass(L"AppxPortable.Xaml.TimeSpanReference", BaseTrust);
     TimeSpan value_;
@@ -46,6 +70,14 @@ public:
         return S_OK;
     }
 };
+MIDL_INTERFACE("9CA679D7-6320-4CA9-B080-C9991102C5DA") IAnimationData;
+// A child's completion time on its storyboard's clock, from Begin.
+struct Scheduled {
+    ComPtr<IAnimationData> timeline;
+    INT64 end;
+    bool fired = false;
+};
+enum class Phase { Stopped, Active, Filling };
 struct State {
     const DWORD thread = GetCurrentThreadId();
     bool storyboard = false, reverse = false;
@@ -57,16 +89,146 @@ struct State {
     std::wstring targetName, themeTargetName, targetProperty;
     std::weak_ptr<SourceNameScope> scope;
     Items children;
+    // Storyboard clock. Begin and Stop bump the generation so a tick notices
+    // when a Completed handler restarted or stopped the clock under it.
+    Phase clock = Phase::Stopped;
+    INT64 started = 0, offset = 0, total = 0;
+    std::vector<Scheduled> plan;
+    UINT_PTR timer = 0;
+    UINT generation = 0;
     HRESULT CheckThread() const { return GetCurrentThreadId() == thread ? S_OK : RPC_E_WRONG_THREAD; }
 };
 MIDL_INTERFACE("9CA679D7-6320-4CA9-B080-C9991102C5DA") IAnimationData : IUnknown {
     virtual HRESULT STDMETHODCALLTYPE GetData(std::shared_ptr<State> & value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE RaiseCompleted() = 0;
 };
 HRESULT Data(IInspectable* value, std::shared_ptr<State>& result) {
     if (!value) return E_INVALIDARG;
     ComPtr<IAnimationData> node;
     auto hr = value->QueryInterface(IID_PPV_ARGS(&node));
     return FAILED(hr) ? hr : node->GetData(result);
+}
+struct Running {
+    ComPtr<IAnimationData> storyboard; // A running clock keeps its storyboard alive, as the OS time manager does.
+    std::shared_ptr<State> state;
+};
+// Thread timers fire from the creating UI thread's message loop.
+std::map<UINT_PTR, Running>& Clocks() {
+    static thread_local std::map<UINT_PTR, Running> clocks;
+    return clocks;
+}
+void Disarm(State& state) {
+    if (!state.timer) return;
+    KillTimer(nullptr, state.timer);
+    auto id = state.timer;
+    state.timer = 0;
+    // Erase last: it may release the final reference to the storyboard.
+    auto running = std::move(Clocks()[id]);
+    Clocks().erase(id);
+}
+void CALLBACK Tick(HWND, UINT, UINT_PTR id, DWORD);
+HRESULT Arm(State& state) {
+    const auto elapsed = Now() - state.started;
+    auto next = state.total;
+    for (const auto& child : state.plan)
+        if (!child.fired && child.end <= state.total) next = std::min(next, child.end);
+    UINT delay = USER_TIMER_MAXIMUM;
+    if (next != Never) {
+        const auto wait = next > elapsed ? (next - elapsed + 9999) / 10000 : 0;
+        delay = static_cast<UINT>(std::clamp<INT64>(wait, USER_TIMER_MINIMUM, USER_TIMER_MAXIMUM));
+    }
+    auto id = SetTimer(nullptr, state.timer, delay, Tick);
+    return id == state.timer ? S_OK : id ? (state.timer = id, S_OK) : HRESULT_FROM_WIN32(GetLastError());
+}
+void CALLBACK Tick(HWND, UINT, UINT_PTR id, DWORD) {
+    auto found = Clocks().find(id);
+    if (found == Clocks().end()) return;
+    // Handlers may stop, restart or drop the storyboard.
+    auto running = found->second;
+    auto& state = *running.state;
+    const auto generation = state.generation;
+    const auto elapsed = Now() - state.started;
+    for (size_t i = 0; i < state.plan.size(); ++i) {
+        auto& child = state.plan[i];
+        if (child.fired || child.end > elapsed || child.end > state.total) continue;
+        child.fired = true;
+        auto timeline = child.timeline;
+        auto hr = timeline->RaiseCompleted();
+        if (FAILED(hr)) Log("FAIL", "Timeline Completed handler hr=%08lx", hr);
+        if (state.generation != generation) return;
+    }
+    if (elapsed >= state.total) {
+        Disarm(state);
+        state.clock = state.fill == FillBehavior_HoldEnd ? Phase::Filling : Phase::Stopped;
+        auto hr = running.storyboard->RaiseCompleted();
+        if (FAILED(hr)) Log("FAIL", "Storyboard Completed handler hr=%08lx", hr);
+        return;
+    }
+    auto hr = Arm(state);
+    if (FAILED(hr)) Log("FAIL", "Storyboard clock timer hr=%08lx", hr);
+}
+// Timing the clock does not model fails by name rather than running wrongly.
+HRESULT Modeled(const State& state, INT64& begin) {
+    if (state.speed != 1) return Unsupported(L"Storyboard.Begin SpeedRatio");
+    if (state.reverse) return Unsupported(L"Storyboard.Begin AutoReverse");
+    if (state.repeat.Type != RepeatBehaviorType_Count || state.repeat.Count != 1)
+        return Unsupported(L"Storyboard.Begin RepeatBehavior");
+    if (!state.begin) return Unsupported(L"Storyboard.Begin null BeginTime");
+    TimeSpan value{};
+    auto hr = state.begin->get_Value(&value);
+    begin = value.Duration;
+    return hr;
+}
+// Theme animations animate their target's Opacity, so it must be a UIElement in
+// the namescope of the theme animation, or of its storyboard for code-built children.
+HRESULT ResolveTarget(const State& child, const State& storyboard) {
+    const auto& name = !child.themeTargetName.empty() ? child.themeTargetName
+                       : !child.targetName.empty()    ? child.targetName
+                                                      : storyboard.targetName;
+    if (name.empty()) return TargetFailure(L"has no target for", name);
+    auto scope = child.scope.lock();
+    if (!scope) scope = storyboard.scope.lock();
+    if (!scope) return TargetFailure(L"has no namescope for", name);
+    ComPtr<IInspectable> target;
+    if (!scope->rootName.empty() && scope->rootName == name) {
+        auto hr = scope->root.As(&target);
+        if (FAILED(hr)) return hr;
+    } else {
+        auto named = scope->elements.find(name);
+        if (named != scope->elements.end()) target = named->second;
+    }
+    if (!target) return TargetFailure(L"cannot resolve TargetName", name);
+    ComPtr<IUIElement> element;
+    return SUCCEEDED(target.As(&element)) ? S_OK : TargetFailure(L"cannot animate Opacity of", name);
+}
+// Validates the whole storyboard before Begin changes any clock state.
+HRESULT Schedule(const State& storyboard, std::vector<Scheduled>& plan, INT64& offset, INT64& total) {
+    auto hr = Modeled(storyboard, offset);
+    if (FAILED(hr)) return hr;
+    INT64 natural = 0;
+    for (const auto& item : storyboard.children) {
+        ComPtr<IAnimationData> timeline;
+        std::shared_ptr<State> child;
+        hr = item.As(&timeline);
+        if (SUCCEEDED(hr)) hr = timeline->GetData(child);
+        if (FAILED(hr)) return hr;
+        if (child->storyboard) return Unsupported(L"Storyboard.Begin nested Storyboard");
+        INT64 begin = 0, length = Never;
+        hr = Modeled(*child, begin);
+        if (FAILED(hr)) return hr;
+        if (child->duration.Type == DurationType_Automatic) length = ThemeFadeDuration;
+        if (child->duration.Type == DurationType_TimeSpan) length = child->duration.TimeSpan.Duration;
+        hr = ResolveTarget(*child, storyboard);
+        if (FAILED(hr)) return hr;
+        const auto end = Add(begin, length);
+        natural = std::max(natural, end);
+        plan.push_back({timeline, Add(offset, end)});
+    }
+    const auto length = storyboard.duration.Type == DurationType_Automatic ? natural
+                        : storyboard.duration.Type == DurationType_Forever ? Never
+                                                                           : storyboard.duration.TimeSpan.Duration;
+    total = Add(offset, length);
+    return S_OK;
 }
 bool Contains(const std::shared_ptr<State>& node, State* owner, std::set<State*>& seen) {
     if (node.get() == owner) return true;
@@ -322,6 +484,12 @@ public:
         if (SUCCEEDED(hr)) value = state_;
         return hr;
     }
+    HRESULT STDMETHODCALLTYPE RaiseCompleted() override {
+        // The sender is the controlling identity, as for other composed events.
+        ComPtr<IInspectable> sender;
+        auto hr = this->QueryInterface(IID_PPV_ARGS(&sender));
+        return FAILED(hr) ? hr : completed_.InvokeAll(sender.Get(), nullptr);
+    }
     HRESULT STDMETHODCALLTYPE get_AutoReverse(boolean* value) override {
         if (!value) return E_POINTER;
         *value = false;
@@ -460,19 +628,62 @@ public:
         return FAILED(hr) ? hr : children_.CopyTo(value);
     }
     HRESULT STDMETHODCALLTYPE Seek(TimeSpan) override { return Clock(L"Storyboard.Seek"); }
-    HRESULT STDMETHODCALLTYPE Stop() override { return Clock(L"Storyboard.Stop"); }
-    HRESULT STDMETHODCALLTYPE Begin() override { return Clock(L"Storyboard.Begin"); }
+    HRESULT STDMETHODCALLTYPE Stop() override {
+        auto hr = CheckThread();
+        if (FAILED(hr)) return hr;
+        ++state_->generation;
+        state_->clock = Phase::Stopped;
+        Disarm(*state_);
+        return S_OK;
+    }
+    // The clock only times and completes; theme animations do not yet change Opacity.
+    HRESULT STDMETHODCALLTYPE Begin() override {
+        auto hr = CheckThread();
+        if (FAILED(hr)) return hr;
+        return Guard([&]() -> HRESULT {
+            std::vector<Scheduled> plan;
+            INT64 offset = 0, total = 0;
+            auto result = Schedule(*state_, plan, offset, total);
+            if (FAILED(result)) return result;
+            Running running{nullptr, state_};
+            result = QueryInterface(IID_PPV_ARGS(&running.storyboard));
+            if (FAILED(result)) return result;
+            auto& state = *state_;
+            ++state.generation;
+            Disarm(state);
+            state.plan = std::move(plan);
+            state.offset = offset;
+            state.total = total;
+            state.started = Now();
+            result = Arm(state);
+            if (FAILED(result)) {
+                state.clock = Phase::Stopped;
+                return result;
+            }
+            state.clock = Phase::Active;
+            Clocks()[state.timer] = std::move(running);
+            return S_OK;
+        });
+    }
     HRESULT STDMETHODCALLTYPE Pause() override { return Clock(L"Storyboard.Pause"); }
     HRESULT STDMETHODCALLTYPE Resume() override { return Clock(L"Storyboard.Resume"); }
     HRESULT STDMETHODCALLTYPE GetCurrentState(ClockState* value) override {
         if (!value) return E_POINTER;
         *value = ClockState_Stopped;
-        return Clock(L"Storyboard.GetCurrentState");
+        auto hr = CheckThread();
+        if (SUCCEEDED(hr) && state_->clock != Phase::Stopped)
+            *value = state_->clock == Phase::Active ? ClockState_Active : ClockState_Filling;
+        return hr;
     }
     HRESULT STDMETHODCALLTYPE GetCurrentTime(TimeSpan* value) override {
         if (!value) return E_POINTER;
         *value = {};
-        return Clock(L"Storyboard.GetCurrentTime");
+        auto hr = CheckThread();
+        if (FAILED(hr) || state_->clock == Phase::Stopped) return hr;
+        const auto end =
+            state_->clock == Phase::Filling ? state_->total : std::min(Now() - state_->started, state_->total);
+        value->Duration = std::max<INT64>(end - state_->offset, 0);
+        return S_OK;
     }
     HRESULT STDMETHODCALLTYPE SeekAlignedToLastTick(TimeSpan) override {
         return Clock(L"Storyboard.SeekAlignedToLastTick");

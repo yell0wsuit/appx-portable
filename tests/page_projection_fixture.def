@@ -12,6 +12,7 @@ EXPORTS
   ExerciseResourceMap
   ValidateLoadedResources
   ExerciseAnimationData
+  ExerciseAnimationClock
   ValidateSourceRootFields
   ValidateGridChildren
   ValidateBrushData
