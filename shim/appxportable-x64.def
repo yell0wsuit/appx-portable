@@ -3,6 +3,7 @@ EXPORTS
   ShimGetFactory
   DllGetActivationFactory PRIVATE
   DllCanUnloadNow PRIVATE
+  ShimGetPackageFactory
   ShimBootstrap
   ShimSetManagedCoreWindowMode
   ShimRunNativeApplication

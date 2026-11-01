@@ -131,6 +131,10 @@ jobs:
                   $assets += "$build/WebView2-LICENSE.txt"
                   Compress-Archive -LiteralPath $assets -DestinationPath "build/appx-portable-$env:RELEASE_TAG-$env:ARCHITECTURE.zip" -CompressionLevel Optimal -Force
 
+            - name: Package install-time projection tools
+              if: matrix.architecture == 'x86'
+              run: python scripts/package-winrt-tools.py --output build/appx-portable-winrt-tools.zip
+
             - name: Upload package
               uses: actions/upload-artifact@v7
               with:
@@ -204,6 +208,7 @@ jobs:
                     "build/appx-portable-$env:RELEASE_TAG-$architecture.zip"
                     "build/appx-portable-$env:RELEASE_TAG-wine-$architecture.zip"
                   }
+                  $archives += 'build/appx-portable-winrt-tools.zip'
                   $archives += @(
                     'build/wine-clr/appx-portable-wine-clr-macos.tar.xz'
                     'build/wine-clr/appx-portable-wine-clr-sources.tar.xz'

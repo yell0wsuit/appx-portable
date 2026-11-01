@@ -36,6 +36,9 @@ internal static partial class WinrtProjectionGenerator
 
     private static string Name(TypeReference type)
     {
+        if (Scalar(type) != null) return type.FullName == "System.Boolean" ? "bool" : type.FullName == "System.Char" ? "char" : Scalar(type);
+        var array = type as ArrayType;
+        if (array != null && array.IsVector && array.ElementType.FullName == "System.Byte") return "byte[]";
         var generic = type as GenericInstanceType;
         if (generic != null)
         {
@@ -232,12 +235,20 @@ internal static partial class WinrtProjectionGenerator
     private static void Delegate(StringBuilder output, TypeDefinition type)
     {
         MethodDefinition invoke = type.Methods.Single(m => m.Name == "Invoke");
-        if (invoke.ReturnType.FullName != "System.Void") throw new NotSupportedException("Unsupported delegate return: " + type.FullName);
         var parameters = invoke.Parameters.ToList();
-        foreach (ParameterDefinition parameter in parameters.Where(p => p.ParameterType.FullName != "System.Object"))
+        foreach (ParameterDefinition parameter in parameters)
+        {
+            string full = parameter.ParameterType.FullName;
+            if (Scalar(parameter.ParameterType) != null || full == "System.String" || full == "System.Object") continue;
             if (IsDelegate(Parameter(parameter.ParameterType, type.FullName)))
                 throw new NotSupportedException("Unsupported delegate parameter: " + type.FullName);
-        output.AppendLine("    public delegate void " + type.Name + "(" +
+        }
+        bool returns = invoke.ReturnType.FullName != "System.Void";
+        string resultAbi = Scalar(invoke.ReturnType);
+        bool text = invoke.ReturnType.FullName == "System.String";
+        if (returns && resultAbi == null && !text) throw new NotSupportedException("Unsupported delegate return: " + type.FullName);
+        if (text) resultAbi = "global::System.IntPtr";
+        output.AppendLine("    public delegate " + (returns ? Name(invoke.ReturnType) : "void") + " " + type.Name + "(" +
             string.Join(", ", parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ");");
         output.AppendLine("}");
         output.AppendLine("namespace AppxPortable.WinRT.Projected");
@@ -245,19 +256,35 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("    // " + type.FullName + " as a native callback; delegates are IUnknown-based.");
         output.AppendLine("    internal static class " + type.FullName.Replace('.', '_'));
         output.AppendLine("    {");
+        string signature = "global::System.IntPtr self" + string.Concat(parameters.Select(p => ", " + (Scalar(p.ParameterType) ?? "global::System.IntPtr") + " @" + p.Name)) +
+            (returns ? ", out " + resultAbi + " result" : "");
         output.AppendLine("        " + StdCall);
-        output.AppendLine("        private delegate int InvokeCall(global::System.IntPtr self" +
-            string.Concat(parameters.Select(p => ", global::System.IntPtr @" + p.Name)) + ");");
-        output.AppendLine("        private static readonly InvokeCall invoke = (self" + string.Concat(parameters.Select(p => ", @" + p.Name)) +
-            ") => " + Runtime + "ManagedObject.Call(self, target => ((global::" + type.FullName + ")target)(" +
-            string.Join(", ", parameters.Select(p => Unwrap(p.ParameterType, "@" + p.Name))) + "));");
+        output.AppendLine("        private delegate int InvokeCall(" + signature + ");");
+        output.AppendLine("        private static readonly InvokeCall invoke = Invoke;");
+        output.AppendLine("        private static int Invoke(" + signature + ")");
+        output.AppendLine("        {");
+        if (returns) output.AppendLine("            " + resultAbi + " value = default(" + resultAbi + ");");
+        output.AppendLine("            int hr = " + Runtime + "ManagedObject.Call(self, target =>");
+        output.AppendLine("            {");
+        string call = "((global::" + type.FullName + ")target)(" + string.Join(", ", parameters.Select(p =>
+            p.ParameterType.FullName == "System.Boolean" ? "@" + p.Name + " != 0" :
+            p.ParameterType.FullName == "System.Char" ? "(char)@" + p.Name :
+            Scalar(p.ParameterType) != null ? "@" + p.Name :
+            p.ParameterType.FullName == "System.String" ? Runtime + "NativeString.Read(@" + p.Name + ")" : Unwrap(p.ParameterType, "@" + p.Name))) + ")";
+        if (text) output.AppendLine("                using (var resultString = new " + Runtime + "NativeString(" + call + ")) value = resultString.Detach();");
+        else if (returns) output.AppendLine("                value = " + (invoke.ReturnType.FullName == "System.Boolean" ? call + " ? (byte)1 : (byte)0" : invoke.ReturnType.FullName == "System.Char" ? "(ushort)" + call : call) + ";");
+        else output.AppendLine("                " + call + ";");
+        output.AppendLine("            });");
+        if (returns) output.AppendLine("            result = value;");
+        output.AppendLine("            return hr;");
+        output.AppendLine("        }");
         output.AppendLine("        internal static readonly " + Runtime + "NativeInterface Interface = new " + Runtime +
             "NativeInterface(" + Guid(type) + ", false, invoke);");
         output.AppendLine("    }");
     }
 
-    // Emit the selected pointer/TypeName ABI directly. Every IID and method slot
-    // comes from WinMD; unsupported value/array/generic signatures fail generation.
+    // Emit the selected pointer/TypeName/scalar/input-byte-array ABI directly.
+    // Every IID and slot comes from WinMD; unsupported signatures fail generation.
     private static void Method(StringBuilder output, TypeDefinition type, string name, bool composable)
     {
         var methods = type.Methods.Where(m => m.Name == name && !m.IsConstructor).ToList();
@@ -270,14 +297,16 @@ internal static partial class WinrtProjectionGenerator
         string name = method.Name;
         bool returns = method.ReturnType.FullName != "System.Void";
         bool enumResult = returns && selected.Contains(method.ReturnType.FullName) && Find(method.ReturnType.FullName).IsEnum;
-        string resultAbi = "global::System.IntPtr";
+        string scalarResult = Scalar(method.ReturnType);
+        bool stringResult = method.ReturnType.FullName == "System.String";
+        string resultAbi = scalarResult ?? "global::System.IntPtr";
         if (enumResult)
         {
             string width = Find(method.ReturnType.FullName).Fields.Single(f => f.Name == "value__").FieldType.FullName;
             if (width != "System.Int32" && width != "System.UInt32") throw new NotSupportedException("Unsupported enum return: " + method.ReturnType.FullName);
             resultAbi = width == "System.Int32" ? "int" : "uint";
         }
-        else if (returns && method.ReturnType.FullName != "System.Object") Parameter(method.ReturnType, type.FullName + "." + name);
+        else if (returns && scalarResult == null && !stringResult && method.ReturnType.FullName != "System.Object") Parameter(method.ReturnType, type.FullName + "." + name);
         TypeDefinition owner = MemberInterface(type, method);
         int slot = Slot(owner, method);
         string nativeName = name + (overloaded ? "_" + Literal(slot) : "");
@@ -288,6 +317,26 @@ internal static partial class WinrtProjectionGenerator
         {
             string full = parameter.ParameterType.FullName, value = "@" + parameter.Name;
             string local = "argument" + Literal(parameter.Index), prepare;
+            if (parameter.IsOut || parameter.ParameterType.IsByReference || parameter.ParameterType.IsPointer)
+                throw new NotSupportedException("Unsupported parameter: " + method.FullName + " " + parameter.Name);
+            string scalar = Scalar(parameter.ParameterType);
+            if (scalar != null)
+            {
+                abi.Add(scalar + " " + local);
+                arguments.Add(full == "System.Boolean" ? value + " ? (byte)1 : (byte)0" : full == "System.Char" ? "(ushort)" + value : value);
+                continue;
+            }
+            var array = parameter.ParameterType as ArrayType;
+            if (array != null)
+            {
+                if (!array.IsVector || array.ElementType.FullName != "System.Byte" ||
+                    parameter.CustomAttributes.Any(a => a.AttributeType.FullName == "System.Runtime.InteropServices.WindowsRuntime.WriteOnlyArrayAttribute"))
+                    throw new NotSupportedException("Unsupported array: " + method.FullName + " " + parameter.Name);
+                abi.Add("uint " + local + "Length"); abi.Add("global::System.IntPtr " + local);
+                setup.Add("                using (var " + local + " = new " + Runtime + "PinnedBytes(" + value + "))");
+                arguments.Add(local + ".Length"); arguments.Add(local + ".Pointer");
+                continue;
+            }
             string native = "global::System.IntPtr";
             if (full == "System.String") prepare = "new " + Runtime + "NativeString(" + value + ")";
             else if (full == "Windows.UI.Xaml.Interop.TypeName")
@@ -300,9 +349,9 @@ internal static partial class WinrtProjectionGenerator
             {
                 string width = Find(full).Fields.Single(f => f.Name == "value__").FieldType.FullName;
                 if (width != "System.Int32" && width != "System.UInt32") throw new NotSupportedException("Unsupported enum parameter: " + full);
-                string scalar = width == "System.Int32" ? "int" : "uint";
-                abi.Add(scalar + " " + local);
-                arguments.Add("unchecked((" + scalar + ")" + value + ")");
+                string enumScalar = width == "System.Int32" ? "int" : "uint";
+                abi.Add(enumScalar + " " + local);
+                arguments.Add("unchecked((" + enumScalar + ")" + value + ")");
                 continue;
             }
             else
@@ -340,6 +389,12 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("                    " + Runtime + "Errors.Check(hr);");
             output.AppendLine("                    return unchecked((" + Name(method.ReturnType) + ")result);");
         }
+        else if (scalarResult != null)
+        {
+            output.AppendLine("                    " + Runtime + "Errors.Check(hr);");
+            output.AppendLine("                    return " + (method.ReturnType.FullName == "System.Boolean" ? "result != 0" : method.ReturnType.FullName == "System.Char" ? "(char)result" : "result") + ";");
+        }
+        else if (stringResult) output.AppendLine("                    return " + Runtime + "NativeString.TakeResult(hr, result);");
         else if (returns)
         {
             string result = Runtime + "NativeObject.ObjectResult(hr, result)";
@@ -1041,10 +1096,12 @@ internal static partial class WinrtProjectionGenerator
     {
         try
         {
-            if (args.Length != 3) throw new ArgumentException("generator METADATA_DIRECTORY SURFACE_XML OUTPUT_CS");
+            if (args.Length != 3) throw new ArgumentException("generator METADATA_DIRECTORY SURFACE_XML OUTPUT_CS | generator --component INPUT_WINMD OUTPUT_CS");
+            bool component = args[0] == "--component";
+            string metadata = component ? Path.GetDirectoryName(Path.GetFullPath(args[1])) : args[0];
             var resolver = new DefaultAssemblyResolver();
-            resolver.AddSearchDirectory(args[0]);
-            foreach (string path in Directory.GetFiles(args[0], "*.winmd").OrderBy(p => p, StringComparer.Ordinal))
+            resolver.AddSearchDirectory(metadata);
+            foreach (string path in component ? new[] { args[1] } : Directory.GetFiles(metadata, "*.winmd").OrderBy(p => p, StringComparer.Ordinal).ToArray())
             {
                 var module = ModuleDefinition.ReadModule(path, new ReaderParameters
                 {
@@ -1059,8 +1116,13 @@ internal static partial class WinrtProjectionGenerator
                     types.Add(type.FullName, type);
                 }
             }
-            var document = new XmlDocument { XmlResolver = null };
-            using (XmlReader reader = XmlReader.Create(args[1], new XmlReaderSettings
+            if (component && (modules.Single().Assembly.Name.HasPublicKey || modules.Single().Assembly.Name.PublicKeyToken.Length != 0 ||
+                !string.IsNullOrEmpty(modules.Single().Assembly.Name.Culture)))
+                throw new NotSupportedException("Unsupported component assembly identity: " + modules.Single().Assembly.Name.FullName);
+            if (component && !string.Equals(Path.GetFileNameWithoutExtension(args[1]), modules.Single().Assembly.Name.Name, StringComparison.Ordinal))
+                throw new InvalidDataException("Component metadata filename does not match assembly identity: " + modules.Single().Assembly.Name.Name);
+            var document = component ? ComponentSurface(modules.Single()) : new XmlDocument { XmlResolver = null };
+            if (!component) using (XmlReader reader = XmlReader.Create(args[1], new XmlReaderSettings
             {
                 DtdProcessing = DtdProcessing.Prohibit,
                 XmlResolver = null
@@ -1077,11 +1139,11 @@ internal static partial class WinrtProjectionGenerator
                 if (element.Name == "Class") classes.Add(Find(element.GetAttribute("Name")));
             }
             var output = new StringBuilder();
-            output.AppendLine("// Generated from SDK metadata. Do not edit.");
-            output.AppendLine("// Surface SHA256 " + Hash(args[1]));
+            output.AppendLine(component ? "// Generated from package component metadata. Do not edit." : "// Generated from SDK metadata. Do not edit.");
+            output.AppendLine((component ? "// Component SHA256 " : "// Surface SHA256 ") + Hash(args[1]));
             foreach (ModuleDefinition module in selected.Select(n => Find(n).Module).Distinct().OrderBy(m => m.Name, StringComparer.Ordinal))
                 output.AppendLine("// " + module.Name + " SHA256 " + Hash(module.FileName));
-            output.AppendLine("[assembly: global::System.Reflection.AssemblyVersion(\"255.255.255.255\")]");
+            output.AppendLine("[assembly: global::System.Reflection.AssemblyVersion(\"" + (component ? modules.Single().Assembly.Name.Version.ToString() : "255.255.255.255") + "\")]");
             foreach (XmlElement element in elements.OrderBy(e => e.GetAttribute("Name"), StringComparer.Ordinal))
             {
                 TypeDefinition type = Find(element.GetAttribute("Name"));

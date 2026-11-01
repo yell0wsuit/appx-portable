@@ -423,3 +423,17 @@ extern "C" int __cdecl ShimRunNativeApplication() noexcept {
     }
 }
 }
+
+// Explicit managed ABI callers do not necessarily pass through Wine's export
+// hook. Share native package activation instead of duplicating manifest loading.
+extern "C" HRESULT WINAPI ShimGetPackageFactory(HSTRING name, IActivationFactory** factory) noexcept {
+    if (!factory) return E_POINTER;
+    *factory = nullptr;
+    try {
+        return appx::PackageFactory(name, factory);
+    } catch (const std::bad_alloc&) {
+        return E_OUTOFMEMORY;
+    } catch (...) {
+        return E_FAIL;
+    }
+}
