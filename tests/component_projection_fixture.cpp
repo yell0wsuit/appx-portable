@@ -132,10 +132,14 @@ public:
     }
     HRESULT STDMETHODCALLTYPE RaiseExternal() override { return external_ ? external_->Invoke(node_.Get()) : S_OK; }
 };
+// Like a C++/CX engine creating a Platform::Exception in its constructor: the
+// call goes through a dependency the component, not the game, loaded.
+extern "C" HRESULT __cdecl ReportComponentFailure();
 class EngineFactory final : public ActivationFactory<Implements<IActivationFactory>> {
 public:
     HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) noexcept override {
-        return Make<Engine>().CopyTo(value);
+        auto hr = ReportComponentFailure();
+        return FAILED(hr) ? hr : Make<Engine>().CopyTo(value);
     }
 };
 extern "C" HRESULT WINAPI DllGetActivationFactory(HSTRING name, IActivationFactory** factory) {

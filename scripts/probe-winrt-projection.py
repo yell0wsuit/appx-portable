@@ -565,8 +565,10 @@ def main():
             copy_owned_file(output / "component-winrt.exe", folder / consumer.name)
             copy_owned_file(host, folder / host.name)
             native = shim.parent / "component_projection_fixture.dll"
-            require(native.is_file(), "build component_projection_fixture first")
+            dependency = shim.parent / "component_dependency_fixture.dll"
+            require(native.is_file() and dependency.is_file(), "build component_projection_fixture first")
             copy_owned_file(native, folder / "Example.Component.dll")
+            copy_owned_file(dependency, folder / dependency.name)
             projected = folder / "appx-projections"
             projected.mkdir(exist_ok=True)
             copy_owned_file(projection, projected / projection.name)
@@ -618,6 +620,7 @@ def main():
             for source in (host, cross_consumer): copy_owned_file(source, folder / source.name)
             copy_owned_file(output / "cross-winrt.exe", folder / cross_consumer.name)
             copy_owned_file(native, folder / "Example.Component.dll")
+            copy_owned_file(dependency, folder / dependency.name)
             target = folder / "appx-projections"
             target.mkdir(exist_ok=True)
             for source in (bridge, cross, external_projection): copy_owned_file(source, target / source.name)

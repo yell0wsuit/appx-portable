@@ -286,8 +286,11 @@ static void PatchGameModules(bool activation) noexcept {
 // through their import tables.
 static bool importActivation = false;
 // Modules loaded from the game folder after the shim attached (in-package
-// classes, packaged libraries) need the same import hooks as the game.
-static void PatchLoadedModule(HMODULE module) noexcept { PatchModule(module, importActivation); }
+// classes, packaged libraries) need the same import hooks as the game, and so
+// do the game-folder DLLs they pulled in: a managed game first loads the VC
+// runtime (vccorlib110) as its C++/CX component's dependency. Patching is
+// idempotent, so rescan rather than walk the new module's imports.
+static void PatchLoadedModule(HMODULE) noexcept { PatchGameModules(importActivation); }
 void InstallActivationHook() noexcept {
     HMODULE combase = GetModuleHandleW(L"combase.dll");
     if (auto* original = Hotpatch(combase, "RoGetActivationFactory", reinterpret_cast<void*>(&GetFactory))) {
