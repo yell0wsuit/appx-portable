@@ -60,8 +60,14 @@ int main() {
             memset(bytes, 0, 16); // A consumer's writable buffer must not mutate later tokens.
         }
     }
-    const byte expectedId[16] = {'a', 'p', 'p', 'x', '-', 'p', 'o', 'r', 't', 'a', 'b', 'l', 'e', 0, 0, 1};
-    if (memcmp(initial[0].data(), expectedId, 16) != 0) return 14;
+    // The game accepts four-byte records: a recognized little-endian type and two value bytes.
+    // Printable placeholder bytes were discarded and produced an empty device ID.
+    for (size_t i = 0; i < initial[0].size(); i += 4) {
+        const byte kind = initial[0][i];
+        if ((kind != 1 && kind != 2 && kind != 3 && kind != 9) || initial[0][i + 1] != 0 ||
+            (initial[0][i + 2] == 0 && initial[0][i + 3] == 0))
+            return 14;
+    }
     puts("hardwaretest: 0 failure(s)");
     return 0;
 }
