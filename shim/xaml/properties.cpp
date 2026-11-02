@@ -137,19 +137,20 @@ class Property final
     ComPtr<IPropertyMetadata> metadata_;
     ComPtr<IPropertyChangedCallback> callback_;
     PropertyType type_{};
-    HString customType_;
-    bool custom_ = false;
+    HString managedType_;
+    bool managed_ = false;
 
 public:
     HRESULT Initialize(TypeName type, IPropertyMetadata* metadata) {
         std::wstring name = WindowsGetStringRawBuffer(type.Name, nullptr);
-        // Non-scalar/redirected types must acquire their own validation contract.
+        // Managed Custom and Metadata references share the CLR assignability
+        // contract, including projection-owned closed generic interfaces.
         if (name == L"Object" || name == L"System.Object")
             type_ = PropertyType_Inspectable;
-        else if (type.Kind == TypeKind_Custom) {
+        else if (type.Kind == TypeKind_Custom || type.Kind == TypeKind_Metadata) {
             type_ = PropertyType_Inspectable;
-            custom_ = true;
-            auto hr = customType_.Set(type.Name);
+            managed_ = true;
+            auto hr = managedType_.Set(type.Name);
             if (FAILED(hr)) return hr;
         } else if (type.Kind != TypeKind_Primitive) {
             Log("UNIMPL", "DependencyProperty type %ls", name.c_str());
@@ -209,11 +210,11 @@ public:
     HRESULT STDMETHODCALLTYPE DefaultValue(IInspectable** value) override { return metadata_->get_DefaultValue(value); }
     HRESULT STDMETHODCALLTYPE Validate(IInspectable* value) override {
         if (Same(value, UnsetValue().Get())) return E_INVALIDARG;
-        if (custom_ && value) {
+        if (managed_ && value) {
             ComPtr<IManagedPropertyValue> managed;
             if (FAILED(value->QueryInterface(IID_PPV_ARGS(&managed)))) return E_NOTIMPL;
             boolean matches = false;
-            auto hr = managed->IsInstance(customType_.Get(), &matches);
+            auto hr = managed->IsInstance(managedType_.Get(), &matches);
             return FAILED(hr) ? hr : matches ? S_OK : E_INVALIDARG;
         }
         if (type_ == PropertyType_Inspectable) return S_OK;

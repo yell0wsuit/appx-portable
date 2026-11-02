@@ -223,7 +223,13 @@ Single and Double, with scalar type validation and implicit zero defaults for
 numeric/value types. Custom managed reference properties use a private
 projection/shim interface to let the CLR check assignability; class-name
 comparison cannot validate generic arguments, interfaces, or base classes.
-Custom type names carry assembly identity. The projection maps native
+Custom type names carry assembly identity. Projection-owned metadata reference
+types, including closed generic interfaces, use the same CLR assignability
+contract with their metadata names. Null defaults and local values are allowed;
+non-null native objects without that contract still fail explicitly.
+This reference path does not synthesize boxed defaults for metadata value types;
+their registration can currently yield a null default and is not supported.
+The projection maps native
 [TypeName to System.Type](https://learn.microsoft.com/en-us/uwp/api/windows.ui.xaml.interop.typename),
 boxes/unboxes string, Int32, Int64, Boolean, Double, and Guid via Wine's IPropertyValue, and preserves the
 identity of other managed references through a real IInspectable CCW. The
