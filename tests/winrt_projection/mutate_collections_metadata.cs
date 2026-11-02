@@ -25,6 +25,8 @@ class MutateCollectionsMetadata
                     case "network-enum": name = "Windows.Networking.Connectivity.NetworkConnectivityLevel"; break;
                     case "iterator": name = "Windows.Foundation.Collections.IIterator`1"; break;
                     case "stream-size": name = "Windows.Storage.Streams.IRandomAccessStream"; break;
+                    case "reader-load": name = "Windows.Storage.Streams.IDataReader"; break;
+                    case "reader-factory": name = "Windows.Storage.Streams.IDataReaderFactory"; break;
                     case "read-count": name = "Windows.Storage.Streams.IInputStream"; break;
                     case "buffer-order": name = "Windows.Storage.Streams.IBuffer"; break;
                     case "future-order": name = "Windows.Foundation.IAsyncOperation`1"; break;
@@ -43,6 +45,8 @@ class MutateCollectionsMetadata
                 else if (args[2] == "order" || args[2] == "buffer-order" || args[2] == "future-order" || args[2] == "view-order") { var first = type.Methods[0]; type.Methods.RemoveAt(0); type.Methods.Add(first); }
                 else if (args[2] == "iterator") type.Methods.Single(m => m.Name == "get_HasCurrent").ReturnType = module.TypeSystem.UInt32;
                 else if (args[2] == "stream-size") type.Methods.Single(m => m.Name == "get_Size").ReturnType = module.TypeSystem.UInt32;
+                else if (args[2] == "reader-load") type.Methods.Single(m => m.Name == "LoadAsync").Parameters[0].ParameterType = module.TypeSystem.UInt64;
+                else if (args[2] == "reader-factory") type.Methods.Single(m => m.Name == "CreateDataReader").Parameters[0].ParameterType = module.TypeSystem.Object;
                 else if (args[2] == "read-count") type.Methods.Single(m => m.Name == "ReadAsync").Parameters[1].ParameterType = module.TypeSystem.UInt64;
                 else throw new ArgumentException("Unknown mutation");
                 module.Write(target);

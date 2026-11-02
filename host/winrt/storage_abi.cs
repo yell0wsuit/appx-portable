@@ -67,11 +67,14 @@ namespace AppxPortable.WinRT
         public void Cancel() { using (var info = native.QueryInterface(StorageAbi.Info)) info.Call(StorageAbi.Info_Cancel); }
         public void Close() { using (var info = native.QueryInterface(StorageAbi.Info)) info.Call(StorageAbi.Info_Close); }
     }
-    internal sealed class NativeFuture<T> : NativeAsync, IAsyncOperation<T> where T : class
+    internal sealed class NativeFuture<T> : NativeAsync, IAsyncOperation<T>
     {
         // Reads GetResults from the operation itself, so results need not be objects.
         private readonly Func<NativeObject, T> read;
-        private NativeFuture(NativeObject value, FutureAbi abi, Func<NativeObject, T> read) : base(value, abi) { this.read = read; }
+        private readonly Func<NativeObject, IAsyncOperation<T>> reconstruct;
+        internal NativeFuture(NativeObject value, FutureAbi abi, Func<NativeObject, T> read,
+            Func<NativeObject, IAsyncOperation<T>> reconstruct = null) : base(value, abi)
+        { this.read = read; this.reconstruct = reconstruct; }
         internal static IAsyncOperation<T> FromNative(NativeObject value, FutureAbi abi, Func<NativeObject, T> convert)
         {
             return Wrap(value, abi, operation => convert(operation.Object(abi.Results)));
@@ -86,13 +89,13 @@ namespace AppxPortable.WinRT
             get { return Get<AsyncOperationCompletedHandler<T>>(abi.GetCompleted); }
             set
             {
-                var layout = abi; var reader = read;
+                var layout = abi; var reader = read; var factory = reconstruct;
                 Set(abi.PutCompleted, value == null ? null : new Callback
                 {
                     Original = value,
                     // Reconstruct from the native callback argument. Capturing
                     // this wrapper would create a native/CCW reference cycle.
-                    Completed = (pointer, status) => value(Wrap(NativeObject.Borrow(pointer), layout, reader), (AsyncStatus)status)
+                    Completed = (pointer, status) => value(factory == null ? Wrap(NativeObject.Borrow(pointer), layout, reader) : factory(NativeObject.Borrow(pointer)), (AsyncStatus)status)
                 }, abi.Completed);
             }
         }
@@ -322,6 +325,83 @@ namespace Windows.Storage.Streams
             get { return native.UInt32(StorageAbi.Buffer_get_Length); }
             set { using (var access = new NativeObject.Access(native)) Errors.Check(access.Method<StorageCalls.SetUIntCall>(StorageAbi.Buffer_put_Length)(access.Self, value)); }
         }
+    }
+    public sealed class DataReader : IDisposable, INativeWrapper
+    {
+        private readonly NativeObject native;
+        NativeObject INativeWrapper.Native { get { return native; } }
+        private DataReader(NativeObject value) { native = value; }
+        internal static DataReader FromNative(NativeObject value)
+        { return NativeObject.Wrap<DataReader>(value, StorageAbi.Reader, v => new DataReader(v)); }
+        public DataReader(IInputStream inputStream)
+        {
+            using (var factory = NativeObject.Factory("Windows.Storage.Streams.DataReader", StorageAbi.ReaderFactory))
+            using (var argument = NativeObject.Argument(inputStream, StorageAbi.Input))
+            using (var access = new NativeObject.Access(factory))
+            {
+                IntPtr result;
+                int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.ReaderFactory_CreateDataReader)(access.Self,
+                    argument == null ? IntPtr.Zero : argument.DangerousGetHandle(), out result);
+                native = NativeObject.TakeResult(hr, result);
+            }
+            NativeObject.Remember(this, native);
+        }
+        public static DataReader FromBuffer(IBuffer buffer)
+        {
+            using (var factory = NativeObject.Factory("Windows.Storage.Streams.DataReader", StorageAbi.ReaderStatics))
+            using (var argument = NativeObject.Argument(buffer, StorageAbi.Buffer))
+            using (var access = new NativeObject.Access(factory))
+            {
+                IntPtr result;
+                int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.ReaderStatics_FromBuffer)(access.Self,
+                    argument == null ? IntPtr.Zero : argument.DangerousGetHandle(), out result);
+                return FromNative(NativeObject.TakeResult(hr, result));
+            }
+        }
+        public uint UnconsumedBufferLength { get { return native.UInt32(StorageAbi.Reader_get_UnconsumedBufferLength); } }
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int ReadBytesCall(IntPtr self, uint count, IntPtr bytes);
+        public void ReadBytes(byte[] value)
+        {
+            using (var bytes = new PinnedBytes(value))
+            using (var access = new NativeObject.Access(native))
+                Errors.Check(access.Method<ReadBytesCall>(StorageAbi.Reader_ReadBytes)(access.Self, bytes.Length, bytes.Pointer));
+        }
+        public string ReadString(uint codeUnitCount)
+        {
+            using (var access = new NativeObject.Access(native))
+            {
+                IntPtr result;
+                int hr = access.Method<StorageCalls.UIntCall>(StorageAbi.Reader_ReadString)(access.Self, codeUnitCount, out result);
+                return NativeString.TakeResult(hr, result);
+            }
+        }
+        public DataReaderLoadOperation LoadAsync(uint count)
+        {
+            using (var access = new NativeObject.Access(native))
+            {
+                IntPtr result;
+                int hr = access.Method<StorageCalls.UIntCall>(StorageAbi.Reader_LoadAsync)(access.Self, count, out result);
+                return DataReaderLoadOperation.FromNative(NativeObject.TakeResult(hr, result));
+            }
+        }
+        public IInputStream DetachStream() { return InputStream.FromNative(native.Object(StorageAbi.Reader_DetachStream)); }
+        public void Dispose() { using (var close = native.QueryInterface(StorageAbi.Closable)) close.Call(StorageAbi.Closable_Close); }
+    }
+    public sealed class DataReaderLoadOperation : IAsyncOperation<uint>, INativeWrapper
+    {
+        private readonly NativeFuture<uint> operation;
+        NativeObject INativeWrapper.Native { get { return ((INativeWrapper)operation).Native; } }
+        private DataReaderLoadOperation(NativeObject value)
+        { operation = new NativeFuture<uint>(value, StorageAbi.LoadFuture, v => v.UInt32(StorageAbi.LoadFuture.Results), FromNative); }
+        internal static DataReaderLoadOperation FromNative(NativeObject value)
+        { return NativeObject.Wrap<DataReaderLoadOperation>(value, StorageAbi.LoadFuture.Iid, v => new DataReaderLoadOperation(v)); }
+        public uint Id { get { return operation.Id; } }
+        public AsyncStatus Status { get { return operation.Status; } }
+        public Exception ErrorCode { get { return operation.ErrorCode; } }
+        public AsyncOperationCompletedHandler<uint> Completed { get { return operation.Completed; } set { operation.Completed = value; } }
+        public uint GetResults() { return operation.GetResults(); }
+        public void Cancel() { operation.Cancel(); }
+        public void Close() { operation.Close(); }
     }
     internal class InputStream : IInputStream, INativeWrapper
     {

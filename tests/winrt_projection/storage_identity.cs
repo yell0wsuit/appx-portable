@@ -19,6 +19,47 @@ class StorageIdentityTest
         wrapper = new WeakReference(value); array = new WeakReference(bytes);
         return NativeObject.Of(value).QueryInterface(inspectable);
     }
+    sealed class PendingLoad : IDisposable
+    {
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int PutCall(IntPtr self, IntPtr handler);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetCall(IntPtr self, out IntPtr handler);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int ResultCall(IntPtr self, out uint result);
+        static readonly PutCall put = (self, callback) => ManagedObject.Call(self, target => ((PendingLoad)target).handler = NativeObject.Borrow(callback));
+        static readonly GetCall get = delegate(IntPtr self, out IntPtr callback) { callback = IntPtr.Zero; return 0; };
+        static readonly ResultCall result = delegate(IntPtr self, out uint value) { value = 7; return 0; };
+        internal static readonly NativeInterface Contract = new NativeInterface(StorageAbi.LoadFuture.Iid, true, put, get, result);
+        NativeObject handler;
+        internal object Sender;
+        internal void Complete(IntPtr operation)
+        {
+            using (var access = new NativeObject.Access(handler))
+                Marshal.ThrowExceptionForHR(access.Method<NativeAsync.CompletedCall>(3)(access.Self, operation, (int)Windows.Foundation.AsyncStatus.Completed));
+        }
+        public void Dispose() { Sender = null; if (handler != null) handler.Dispose(); }
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static WeakReference RegisterLoad(IntPtr pointer, PendingLoad pending)
+    {
+        var load = DataReaderLoadOperation.FromNative(NativeObject.Borrow(pointer));
+        load.Completed = (sender, status) =>
+        {
+            Check(status == Windows.Foundation.AsyncStatus.Completed && sender.GetResults() == 7, "delayed load result");
+            pending.Sender = sender;
+        };
+        return new WeakReference(load);
+    }
+    static void LoadIdentity()
+    {
+        using (var pending = new PendingLoad())
+        using (var held = ManagedObject.Hold(pending, PendingLoad.Contract))
+        {
+            WeakReference wrapper = RegisterLoad(held.Pointer, pending);
+            for (int i = 0; i < 3; ++i) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+            Check(!wrapper.IsAlive, "load callback retained the original wrapper");
+            pending.Complete(held.Pointer);
+            Check(pending.Sender is DataReaderLoadOperation, "delayed callback lost the public load-operation type");
+        }
+    }
     static int Main()
     {
         try
@@ -37,6 +78,7 @@ class StorageIdentityTest
                 byte[] actual = new byte[3]; StorageBuffer.Copy((IBuffer)recreated, actual, 0, 3, false);
                 Check(actual[0] == 7 && actual[2] == 9, "pinned native bytes after wrapper collection");
             }
+            LoadIdentity();
             Console.WriteLine("PASS: buffer projection preserves object identity and native-owned pin lifetime"); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
