@@ -1,4 +1,12 @@
 <Projection>
+  <!-- CLR-redirected structs; System.Runtime.WindowsRuntime(.UI.Xaml) forward to them. -->
+  <Struct Name="Windows.Foundation.Point" Adapter="Clr" />
+  <Struct Name="Windows.Foundation.Size" Adapter="Clr" />
+  <Struct Name="Windows.Foundation.Rect" Adapter="Clr" />
+  <Struct Name="Windows.UI.Color" Adapter="Clr" />
+  <Struct Name="Windows.UI.Xaml.Thickness" Adapter="Clr" />
+  <Struct Name="Windows.UI.Xaml.Duration" Adapter="Clr" />
+  <Enum Name="Windows.UI.Xaml.DurationType" />
   <Class Name="Windows.ApplicationModel.Package">
     <Property Name="Current" />
     <Property Name="Id" />

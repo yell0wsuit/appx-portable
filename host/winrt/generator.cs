@@ -657,6 +657,174 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("    }");
     }
 
+    // CLR-redirected WinRT structs. Games bind them to System.Runtime.WindowsRuntime(.UI.Xaml),
+    // whose appx-portable facades forward here so projected members can use them. Each keeps
+    // its SDK field layout behind the public API .NET gives it.
+    private static readonly Dictionary<string, string[]> ClrStructFields = new Dictionary<string, string[]>(StringComparer.Ordinal) {
+        { "Windows.Foundation.Point", new[] { "X:System.Single", "Y:System.Single" } },
+        { "Windows.Foundation.Size", new[] { "Width:System.Single", "Height:System.Single" } },
+        { "Windows.Foundation.Rect", new[] { "X:System.Single", "Y:System.Single", "Width:System.Single", "Height:System.Single" } },
+        { "Windows.UI.Color", new[] { "A:System.Byte", "R:System.Byte", "G:System.Byte", "B:System.Byte" } },
+        { "Windows.UI.Xaml.Thickness", new[] { "Left:System.Double", "Top:System.Double", "Right:System.Double", "Bottom:System.Double" } },
+        { "Windows.UI.Xaml.Duration", new[] { "TimeSpan:Windows.Foundation.TimeSpan", "Type:Windows.UI.Xaml.DurationType" } } };
+    private static void ClrStruct(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        string[] fields;
+        if (surface.Name != "Struct" || surface.HasChildNodes || !type.IsValueType || type.IsEnum ||
+            !ClrStructFields.TryGetValue(type.FullName, out fields) ||
+            !type.Fields.Where(f => !f.IsStatic).Select(f => f.Name + ":" + f.FieldType.FullName).SequenceEqual(fields))
+            throw new NotSupportedException("Unsupported CLR-redirected struct: " + type.FullName);
+        if (type.FullName == "Windows.UI.Xaml.Duration" && !selected.Contains("Windows.UI.Xaml.DurationType"))
+            throw new NotSupportedException("Duration needs Windows.UI.Xaml.DurationType");
+        output.AppendLine("    [global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.Sequential)]");
+        output.Append(ClrStructTemplates[type.FullName]);
+    }
+    private static readonly Dictionary<string, string> ClrStructTemplates = new Dictionary<string, string>(StringComparer.Ordinal) {
+        { "Windows.Foundation.Point", @"    public struct Point
+    {
+        private float _x, _y;
+        public Point(double x, double y) { _x = (float)x; _y = (float)y; }
+        public double X { get { return _x; } set { _x = (float)value; } }
+        public double Y { get { return _y; } set { _y = (float)value; } }
+        public bool Equals(Point value) { return X == value.X && Y == value.Y; }
+        public override bool Equals(object o) { return o is Point && Equals((Point)o); }
+        public override int GetHashCode() { return X.GetHashCode() ^ Y.GetHashCode(); }
+        public static bool operator ==(Point a, Point b) { return a.Equals(b); }
+        public static bool operator !=(Point a, Point b) { return !a.Equals(b); }
+        public override string ToString() { return X.ToString() + "","" + Y.ToString(); }
+    }
+" },
+        { "Windows.Foundation.Size", @"    public struct Size
+    {
+        private float _width, _height;
+        public Size(double width, double height)
+        {
+            if (width < 0 || height < 0) throw new global::System.ArgumentException(""Size dimensions cannot be negative"");
+            _width = (float)width; _height = (float)height;
+        }
+        public double Width
+        {
+            get { return _width; }
+            set { if (IsEmpty || value < 0) throw new global::System.ArgumentException(""Invalid Size width""); _width = (float)value; }
+        }
+        public double Height
+        {
+            get { return _height; }
+            set { if (IsEmpty || value < 0) throw new global::System.ArgumentException(""Invalid Size height""); _height = (float)value; }
+        }
+        public static Size Empty { get { var value = new Size(); value._width = value._height = float.NegativeInfinity; return value; } }
+        public bool IsEmpty { get { return _width < 0; } }
+        public bool Equals(Size value) { return Width == value.Width && Height == value.Height; }
+        public override bool Equals(object o) { return o is Size && Equals((Size)o); }
+        public override int GetHashCode() { return Width.GetHashCode() ^ Height.GetHashCode(); }
+        public static bool operator ==(Size a, Size b) { return a.Equals(b); }
+        public static bool operator !=(Size a, Size b) { return !a.Equals(b); }
+        public override string ToString() { return IsEmpty ? ""Empty"" : Width.ToString() + "","" + Height.ToString(); }
+    }
+" },
+        { "Windows.Foundation.Rect", @"    public struct Rect
+    {
+        private float _x, _y, _width, _height;
+        public Rect(double x, double y, double width, double height)
+        {
+            if (width < 0 || height < 0) throw new global::System.ArgumentException(""Rect dimensions cannot be negative"");
+            _x = (float)x; _y = (float)y; _width = (float)width; _height = (float)height;
+        }
+        public Rect(Point point1, Point point2)
+            : this(global::System.Math.Min(point1.X, point2.X), global::System.Math.Min(point1.Y, point2.Y),
+                   global::System.Math.Abs(point2.X - point1.X), global::System.Math.Abs(point2.Y - point1.Y)) { }
+        public Rect(Point location, Size size) : this(location.X, location.Y, size.Width, size.Height) { }
+        public double X { get { return _x; } set { _x = (float)value; } }
+        public double Y { get { return _y; } set { _y = (float)value; } }
+        public double Width
+        {
+            get { return _width; }
+            set { if (value < 0) throw new global::System.ArgumentException(""Rect width cannot be negative""); _width = (float)value; }
+        }
+        public double Height
+        {
+            get { return _height; }
+            set { if (value < 0) throw new global::System.ArgumentException(""Rect height cannot be negative""); _height = (float)value; }
+        }
+        public double Left { get { return X; } }
+        public double Top { get { return Y; } }
+        public double Right { get { return IsEmpty ? double.NegativeInfinity : X + Width; } }
+        public double Bottom { get { return IsEmpty ? double.NegativeInfinity : Y + Height; } }
+        public static Rect Empty
+        {
+            get
+            {
+                var value = new Rect();
+                value._x = value._y = float.PositiveInfinity;
+                value._width = value._height = float.NegativeInfinity;
+                return value;
+            }
+        }
+        public bool IsEmpty { get { return _width < 0; } }
+        public bool Contains(Point point) { return point.X >= X && point.X <= Right && point.Y >= Y && point.Y <= Bottom; }
+        public bool Equals(Rect value) { return X == value.X && Y == value.Y && Width == value.Width && Height == value.Height; }
+        public override bool Equals(object o) { return o is Rect && Equals((Rect)o); }
+        public override int GetHashCode() { return X.GetHashCode() ^ Y.GetHashCode() ^ Width.GetHashCode() ^ Height.GetHashCode(); }
+        public static bool operator ==(Rect a, Rect b) { return a.Equals(b); }
+        public static bool operator !=(Rect a, Rect b) { return !a.Equals(b); }
+        public override string ToString() { return IsEmpty ? ""Empty"" : X + "","" + Y + "","" + Width + "","" + Height; }
+    }
+" },
+        { "Windows.UI.Color", @"    public struct Color
+    {
+        private byte _A, _R, _G, _B;
+        public byte A { get { return _A; } set { _A = value; } }
+        public byte R { get { return _R; } set { _R = value; } }
+        public byte G { get { return _G; } set { _G = value; } }
+        public byte B { get { return _B; } set { _B = value; } }
+        public static Color FromArgb(byte a, byte r, byte g, byte b) { var value = new Color(); value._A = a; value._R = r; value._G = g; value._B = b; return value; }
+        public bool Equals(Color value) { return A == value.A && R == value.R && G == value.G && B == value.B; }
+        public override bool Equals(object o) { return o is Color && Equals((Color)o); }
+        public override int GetHashCode() { return A << 24 | R << 16 | G << 8 | B; }
+        public static bool operator ==(Color a, Color b) { return a.Equals(b); }
+        public static bool operator !=(Color a, Color b) { return !a.Equals(b); }
+        public override string ToString() { return ""#"" + A.ToString(""X2"") + R.ToString(""X2"") + G.ToString(""X2"") + B.ToString(""X2""); }
+    }
+" },
+        { "Windows.UI.Xaml.Thickness", @"    public struct Thickness
+    {
+        private double _Left, _Top, _Right, _Bottom;
+        public Thickness(double uniformLength) { _Left = _Top = _Right = _Bottom = uniformLength; }
+        public Thickness(double left, double top, double right, double bottom) { _Left = left; _Top = top; _Right = right; _Bottom = bottom; }
+        public double Left { get { return _Left; } set { _Left = value; } }
+        public double Top { get { return _Top; } set { _Top = value; } }
+        public double Right { get { return _Right; } set { _Right = value; } }
+        public double Bottom { get { return _Bottom; } set { _Bottom = value; } }
+        public bool Equals(Thickness value) { return Left == value.Left && Top == value.Top && Right == value.Right && Bottom == value.Bottom; }
+        public override bool Equals(object o) { return o is Thickness && Equals((Thickness)o); }
+        public override int GetHashCode() { return Left.GetHashCode() ^ Top.GetHashCode() ^ Right.GetHashCode() ^ Bottom.GetHashCode(); }
+        public static bool operator ==(Thickness a, Thickness b) { return a.Equals(b); }
+        public static bool operator !=(Thickness a, Thickness b) { return !a.Equals(b); }
+        public override string ToString() { return Left + "","" + Top + "","" + Right + "","" + Bottom; }
+    }
+" },
+        { "Windows.UI.Xaml.Duration", @"    public struct Duration
+    {
+        private global::System.TimeSpan _timeSpan;
+        private DurationType _durationType;
+        public Duration(global::System.TimeSpan timeSpan) { _timeSpan = timeSpan; _durationType = DurationType.TimeSpan; }
+        public static implicit operator Duration(global::System.TimeSpan timeSpan) { return new Duration(timeSpan); }
+        public static Duration Automatic { get { var value = new Duration(); value._durationType = DurationType.Automatic; return value; } }
+        public static Duration Forever { get { var value = new Duration(); value._durationType = DurationType.Forever; return value; } }
+        public bool HasTimeSpan { get { return _durationType == DurationType.TimeSpan; } }
+        public global::System.TimeSpan TimeSpan
+        {
+            get { if (!HasTimeSpan) throw new global::System.InvalidOperationException(""Duration has no TimeSpan""); return _timeSpan; }
+        }
+        public bool Equals(Duration value) { return _durationType == value._durationType && (!HasTimeSpan || _timeSpan == value._timeSpan); }
+        public override bool Equals(object o) { return o is Duration && Equals((Duration)o); }
+        public override int GetHashCode() { return HasTimeSpan ? _timeSpan.GetHashCode() : (int)_durationType; }
+        public static bool operator ==(Duration a, Duration b) { return a.Equals(b); }
+        public static bool operator !=(Duration a, Duration b) { return !a.Equals(b); }
+        public override string ToString() { return HasTimeSpan ? _timeSpan.ToString() : _durationType.ToString(); }
+    }
+" } };
+
     // Managed-implemented interfaces a composed object exposes on its controlling outer.
     private static readonly string[][] ManagedContractList = {
         new[] { "Windows.UI.Xaml.Markup.IComponentConnector", "Windows_UI_Xaml_Markup_IComponentConnector.Interface" },
@@ -1676,7 +1844,7 @@ namespace AppxPortable.WinRT.Projected
             var elements = document.DocumentElement.ChildNodes.OfType<XmlElement>().ToList();
             foreach (XmlElement element in elements)
             {
-                if (element.Name != "Class" && element.Name != "Enum" && element.Name != "Delegate" && element.Name != "Interface")
+                if (element.Name != "Class" && element.Name != "Enum" && element.Name != "Delegate" && element.Name != "Interface" && element.Name != "Struct")
                     throw new NotSupportedException("Unsupported surface kind: " + element.Name);
                 if (!selected.Add(element.GetAttribute("Name"))) throw new InvalidDataException("Duplicate selected type");
                 if (element.Name == "Interface") interfaces.Add(element.GetAttribute("Name"), element);
@@ -1701,6 +1869,11 @@ namespace AppxPortable.WinRT.Projected
                     ComponentConnectorContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "XamlMetadata")
                     XamlMetadataContract(output, type, element);
+                else if (element.GetAttribute("Adapter") == "Clr")
+                {
+                    if (component) throw new NotSupportedException("CLR-redirected structs belong to Windows.dll: " + type.FullName);
+                    ClrStruct(output, type, element);
+                }
                 else if (element.GetAttribute("Adapter") == "Storage")
                     StorageContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "StringMapView")

@@ -319,7 +319,27 @@ def main():
         copy_owned_file(bridge, copied_bridge)
         run("task-adapters", [signed.name], cwd=folder,
             marker="PASS: WinRT task adapters preserve completion, failure, cancellation, progress and ownership")
+        probe_redirected(projection, bridge, marker)
         return bridge
+
+    def probe_redirected(projection, bridge, marker):
+        # Games bind redirected structs to the CLR facades; ours forward them to Windows.dll.
+        xaml = compile_file("tasks/System.Runtime.WindowsRuntime.UI.Xaml.dll", [repo / "host/winrt/xaml_forwards.cs"],
+                            ["/target:library", "/r:" + windows(projection)])
+        source = repo / "tests/winrt_projection/redirected_reference.cs"
+        references = [compile_file("redirected-reference/System.Runtime.WindowsRuntime.dll", [source], ["/target:library"]),
+                      compile_file("redirected-reference/System.Runtime.WindowsRuntime.UI.Xaml.dll", [source], ["/target:library", "/define:XAML"])]
+        consumer = compile_file("redirected.exe", [repo / "tests/winrt_projection/redirected.cs"], ["/r:" + windows(r) for r in references])
+        signed = output / "redirected-bound.exe"
+        run("mark-redirected-runtime", [marker.name, windows(consumer), windows(signed), "--runtime-reference"],
+            marker="System.Runtime.WindowsRuntime.UI.Xaml, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")
+        folder = fixture("redirected", signed.name, "RedirectedTest", "CN=projection")
+        for source in (signed, projection, bridge):
+            deploy(source, folder / source.name)
+        run("missing-xaml-runtime", [signed.name], cwd=folder, succeeds=False, marker="System.Runtime.WindowsRuntime.UI.Xaml")
+        deploy(xaml, folder / xaml.name)
+        run("redirected-structs", [signed.name], cwd=folder, marker="PASS: CLR-redirected structs bind through the facades to Windows.dll")
+        return xaml
 
     def probe_page(projection):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
@@ -340,7 +360,8 @@ def main():
         require(not target.exists(), "invalid object map shape produced a usable output")
         for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri"),
                              ("xaml-type-order", "Unsupported XAML metadata ABI: Windows.UI.Xaml.Markup.IXamlType"),
-                             ("xaml-member-value", "Unsupported XAML metadata ABI: Windows.UI.Xaml.Markup.IXamlMember")):
+                             ("xaml-member-value", "Unsupported XAML metadata ABI: Windows.UI.Xaml.Markup.IXamlMember"),
+                             ("clr-rect", "Unsupported CLR-redirected struct: Windows.Foundation.Rect")):
             mutated = output / kind
             run("mutate-" + kind, [mutator.name, windows(metadata), windows(mutated), kind])
             run("reject-" + kind, ["generator.exe", windows(mutated), windows(repo / "host/winrt/bootstrap.xml"), windows(output / (kind + ".cs"))], succeeds=False, marker=member)
@@ -928,7 +949,8 @@ def main():
         if args.game:
             source = args.game
             paths = [source / "appx-host.exe", source / "AppxManifest.xml"] + [p.resolve() for p in args.consumer]
-            paths += [source / name for name in ("appxportable.dll", "Windows.dll", "Microsoft.Xbox.dll", "System.Runtime.WindowsRuntime.dll") if (source / name).is_file()]
+            paths += [source / name for name in ("appxportable.dll", "Windows.dll", "Microsoft.Xbox.dll", "System.Runtime.WindowsRuntime.dll",
+                                                 "System.Runtime.WindowsRuntime.UI.Xaml.dll") if (source / name).is_file()]
             def hashes():
                 return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
             before = hashes()
@@ -940,6 +962,8 @@ def main():
             copy_owned_file(shim, game / "appxportable.dll")
             copy_owned_file(completed, game / "Windows.dll")
             copy_owned_file(task_bridge, game / task_bridge.name)
+            xaml_facade = task_bridge.with_name("System.Runtime.WindowsRuntime.UI.Xaml.dll")
+            copy_owned_file(xaml_facade, game / xaml_facade.name)
             if xbox_projection:
                 copy_owned_file(xbox_projection, game / "Microsoft.Xbox.dll")
             run("game-launch", ["appx-host.exe", "--trace"], cwd=game, succeeds=False,

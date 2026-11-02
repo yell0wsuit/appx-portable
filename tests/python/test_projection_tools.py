@@ -12,7 +12,7 @@ tools = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tools)
 
 
-PREBUILT = ["AppxPortable.WinRT.Interop.dll", "System.Runtime.WindowsRuntime.dll", "Windows.dll"]
+PREBUILT = ["AppxPortable.WinRT.Interop.dll", "System.Runtime.WindowsRuntime.dll", "System.Runtime.WindowsRuntime.UI.Xaml.dll", "Windows.dll"]
 
 
 class ProjectionToolsTests(unittest.TestCase):

@@ -22,6 +22,7 @@ class MutateCollectionsMetadata
                     case "connector-id": name = "Windows.UI.Xaml.Markup.IComponentConnector"; break;
                     case "xaml-type-order": name = "Windows.UI.Xaml.Markup.IXamlType"; break;
                     case "xaml-member-value": name = "Windows.UI.Xaml.Markup.IXamlMember"; break;
+                    case "clr-rect": name = "Windows.Foundation.Rect"; break;
                     case "uri-return": name = "Windows.Foundation.IUriRuntimeClass"; break;
                     case "uri-factory": name = "Windows.Foundation.IUriRuntimeClassFactory"; break;
                     case "typed-event": name = "Windows.Foundation.TypedEventHandler`2"; break;
@@ -53,6 +54,7 @@ class MutateCollectionsMetadata
                 else if (args[2] == "typed-event") type.Methods.Single(m => m.Name == "Invoke").Parameters[1].ParameterType = module.TypeSystem.UInt32;
                 else if (args[2] == "network-enum") type.Fields.Single(f => f.Name == "value__").FieldType = module.TypeSystem.Int64;
                 else if (args[2] == "insert") type.Methods.Single(m => m.Name == "Insert").Parameters[1].ParameterType = module.TypeSystem.UInt64;
+                else if (args[2] == "clr-rect") type.Fields.First(f => !f.IsStatic).FieldType = module.TypeSystem.Double;
                 else if (args[2] == "xaml-member-value") type.Methods.Single(m => m.Name == "GetValue").Parameters[0].ParameterType = module.TypeSystem.IntPtr;
                 else if (args[2] == "order" || args[2] == "buffer-order" || args[2] == "future-order" || args[2] == "view-order" || args[2] == "xaml-type-order") { var first = type.Methods[0]; type.Methods.RemoveAt(0); type.Methods.Add(first); }
                 else if (args[2] == "iterator") type.Methods.Single(m => m.Name == "get_HasCurrent").ReturnType = module.TypeSystem.UInt32;

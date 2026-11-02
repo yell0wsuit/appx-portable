@@ -84,8 +84,17 @@ class SurfaceLoadTest
             }
             // A CLR-redirected type is defined by its own assembly, never copied into Windows.dll.
             foreach (string redirected in new[] { "Windows.UI.Xaml.Media.Matrix", "Windows.UI.Xaml.Media.Media3D.Matrix3D", "Windows.UI.Xaml.Media.Animation.KeyTime",
-                "Windows.Foundation.Numerics.Vector3", "Windows.Foundation.Point", "Windows.UI.Xaml.Thickness" })
+                "Windows.Foundation.Numerics.Vector3" })
                 if (surface.GetType(redirected) != null) failures.Add("CLR-redirected type copied into the surface: " + redirected);
+            // Except those Windows.dll defines for the facades to forward to: in their CLR shape,
+            // whose fields are private, never as a WinMD copy with public fields.
+            foreach (string defined in new[] { "Windows.Foundation.Point", "Windows.Foundation.Size", "Windows.Foundation.Rect", "Windows.UI.Color",
+                "Windows.UI.Xaml.Thickness", "Windows.UI.Xaml.Duration" })
+            {
+                Type type = surface.GetType(defined);
+                if (type == null || type.GetFields(BindingFlags.Public | BindingFlags.Instance).Length != 0)
+                    failures.Add("CLR-redirected type not defined in its CLR shape: " + defined);
+            }
             foreach (string failure in failures) Console.Error.WriteLine(failure);
             foreach (KeyValuePair<string, int> pair in deferred) Console.WriteLine("deferred: " + pair.Value + " signature types in " + pair.Key);
             var names = new HashSet<string>(types.Select(t => t.FullName));
