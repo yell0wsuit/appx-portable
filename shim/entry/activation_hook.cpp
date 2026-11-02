@@ -261,6 +261,8 @@ static void PatchModule(HMODULE module, bool activation) noexcept {
             if (OnWine() && strcmp(name, "RoTransformError") == 0) hook = reinterpret_cast<void*>(&TransformError);
             if (OnWine() && strcmp(name, "CoCreateInstanceFromApp") == 0)
                 hook = reinterpret_cast<void*>(&CreateInstanceFromApp);
+            if (OnWine() && strcmp(name, "CreateStreamOverRandomAccessStream") == 0)
+                hook = reinterpret_cast<void*>(&CreateStreamOverRandomAccessStream);
             if (OnWine() && strcmp(name, "RoCaptureErrorContext") == 0)
                 hook = reinterpret_cast<void*>(&CaptureErrorContext);
             if (OnWine() && _stricmp(reinterpret_cast<const char*>(base + imports->Name), "mfplat.dll") == 0 &&

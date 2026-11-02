@@ -8,6 +8,7 @@
 #include <limits>
 #include <mutex>
 #include <vector>
+#include <stdexcept>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Storage::Streams;
 using namespace ABI::Windows::Foundation;
@@ -67,8 +68,10 @@ public:
             ComPtr<IAsyncOperationWithProgress<IBuffer*, UINT32>> operation;
             hr = input->ReadAsync(buffer.Get(), count, InputStreamOptions_None, &operation);
             if (FAILED(hr)) return hr;
-            auto event = std::make_shared<Wrappers::Event>(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-            if (!event->IsValid()) return HRESULT_FROM_WIN32(GetLastError());
+            if (!operation) return E_UNEXPECTED;
+            Wrappers::Event signal(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            if (!signal.IsValid()) return HRESULT_FROM_WIN32(GetLastError());
+            auto event = std::make_shared<Wrappers::Event>(std::move(signal));
             auto completed = Callback<IAsyncOperationWithProgressCompletedHandler<IBuffer*, UINT32>>(
                 [event](IAsyncOperationWithProgress<IBuffer*, UINT32>*, AsyncStatus) -> HRESULT {
                     SetEvent(event->Get());
@@ -80,21 +83,27 @@ public:
             if (WaitForSingleObject(event->Get(), INFINITE) != WAIT_OBJECT_0) return HRESULT_FROM_WIN32(GetLastError());
             ComPtr<IBuffer> filled;
             hr = operation->GetResults(&filled);
-            UINT32 length = 0;
+            UINT32 length = 0, capacity = 0;
+            if (SUCCEEDED(hr) && !filled) return E_UNEXPECTED;
             if (SUCCEEDED(hr)) hr = filled->get_Length(&length);
+            if (SUCCEEDED(hr)) hr = filled->get_Capacity(&capacity);
             if (FAILED(hr)) return hr;
-            if (length > count) return E_UNEXPECTED;
+            if (length > count || length > capacity || position > std::numeric_limits<UINT64>::max() - length)
+                return E_UNEXPECTED;
             ComPtr<Windows::Storage::Streams::IBufferByteAccess> access;
             byte* bytes = nullptr;
             hr = filled.As(&access);
             if (SUCCEEDED(hr)) hr = access->Buffer(&bytes);
             if (FAILED(hr)) return hr;
+            if (length && !bytes) return E_POINTER;
             if (length) memcpy(destination, bytes, length);
             hr = source_->Seek(position + length);
             if (FAILED(hr)) return hr;
             if (read) *read = length;
             return length == count ? S_OK : S_FALSE;
         } catch (const std::bad_alloc&) {
+            return E_OUTOFMEMORY;
+        } catch (const std::length_error&) {
             return E_OUTOFMEMORY;
         }
     }
@@ -156,6 +165,20 @@ public:
         return STG_E_INVALIDFUNCTION;
     }
 };
+}
+HRESULT WINAPI CreateStreamOverRandomAccessStream(IUnknown* source, REFIID iid, void** result) noexcept {
+    if (!result) return E_POINTER;
+    *result = nullptr;
+    if (!source) return E_POINTER;
+    ComPtr<IRandomAccessStream> random;
+    auto hr = source->QueryInterface(IID_PPV_ARGS(&random));
+    if (FAILED(hr)) return hr;
+    boolean readable = false;
+    hr = random->get_CanRead(&readable);
+    if (FAILED(hr)) return hr;
+    if (!readable) return STG_E_ACCESSDENIED;
+    auto stream = Make<Stream>(random.Get());
+    return stream ? stream->QueryInterface(iid, result) : E_OUTOFMEMORY;
 }
 HRESULT WINAPI CreateMFByteStreamOnStreamEx(IUnknown* source, IMFByteStream** result) noexcept {
     if (!result) return E_POINTER;

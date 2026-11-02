@@ -454,6 +454,14 @@ classes and native Windows keep their original activation path. `httptest`
 checks callback lifetime, cross-thread apartment setup, reentrant cancellation,
 partial interface results and missing-class forwarding; it skips on native Windows.
 
+Wine imports of `CreateStreamOverRandomAccessStream` also use the existing
+read-only media-stream adapter for native request bodies. It retains the WinRT
+source and forwards actual reads, seeks and size queries; short reads/EOF and
+native errors remain visible. Asynchronous reads wait for completion and accept
+an alternate returned buffer. Writes and resizing remain denied. Native Windows
+keeps its system conversion. `mfstreamtest` covers this bridge alongside the
+Media Foundation conversion, including delayed reads and source ownership.
+
 `--network-only` and `winrt_network_projection` check both modes in separate
 processes, native subscriber lifetime/removal and WindowsRuntimeMarshal event
 registration. `network_projection_fixture.dll` is a test-only SDK ABI caller: it
