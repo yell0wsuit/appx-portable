@@ -4,6 +4,7 @@
 #include <mfapi.h>
 #include <mfidl.h>
 #include <shlwapi.h>
+#include <shcore.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
@@ -119,14 +120,16 @@ class DelayedInput final : public RuntimeClass<RuntimeClassFlags<WinRt>, IInputS
     InspectableClass(L"Test.DelayedInput", BaseTrust);
     ComPtr<IInputStream> source_;
     HRESULT error_;
+    bool nullResult_;
 
 public:
-    DelayedInput(IInputStream* source, HRESULT error) : source_(source), error_(error) {}
+    DelayedInput(IInputStream* source, HRESULT error, bool nullResult = false)
+        : source_(source), error_(error), nullResult_(nullResult) {}
     HRESULT STDMETHODCALLTYPE ReadAsync(IBuffer*, UINT32 count, InputStreamOptions options,
                                         ReadOperation** value) override {
         auto buffer = Make<AlternateBuffer>();
         ComPtr<IBuffer> filled;
-        if (SUCCEEDED(error_)) {
+        if (SUCCEEDED(error_) && !nullResult_) {
             ComPtr<ReadOperation> operation;
             auto hr = source_->ReadAsync(buffer.Get(), count, options, &operation);
             if (FAILED(hr)) return hr;
@@ -142,9 +145,15 @@ class DelayedSource final : public RuntimeClass<RuntimeClassFlags<WinRt>, IRando
     InspectableClass(L"Test.DelayedSource", BaseTrust);
     ComPtr<IRandomAccessStream> source_;
     HRESULT error_;
+    bool* destroyed_;
+    bool nullResult_;
 
 public:
-    DelayedSource(IRandomAccessStream* source, HRESULT error) : source_(source), error_(error) {}
+    DelayedSource(IRandomAccessStream* source, HRESULT error, bool* destroyed = nullptr, bool nullResult = false)
+        : source_(source), error_(error), destroyed_(destroyed), nullResult_(nullResult) {}
+    ~DelayedSource() {
+        if (destroyed_) *destroyed_ = true;
+    }
     HRESULT STDMETHODCALLTYPE get_Size(UINT64* value) override { return source_->get_Size(value); }
     HRESULT STDMETHODCALLTYPE put_Size(UINT64 value) override { return source_->put_Size(value); }
     HRESULT STDMETHODCALLTYPE get_Position(UINT64* value) override { return source_->get_Position(value); }
@@ -156,7 +165,7 @@ public:
         ComPtr<IInputStream> input;
         auto hr = source_->GetInputStreamAt(position, &input);
         if (FAILED(hr)) return hr;
-        return Make<DelayedInput>(input.Get(), error_).CopyTo(value);
+        return Make<DelayedInput>(input.Get(), error_, nullResult_).CopyTo(value);
     }
     HRESULT STDMETHODCALLTYPE GetOutputStreamAt(UINT64 position, IOutputStream** value) override {
         return source_->GetOutputStreamAt(position, value);
@@ -194,6 +203,29 @@ int main() {
     CHECK(Wait(opening.Get()));
     ComPtr<IRandomAccessStreamWithContentType> source;
     CHECK(SUCCEEDED(opening->GetResults(&source)));
+    ComPtr<IRandomAccessStream> randomSource;
+    CHECK(SUCCEEDED(source.As(&randomSource)));
+    // Native request bodies use shcore's WinRT-to-IStream conversion.
+    ComPtr<IStream> bridge;
+    CHECK(SUCCEEDED(CreateStreamOverRandomAccessStream(source.Get(), IID_PPV_ARGS(&bridge))));
+    STATSTG stat{};
+    CHECK(SUCCEEDED(bridge->Stat(&stat, STATFLAG_NONAME)) && stat.type == STGTY_STREAM &&
+          stat.cbSize.QuadPart == sizeof(payload) - 1);
+    BYTE bridged[64]{};
+    ULONG bridgedRead = 0;
+    CHECK(bridge->Read(bridged, 7, &bridgedRead) == S_OK && bridgedRead == 7 && !memcmp(bridged, payload, 7));
+    LARGE_INTEGER move{};
+    move.QuadPart = -2;
+    ULARGE_INTEGER bridgedPosition{};
+    CHECK(SUCCEEDED(bridge->Seek(move, STREAM_SEEK_CUR, &bridgedPosition)) && bridgedPosition.QuadPart == 5);
+    move.QuadPart = sizeof(payload) - 3;
+    CHECK(SUCCEEDED(bridge->Seek(move, STREAM_SEEK_SET, nullptr)));
+    CHECK(bridge->Read(bridged, 8, &bridgedRead) == S_FALSE && bridgedRead == 2 &&
+          !memcmp(bridged, payload + sizeof(payload) - 3, 2));
+    CHECK(bridge->Read(bridged, 1, &bridgedRead) == S_FALSE && bridgedRead == 0);
+    CHECK(bridge->Write(payload, 1, &bridgedRead) == STG_E_ACCESSDENIED && bridgedRead == 0);
+    bridge.Reset();
+    CHECK(SUCCEEDED(randomSource->Seek(0)));
     ComPtr<IMFByteStream> bytes;
     HRESULT hr = MFCreateMFByteStreamOnStreamEx(source.Get(), &bytes);
     printf("MFCreateMFByteStreamOnStreamEx hr=%08lx\n", hr);
@@ -227,6 +259,28 @@ int main() {
     if (GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version")) {
         ComPtr<IRandomAccessStream> random;
         CHECK(SUCCEEDED(source.As(&random)));
+        CHECK(CreateStreamOverRandomAccessStream(nullptr, IID_PPV_ARGS(&bridge)) == E_POINTER && !bridge);
+        CHECK(CreateStreamOverRandomAccessStream(source.Get(), __uuidof(IStream), nullptr) == E_POINTER);
+        ComPtr<IMFByteStream> unsupported;
+        CHECK(CreateStreamOverRandomAccessStream(source.Get(), IID_PPV_ARGS(&unsupported)) == E_NOINTERFACE &&
+              !unsupported);
+        CHECK(SUCCEEDED(random->Seek(0)));
+        bool destroyed = false;
+        auto owned = Make<DelayedSource>(random.Get(), S_OK, &destroyed);
+        CHECK(SUCCEEDED(
+            CreateStreamOverRandomAccessStream(static_cast<IRandomAccessStream*>(owned.Get()), IID_PPV_ARGS(&bridge))));
+        owned.Reset();
+        CHECK(!destroyed);
+        CHECK(bridge->Read(buffer, 7, &read) == S_OK && read == 7 && !memcmp(buffer, payload, 7));
+        bridge.Reset();
+        CHECK(destroyed);
+        auto broken = Make<DelayedSource>(random.Get(), S_OK, nullptr, true);
+        CHECK(SUCCEEDED(CreateStreamOverRandomAccessStream(static_cast<IRandomAccessStream*>(broken.Get()),
+                                                           IID_PPV_ARGS(&bridge))));
+        CHECK(bridge->Read(buffer, 7, &read) == E_UNEXPECTED && read == 0);
+        bridge.Reset();
+        broken.Reset();
+        CHECK(SUCCEEDED(random->Seek(0)));
         auto delayed = Make<DelayedSource>(random.Get(), S_OK);
         CHECK(SUCCEEDED(MFCreateMFByteStreamOnStreamEx(static_cast<IRandomAccessStream*>(delayed.Get()), &bytes)));
         CHECK(SUCCEEDED(bytes->Read(buffer, 7, &read)) && read == 7 && !memcmp(buffer, payload, 7));
@@ -242,6 +296,7 @@ int main() {
         random.Reset();
     }
     opening.Reset();
+    randomSource.Reset();
     source.Reset();
     storage.Reset();
     lookup.Reset();
