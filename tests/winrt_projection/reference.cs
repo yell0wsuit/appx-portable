@@ -174,7 +174,13 @@ namespace Windows.UI.Core
         public static CoreWindow GetForCurrentThread() { throw new global::System.NotImplementedException("Windows.UI.Core.CoreWindow.GetForCurrentThread"); }
         public CoreDispatcher Dispatcher { get { throw new global::System.NotImplementedException("Windows.UI.Core.CoreWindow.Dispatcher"); } }
     }
-    public sealed class CoreDispatcher { internal CoreDispatcher() { } }
+    public enum CoreDispatcherPriority { Idle = -2, Low = -1, Normal = 0, High = 1 }
+    public delegate void DispatchedHandler();
+    public sealed class CoreDispatcher
+    {
+        internal CoreDispatcher() { }
+        public global::Windows.Foundation.IAsyncAction RunAsync(CoreDispatcherPriority priority, DispatchedHandler agileCallback) { throw new global::System.NotImplementedException("Windows.UI.Core.CoreDispatcher.RunAsync"); }
+    }
 }
 namespace Windows.Foundation.Collections
 {
@@ -220,6 +226,21 @@ namespace Windows.Networking.Connectivity
 namespace Windows.Foundation
 {
     public delegate void TypedEventHandler<TSender, TArgs>(TSender sender, TArgs args);
+    public enum AsyncStatus { Started = 0, Completed = 1, Canceled = 2, Error = 3 }
+    public delegate void AsyncActionCompletedHandler(IAsyncAction asyncInfo, AsyncStatus asyncStatus);
+    public interface IAsyncInfo
+    {
+        global::System.Exception ErrorCode { get; }
+        uint Id { get; }
+        AsyncStatus Status { get; }
+        void Cancel();
+        void Close();
+    }
+    public interface IAsyncAction : IAsyncInfo
+    {
+        AsyncActionCompletedHandler Completed { get; set; }
+        void GetResults();
+    }
 }
 namespace Windows.ApplicationModel.Activation
 {

@@ -90,6 +90,29 @@ class PageApp : Application
     static extern int ConnectWindowContent(int id);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectFrameContent(int id);
+    // The game's splash continuation: RunAsync queues work for the UI thread and
+    // completes the returned action once the handler has run.
+    void VerifyDispatcher()
+    {
+        global::Windows.UI.Core.CoreDispatcher dispatcher = global::Windows.UI.Core.CoreWindow.GetForCurrentThread().Dispatcher;
+        int thread = global::System.Threading.Thread.CurrentThread.ManagedThreadId;
+        bool ran = false;
+        global::Windows.Foundation.IAsyncAction action = dispatcher.RunAsync(global::Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+        {
+            Check(global::System.Threading.Thread.CurrentThread.ManagedThreadId == thread, "RunAsync handler thread");
+            ran = true;
+        });
+        Check(!ran && action.Status == global::Windows.Foundation.AsyncStatus.Started, "RunAsync queues the handler");
+        action.Completed = (info, status) =>
+        {
+            try
+            {
+                Check(ReferenceEquals(info, action) && ran && status == global::Windows.Foundation.AsyncStatus.Completed, "RunAsync completes after the handler");
+                VerifyTimer();
+            }
+            catch (Exception error) { Console.Error.WriteLine(error); Environment.Exit(1); }
+        };
+    }
     // The game's tip rotation: ticks arrive from the host's own message loop
     // after OnLaunched returns, so this test exits only when they do.
     void VerifyTimer()
@@ -287,7 +310,7 @@ class PageApp : Application
         VerifyApplicationView();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
-        VerifyTimer();
+        VerifyDispatcher();
     }
     protected override void OnLaunched(Windows.ApplicationModel.Activation.LaunchActivatedEventArgs args) { Verify(new DerivedPage()); }
 }
