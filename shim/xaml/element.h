@@ -2,6 +2,7 @@
 #include "package/package.h"
 #include "properties.h"
 #include "resources.h"
+#include "style.h"
 #include "generated/xaml.h"
 #include "com/composable.h"
 #include "host/host.h"
@@ -124,6 +125,7 @@ class Element
     ABI::Windows::UI::Xaml::VerticalAlignment vertical_ = ABI::Windows::UI::Xaml::VerticalAlignment_Stretch;
     PropertyValues properties_;
     Microsoft::WRL::ComPtr<ABI::Windows::UI::Xaml::IResourceDictionary> resources_;
+    Microsoft::WRL::ComPtr<ABI::Windows::UI::Xaml::IStyle> style_;
     bool loadedRaised_ = false;
     ABI::Windows::Foundation::Size laidOut_{0, 0};
     // XAML raises SizeChanged on first layout (from 0x0) and on every later
@@ -189,6 +191,29 @@ public:
         if (FAILED(hr)) return hr;
         resources_ = value;
         return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Style(ABI::Windows::UI::Xaml::IStyle** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto hr = CheckSourceThread();
+        return FAILED(hr) ? hr : style_.CopyTo(value);
+    }
+    // Style values are applied as local values once; replacing or clearing an
+    // applied Style would need value precedence the shim does not model.
+    HRESULT STDMETHODCALLTYPE put_Style(ABI::Windows::UI::Xaml::IStyle* value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        Microsoft::WRL::ComPtr<IUnknown> current, next;
+        if (style_) style_.As(&current);
+        if (value) value->QueryInterface(IID_PPV_ARGS(&next));
+        if (current == next) return S_OK;
+        if (style_) {
+            Log("UNIMPL", "FrameworkElement.Style replacement hr=%08lx", E_NOTIMPL);
+            return E_NOTIMPL;
+        }
+        hr = ApplySourceStyle(value, static_cast<ABI::Windows::UI::Xaml::IFrameworkElement*>(this), Derived::Name);
+        if (SUCCEEDED(hr)) style_ = value;
+        return hr;
     }
     HRESULT STDMETHODCALLTYPE GetValue(ABI::Windows::UI::Xaml::IDependencyProperty* property,
                                        IInspectable** value) override {

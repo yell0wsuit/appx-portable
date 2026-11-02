@@ -17,7 +17,8 @@
       "ABI::Windows::UI::Xaml::Controls::IMediaElement",
       "ABI::Windows::UI::Xaml::Controls::IMediaElement2",
       "ABI::Windows::UI::Xaml::Controls::ITextBox",
-      "ABI::Windows::UI::Xaml::Controls::IPasswordBox"
+      "ABI::Windows::UI::Xaml::Controls::IPasswordBox",
+      "ABI::Windows::UI::Xaml::Controls::IContentPresenter"
     ]
   },
   "win10_controls.h": {
@@ -269,6 +270,12 @@
     "header": "windows.ui.xaml.controls.h",
     "interfaces": [
       "ABI::Windows::UI::Xaml::Controls::ITextBlock"
+    ]
+  },
+  "xaml_media.h": {
+    "header": "windows.ui.xaml.media.h",
+    "interfaces": [
+      "ABI::Windows::UI::Xaml::Media::IVisualTreeHelperStatics"
     ]
   }
 }

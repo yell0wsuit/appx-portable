@@ -289,6 +289,8 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
     EventSource<IExceptionRoutedEventHandler> failed_;
     HWND surface_ = nullptr;
     boolean autoPlay_ = true, muted_ = false;
+    // Kept for callers; Wine has no background audio policy for it to select.
+    AudioCategory audioCategory_ = AudioCategory_Other;
     double volume_ = 1;
     bool ready_ = false, playRequested_ = false, failedOnce_ = false;
     MediaElementState state_ = MediaElementState_Closed;
@@ -507,6 +509,16 @@ public:
     }
     HRESULT STDMETHODCALLTYPE put_AutoPlay(boolean value) override {
         autoPlay_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_AudioCategory(AudioCategory* value) override {
+        if (!value) return E_POINTER;
+        *value = audioCategory_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_AudioCategory(AudioCategory value) override {
+        if (value < AudioCategory_Other || value > AudioCategory_Media) return E_INVALIDARG;
+        audioCategory_ = value;
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_CurrentState(MediaElementState* value) override {

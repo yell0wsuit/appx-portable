@@ -9,6 +9,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Markup;
+using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Animation;
 class SourcePage : Page, IComponentConnector
 {
@@ -151,6 +152,97 @@ class SourceApp : Application
     static string Dictionary(string body)
     {
         return "<ResourceDictionary" + Ns + " xmlns:d=\"http://schemas.microsoft.com/expression/blend/2008\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"d\">" + body + "</ResourceDictionary>";
+    }
+    static string FrameStyle(string key, string template)
+    {
+        return "<Style x:Key=\"" + key + "\" TargetType=\"Frame\"><Setter Property=\"Template\"><Setter.Value>" + template + "</Setter.Value></Setter></Style>";
+    }
+    static void Unsupported<T>(IDictionary<object, object> map, string key) where T : Exception
+    {
+        try { var ignored = map[key]; throw new Exception("invalid style accepted: " + key); }
+        catch (T) { }
+    }
+    static void VerifyFrameStyle()
+    {
+        var app = Application.Current;
+        var original = app.Resources;
+        Directory.CreateDirectory("Fixtures/Styles");
+        const string body = "<Grid><MediaElement x:Name=\"MediaPlayer\" AudioCategory=\"BackgroundCapableMedia\" AutoPlay=\"True\"/><ContentPresenter/></Grid>";
+        File.WriteAllText("Fixtures/Styles/frame.xaml", Dictionary(
+            FrameStyle("frameStyle", "<ControlTemplate TargetType=\"Frame\">" + body + "</ControlTemplate>") +
+            "<Style x:Key=\"setters\" TargetType=\"Frame\"><Style.Setters><Setter Property=\"Template\"><Setter.Value><ControlTemplate><Grid/></ControlTemplate></Setter.Value></Setter></Style.Setters></Style>" +
+            "<Style x:Key=\"empty\" TargetType=\"Frame\"/>" +
+            "<Style x:Key=\"textStyle\" TargetType=\"TextBlock\"><Setter Property=\"FontSize\" Value=\"12\"/></Style>" +
+            "<Style x:Key=\"frameWidth\" TargetType=\"Frame\"><Setter Property=\"Width\" Value=\"12\"/></Style>" +
+            "<Style x:Key=\"based\" TargetType=\"Frame\" BasedOn=\"{StaticResource frameStyle}\"/>" +
+            "<Style x:Key=\"untargeted\"/>" +
+            "<Style x:Key=\"custom\" TargetType=\"local:Frame\" xmlns:local=\"using:Custom\"/>" +
+            "<Style x:Key=\"nameless\" TargetType=\"Frame\"><Setter Value=\"1\"/></Style>" +
+            "<Style x:Key=\"doubled\" TargetType=\"Frame\"><Setter Property=\"Template\" Value=\"x\"><Setter.Value><ControlTemplate/></Setter.Value></Setter></Style>" +
+            FrameStyle("wrongTarget", "<ControlTemplate TargetType=\"Page\"><Grid/></ControlTemplate>") +
+            FrameStyle("twoRoots", "<ControlTemplate><Grid/><Grid/></ControlTemplate>") +
+            FrameStyle("notTemplate", "<Grid/>") +
+            FrameStyle("badAudio", "<ControlTemplate><MediaElement AudioCategory=\"Bogus\"/></ControlTemplate>") +
+            FrameStyle("presenterContent", "<ControlTemplate><ContentPresenter Content=\"x\"/></ControlTemplate>")));
+        File.WriteAllText("Fixtures/styles.xaml", Merged("<ResourceDictionary Source=\"Styles/frame.xaml\"/>", ""));
+        Application.LoadComponent(app, new Uri("ms-appx:///Fixtures/styles.xaml"));
+        var map = (IDictionary<object, object>)(object)app.Resources;
+        var style = map["frameStyle"] as Style;
+        Check(style != null && ReferenceEquals(style, map["frameStyle"]), "source Style is a stable typed resource");
+        Check(map["setters"] is Style && map["empty"] is Style, "explicit setters and empty styles");
+        Unsupported<NotImplementedException>(map, "textStyle");
+        Unsupported<NotImplementedException>(map, "frameWidth");
+        Unsupported<NotImplementedException>(map, "based");
+        Unsupported<ArgumentException>(map, "untargeted");
+        Unsupported<NotImplementedException>(map, "custom");
+        Unsupported<ArgumentException>(map, "nameless");
+        Unsupported<ArgumentException>(map, "doubled");
+        Unsupported<NotImplementedException>(map, "wrongTarget");
+        Unsupported<ArgumentException>(map, "twoRoots");
+        Unsupported<ArgumentException>(map, "notTemplate");
+        Unsupported<ArgumentException>(map, "badAudio");
+        Unsupported<NotImplementedException>(map, "presenterContent");
+
+        var frame = new Frame();
+        var page = new Page();
+        frame.Content = page;
+        try { VisualTreeHelper.GetChildrenCount(frame); throw new Exception("untemplated Frame reported children"); }
+        catch (NotImplementedException) { }
+        WrongThread(() => frame.Style = style);
+        frame.Style = style;
+        Check(ReferenceEquals(frame.Style, style), "Frame.Style identity");
+        Check(VisualTreeHelper.GetChildrenCount(frame) == 1, "templated Frame has its template root");
+        var root = VisualTreeHelper.GetChild(frame, 0) as Grid;
+        Check(root != null && ReferenceEquals(root, VisualTreeHelper.GetChild(frame, 0)) && VisualTreeHelper.GetChildrenCount(root) == 2, "template root Grid");
+        var media = VisualTreeHelper.GetChild(root, 0) as MediaElement;
+        var presenter = VisualTreeHelper.GetChild(root, 1) as ContentPresenter;
+        Check(media != null && VisualTreeHelper.GetChildrenCount(media) == 0, "template MediaElement");
+        Check(presenter != null && VisualTreeHelper.GetChildrenCount(presenter) == 1 && ReferenceEquals(VisualTreeHelper.GetChild(presenter, 0), page), "ContentPresenter shows the templated parent's content");
+        var next = new Page();
+        frame.Content = next;
+        Check(ReferenceEquals(VisualTreeHelper.GetChild(presenter, 0), next), "ContentPresenter follows Content");
+        frame.Content = null;
+        Check(VisualTreeHelper.GetChildrenCount(presenter) == 0, "empty ContentPresenter");
+        try { VisualTreeHelper.GetChild(root, 2); throw new Exception("out-of-range child returned"); }
+        catch (ArgumentException) { }
+        WrongThread(() => VisualTreeHelper.GetChildrenCount(root));
+        frame.Style = style;
+        Check(ReferenceEquals(VisualTreeHelper.GetChild(frame, 0), root), "reapplying the same Style keeps the template");
+        var other = new Frame();
+        other.Style = style;
+        Check(!ReferenceEquals(VisualTreeHelper.GetChild(other, 0), root), "each Frame instantiates its own template");
+        try { frame.Style = (Style)map["setters"]; throw new Exception("Style replacement accepted"); }
+        catch (NotImplementedException) { }
+        Check(ReferenceEquals(frame.Style, style) && ReferenceEquals(VisualTreeHelper.GetChild(frame, 0), root), "failed Style replacement changed the Frame");
+        var plain = new Frame();
+        plain.Style = (Style)map["empty"];
+        try { VisualTreeHelper.GetChildrenCount(plain); throw new Exception("empty Style created a template"); }
+        catch (NotImplementedException) { }
+        GC.KeepAlive(presenter);
+        app.Resources = original;
+        Directory.Delete("Fixtures/Styles", true);
+        File.Delete("Fixtures/styles.xaml");
+        Console.WriteLine("PASS: source Styles template Frames with MediaElement and ContentPresenter children");
     }
     static void VerifyMergedSources()
     {
@@ -529,6 +621,7 @@ class SourceApp : Application
         catch (NotImplementedException) { }
         VerifyApplicationSource();
         VerifyMergedSources();
+        VerifyFrameStyle();
         VerifyResources(page);
         VerifyGrid(page);
         VerifyBrush(page);

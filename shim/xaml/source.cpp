@@ -5,6 +5,7 @@
 #include "text.h"
 #include "viewbox.h"
 #include "grid.h"
+#include "style.h"
 #include "element.h"
 #include "registry.h"
 #include "package/resources.h"
@@ -37,6 +38,11 @@ struct Node {
     std::wstring text;                            // Rejected by RejectText until an element type consumes it.
     std::vector<std::wstring> mergedSources;
     bool hasMerged = false;
+    std::wstring targetType;               // Style/ControlTemplate TargetType, a short type name.
+    Node* templateNode = nullptr;          // Style: the ControlTemplate of its Template setter.
+    std::shared_ptr<Node> templateContent; // ControlTemplate: its root, kept beyond the source document.
+    bool hasAudioCategory = false, hasAutoPlay = false, autoPlay = false;
+    ABI::Windows::UI::Xaml::Media::AudioCategory audioCategory{};
     std::vector<Attribute> attributes;
     std::vector<std::unique_ptr<Node>> children;
     Node* content = nullptr;
@@ -215,6 +221,128 @@ HRESULT ResolveSourcePath(const Node& owner, const std::wstring& value, std::wst
     path = (slash == std::wstring::npos ? std::wstring() : base.substr(0, slash + 1)) + value;
     return S_OK;
 }
+// The element types source XAML builds; Style and ControlTemplate targets must be one of them.
+bool SourceElementType(const std::wstring& type) {
+    return type == L"Page" || type == L"Frame" || type == L"Grid" || type == L"Image" || type == L"ProgressRing" ||
+           type == L"TextBlock" || type == L"Viewbox" || type == L"MediaElement" || type == L"ContentPresenter";
+}
+std::wstring ControlType(const std::wstring& type) { return L"Windows.UI.Xaml.Controls." + type; }
+HRESULT ParseTargetType(const std::wstring& owner, const std::wstring& value, std::wstring& type) {
+    if (!value.empty() && (value.front() == L'{' || value.find(L':') != std::wstring::npos))
+        return Fail(owner + L".TargetType " + value);
+    if (!Identifier(value)) return Fail(owner + L".TargetType", E_INVALIDARG);
+    if (!SourceElementType(value)) return Fail(owner + L".TargetType " + value);
+    type = value;
+    return S_OK;
+}
+HRESULT PrepareTemplate(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
+                        const std::wstring& owner) {
+    for (const auto& attr : node.attributes)
+        if (attr.space == Xmlns) spaces[attr.name] = attr.value;
+    for (const auto& attr : node.attributes) {
+        if (attr.space == Xmlns || (ignoreDesign && attr.space == Design)) continue;
+        if (attr.space.empty() && attr.name == L"TargetType") {
+            auto hr = ParseTargetType(node.type, attr.value, node.targetType);
+            if (FAILED(hr)) return hr;
+            if (node.targetType != owner) return Fail(L"ControlTemplate.TargetType " + attr.value + L" for " + owner);
+        } else
+            return Fail(node.type + L"." + attr.name);
+    }
+    if (node.children.size() > 1) return Fail(L"ControlTemplate multiple roots", E_INVALIDARG);
+    if (node.children.empty()) return S_OK;
+    auto& root = *node.children[0];
+    if (root.space == Presentation && root.type.find(L'.') != std::wstring::npos) return Fail(root.type);
+    // Template content has its own namescope and no connections to the loading component.
+    std::set<std::wstring> names;
+    std::set<int> connections;
+    auto hr = Prepare(root, spaces, ignoreDesign, names, connections, false);
+    if (FAILED(hr)) return hr;
+    if (!connections.empty()) return Fail(L"ControlTemplate connections");
+    if (AnimationType(root.type) || BrushDataType(root.type)) return Fail(L"ControlTemplate nonvisual root", E_INVALIDARG);
+    node.templateContent = std::shared_ptr<Node>(std::move(node.children[0]));
+    node.children.clear();
+    return S_OK;
+}
+// Setters are resolved now by (TargetType, property name): only Frame.Template has an applier.
+HRESULT PrepareSetter(Node& style, Node& setter, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign) {
+    if (setter.space != Presentation || setter.type != L"Setter")
+        return Fail(L"Style.Setters type " + setter.type, E_INVALIDARG);
+    const Attribute *property = nullptr, *text = nullptr;
+    for (const auto& attr : setter.attributes)
+        if (attr.space == Xmlns)
+            spaces[attr.name] = attr.value;
+        else if (attr.space.empty() && attr.name == L"Property" && !property)
+            property = &attr;
+        else if (attr.space.empty() && attr.name == L"Value" && !text)
+            text = &attr;
+        else if (!(ignoreDesign && attr.space == Design))
+            return Fail(L"Setter." + attr.name);
+    Node* element = nullptr;
+    auto valueSpaces = spaces;
+    for (auto& child : setter.children) {
+        if (child->space != Presentation || child->type != L"Setter.Value") return Fail(L"Setter content " + child->type);
+        for (const auto& attr : child->attributes) {
+            if (attr.space != Xmlns) return Fail(L"Setter.Value." + attr.name);
+            valueSpaces[attr.name] = attr.value;
+        }
+        if (element || child->children.size() != 1) return Fail(L"Setter.Value multiple values", E_INVALIDARG);
+        element = child->children[0].get();
+    }
+    if (!property || property->value.empty()) return Fail(L"Setter.Property", E_INVALIDARG);
+    if ((text != nullptr) == (element != nullptr)) return Fail(L"Setter.Value", E_INVALIDARG);
+    if (property->value.front() == L'{') return Fail(L"Setter.Property " + property->value);
+    if (style.targetType != L"Frame" || property->value != L"Template")
+        return Fail(L"Style setter " + style.targetType + L"." + property->value);
+    if (!element) return Fail(L"Setter.Value " + text->value);
+    if (element->space != Presentation || element->type != L"ControlTemplate")
+        return Fail(L"Frame.Template type " + element->type, E_INVALIDARG);
+    if (style.templateNode) return Fail(L"Style duplicate setter Template", E_INVALIDARG);
+    auto hr = PrepareTemplate(*element, valueSpaces, ignoreDesign, style.targetType);
+    if (SUCCEEDED(hr)) style.templateNode = element;
+    return hr;
+}
+HRESULT PrepareStyle(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign, bool resource) {
+    if (!resource) return Fail(L"Style outside resources");
+    for (const auto& attr : node.attributes)
+        if (attr.space == Xmlns) spaces[attr.name] = attr.value;
+    bool hasTarget = false;
+    for (const auto& attr : node.attributes) {
+        if (attr.space == Xmlns || (ignoreDesign && attr.space == Design)) continue;
+        if (attr.space == Language && attr.name == L"Key") {
+            if (attr.value.empty() || attr.value.front() == L'{') return Fail(L"Style.Key");
+            node.key = attr.value;
+            node.hasKey = true;
+        } else if (attr.space.empty() && attr.name == L"TargetType") {
+            auto hr = ParseTargetType(node.type, attr.value, node.targetType);
+            if (FAILED(hr)) return hr;
+            hasTarget = true;
+        } else
+            return Fail(L"Style." + attr.name);
+    }
+    if (!hasTarget) return Fail(L"Style.TargetType", E_INVALIDARG);
+    if (!node.hasKey) return Fail(L"Style implicit key");
+    std::vector<Node*> setters;
+    bool explicitSetters = false;
+    for (auto& child : node.children) {
+        if (child->space == Presentation && child->type == L"Style.Setters") {
+            if (explicitSetters || !setters.empty()) return Fail(L"Style.Setters multiple values", E_INVALIDARG);
+            for (const auto& attr : child->attributes)
+                if (attr.space != Xmlns) return Fail(L"Style.Setters." + attr.name);
+            explicitSetters = true;
+            for (auto& entry : child->children) setters.push_back(entry.get());
+        } else if (explicitSetters)
+            return Fail(L"Style.Setters mixed values", E_INVALIDARG);
+        else if (child->space == Presentation && child->type.find(L'.') != std::wstring::npos)
+            return Fail(child->type);
+        else
+            setters.push_back(child.get());
+    }
+    for (auto* setter : setters) {
+        auto hr = PrepareSetter(node, *setter, spaces, ignoreDesign);
+        if (FAILED(hr)) return hr;
+    }
+    return S_OK;
+}
 HRESULT PrepareMerged(Node& owner, Node& property) {
     if (owner.hasMerged) return Fail(property.type + L" multiple values", E_INVALIDARG);
     owner.hasMerged = true;
@@ -279,13 +407,12 @@ HRESULT PrepareResources(Node& owner, Node& property, std::map<std::wstring, std
 HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
                 std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource) {
     if (node.space != Presentation) return Fail(node.space + L":" + node.type);
+    if (node.type == L"Style") return PrepareStyle(node, spaces, ignoreDesign, resource);
     const bool animation = AnimationType(node.type);
     const bool brush = BrushDataType(node.type);
     const bool nonvisual = animation || brush;
     if (root && nonvisual) return Fail(L"nonvisual root", E_INVALIDARG);
-    if (!nonvisual && node.type != L"Page" && node.type != L"Frame" && node.type != L"Grid" && node.type != L"Image" &&
-        node.type != L"ProgressRing" && node.type != L"TextBlock" && node.type != L"Viewbox")
-        return Fail(node.type);
+    if (!nonvisual && !SourceElementType(node.type)) return Fail(node.type);
     for (const auto& attr : node.attributes)
         if (attr.space == Xmlns) spaces[attr.name] = attr.value;
     for (const auto& attr : node.attributes)
@@ -351,6 +478,20 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             auto hr = ParseSourceColor(attr.value, node.foregroundColor);
             if (FAILED(hr)) return Fail(member, hr);
             node.hasForeground = true;
+        } else if (node.type == L"MediaElement" && attr.space.empty() && attr.name == L"AudioCategory") {
+            if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
+            auto value = Choice(attr.value, {L"Other", L"ForegroundOnlyMedia", L"BackgroundCapableMedia",
+                                             L"Communications", L"Alerts", L"SoundEffects", L"GameEffects",
+                                             L"GameMedia", L"GameChat", L"Speech", L"Movie", L"Media"});
+            if (value < 0) return Fail(member, E_INVALIDARG);
+            node.audioCategory = static_cast<ABI::Windows::UI::Xaml::Media::AudioCategory>(value);
+            node.hasAudioCategory = true;
+        } else if (node.type == L"MediaElement" && attr.space.empty() && attr.name == L"AutoPlay") {
+            if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
+            if (_wcsicmp(attr.value.c_str(), L"True") != 0 && _wcsicmp(attr.value.c_str(), L"False") != 0)
+                return Fail(member, E_INVALIDARG);
+            node.autoPlay = _wcsicmp(attr.value.c_str(), L"True") == 0;
+            node.hasAutoPlay = true;
         } else if (node.type == L"TextBlock" && attr.space.empty() && attr.name == L"Text") {
             if (!attr.value.empty() && attr.value.front() == L'{') return Fail(member);
             node.textValue = attr.value;
@@ -534,7 +675,8 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
             }
             continue;
         }
-        if (animation || node.type == L"Image" || node.type == L"ProgressRing" || node.type == L"TextBlock")
+        if (animation || node.type == L"Image" || node.type == L"ProgressRing" || node.type == L"TextBlock" ||
+            node.type == L"MediaElement" || node.type == L"ContentPresenter")
             return Fail(node.type + L".Children");
         if (node.type == L"Grid") {
             Node* holder = nullptr;
@@ -596,7 +738,56 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     }
     return S_OK;
 }
+HRESULT Build(Node& node);
+HRESULT BindPresenters(Node& node, const std::shared_ptr<TemplateLink>& link) {
+    if (node.type == L"ContentPresenter") return BindContentPresenter(node.value.Get(), link);
+    for (auto* visual : node.visuals) {
+        auto hr = BindPresenters(*visual, link);
+        if (FAILED(hr)) return hr;
+    }
+    return node.content ? BindPresenters(*node.content, link) : S_OK;
+}
+HRESULT CreateStyle(Node& node) {
+    std::vector<StyleSetter> setters;
+    if (node.templateNode) {
+        auto hr = Build(*node.templateNode);
+        ComPtr<IControlTemplate> value;
+        if (SUCCEEDED(hr)) hr = node.templateNode->value.As(&value);
+        if (FAILED(hr)) return hr;
+        setters.push_back([value](IInspectable* target) -> HRESULT {
+            ComPtr<IControl> control;
+            auto hr = target->QueryInterface(IID_PPV_ARGS(&control));
+            return FAILED(hr) ? hr : control->put_Template(value.Get());
+        });
+    }
+    ComPtr<IStyle> style;
+    auto hr = MakeSourceStyle(ControlType(node.targetType), std::move(setters), &style);
+    return FAILED(hr) ? hr : style.As(&node.value);
+}
+// Each instantiation rebuilds the prepared content, giving every templated parent its own elements.
+HRESULT CreateTemplate(Node& node) {
+    auto content = node.templateContent;
+    ComPtr<IControlTemplate> value;
+    auto hr = MakeSourceControlTemplate(
+        node.targetType.empty() ? std::wstring() : ControlType(node.targetType),
+        [content](const std::shared_ptr<TemplateLink>& link, ComPtr<IUIElement>& root) -> HRESULT {
+            if (!content) return S_OK;
+            try {
+                auto result = Build(*content);
+                if (SUCCEEDED(result)) result = BindPresenters(*content, link);
+                return FAILED(result) ? result : content->value.As(&root);
+            } catch (const std::bad_alloc&) {
+                return E_OUTOFMEMORY;
+            }
+        },
+        &value);
+    return FAILED(hr) ? hr : value.As(&node.value);
+}
 HRESULT Create(Node& node) {
+    if (node.type == L"Style") return CreateStyle(node);
+    if (node.type == L"ControlTemplate") return CreateTemplate(node);
+    if (node.type == L"MediaElement") return MakeMediaElement(&node.value);
+    if (node.type == L"ContentPresenter") return MakeContentPresenter(&node.value);
     if (node.type == L"Image" || node.type == L"ProgressRing" || node.type == L"TextBlock" || node.type == L"Viewbox") {
         ComPtr<IActivationFactory> factory;
         auto name = L"Windows.UI.Xaml.Controls." + node.type;
@@ -670,6 +861,7 @@ HRESULT Apply(Node& node) {
                                   node.hasTargetName ? &node.targetName : nullptr,
                                   node.hasThemeName ? &node.themeName : nullptr,
                                   node.hasTargetProperty ? &node.targetProperty : nullptr);
+    if (node.type == L"Style" || node.type == L"ControlTemplate") return S_OK;
     ComPtr<IFrameworkElement> element;
     auto hr = node.value.As(&element);
     if (SUCCEEDED(hr) && !node.name.empty())
@@ -715,6 +907,14 @@ HRESULT Apply(Node& node) {
         }
         return hr;
     }
+    if (node.type == L"MediaElement") {
+        ComPtr<IMediaElement> media;
+        if (SUCCEEDED(hr)) hr = node.value.As(&media);
+        if (SUCCEEDED(hr) && node.hasAudioCategory) hr = media->put_AudioCategory(node.audioCategory);
+        if (SUCCEEDED(hr) && node.hasAutoPlay) hr = media->put_AutoPlay(node.autoPlay);
+        return hr;
+    }
+    if (node.type == L"ContentPresenter") return hr;
     if (node.type == L"Viewbox") {
         ComPtr<IViewbox> viewbox;
         if (SUCCEEDED(hr)) hr = node.value.As(&viewbox);
@@ -723,7 +923,6 @@ HRESULT Apply(Node& node) {
     }
     return FAILED(hr) ? hr : SetContent(node);
 }
-HRESULT Build(Node& node);
 HRESULT LoadSourceDictionary(const std::wstring& path, std::vector<std::wstring>& loading,
                              ComPtr<IResourceDictionary>& dictionary);
 HRESULT BuildParts(Node& node) {
