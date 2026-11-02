@@ -535,6 +535,21 @@ exceptions. Native targets use selected runtime-class wrappers; boxed property
 values are unboxed, and unnamed native objects retain a generic wrapper when
 GetRuntimeClassName returns E_NOTIMPL. Other native failures propagate.
 
+`Adapter="XamlMetadata"` emits `IXamlMetadataProvider`, `IXamlType`,
+`IXamlMember` and `XmlnsDefinition` in their CLR-projected shapes after checking
+each WinMD method order and signature. A composed managed object implementing
+the provider, such as a XAML app, exposes it on its controlling outer; returned
+types and members get CCWs, and `ActivateInstance` results use their native
+identity. Native TypeName arguments map to CLR types: primitives by name,
+Metadata types from this projection, Custom types by assembly-qualified name,
+and anything unresolved to null. `UnderlyingType` returns the same encoding.
+`GetXmlnsDefinitions`, `CreateFromString`, `AddToVector`, `AddToMap`, member
+`GetValue` and `SetValue` fail with E_NOTIMPL. This lets `Frame.Navigate(Type)`
+and `Navigate(Type, object)` reach the shim's Frame, which resolves the page through the
+app's provider and activates it. A member on a class's non-default interface,
+such as `INavigate.Navigate`, is called through that interface, and
+`Arities="1 2"` selects overloads by parameter count.
+
 Public arguments of a composed object use its controlling identity, including
 IInspectable arguments. The private inner remains available for native base
 methods, preventing recursive override calls.

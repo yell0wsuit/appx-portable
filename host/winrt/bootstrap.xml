@@ -107,7 +107,10 @@
   <Class Name="Windows.UI.Xaml.Navigation.NavigatingCancelEventArgs" />
   <Class Name="Windows.UI.Xaml.Controls.Frame">
     <Constructor />
+    <Method Name="Navigate" Arities="1 2" />
   </Class>
+  <!-- Implemented by managed apps; emits IXamlType, IXamlMember and XmlnsDefinition too. -->
+  <Interface Name="Windows.UI.Xaml.Markup.IXamlMetadataProvider" Adapter="XamlMetadata" />
   <Delegate Name="Windows.UI.Xaml.ApplicationInitializationCallback" />
   <!-- A typed wrapper only: its referenced members are completion stubs. -->
   <Class Name="Windows.ApplicationModel.SuspendingEventArgs" />

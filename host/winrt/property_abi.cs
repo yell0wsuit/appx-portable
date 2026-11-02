@@ -11,15 +11,16 @@ namespace AppxPortable.WinRT
         internal struct Abi { internal IntPtr Name; internal int Kind; }
         private readonly NativeString name;
         internal readonly Abi Value;
+        private static readonly Type[] primitiveTypes = {
+            typeof(string), typeof(int), typeof(bool), typeof(double), typeof(float), typeof(uint), typeof(long), typeof(ulong), typeof(object) };
+        private static readonly string[] primitiveNames = {
+            "String", "Int32", "Boolean", "Double", "Single", "UInt32", "Int64", "UInt64", "Object" };
         internal NativeTypeName(Type type)
         {
             if (type == null) throw new ArgumentNullException("type");
-            string text = type == typeof(string) ? "String" : type == typeof(int) ? "Int32" :
-                type == typeof(bool) ? "Boolean" : type == typeof(double) ? "Double" :
-                type == typeof(float) ? "Single" : type == typeof(uint) ? "UInt32" :
-                type == typeof(long) ? "Int64" : type == typeof(ulong) ? "UInt64" : null;
+            int primitive = Array.IndexOf(primitiveTypes, type);
+            string text = primitive < 0 ? null : primitiveNames[primitive];
             int kind = text == null ? 2 : 0;
-            if (type == typeof(object)) { text = "Object"; kind = 0; }
             if (text == null)
             {
                 if (type.FullName == null || type.IsPointer || type.IsByRef || type.ContainsGenericParameters)
@@ -31,6 +32,26 @@ namespace AppxPortable.WinRT
             Value = new Abi { Name = name.Value, Kind = kind };
         }
         public void Dispose() { name.Dispose(); }
+        // A TypeName result whose HSTRING the native caller then owns.
+        internal static Abi Detach(Type type)
+        {
+            if (type == null) return default(Abi);
+            using (var value = new NativeTypeName(type)) return new Abi { Name = value.name.Detach(), Kind = value.Value.Kind };
+        }
+        // The CLR type a native TypeName argument names, or null when none is loaded:
+        // primitives by name, Metadata types in this projection, Custom types by assembly-qualified name.
+        internal static Type ToType(Abi value)
+        {
+            string text = NativeString.Read(value.Name);
+            if (text.Length == 0) return null;
+            if (value.Kind == 0)
+            {
+                int primitive = Array.IndexOf(primitiveNames, text);
+                return primitive < 0 ? null : primitiveTypes[primitive];
+            }
+            if (value.Kind == 1) return typeof(NativeTypeName).Assembly.GetType(text, false);
+            return Type.GetType(text, false);
+        }
     }
 
     // Internal projection/shim contract for managed reference-type validation.
