@@ -186,6 +186,21 @@ class StorageIoProjectionTest
         }
         try { GC.KeepAlive(FileIO.WriteBufferAsync(created, null)); throw new Exception("null buffer accepted"); } catch (NullReferenceException) { }
         try { GC.KeepAlive(FileIO.WriteBufferAsync(null, idBuffer)); throw new Exception("null file accepted"); } catch (NullReferenceException) { }
+        // First-run device-ID generation uses a native memory stream and writer, then detaches its buffer.
+        using (var memory = new InMemoryRandomAccessStream())
+        using (var writer = new DataWriter(memory))
+        {
+            Check(memory.CanRead && memory.CanWrite && memory.Size == 0, "native memory-stream capabilities");
+            string identifier = "synthetic device 💎\0id";
+            uint encoded = writer.WriteString(identifier);
+            IBuffer detached = writer.DetachBuffer();
+            Check(encoded == System.Text.Encoding.UTF8.GetByteCount(identifier) && detached.Length == encoded, "writer UTF8 byte count");
+            using (var reader = DataReader.FromBuffer(detached))
+                Check(reader.ReadString(encoded) == identifier, "detached writer buffer contents");
+            var target = await local.CreateFileAsync("synthetic-device-id.txt");
+            await FileIO.WriteBufferAsync(target, detached);
+            Check(File.ReadAllText(target.Path) == identifier, "native writer buffer persists to disk");
+        }
         // The game's device token: an unbound package token, read four bytes at a time.
         HardwareToken token = HardwareIdentification.GetPackageSpecificToken(null);
         IBuffer id = token.Id;

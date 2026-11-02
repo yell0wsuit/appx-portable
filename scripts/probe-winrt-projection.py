@@ -401,6 +401,7 @@ def main():
         mutator = compile_file("mutate-storage-abi.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         for kind, expected in (("stream-size", "IRandomAccessStream.get_Size"), ("read-count", "IInputStream.ReadAsync"),
                                ("buffer-order", "Unsupported buffer method order"), ("future-order", "Unsupported storage async method order"),
+                               ("writer-string", "IDataWriter.WriteString"), ("writer-factory", "IDataWriterFactory.CreateDataWriter"),
                                ("file-open", "IStorageFile.OpenAsync"), ("reader-load", "IDataReader.LoadAsync"), ("reader-factory", "IDataReaderFactory.CreateDataReader")):
             changed = output / ("storage-" + kind)
             target = output / ("storage-" + kind + ".cs")
@@ -416,7 +417,8 @@ def main():
         for iid in ("5e52f8ce-aced-5a42-95b4-f674dd84885e", "c4a57c5e-32b0-55b3-ad13-ce1c23041ed6", "d26b2819-897f-5c7d-84d6-56d796561431", "e521c894-2c26-5946-9e61-2b5e188d01ed", "3dddecf4-1d39-58e8-83b1-dbed541c7f35", "06386a7a-e009-5b0b-ab68-a8e48b516647", "bf666554-7605-5d9a-b14e-18d8c8472afe",
                     "3e1fe603-f897-5263-b328-0806426b8a79", "b79a741f-7fb5-50ae-9e99-911201ec3d41", "887411eb-7f54-4732-a5f0-5e43e3b8c2f5", "fa3f6186-4214-428c-a64c-14c9ac7315ea",
                     "5a648006-843a-4da9-865b-9d26e5dfad7b", "a4ed5c81-76c9-40bd-8be6-b1d90fb20ae7",
-                    "430ecece-1418-5d19-81b2-5ddb381603cc", "398c4183-793d-5b00-819b-4aef92485e94",
+                    "64b89265-d341-4922-b38a-dd4af8808c4e", "338c67c2-8b84-4c2b-9c50-7b8767847a1f",
+                    "905a0fe6-bc53-11df-8c49-001e4fc686da", "430ecece-1418-5d19-81b2-5ddb381603cc", "398c4183-793d-5b00-819b-4aef92485e94",
                     "d7527847-57da-4e15-914c-06806699a098", "ef60385f-be78-584b-aaef-7829ada2b0de",
                     "9343b6e7-e3d2-5e4a-ab2d-2bce4919a6a4"):
             require(iid in generated, "storage async IID differs from SDK header: " + iid)
@@ -433,7 +435,8 @@ def main():
                           "Action_put_Completed": 6, "Action_get_Completed": 7, "Action_GetResults": 8,
                           "Reader_get_UnconsumedBufferLength": 6, "Reader_ReadBytes": 14, "Reader_ReadString": 26,
                           "Reader_LoadAsync": 29, "Reader_DetachStream": 31, "ReaderFactory_CreateDataReader": 6,
-                          "ReaderStatics_FromBuffer": 6}
+                          "ReaderStatics_FromBuffer": 6, "Writer_WriteString": 27, "Writer_DetachBuffer": 31,
+                          "WriterFactory_CreateDataWriter": 6}
         for member, slot in expected_slots.items():
             require("int " + member + " = " + str(slot) + ";" in generated, "storage ABI slot differs from SDK header: " + member)
         # windows.system.profile.h, windows.storage.streams.h and windows.foundation.h.

@@ -114,4 +114,116 @@ struct __declspec(uuid("e2b50029-b4c1-4314-a4b8-fb813a2f275e")) DefaultIDataRead
   }
 };
 }
+namespace ABI::Windows::Storage::Streams {
+struct __declspec(uuid("64b89265-d341-4922-b38a-dd4af8808c4e")) DefaultIDataWriter : public ABI::Windows::Storage::Streams::IDataWriter {
+  HRESULT STDMETHODCALLTYPE get_UnstoredBufferLength(UINT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::get_UnstoredBufferLength");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_UnicodeEncoding(ABI::Windows::Storage::Streams::UnicodeEncoding* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::get_UnicodeEncoding");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_UnicodeEncoding(ABI::Windows::Storage::Streams::UnicodeEncoding value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::put_UnicodeEncoding");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_ByteOrder(ABI::Windows::Storage::Streams::ByteOrder* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::get_ByteOrder");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_ByteOrder(ABI::Windows::Storage::Streams::ByteOrder value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::put_ByteOrder");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteByte(BYTE value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteByte");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteBytes(UINT32 valueLength, BYTE* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteBytes");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteBuffer(ABI::Windows::Storage::Streams::IBuffer* buffer) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteBuffer");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteBufferRange(ABI::Windows::Storage::Streams::IBuffer* buffer, UINT32 start, UINT32 count) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteBufferRange");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteBoolean(boolean value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteBoolean");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteGuid(GUID value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteGuid");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteInt16(INT16 value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteInt16");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteInt32(INT32 value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteInt32");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteInt64(INT64 value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteInt64");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteUInt16(UINT16 value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteUInt16");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteUInt32(UINT32 value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteUInt32");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteUInt64(UINT64 value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteUInt64");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteSingle(FLOAT value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteSingle");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteDouble(DOUBLE value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteDouble");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteDateTime(ABI::Windows::Foundation::DateTime value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteDateTime");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteTimeSpan(ABI::Windows::Foundation::TimeSpan value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteTimeSpan");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE WriteString(HSTRING value, UINT32* codeUnitCount) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::WriteString");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE MeasureString(HSTRING value, UINT32* codeUnitCount) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::MeasureString");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE StoreAsync(__FIAsyncOperation_1_UINT32** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::StoreAsync");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE FlushAsync(__FIAsyncOperation_1_boolean** operation) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::FlushAsync");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE DetachBuffer(ABI::Windows::Storage::Streams::IBuffer** buffer) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::DetachBuffer");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE DetachStream(ABI::Windows::Storage::Streams::IOutputStream** outputStream) override {
+    appx::Log("UNIMPL", "ABI::Windows::Storage::Streams::IDataWriter::DetachStream");
+    return E_NOTIMPL;
+  }
+};
+}
 #pragma warning(pop)

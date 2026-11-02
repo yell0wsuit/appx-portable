@@ -46,6 +46,7 @@ internal static partial class WinrtProjectionGenerator
             "Create|(System.UInt32)->Windows.Storage.Streams.Buffer" });
         StorageInterface(output, "Input", "Windows.Storage.Streams.IInputStream", new[] {
             "ReadAsync|(Windows.Storage.Streams.IBuffer,System.UInt32,Windows.Storage.Streams.InputStreamOptions)->Windows.Foundation.IAsyncOperationWithProgress`2<Windows.Storage.Streams.IBuffer,System.UInt32>" });
+        StorageInterface(output, "Output", "Windows.Storage.Streams.IOutputStream", new string[0]);
         StorageInterface(output, "Random", "Windows.Storage.Streams.IRandomAccessStream", new[] {
             "get_Size|()->System.UInt64", "put_Size|(System.UInt64)->System.Void", "get_Position|()->System.UInt64", "Seek|(System.UInt64)->System.Void",
             "get_CanRead|()->System.Boolean", "get_CanWrite|()->System.Boolean",
@@ -62,6 +63,20 @@ internal static partial class WinrtProjectionGenerator
             "CreateDataReader|(Windows.Storage.Streams.IInputStream)->Windows.Storage.Streams.DataReader" });
         StorageInterface(output, "ReaderStatics", "Windows.Storage.Streams.IDataReaderStatics", new[] {
             "FromBuffer|(Windows.Storage.Streams.IBuffer)->Windows.Storage.Streams.DataReader" });
+        StorageInterface(output, "Writer", "Windows.Storage.Streams.IDataWriter", new[] {
+            "WriteString|(System.String)->System.UInt32", "DetachBuffer|()->Windows.Storage.Streams.IBuffer" });
+        StorageInterface(output, "WriterFactory", "Windows.Storage.Streams.IDataWriterFactory", new[] {
+            "CreateDataWriter|(Windows.Storage.Streams.IOutputStream)->Windows.Storage.Streams.DataWriter" });
+        TypeDefinition memory = Find("Windows.Storage.Streams.InMemoryRandomAccessStream"), writer = Find("Windows.Storage.Streams.DataWriter");
+        if (DefaultInterface(writer).FullName != "Windows.Storage.Streams.IDataWriter" ||
+            DefaultInterface(memory).FullName != "Windows.Storage.Streams.IRandomAccessStream" ||
+            !memory.Methods.Any(m => m.IsConstructor && m.Parameters.Count == 0) ||
+            !memory.CustomAttributes.Any(a => a.AttributeType.FullName == "Windows.Foundation.Metadata.ActivatableAttribute" &&
+                a.ConstructorArguments[0].Type.FullName == "System.UInt32") ||
+            !writer.Methods.Any(m => m.IsConstructor && m.Parameters.Count == 1 && m.Parameters[0].ParameterType.FullName == "Windows.Storage.Streams.IOutputStream") ||
+            !writer.CustomAttributes.Any(a => a.AttributeType.FullName == "Windows.Foundation.Metadata.ActivatableAttribute" &&
+                a.ConstructorArguments[0].Value is TypeReference && ((TypeReference)a.ConstructorArguments[0].Value).FullName == "Windows.Storage.Streams.IDataWriterFactory"))
+            throw new NotSupportedException("Unsupported memory-stream or writer activation contract");
         TypeDefinition reader = Find("Windows.Storage.Streams.DataReader"), load = Find("Windows.Storage.Streams.DataReaderLoadOperation");
         if (!reader.Methods.Any(m => m.IsConstructor && m.Parameters.Count == 1 &&
                 m.Parameters[0].ParameterType.FullName == "Windows.Storage.Streams.IInputStream") ||

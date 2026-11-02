@@ -118,6 +118,15 @@ namespace AppxPortable.WinRT
                     // the shim registry nor the package declares this class.
                     if (packageResult != unchecked((int)0x80040154)) hr = packageResult;
                 }
+                if (hr == unchecked((int)0x80040111))
+                {
+                    // Native system classes need no package registration. Preserve the
+                    // established unknown-class error when the OS also lacks the class.
+                    int systemResult = RoGetActivationFactory(name.Value, ref iid, out pointer);
+                    if (systemResult == unchecked((int)0x80040154) || systemResult == unchecked((int)0x80040111))
+                        systemResult = hr;
+                    return TakeResult(systemResult, pointer);
+                }
                 using (NativeObject factory = TakeResult(hr, pointer))
                     return factory.QueryInterface(iid);
             }

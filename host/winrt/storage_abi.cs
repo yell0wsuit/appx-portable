@@ -157,6 +157,7 @@ namespace AppxPortable.WinRT
     }
     internal static class StorageCalls
     {
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int WriteStringCall(IntPtr self, IntPtr text, out uint count);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int TextCall(IntPtr self, IntPtr text, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int ObjectCall(IntPtr self, IntPtr argument, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int ObjectPairCall(IntPtr self, IntPtr first, IntPtr second, out IntPtr value);
@@ -337,6 +338,66 @@ namespace Windows.Storage.Streams
             set { using (var access = new NativeObject.Access(native)) Errors.Check(access.Method<StorageCalls.SetUIntCall>(StorageAbi.Buffer_put_Length)(access.Self, value)); }
         }
     }
+    public sealed class InMemoryRandomAccessStream : IRandomAccessStream, INativeWrapper
+    {
+        private readonly RandomStream stream;
+        NativeObject INativeWrapper.Native { get { return ((INativeWrapper)stream).Native; } }
+        private InMemoryRandomAccessStream(NativeObject value) { stream = new RandomStream(value); }
+        public InMemoryRandomAccessStream()
+        {
+            using (var factory = NativeObject.Factory("Windows.Storage.Streams.InMemoryRandomAccessStream", new Guid("00000035-0000-0000-c000-000000000046")))
+            using (var value = factory.Object(6)) stream = new RandomStream(value.QueryInterface(StorageAbi.Random));
+            NativeObject.Remember(this, ((INativeWrapper)stream).Native);
+        }
+        internal static InMemoryRandomAccessStream FromNative(NativeObject value)
+        { return NativeObject.Wrap<InMemoryRandomAccessStream>(value, StorageAbi.Random, v => new InMemoryRandomAccessStream(v)); }
+        public ulong Size { get { return stream.Size; } set { stream.Size = value; } }
+        public ulong Position { get { return stream.Position; } }
+        public bool CanRead { get { return stream.CanRead; } }
+        public bool CanWrite { get { return stream.CanWrite; } }
+        public void Seek(ulong position) { stream.Seek(position); }
+        public IInputStream GetInputStreamAt(ulong position) { return stream.GetInputStreamAt(position); }
+        public IOutputStream GetOutputStreamAt(ulong position) { return stream.GetOutputStreamAt(position); }
+        public IRandomAccessStream CloneStream()
+        { return FromNative(((INativeWrapper)stream).Native.Object(StorageAbi.Random_CloneStream)); }
+        public IAsyncOperationWithProgress<IBuffer, uint> ReadAsync(IBuffer buffer, uint count, InputStreamOptions options) { return stream.ReadAsync(buffer, count, options); }
+        public IAsyncOperationWithProgress<uint, uint> WriteAsync(IBuffer buffer) { return stream.WriteAsync(buffer); }
+        public IAsyncOperation<bool> FlushAsync() { return stream.FlushAsync(); }
+        public void Dispose() { stream.Dispose(); }
+    }
+    public sealed class DataWriter : IDisposable, INativeWrapper
+    {
+        private readonly NativeObject native;
+        NativeObject INativeWrapper.Native { get { return native; } }
+        private DataWriter(NativeObject value) { native = value; }
+        internal static DataWriter FromNative(NativeObject value)
+        { return NativeObject.Wrap<DataWriter>(value, StorageAbi.Writer, v => new DataWriter(v)); }
+        public DataWriter(IOutputStream outputStream)
+        {
+            using (var factory = NativeObject.Factory("Windows.Storage.Streams.DataWriter", StorageAbi.WriterFactory))
+            using (var output = NativeObject.Argument(outputStream, StorageAbi.Output))
+            using (var access = new NativeObject.Access(factory))
+            {
+                IntPtr result;
+                int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.WriterFactory_CreateDataWriter)(access.Self,
+                    output == null ? IntPtr.Zero : output.DangerousGetHandle(), out result);
+                native = NativeObject.TakeResult(hr, result);
+            }
+            NativeObject.Remember(this, native);
+        }
+        public uint WriteString(string value)
+        {
+            using (var text = new NativeString(value))
+            using (var access = new NativeObject.Access(native))
+            {
+                uint count;
+                Errors.Check(access.Method<StorageCalls.WriteStringCall>(StorageAbi.Writer_WriteString)(access.Self, text.Value, out count));
+                return count;
+            }
+        }
+        public IBuffer DetachBuffer() { return Buffer.FromNative(native.Object(StorageAbi.Writer_DetachBuffer)); }
+        public void Dispose() { using (var close = native.QueryInterface(StorageAbi.Closable)) close.Call(StorageAbi.Closable_Close); }
+    }
     public sealed class DataReader : IDisposable, INativeWrapper
     {
         private readonly NativeObject native;
@@ -435,7 +496,7 @@ namespace Windows.Storage.Streams
     }
     internal sealed class RandomStream : InputStream, IRandomAccessStreamWithContentType
     {
-        private RandomStream(NativeObject value) : base(value) { }
+        internal RandomStream(NativeObject value) : base(value) { }
         internal static IRandomAccessStream FromRandom(NativeObject value)
         { return NativeObject.Wrap<IRandomAccessStream>(value, StorageAbi.Random, v => new RandomStream(v)); }
         internal static IRandomAccessStreamWithContentType FromContent(NativeObject value)
