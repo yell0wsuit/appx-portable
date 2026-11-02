@@ -68,6 +68,14 @@ HRESULT Send() {
 }
 extern "C" HRESULT __cdecl SendWindowSize() { return window_size_fixture::Send(); }
 extern "C" HRESULT __cdecl FlushWindowEvents() { return window_size_fixture::Drain(); }
+// The view counts as active while it can be seen: minimizing deactivates it.
+extern "C" HRESULT __cdecl SetHostMinimized(int minimized) {
+    HWND host = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), window_size_fixture::FindHost, reinterpret_cast<LPARAM>(&host));
+    if (!host) return E_FAIL;
+    ShowWindow(host, minimized ? SW_MINIMIZE : SW_RESTORE);
+    return window_size_fixture::Drain();
+}
 extern "C" HRESULT __cdecl ValidateWindowSizeArgs(ABI::Windows::UI::Core::IWindowSizeChangedEventArgs* args) {
     if (!args) return E_POINTER;
     ABI::Windows::Foundation::Size size{};

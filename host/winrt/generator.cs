@@ -220,6 +220,8 @@ internal static partial class WinrtProjectionGenerator
         if (view != null && view.ElementType.FullName == MapViewName)
             return Runtime + "NativeStringMapView<" + Name(MapViewValue(view)) + ">.Wrap(" + receiver + ".Object(" + number + "), " +
                 StringMapViewAbi(view) + ", v => " + Wrapped(MapViewValue(view), "v") + ")";
+        if (ClrStructFields.ContainsKey(result.FullName) && selected.Contains(result.FullName))
+            return receiver + ".Value<" + Name(result) + ">(" + number + ")";
         TypeDefinition definition = Find(result.FullName);
         if (definition.IsEnum)
         {
