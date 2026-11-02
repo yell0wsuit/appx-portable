@@ -18,6 +18,9 @@
     <Property Name="ResourceId" />
     <Property Name="Architecture" />
   </Class>
+  <Class Name="Windows.ApplicationModel.DesignMode">
+    <Property Name="DesignModeEnabled" />
+  </Class>
   <Enum Name="Windows.System.ProcessorArchitecture" />
   <Enum Name="Windows.ApplicationModel.Activation.ActivationKind" />
   <Enum Name="Windows.ApplicationModel.Activation.ApplicationExecutionState" />
