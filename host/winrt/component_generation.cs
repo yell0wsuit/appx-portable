@@ -42,11 +42,8 @@ internal static partial class WinrtProjectionGenerator
                 if (name != null) item.SetAttribute("Name", name);
                 element.AppendChild(item);
             };
-            foreach (var constructor in type.Methods.Where(m => m.IsConstructor && m.IsPublic))
-            {
-                if (constructor.HasParameters) throw new System.NotSupportedException("Unsupported component constructor: " + constructor);
-                add("Constructor", null);
-            }
+            // One Constructor element projects every public constructor, factory ones included.
+            if (type.Methods.Any(m => m.IsConstructor && m.IsPublic && !m.IsStatic)) add("Constructor", null);
             foreach (var property in type.Properties) add("Property", property.Name);
             foreach (var handler in type.Events) add("Event", handler.Name);
             foreach (string name in type.Methods.Where(m => m.IsPublic && !m.IsConstructor && !m.IsGetter && !m.IsSetter && !m.IsAddOn && !m.IsRemoveOn)
@@ -88,6 +85,7 @@ internal static partial class WinrtProjectionGenerator
             throw new System.NotSupportedException("Reference is not an interop projection: " + path);
         foreach (var type in module.Types.Where(t => t.IsPublic))
         {
+            referenced.Add(type.FullName);
             var descriptor = Attribute(type, TypeDescriptor);
             if (descriptor == null) continue;
             string iid = (string)descriptor.ConstructorArguments.Single().Value;
@@ -97,6 +95,37 @@ internal static partial class WinrtProjectionGenerator
             if (types.ContainsKey(type.FullName)) throw new System.IO.InvalidDataException("Conflicting external projection type: " + type.FullName);
             external.Add(type.FullName, type); types.Add(type.FullName, type);
         }
+    }
+    // Public types of the referenced projections, by name, for stub signatures.
+    private static readonly System.Collections.Generic.HashSet<string> referenced = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+    // WinRT types the CLR presents as .NET types, as consumers' signatures name them.
+    private static readonly System.Collections.Generic.Dictionary<string, string> clrNames = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal)
+    {
+        { "Windows.Foundation.Collections.IVectorView`1", "System.Collections.Generic.IReadOnlyList" },
+        { "Windows.Foundation.Collections.IVector`1", "System.Collections.Generic.IList" },
+        { "Windows.Foundation.Collections.IIterable`1", "System.Collections.Generic.IEnumerable" },
+        { "Windows.Foundation.Collections.IMapView`2", "System.Collections.Generic.IReadOnlyDictionary" },
+        { "Windows.Foundation.Collections.IMap`2", "System.Collections.Generic.IDictionary" },
+        { "Windows.Foundation.Collections.IKeyValuePair`2", "System.Collections.Generic.KeyValuePair" },
+        { "Windows.Foundation.EventHandler`1", "System.EventHandler" },
+        { "Windows.Foundation.IReference`1", "System.Nullable" },
+        { "Windows.Foundation.DateTime", "System.DateTimeOffset" },
+        { "Windows.Foundation.TimeSpan", "System.TimeSpan" },
+        { "Windows.Foundation.Uri", "System.Uri" },
+        { "Windows.Foundation.HResult", "System.Exception" },
+        { "Windows.Foundation.EventRegistrationToken", "System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken" },
+    };
+    // A stub's signature type: the CLR projection's name where the generator has no wrapper.
+    private static string StubName(Mono.Cecil.TypeReference type)
+    {
+        var generic = type as Mono.Cecil.GenericInstanceType;
+        string element = (generic != null ? generic.ElementType : type).FullName;
+        string mapped;
+        if (clrNames.TryGetValue(element, out mapped) || referenced.Contains(element) && (mapped = element.Split('`')[0]) != null)
+            return "global::" + mapped + (generic == null ? "" : "<" + string.Join(", ", generic.GenericArguments.Select(StubName)) + ">");
+        if (generic == null && !type.IsArray && !type.IsByReference && !type.IsPointer && element.StartsWith("System.", System.StringComparison.Ordinal) && element.IndexOf('.', 7) < 0 &&
+            element != "System.Object" && element != "System.String" && Scalar(type) == null && element != "System.Boolean") return "global::" + element;
+        return Name(type);
     }
     private static string Wrapped(Mono.Cecil.TypeReference type, string owned)
     {

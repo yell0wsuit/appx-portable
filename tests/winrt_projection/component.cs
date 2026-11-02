@@ -15,6 +15,9 @@ class ComponentTest
     [MTAThread]
     static int Main()
     {
+        // A factory constructor with arguments, as Microsoft.Xbox's ServiceClient(String) has.
+        Require(new Gauge("đá 💎").Name == "đá 💎", "factory constructor argument");
+        Require(new Gauge(null).Name == "", "null string factory argument");
         var engine = new Engine();
         Require(engine.Echo(-1234567) == -1234567, "signed scalar result");
         engine.SetState(true, 1.25, 0xf0000000U);

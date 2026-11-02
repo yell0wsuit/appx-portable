@@ -525,9 +525,9 @@ def main():
                        "Microsoft.Xbox.IXboxLIVEService::get_SignedInUserIdentity, slot 10"):
             require("// " + member in xbox_text, "Xbox member differs from native header: " + member)
         no_constructor = output / "xbox-no-default-constructor.xml"
-        no_constructor.write_text('<Projection><Class Name="Microsoft.Xbox.Foundation.UserIdentity"><Constructor /></Class></Projection>')
+        no_constructor.write_text('<Projection><Class Name="Microsoft.Xbox.Foundation.SignedOutEventArgs"><Constructor /></Class></Projection>')
         run("reject-xbox-constructor", [generator.name, windows(xbox_metadata), windows(no_constructor), windows(output / "xbox-no-constructor.cs")],
-            succeeds=False, marker="No default activation constructor")
+            succeeds=False, marker="No activation constructor")
         qualifier = compile_file("xbox-metadata.exe", [repo / "host/winrt/xbox_metadata.cs"], ["/r:Mono.Cecil.dll"])
         version = output / "Microsoft.Xbox.version.cs"
         qualification = run("qualify-xbox", [qualifier.name, windows(xbox_winmd), windows(version)], marker="Xbox IUser ABI ")
@@ -552,6 +552,25 @@ def main():
         resolver = compile_file("resolve-xbox.exe", [repo / "tests/winrt_projection/resolve_references.cs"], ["/r:Mono.Cecil.dll"])
         run("resolve-xbox", [resolver.name, "--assembly", "Microsoft.Xbox", windows(xbox_projection.parent)] + [windows(p) for p in all_consumers], marker="0 unresolved")
         run("xbox-offline-contract", [xbox_consumer.name, abi_version], cwd=xbox_folder, marker="PASS: Xbox projection uses native signed-out user and service client")
+        # The package's own Microsoft.Xbox.winmd projects generically at install time.
+        xbox_bridge = compile_file("xbox-interop/AppxPortable.WinRT.Interop.dll", [repo / "host/winrt/interop.cs"], ["/target:library"])
+        xbox_flags = ["/target:library", "/define:APPX_PORTABLE_INTEROP", "/r:" + windows(xbox_bridge)]
+        xbox_windows_generated = output / "Windows.xbox-interop.cs"
+        run("generate-xbox-windows-interop", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(xbox_windows_generated), "--interop"])
+        generic_runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
+        xbox_windows = compile_file("xbox-interop/Windows.dll", generic_runtime + [repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", xbox_windows_generated], xbox_flags)
+        xbox_component = output / "Microsoft.Xbox.component.cs"
+        run("generate-xbox-component", [generator.name, "--component", windows(xbox_winmd), windows(xbox_component), "--reference", windows(xbox_windows)])
+        # The shim reads the native ABI layout from the version resource beside the game;
+        # installs keep the package's native DLL there, so the fixture borrows the qualified one.
+        xbox_generic = compile_file("xbox-component/Microsoft.Xbox.dll", generic_runtime + [xbox_component, version], xbox_flags + ["/r:" + windows(xbox_windows)])
+        generic_folder = fixture("xbox-generic", xbox_consumer.name, "XboxProjectionTest", "CN=projection")
+        copy_owned_file(output / "xbox-winrt.exe", generic_folder / xbox_consumer.name)
+        for source in (xbox_generic, xbox_windows, xbox_bridge):
+            copy_owned_file(source, generic_folder / source.name)
+        run("xbox-generic-contract", [xbox_consumer.name, "generic"], cwd=generic_folder,
+            marker="PASS: generic Xbox projection uses native signed-out user and service client")
+        run("resolve-xbox-generic", [resolver.name, "--assembly", "Microsoft.Xbox", windows(xbox_generic.parent)] + [windows(p) for p in all_consumers], marker="0 unresolved")
         return xbox_projection
 
     try:
@@ -663,7 +682,7 @@ def main():
             host = compile_file("appx-host.exe", [repo / "host/managed.cs", repo / "host/projections.cs"], ["/nowarn:0219", "/r:" + windows(references / "System.Windows.Forms.dll")])
             folder = fixture("component-game", consumer.name, "ComponentProjectionTest", "CN=projection")
             manifest = folder / "AppxManifest.xml"
-            text = manifest.read_text().replace("</Applications>", '</Applications><Extensions><Extension Category="windows.activatableClass.inProcessServer"><InProcessServer><Path>Example.Component.dll</Path><ActivatableClass ActivatableClassId="Example.Component.Engine" ThreadingModel="both"/></InProcessServer></Extension></Extensions>')
+            text = manifest.read_text().replace("</Applications>", '</Applications><Extensions><Extension Category="windows.activatableClass.inProcessServer"><InProcessServer><Path>Example.Component.dll</Path><ActivatableClass ActivatableClassId="Example.Component.Engine" ThreadingModel="both"/><ActivatableClass ActivatableClassId="Example.Component.Gauge" ThreadingModel="both"/></InProcessServer></Extension></Extensions>')
             manifest.write_text(text)
             copy_owned_file(output / "component-winrt.exe", folder / consumer.name)
             copy_owned_file(host, folder / host.name)
@@ -683,7 +702,12 @@ def main():
             run("reject-component-reference", [host.name, "--log"], cwd=folder, succeeds=False, marker="Generated component projection identity does not match", evidence=folder / "managed.log")
             copy_owned_file(output / "component-winrt.exe", folder / consumer.name)
             run("unsupported-component-metadata", [metadata_builder.name, windows(output / "unsupported/Example.Component.winmd"), "unsupported"])
-            run("reject-component-signature", [generator.name, "--component", windows(output / "unsupported/Example.Component.winmd"), windows(output / "unsupported.cs")], succeeds=False, marker="Unsupported parameter:")
+            # A member the generator cannot express becomes a named stub; the component still projects.
+            run("stub-component-signature", [generator.name, "--component", windows(output / "unsupported/Example.Component.winmd"), windows(output / "unsupported.cs")],
+                marker="Stubbed Example.Component.Engine.Echo: Unsupported parameter:")
+            require('throw global::AppxPortable.WinRT.Errors.Unimplemented("Example.Component.Engine.Echo")' in (output / "unsupported.cs").read_text(encoding="utf-8"),
+                    "an unsupported component member was not stubbed with its name")
+            compile_file("unsupported-projection/Example.Component.dll", runtime + [output / "unsupported.cs"], ["/target:library"])
             for identity in ("culture", "signed"):
                 run("component-identity-" + identity, [metadata_builder.name, windows(output / "unsupported/Example.Component.winmd"), identity])
                 run("reject-component-identity-" + identity, [generator.name, "--component", windows(output / "unsupported/Example.Component.winmd"), windows(output / "identity.cs")], succeeds=False, marker="Unsupported component assembly identity:")
