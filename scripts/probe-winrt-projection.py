@@ -429,6 +429,8 @@ def main():
         identity = compile_file("storage-identity.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/storage_identity.cs"])
         copy_owned_file(identity, folder / identity.name)
         run("storage-identity", [identity.name], cwd=folder, marker="PASS: buffer projection preserves object identity and native-owned pin lifetime")
+        # Each run starts from empty app data: a reused output folder keeps files the test creates.
+        shutil.rmtree(output / "io-data", ignore_errors=True)
         run("storage-io", [signed.name], cwd=folder, environment={"APPX_PORTABLE_DATA": windows(output / "io-data")},
             marker="PASS: managed storage awaits native files and reads seekable streams and buffers")
 
@@ -439,6 +441,8 @@ def main():
         folder = fixture("storage", consumer.name, "StorageProjectionTest", "CN=projection")
         copy_owned_file(output / "storage-winrt.exe", folder / consumer.name)
         copy_owned_file(projection, folder / "Windows.dll")
+        # Settings persist from the write run to the read run, never from an earlier probe.
+        shutil.rmtree(output / "settings-data", ignore_errors=True)
         environment = {"APPX_PORTABLE_DATA": windows(output / "settings-data")}
         for mode in ("write", "read"):
             run("storage-" + mode, [consumer.name, mode], cwd=folder, environment=environment,
