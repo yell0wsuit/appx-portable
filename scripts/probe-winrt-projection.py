@@ -422,6 +422,16 @@ def main():
                           "Action_put_Completed": 6, "Action_get_Completed": 7, "Action_GetResults": 8}
         for member, slot in expected_slots.items():
             require("int " + member + " = " + str(slot) + ";" in generated, "storage ABI slot differs from SDK header: " + member)
+        # windows.system.profile.h, windows.storage.streams.h and windows.foundation.h.
+        for value in ('new global::System.Guid("971260e0-f170-4a42-bd55-a900b212dae2")', 'new global::System.Guid("28f6d4c0-fb12-40a4-8167-7f4e03d2724c")',
+                      'new global::System.Guid("11fcbfc8-f93a-471b-b121-f379e349313c")', 'new global::System.Guid("e2b50029-b4c1-4314-a4b8-fb813a2f275e")',
+                      'new global::System.Guid("30d5a829-7fa4-4026-83bb-d75bae4ea99e")',
+                      "// Windows.System.Profile.IHardwareIdentificationStatics::GetPackageSpecificToken, slot 6",
+                      "// Windows.System.Profile.IHardwareToken::get_Id, slot 6", "// Windows.System.Profile.IHardwareToken::get_Signature, slot 7",
+                      "// Windows.System.Profile.IHardwareToken::get_Certificate, slot 8", "// Windows.Storage.Streams.IDataReaderStatics::FromBuffer, slot 6",
+                      "// Windows.Storage.Streams.IDataReader::get_UnconsumedBufferLength, slot 6", "// Windows.Storage.Streams.IDataReader::ReadBytes, slot 14",
+                      "// Windows.Foundation.IClosable::Close, slot 6"):
+            require(value in generated, "token and reader ABI differs from the SDK header: " + value)
         consumer = compile_file("storage-io.exe", [repo / "tests/winrt_projection/storage_io.cs"],
                                 ["/r:" + windows(projection), "/r:" + windows(bridge)])
         marker = output / "mark-async.exe"

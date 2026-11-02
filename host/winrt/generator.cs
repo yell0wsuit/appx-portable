@@ -67,6 +67,8 @@ internal static partial class WinrtProjectionGenerator
         if (type.FullName == "System.Object") throw new NotSupportedException("Object is wrapped by Unwrap");
         Name(type);
         if (type.FullName == "Windows.Foundation.Uri") return Projected(Find(type.FullName));
+        // The hand-written storage adapter wraps native buffers.
+        if (type.FullName == "Windows.Storage.Streams.IBuffer") return "global::Windows.Storage.Streams.Buffer";
         return interfaces.ContainsKey(type.FullName) ? Projected(Find(type.FullName)) : "global::" + type.FullName;
     }
 
@@ -187,6 +189,7 @@ internal static partial class WinrtProjectionGenerator
         TypeReference result = method.ReturnType;
         if (result.FullName == "System.Boolean") return receiver + ".Boolean(" + number + ")";
         if (result.FullName == "System.String") return receiver + ".String(" + number + ")";
+        if (result.FullName == "System.UInt32") return receiver + ".UInt32(" + number + ")";
         if (result.FullName == "System.Object") return Inspectable(receiver + ".Object(" + number + ")");
         if (result.FullName == "Windows.Foundation.TimeSpan") return "new global::System.TimeSpan(" + receiver + ".Int64(" + number + "))";
         var view = result as GenericInstanceType;
@@ -326,7 +329,8 @@ internal static partial class WinrtProjectionGenerator
         {
             string full = parameter.ParameterType.FullName, value = "@" + parameter.Name;
             string local = "argument" + Literal(parameter.Index), prepare;
-            if (parameter.IsOut || parameter.ParameterType.IsByReference || parameter.ParameterType.IsPointer)
+            // A fill array is [out] but passed by value; a receive array is by reference.
+            if ((parameter.IsOut && !(parameter.ParameterType is ArrayType)) || parameter.ParameterType.IsByReference || parameter.ParameterType.IsPointer)
                 throw new NotSupportedException("Unsupported parameter: " + method.FullName + " " + parameter.Name);
             string scalar = Scalar(parameter.ParameterType);
             if (scalar != null)
@@ -338,8 +342,8 @@ internal static partial class WinrtProjectionGenerator
             var array = parameter.ParameterType as ArrayType;
             if (array != null)
             {
-                if (!array.IsVector || array.ElementType.FullName != "System.Byte" ||
-                    parameter.CustomAttributes.Any(a => a.AttributeType.FullName == "System.Runtime.InteropServices.WindowsRuntime.WriteOnlyArrayAttribute"))
+                // Pass and fill arrays share an ABI; the native side writes a fill array through the pin.
+                if (!array.IsVector || array.ElementType.FullName != "System.Byte")
                     throw new NotSupportedException("Unsupported array: " + method.FullName + " " + parameter.Name);
                 abi.Add("uint " + local + "Length"); abi.Add("global::System.IntPtr " + local);
                 setup.Add("                using (var " + local + " = new " + Runtime + "PinnedBytes(" + value + "))");
@@ -953,6 +957,28 @@ internal static partial class WinrtProjectionGenerator
             .Select(i => Find(i.InterfaceType.FullName)).ToList();
     }
 
+    private const string ClosableName = "Windows.Foundation.IClosable";
+    private static bool Closable(TypeDefinition type)
+    {
+        if (!type.Interfaces.Any(i => i.InterfaceType.FullName == ClosableName)) return false;
+        TypeDefinition closable = Find(ClosableName);
+        if (!closable.Methods.Select(m => m.Name).SequenceEqual(new[] { "Close" }) || closable.Methods[0].Parameters.Count != 0 ||
+            closable.Methods[0].ReturnType.FullName != "System.Void")
+            throw new NotSupportedException("Unsupported closable ABI: " + ClosableName);
+        return true;
+    }
+    // The CLR projects IClosable.Close as IDisposable.Dispose.
+    private static void Dispose(StringBuilder output)
+    {
+        TypeDefinition closable = Find(ClosableName);
+        output.AppendLine("        // " + ClosableName + "::Close, slot " + Literal(Slot(closable, closable.Methods[0])));
+        output.AppendLine("        public void Dispose()");
+        output.AppendLine("        {");
+        output.AppendLine("            using (var invocation = " + Runtime + "Errors.Begin())");
+        output.AppendLine("            using (var self = native.QueryInterface(" + Guid(closable) + "))");
+        output.AppendLine("                self.Call(" + Literal(Slot(closable, closable.Methods[0])) + ");");
+        output.AppendLine("        }");
+    }
     private static void Class(StringBuilder output, TypeDefinition type, XmlElement surface)
     {
         CustomAttribute composition = Attribute(type, "Windows.Foundation.Metadata.ComposableAttribute");
@@ -1013,9 +1039,11 @@ internal static partial class WinrtProjectionGenerator
         string hide = root ? "" : "new ";
 
         var implemented = type.Interfaces.Select(i => i.InterfaceType.FullName).Where(interfaces.ContainsKey).ToList();
+        bool closable = members.Contains("Close") && Closable(type);
         var bases = new List<string>();
         if (!root) bases.Add("global::" + baseClass.FullName);
         bases.AddRange(implemented.Select(i => "global::" + i));
+        if (closable) bases.Add("global::System.IDisposable");
         if (root) bases.Add(Runtime + "INativeWrapper");
         if (interop)
         {
@@ -1145,7 +1173,8 @@ internal static partial class WinrtProjectionGenerator
         }
         foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
         {
-            if (member.Name == "Property") Property(output, type, member.GetAttribute("Name"), query);
+            if (member.Name == "Method" && closable && member.GetAttribute("Name") == "Close") Dispose(output);
+            else if (member.Name == "Property") Property(output, type, member.GetAttribute("Name"), query);
             else if (member.Name == "Method") Method(output, type, member.GetAttribute("Name"), query);
             else if (member.Name == "Event") Event(output, type, member.GetAttribute("Name"), query);
         }
