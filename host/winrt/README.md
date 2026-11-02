@@ -384,6 +384,27 @@ context. The seekable view is limited to read-only streams; writable streams,
 resizing, output streams and additional extension overloads fail explicitly or
 remain unprojected. Disposal closes the underlying WinRT input stream.
 
+Activation tries the shim registry, package components, then native system
+factories. The existing missing-class error remains unchanged when all three
+lack a class. This lets selected native system classes work without a package
+manifest entry.
+
+InMemoryRandomAccessStream uses the system implementation. DataWriter supports
+its output-stream constructor, UTF-8 WriteString and DetachBuffer. The writer
+factory checks the system constructor, string encoding, buffer detachment and
+closing on an isolated instance; incomplete implementations use the narrow native
+fallback. Detached buffers own their bytes independently, and closing a writer
+closes its attached stream. StoreAsync, stream writes and flush are outside this
+selected surface; other stream operations retain native errors if unavailable.
+`writertest` checks Unicode/NUL bytes, buffer ownership, stream detachment and
+closed-state behavior. The managed I/O fixture covers writing the detached buffer
+to a file.
+
+HardwareIdentification returns invented stable four-byte component records,
+which the game's device-ID parser recognizes. This is compatibility data rather
+than a physical device identity or cryptographic signature. Existing app data
+continues to follow the application's own loading/regeneration behavior.
+
 DataReader supports FromBuffer and construction over IInputStream. LoadAsync
 appends unread data and returns a concrete DataReaderLoadOperation implementing
 IAsyncOperation<uint>; callbacks preserve operation identity. ReadBytes fills the

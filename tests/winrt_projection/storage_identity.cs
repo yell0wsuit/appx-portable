@@ -65,6 +65,17 @@ class StorageIdentityTest
         try
         {
             Marshal.ThrowExceptionForHR(RoInitialize(1));
+            // A selected system class can exist in Wine without a shim/package registration.
+            using (var factory = NativeObject.Factory("Windows.Storage.Streams.InMemoryRandomAccessStream", new Guid("00000035-0000-0000-c000-000000000046")))
+            using (var instance = factory.Object(6))
+            using (var memory = instance.QueryInterface(StorageAbi.Random))
+                Check(StorageCalls.Wide(memory, StorageAbi.Random_get_Size) == 0, "system memory-stream activation");
+            try
+            {
+                using (var absent = NativeObject.Factory("AppxPortable.Probe.MissingClass", inspectable)) { }
+                throw new Exception("unknown factory unexpectedly exists");
+            }
+            catch (Exception error) { if (error.HResult != unchecked((int)0x80040111)) throw; }
             IBuffer original = ArrayBuffer.Create(new byte[] { 1, 2 });
             object result = NativeObject.Inspectable(NativeObject.Of(original).QueryInterface(inspectable));
             Check(ReferenceEquals(original, result), "object round trip exposed buffer backing state");

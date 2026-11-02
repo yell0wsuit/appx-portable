@@ -200,7 +200,8 @@
   "streams.h": {
     "header": "windows.storage.streams.h",
     "interfaces": [
-      "ABI::Windows::Storage::Streams::IDataReader"
+      "ABI::Windows::Storage::Streams::IDataReader",
+      "ABI::Windows::Storage::Streams::IDataWriter"
     ]
   },
   "tiles.h": {
