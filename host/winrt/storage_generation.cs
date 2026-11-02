@@ -23,12 +23,15 @@ internal static partial class WinrtProjectionGenerator
         StorageInterface(output, "Item", "Windows.Storage.IStorageItem", new[] {
             "get_Name|()->System.String", "get_Path|()->System.String" });
         StorageInterface(output, "Folder", "Windows.Storage.IStorageFolder", new[] {
+            "CreateFileAsyncOverloadDefaultOptions|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>",
+            "CreateFileAsync|(System.String,Windows.Storage.CreationCollisionOption)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>",
             "GetFileAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
         StorageInterface(output, "FileStatics", "Windows.Storage.IStorageFileStatics", new[] {
             "GetFileFromPathAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
         StorageInterface(output, "File", "Windows.Storage.IStorageFile", new string[0]);
         StorageInterface(output, "FileIO", "Windows.Storage.IFileIOStatics", new[] {
-            "ReadTextAsync|(Windows.Storage.IStorageFile)->Windows.Foundation.IAsyncOperation`1<System.String>" });
+            "ReadTextAsync|(Windows.Storage.IStorageFile)->Windows.Foundation.IAsyncOperation`1<System.String>",
+            "WriteBufferAsync|(Windows.Storage.IStorageFile,Windows.Storage.Streams.IBuffer)->Windows.Foundation.IAsyncAction" });
         StorageInterface(output, "FileReference", "Windows.Storage.Streams.IRandomAccessStreamReference", new[] {
             "OpenReadAsync|()->Windows.Foundation.IAsyncOperation`1<Windows.Storage.Streams.IRandomAccessStreamWithContentType>" });
         StorageInterface(output, "Info", "Windows.Foundation.IAsyncInfo", new[] {
@@ -53,7 +56,24 @@ internal static partial class WinrtProjectionGenerator
         StorageFuture(output, "Stream", "Windows.Storage.Streams.IRandomAccessStreamWithContentType", false);
         StorageFuture(output, "Read", "Windows.Storage.Streams.IBuffer", true);
         StorageFuture(output, "Text", "System.String", false);
+        StorageAction(output);
         output.AppendLine("    }");
+    }
+    // A native IAsyncAction: no results type, so no parameterized IIDs.
+    private static void StorageAction(StringBuilder output)
+    {
+        TypeDefinition type = Find("Windows.Foundation.IAsyncAction"), completed = Find("Windows.Foundation.AsyncActionCompletedHandler");
+        if (!type.Methods.Select(m => m.Name).SequenceEqual(new[] { "put_Completed", "get_Completed", "GetResults" }))
+            throw new NotSupportedException("Unsupported storage action method order");
+        StorageInterface(output, "Action", type.FullName, new[] {
+            "put_Completed|(Windows.Foundation.AsyncActionCompletedHandler)->System.Void",
+            "get_Completed|()->Windows.Foundation.AsyncActionCompletedHandler", "GetResults|()->System.Void" });
+        MethodDefinition invoke = completed.Methods.Single(m => m.Name == "Invoke");
+        if (CollectionType(invoke.ReturnType) != "System.Void" || !invoke.Parameters.Select(p => CollectionType(p.ParameterType))
+            .SequenceEqual(new[] { type.FullName, "Windows.Foundation.AsyncStatus" }))
+            throw new NotSupportedException("Unsupported storage action completion ABI");
+        output.AppendLine("        internal static readonly FutureAbi ActionFuture = new FutureAbi(" + Guid(type) + ", " + Guid(completed) +
+            ", global::System.Guid.Empty, " + NamedSlot(type, "put_Completed") + ", " + NamedSlot(type, "get_Completed") + ", " + NamedSlot(type, "GetResults") + ");");
     }
     private static void StorageInterface(StringBuilder output, string label, string name, string[] methods)
     {

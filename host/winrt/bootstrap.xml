@@ -148,6 +148,7 @@
   <Interface Name="Windows.Storage.IStorageItem" Adapter="Storage" />
   <Interface Name="Windows.Storage.IStorageFile" Adapter="Storage" />
   <Class Name="Windows.Storage.FileIO" Adapter="Storage" />
+  <Enum Name="Windows.Storage.CreationCollisionOption" />
   <Class Name="Windows.Storage.Streams.Buffer" Adapter="Storage" />
   <Interface Name="Windows.Storage.Streams.IBuffer" Adapter="Storage" />
   <Interface Name="Windows.Storage.Streams.IInputStream" Adapter="Storage" />

@@ -102,6 +102,31 @@ class StorageIoProjectionTest
         try { await FileIO.ReadTextAsync(vanished); throw new Exception("deleted file read"); } catch (FileNotFoundException) { }
         // Windows fails a null file synchronously with E_POINTER.
         try { GC.KeepAlive(FileIO.ReadTextAsync(null)); throw new Exception("null file accepted"); } catch (NullReferenceException) { }
+        // The game's first-run device ID: create a LocalFolder file, then write a buffer to it.
+        StorageFile created = await local.CreateFileAsync("created.txt");
+        Check(created.Path == Path.Combine(local.Path, "created.txt") && new FileInfo(created.Path).Length == 0, "CreateFileAsync makes an empty file");
+        try { await local.CreateFileAsync("created.txt"); throw new Exception("existing file replaced by default"); }
+        catch (Exception error) { if (error.HResult != unchecked((int)0x800700B7)) throw; }
+        await FileIO.WriteBufferAsync(created, System.Text.Encoding.UTF8.GetBytes("device id 💎").AsBuffer());
+        Check(File.ReadAllText(created.Path) == "device id 💎", "WriteBufferAsync writes a managed buffer");
+        await FileIO.WriteBufferAsync(created, System.Text.Encoding.ASCII.GetBytes("ab").AsBuffer());
+        Check(File.ReadAllText(created.Path) == "ab", "WriteBufferAsync replaces the contents with the buffer's Length bytes");
+        Check(File.ReadAllText((await local.CreateFileAsync("created.txt", CreationCollisionOption.OpenIfExists)).Path) == "ab", "OpenIfExists keeps the file");
+        var idBuffer = new Windows.Storage.Streams.Buffer(3);
+        StorageFile emptied = await local.CreateFileAsync("emptied.txt");
+        File.WriteAllText(emptied.Path, "old contents");
+        await FileIO.WriteBufferAsync(emptied, idBuffer);
+        Check(new FileInfo(emptied.Path).Length == 0, "an empty native buffer empties the file");
+        StorageFile unique = await local.CreateFileAsync("created.txt", CreationCollisionOption.GenerateUniqueName);
+        Check(unique.Name == "created (2).txt" && new FileInfo(unique.Path).Length == 0, "GenerateUniqueName numbers before the extension");
+        Check(new FileInfo((await local.CreateFileAsync("created.txt", CreationCollisionOption.ReplaceExisting)).Path).Length == 0, "ReplaceExisting empties the file");
+        foreach (string invalid in new[] { "", @"sub\created.txt", "sub/created.txt" })
+        {
+            try { await local.CreateFileAsync(invalid); throw new Exception("invalid file name accepted: " + invalid); }
+            catch (Exception error) { if (error.HResult != unchecked((int)0x8007007B)) throw; }
+        }
+        try { GC.KeepAlive(FileIO.WriteBufferAsync(created, null)); throw new Exception("null buffer accepted"); } catch (NullReferenceException) { }
+        try { GC.KeepAlive(FileIO.WriteBufferAsync(null, idBuffer)); throw new Exception("null file accepted"); } catch (NullReferenceException) { }
         byte[] copied = bytes.AsBuffer().ToArray();
         Check(copied.Length == bytes.Length && copied[0] == bytes[0], "buffer extensions");
         Console.WriteLine("PASS: managed storage awaits native files and reads seekable streams and buffers");
