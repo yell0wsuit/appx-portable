@@ -160,8 +160,8 @@ fails explicitly at `Storyboard.Begin` (E_NOTIMPL in the native trace, construct
 offset0x3b in the managed stack). Animation clocks are the next measured gap.
 No menu or game round has been displayed by this path.
 
-The game references `System.Runtime.WindowsRuntime`, now supplied by the probe,
-and `System.Runtime.WindowsRuntime.UI.Xaml`, still missing from Wine Mono, plus
+The game references `System.Runtime.WindowsRuntime` and
+`System.Runtime.WindowsRuntime.UI.Xaml`, both now supplied by the probe, plus
 the `Microsoft.Xbox` and `Bej3Win8Component` WinRT components. The initial Xbox
 surface, task adapters, and the read-only storage/stream path are projected;
 other component assemblies and additional native async shapes remain pending.
@@ -553,6 +553,16 @@ such as `INavigate.Navigate`, is called through that interface, and
 Public arguments of a composed object use its controlling identity, including
 IInspectable arguments. The private inner remains available for native base
 methods, preventing recursive override calls.
+
+CLR-redirected structs live in Windows.dll, beside the members that use them.
+`<Struct Adapter="Clr">` emits Point, Size, Rect, Color, Thickness and Duration
+with .NET's public members over their SDK field layouts, after checking the
+WinMD fields; component projections may not emit them. Games bind them to
+`System.Runtime.WindowsRuntime` and `System.Runtime.WindowsRuntime.UI.Xaml`,
+so the task bridge and the `xaml_forwards.cs` facade forward them here. Defining
+them in those assemblies would form a cycle, because the bridge references
+Windows.dll. The release ships the facade as a fourth prebuilt assembly. Members
+with these struct types in their signatures are not projected yet.
 
 The Uri adapter follows the documented
 [System.Uri projection](https://learn.microsoft.com/en-us/uwp/api/windows.foundation.uri):

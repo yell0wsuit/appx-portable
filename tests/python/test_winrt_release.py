@@ -35,6 +35,13 @@ class ReleaseBuildTests(unittest.TestCase):
         self.assertTrue(steps["rebind-tasks"][-1].endswith("System.Runtime.WindowsRuntime.dll"))
         self.assertIn("/define:APPX_PORTABLE_INTEROP", steps["compile-bootstrap"])
 
+    def test_xaml_facade_forwards_to_the_bootstrap_identity(self):
+        steps = self.steps(release.Toolchain(framework=Path("/framework")))
+        facade = steps["compile-xaml-facade"]
+        self.assertIn("/out:" + str(Path("/out/System.Runtime.WindowsRuntime.UI.Xaml.dll")), facade)
+        self.assertTrue(facade[-1].endswith("xaml_forwards.cs"))
+        self.assertIn("/r:" + str(Path("/work/bootstrap/Windows.dll")), facade)
+
     def test_release_artifact_is_verified_by_the_strict_load_test(self):
         names = [name for name, _ in release.commands(release.Toolchain(framework=Path("/framework")), Path("/metadata"),
                                                       Path("/work/Mono.Cecil.dll"), Path("/out"), Path("/work"))]

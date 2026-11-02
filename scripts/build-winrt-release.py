@@ -3,6 +3,7 @@
 
 Windows.dll is the interop bootstrap projection completed against every type of the
 given SDK contracts; System.Runtime.WindowsRuntime.dll is the task and stream bridge;
+System.Runtime.WindowsRuntime.UI.Xaml.dll forwards XAML value types to Windows.dll;
 AppxPortable.WinRT.Interop.dll is the contract they share with package components.
 Contract metadata is read here only and never copied into the output.
 """
@@ -20,6 +21,7 @@ BRIDGE = ("task_extensions.cs", "stream_extensions.cs")
 REFERENCES = ("mscorlib.dll", "System.dll", "System.Core.dll", "System.Xml.dll")
 INTEROP = "AppxPortable.WinRT.Interop.dll"
 TASKS = "System.Runtime.WindowsRuntime.dll"
+XAML = "System.Runtime.WindowsRuntime.UI.Xaml.dll"
 
 
 class Toolchain:
@@ -69,6 +71,8 @@ def commands(toolchain, metadata, cecil, output, work):
         # C# binds WinRT setters as set_X against the bootstrap; the surface names them put_X.
         ("compile-tasks", t.compile(compiled_tasks, [WINRT / n for n in BRIDGE], ["/target:library", "/r:" + t.path(bootstrap), "/r:" + t.path(interop)])),
         ("rebind-tasks", t.tool(completer) + ["--rebind", t.path(output / "Windows.dll"), t.path(compiled_tasks), t.path(output / TASKS)]),
+        # Type forwarders only: no member references to rebind.
+        ("compile-xaml-facade", t.compile(output / XAML, [WINRT / "xaml_forwards.cs"], ["/target:library", "/r:" + t.path(bootstrap), "/r:" + t.path(interop)])),
         # The artifact itself, on this runtime: every type loads and every signature type resolves.
         ("compile-surface-check", t.compile(work / "surface-load.exe", [REPO / "tests/winrt_projection/surface_load.cs"])),
         ("verify-surface", t.tool(work / "surface-load.exe") + [t.path(output / "Windows.dll")]),

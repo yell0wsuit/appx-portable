@@ -8,6 +8,11 @@ using System.Threading.Tasks;
 using Windows.Foundation;
 
 [assembly: System.Reflection.AssemblyVersion("4.0.0.0")]
+// Games bind these redirected structs here; Windows.dll defines them beside the members using them.
+[assembly: TypeForwardedTo(typeof(Windows.Foundation.Point))]
+[assembly: TypeForwardedTo(typeof(Windows.Foundation.Rect))]
+[assembly: TypeForwardedTo(typeof(Windows.Foundation.Size))]
+[assembly: TypeForwardedTo(typeof(Windows.UI.Color))]
 namespace System
 {
     public static class WindowsRuntimeSystemExtensions
