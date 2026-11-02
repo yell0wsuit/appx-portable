@@ -419,6 +419,26 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         page.Content = null; Check(page.Content == null, "Page content clear");
         var property = DependencyProperty.RegisterAttached("PageState", typeof(string), typeof(DerivedPage), null);
         page.SetValue(property, "composed page"); Check((string)page.GetValue(property) == "composed page", "Page native dependency store");
+        // Projection-owned interfaces use TypeKind.Metadata, including the
+        // IObservableMap<string, object> property in LayoutAwarePage.
+        var providerProperty = DependencyProperty.Register("Provider", typeof(Windows.UI.Xaml.Markup.IXamlMetadataProvider), typeof(DerivedPage), null);
+        Check(page.GetValue(providerProperty) == null, "metadata interface default");
+        page.SetValue(providerProperty, this);
+        Check(ReferenceEquals(page.GetValue(providerProperty), this), "metadata interface property identity");
+        try { page.SetValue(providerProperty, new object()); throw new Exception("wrong metadata interface accepted"); }
+        catch (ArgumentException) { }
+        Check(ReferenceEquals(page.GetValue(providerProperty), this), "rejected metadata value preserves local value");
+        page.ClearValue(providerProperty);
+        Check(page.GetValue(providerProperty) == null, "metadata interface clear");
+        var observable = typeof(Application).Assembly.GetType("Windows.Foundation.Collections.IObservableMap`2", false);
+        if (observable != null)
+        {
+            var mapType = observable.MakeGenericType(typeof(string), typeof(object));
+            var mapProperty = DependencyProperty.Register("ObservableState", mapType, typeof(DerivedPage), null);
+            Check(page.GetValue(mapProperty) == null, "closed metadata generic default");
+            try { page.SetValue(mapProperty, new object()); throw new Exception("wrong metadata generic accepted"); }
+            catch (ArgumentException) { }
+        }
         Window.Current.Content = page;
         Check(ReferenceEquals(Window.Current.Content, page), "Window preserves derived Page identity");
         Check(ConnectWindowContent(31) == 0, "external component callback HRESULT");

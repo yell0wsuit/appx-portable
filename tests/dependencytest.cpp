@@ -116,6 +116,20 @@ int main() {
         properties->RegisterAttached(HStringReference(L"NoDefault").Get(), type, owner, nullptr, &nullDefault)));
     value.Reset();
     CHECK(SUCCEEDED(element->GetValue(nullDefault.Get(), &value)) && !value);
+    // Metadata reference types retain null defaults, but must not accept an
+    // arbitrary native object without a managed assignability contract.
+    HStringReference mapName(L"Windows.Foundation.Collections.IObservableMap`2[System.String,System.Object]");
+    TypeName mapType{mapName.Get(), TypeKind_Metadata};
+    ComPtr<IDependencyProperty> mapProperty;
+    CHECK(SUCCEEDED(
+        properties->Register(HStringReference(L"ObservableState").Get(), mapType, owner, nullptr, &mapProperty)));
+    if (mapProperty) {
+        value.Reset();
+        CHECK(SUCCEEDED(element->GetValue(mapProperty.Get(), &value)) && !value);
+        CHECK(element->SetValue(mapProperty.Get(), object.Get()) == E_NOTIMPL);
+        CHECK(SUCCEEDED(element->SetValue(mapProperty.Get(), nullptr)));
+        CHECK(SUCCEEDED(element->ClearValue(mapProperty.Get())));
+    }
     // Each object owns its own local-value store.
     ComPtr<IInspectable> another;
     ComPtr<IDependencyObject> other;
