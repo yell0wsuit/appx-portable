@@ -357,7 +357,10 @@ checked against SDK ABI headers. Negative metadata fixtures reject changed
 buffer/async slots.
 
 ApplicationData.LocalFolder, StorageFolder.Path/Name/GetFileAsync, and
-StorageFile.GetFileFromPathAsync/Path/Name/OpenReadAsync reach the native shim.
+StorageFile.GetFileFromPathAsync/Path/Name/OpenReadAsync and OpenAsync(Read)
+reach the native shim. OpenAsync returns a qualified
+`IAsyncOperation<IRandomAccessStream>`; file-open errors remain native async errors,
+and write modes retain the fallback's explicit unsupported result.
 The native folder fallback now looks up relative file paths, including subfolders,
 and returns the existing native async error for missing files. This follows the
 [documented GetFileAsync path contract](https://learn.microsoft.com/en-us/uwp/api/windows.storage.storagefolder.getfileasync).

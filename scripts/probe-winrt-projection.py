@@ -401,7 +401,7 @@ def main():
         mutator = compile_file("mutate-storage-abi.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         for kind, expected in (("stream-size", "IRandomAccessStream.get_Size"), ("read-count", "IInputStream.ReadAsync"),
                                ("buffer-order", "Unsupported buffer method order"), ("future-order", "Unsupported storage async method order"),
-                               ("reader-load", "IDataReader.LoadAsync"), ("reader-factory", "IDataReaderFactory.CreateDataReader")):
+                               ("file-open", "IStorageFile.OpenAsync"), ("reader-load", "IDataReader.LoadAsync"), ("reader-factory", "IDataReaderFactory.CreateDataReader")):
             changed = output / ("storage-" + kind)
             target = output / ("storage-" + kind + ".cs")
             if target.exists():
@@ -416,12 +416,13 @@ def main():
         for iid in ("5e52f8ce-aced-5a42-95b4-f674dd84885e", "c4a57c5e-32b0-55b3-ad13-ce1c23041ed6", "d26b2819-897f-5c7d-84d6-56d796561431", "e521c894-2c26-5946-9e61-2b5e188d01ed", "3dddecf4-1d39-58e8-83b1-dbed541c7f35", "06386a7a-e009-5b0b-ab68-a8e48b516647", "bf666554-7605-5d9a-b14e-18d8c8472afe",
                     "3e1fe603-f897-5263-b328-0806426b8a79", "b79a741f-7fb5-50ae-9e99-911201ec3d41", "887411eb-7f54-4732-a5f0-5e43e3b8c2f5", "fa3f6186-4214-428c-a64c-14c9ac7315ea",
                     "5a648006-843a-4da9-865b-9d26e5dfad7b", "a4ed5c81-76c9-40bd-8be6-b1d90fb20ae7",
+                    "430ecece-1418-5d19-81b2-5ddb381603cc", "398c4183-793d-5b00-819b-4aef92485e94",
                     "d7527847-57da-4e15-914c-06806699a098", "ef60385f-be78-584b-aaef-7829ada2b0de",
                     "9343b6e7-e3d2-5e4a-ab2d-2bce4919a6a4"):
             require(iid in generated, "storage async IID differs from SDK header: " + iid)
         # Slots independently counted from the SDK ABI declarations.
         expected_slots = {"Item_get_Name": 11, "Item_get_Path": 12, "Folder_GetFileAsync": 10,
-                          "FileStatics_GetFileFromPathAsync": 6, "FileReference_OpenReadAsync": 6,
+                          "File_OpenAsync": 8, "FileStatics_GetFileFromPathAsync": 6, "FileReference_OpenReadAsync": 6,
                           "Info_get_Id": 6, "Info_get_Status": 7, "Info_get_ErrorCode": 8, "Info_Cancel": 9, "Info_Close": 10,
                           "Buffer_get_Capacity": 6, "Buffer_get_Length": 7, "Buffer_put_Length": 8, "BufferFactory_Create": 6,
                           "Input_ReadAsync": 6, "Random_get_Size": 6, "Random_put_Size": 7, "Random_GetInputStreamAt": 8,

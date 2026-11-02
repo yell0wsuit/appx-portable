@@ -160,6 +160,7 @@ namespace AppxPortable.WinRT
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int TextCall(IntPtr self, IntPtr text, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int ObjectCall(IntPtr self, IntPtr argument, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int ObjectPairCall(IntPtr self, IntPtr first, IntPtr second, out IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int OptionCall(IntPtr self, int option, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int TextOptionCall(IntPtr self, IntPtr text, int option, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int UIntCall(IntPtr self, uint number, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int SetUIntCall(IntPtr self, uint number);
@@ -249,6 +250,16 @@ namespace Windows.Storage
         {
             using (var factory = NativeObject.Factory("Windows.Storage.StorageFile", StorageAbi.FileStatics))
                 return NativeFuture<StorageFile>.FromNative(StorageCalls.Text(factory, StorageAbi.FileStatics_GetFileFromPathAsync, path), StorageAbi.FileFuture, FromNative);
+        }
+        public IAsyncOperation<IRandomAccessStream> OpenAsync(FileAccessMode accessMode)
+        {
+            using (var file = native.QueryInterface(StorageAbi.File))
+            using (var access = new NativeObject.Access(file))
+            {
+                IntPtr result;
+                int hr = access.Method<StorageCalls.OptionCall>(StorageAbi.File_OpenAsync)(access.Self, (int)accessMode, out result);
+                return NativeFuture<IRandomAccessStream>.FromNative(NativeObject.TakeResult(hr, result), StorageAbi.RandomFuture, RandomStream.FromRandom);
+            }
         }
         public IAsyncOperation<IRandomAccessStreamWithContentType> OpenReadAsync()
         {
@@ -425,6 +436,8 @@ namespace Windows.Storage.Streams
     internal sealed class RandomStream : InputStream, IRandomAccessStreamWithContentType
     {
         private RandomStream(NativeObject value) : base(value) { }
+        internal static IRandomAccessStream FromRandom(NativeObject value)
+        { return NativeObject.Wrap<IRandomAccessStream>(value, StorageAbi.Random, v => new RandomStream(v)); }
         internal static IRandomAccessStreamWithContentType FromContent(NativeObject value)
         { return NativeObject.Wrap<IRandomAccessStreamWithContentType>(value, StorageAbi.Random, v => new RandomStream(v)); }
         private NativeObject Random() { return native.QueryInterface(StorageAbi.Random); }
