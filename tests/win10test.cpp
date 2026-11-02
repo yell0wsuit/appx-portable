@@ -3,6 +3,7 @@
 #include <roapi.h>
 #include <windows.system.h>
 #include <windows.foundation.metadata.h>
+#include <windows.applicationmodel.h>
 #include <windows.applicationmodel.core.h>
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.core.h>
@@ -98,6 +99,12 @@ int main() {
     ComPtr<ABI::Windows::Devices::Sensors::IAccelerometer> accelerometer;
     CHECK(SUCCEEDED(get(HStringReference(L"Windows.Devices.Sensors.Accelerometer").Get(), &factory)) &&
           SUCCEEDED(factory.As(&accelerometers)) && SUCCEEDED(accelerometers->GetDefault(&accelerometer)));
+    // Bejeweled's LayoutAwarePage asks whether it runs in a designer while constructing.
+    ComPtr<ABI::Windows::ApplicationModel::IDesignModeStatics> designMode;
+    boolean designing = true;
+    CHECK(SUCCEEDED(get(HStringReference(L"Windows.ApplicationModel.DesignMode").Get(), &factory)) &&
+          SUCCEEDED(factory.As(&designMode)) && SUCCEEDED(designMode->get_DesignModeEnabled(&designing)) &&
+          !designing && designMode->get_DesignModeEnabled(nullptr) == E_POINTER);
     CHECK(SUCCEEDED(get(HStringReference(L"Windows.ApplicationModel.Core.CoreApplication").Get(), &factory)));
     ComPtr<ABI::Windows::ApplicationModel::Core::ICoreApplication> app;
     CHECK(SUCCEEDED(factory.As(&app)));
