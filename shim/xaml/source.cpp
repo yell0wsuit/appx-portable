@@ -33,6 +33,10 @@ struct Attribute {
 };
 struct Node {
     std::wstring space, type, name, className;
+    std::shared_ptr<const std::wstring> document; // Package path of the containing file.
+    std::wstring text;                            // Rejected by RejectText until an element type consumes it.
+    std::vector<std::wstring> mergedSources;
+    bool hasMerged = false;
     std::vector<Attribute> attributes;
     std::vector<std::unique_ptr<Node>> children;
     Node* content = nullptr;
@@ -85,7 +89,8 @@ bool Identifier(const std::wstring& text) {
     if (text.empty() || !letter(text[0])) return false;
     return std::all_of(text.begin(), text.end(), [&](wchar_t c) { return letter(c) || (c >= L'0' && c <= L'9'); });
 }
-HRESULT Read(IXmlReader* reader, std::unique_ptr<Node>& root) {
+HRESULT Read(IXmlReader* reader, const std::wstring& path, std::unique_ptr<Node>& root) {
+    auto document = std::make_shared<const std::wstring>(path);
     std::vector<Node*> stack;
     XmlNodeType kind{};
     HRESULT hr;
@@ -109,6 +114,7 @@ HRESULT Read(IXmlReader* reader, std::unique_ptr<Node>& root) {
             reader->GetNamespaceUri(&space, nullptr);
             node->type = text ? text : L"";
             node->space = space ? space : L"";
+            node->document = document;
             const bool empty = reader->IsEmptyElement() != FALSE;
             for (auto attr = reader->MoveToFirstAttribute(); attr == S_OK; attr = reader->MoveToNextAttribute()) {
                 const wchar_t* value = nullptr;
@@ -131,10 +137,21 @@ HRESULT Read(IXmlReader* reader, std::unique_ptr<Node>& root) {
         } else if (kind == XmlNodeType_Text || kind == XmlNodeType_CDATA) {
             const wchar_t* value = nullptr;
             reader->GetValue(&value, nullptr);
-            if (value && !Whitespace(value)) return Fail(L"text content");
+            if (value && !Whitespace(value)) {
+                if (stack.empty()) return Fail(L"text content");
+                stack.back()->text += value;
+            }
         }
     }
     return FAILED(hr) ? hr : root && stack.empty() ? S_OK : E_INVALIDARG;
+}
+HRESULT RejectText(const Node& node) {
+    if (!node.text.empty()) return Fail(L"text content");
+    for (const auto& child : node.children) {
+        auto hr = RejectText(*child);
+        if (FAILED(hr)) return hr;
+    }
+    return S_OK;
 }
 int Choice(const std::wstring& text, std::initializer_list<const wchar_t*> names) {
     int value = 0;
@@ -171,6 +188,56 @@ HRESULT ParseMargin(const std::wstring& text, Thickness& value) {
 }
 HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
                 std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource = false);
+HRESULT ResourcePath(ABI::Windows::Foundation::IUriRuntimeClass* uri, std::wstring& path);
+// A merged Source is an ms-appx URI or a path relative to the containing file.
+HRESULT ResolveSourcePath(const Node& owner, const std::wstring& value, std::wstring& path) {
+    if (value.find(L':') != std::wstring::npos) {
+        ComPtr<ABI::Windows::Foundation::IUriRuntimeClassFactory> factory;
+        auto hr = RoGetActivationFactory(Wrappers::HStringReference(L"Windows.Foundation.Uri").Get(),
+                                         IID_PPV_ARGS(&factory));
+        ComPtr<ABI::Windows::Foundation::IUriRuntimeClass> uri;
+        if (SUCCEEDED(hr)) hr = factory->CreateUri(Wrappers::HStringReference(value.c_str()).Get(), &uri);
+        if (FAILED(hr)) return Fail(L"ResourceDictionary.Source " + value, E_INVALIDARG);
+        return ResourcePath(uri.Get(), path);
+    }
+    if (value.empty() || value.find_first_of(L"\\%?#") != std::wstring::npos)
+        return Fail(L"ResourceDictionary.Source " + value);
+    size_t start = 0;
+    do {
+        auto end = value.find(L'/', start);
+        auto segment = value.substr(start, end == std::wstring::npos ? end : end - start);
+        if (segment.empty() || segment == L"." || segment == L"..") return Fail(L"ResourceDictionary.Source " + value);
+        if (end == std::wstring::npos) break;
+        start = end + 1;
+    } while (true);
+    const auto& base = owner.document ? *owner.document : std::wstring();
+    auto slash = base.rfind(L'/');
+    path = (slash == std::wstring::npos ? std::wstring() : base.substr(0, slash + 1)) + value;
+    return S_OK;
+}
+HRESULT PrepareMerged(Node& owner, Node& property) {
+    if (owner.hasMerged) return Fail(property.type + L" multiple values", E_INVALIDARG);
+    owner.hasMerged = true;
+    for (const auto& attr : property.attributes)
+        if (attr.space != Xmlns) return Fail(property.type + L"." + attr.name);
+    for (auto& entry : property.children) {
+        if (entry->space != Presentation || entry->type != L"ResourceDictionary")
+            return Fail(property.type + L" type " + entry->type, E_INVALIDARG);
+        const Attribute* source = nullptr;
+        for (const auto& attr : entry->attributes)
+            if (attr.space.empty() && attr.name == L"Source" && !source)
+                source = &attr;
+            else if (attr.space != Xmlns)
+                return Fail(L"merged ResourceDictionary." + attr.name);
+        if (!source || !entry->children.empty()) return Fail(L"inline merged ResourceDictionary");
+        if (!source->value.empty() && source->value.front() == L'{') return Fail(L"ResourceDictionary.Source");
+        std::wstring path;
+        auto hr = ResolveSourcePath(*entry, source->value, path);
+        if (FAILED(hr)) return hr;
+        owner.mergedSources.push_back(path);
+    }
+    return S_OK;
+}
 HRESULT PrepareResources(Node& owner, Node& property, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
                          std::set<std::wstring>& names, std::set<int>& connections) {
     if (owner.hasResources) return Fail(property.type + L" multiple values", E_INVALIDARG);
@@ -194,6 +261,12 @@ HRESULT PrepareResources(Node& owner, Node& property, std::map<std::wstring, std
     }
     std::set<std::wstring> keys;
     for (auto& entry : holder->children) {
+        if (holder != &property && entry->space == Presentation &&
+            entry->type == L"ResourceDictionary.MergedDictionaries") {
+            hr = PrepareMerged(owner, *entry);
+            if (FAILED(hr)) return hr;
+            continue;
+        }
         if (entry->space == Presentation && entry->type == L"ResourceDictionary")
             return Fail(property.type + L" mixed dictionary entries", E_INVALIDARG);
         hr = Prepare(*entry, resourceSpaces, ignoreDesign, names, connections, false, true);
@@ -651,6 +724,8 @@ HRESULT Apply(Node& node) {
     return FAILED(hr) ? hr : SetContent(node);
 }
 HRESULT Build(Node& node);
+HRESULT LoadSourceDictionary(const std::wstring& path, std::vector<std::wstring>& loading,
+                             ComPtr<IResourceDictionary>& dictionary);
 HRESULT BuildParts(Node& node) {
     if (node.type == L"TextBlock" && node.hasFontFamily) {
         auto hr =
@@ -718,6 +793,18 @@ HRESULT BuildParts(Node& node) {
         for (auto* resource : node.resources) {
             hr = AddSourceResource(node.dictionary.Get(), Wrappers::HStringReference(resource->key.c_str()).Get(),
                                    resource->value.Get());
+            if (FAILED(hr)) return hr;
+        }
+        if (node.hasMerged) {
+            std::vector<ComPtr<IResourceDictionary>> merged;
+            std::vector<std::wstring> loading;
+            for (const auto& path : node.mergedSources) {
+                ComPtr<IResourceDictionary> dictionary;
+                hr = LoadSourceDictionary(path, loading, dictionary);
+                if (FAILED(hr)) return hr;
+                merged.push_back(std::move(dictionary));
+            }
+            hr = SetSourceDictionaryParts(node.dictionary.Get(), L"", std::move(merged), {});
             if (FAILED(hr)) return hr;
         }
     }
@@ -831,7 +918,142 @@ HRESULT ReadSource(const std::wstring& path, std::unique_ptr<Node>& root) {
     if (SUCCEEDED(hr)) hr = reader->SetProperty(XmlReaderProperty_DtdProcessing, DtdProcessing_Prohibit);
     if (SUCCEEDED(hr)) hr = reader->SetProperty(XmlReaderProperty_MaxElementDepth, 128);
     if (SUCCEEDED(hr)) hr = reader->SetInput(stream.Get());
-    if (SUCCEEDED(hr)) hr = Read(reader.Get(), root);
+    if (SUCCEEDED(hr)) hr = Read(reader.Get(), path, root);
+    return hr;
+}
+HRESULT EntryKey(const Node& entry, std::wstring& key) {
+    const Attribute* found = nullptr;
+    for (const auto& attr : entry.attributes)
+        if (attr.space == Language && attr.name == L"Key") found = &attr;
+    for (const auto& attr : entry.attributes)
+        if (!found && (attr.space == Language || attr.space.empty()) && attr.name == L"Name") found = &attr;
+    if (!found) {
+        bool targeted = std::any_of(entry.attributes.begin(), entry.attributes.end(),
+                                    [](const Attribute& attr) { return attr.space.empty() && attr.name == L"TargetType"; });
+        return targeted ? Fail(entry.type + L" implicit key") : Fail(entry.type + L" resource key", E_INVALIDARG);
+    }
+    if (found->value.empty()) return Fail(entry.type + L" resource key", E_INVALIDARG);
+    if (found->value.front() == L'{') return Fail(entry.type + L" resource key markup");
+    key = found->value;
+    return S_OK;
+}
+// A source dictionary's own entries are prepared and built on first lookup,
+// as Windows 8.1+ creates dictionary resources on demand; only its structure
+// (keys, theme keys and merged sources) is validated when it loads.
+HRESULT LoadSourceDictionary(const std::wstring& path, std::vector<std::wstring>& loading,
+                             ComPtr<IResourceDictionary>& dictionary) {
+    if (std::find(loading.begin(), loading.end(), path) != loading.end())
+        return Fail(L"ResourceDictionary.Source cycle " + path, E_INVALIDARG);
+    std::unique_ptr<Node> parsed;
+    auto hr = ReadSource(path, parsed);
+    if (hr == S_FALSE) return Fail(L"ResourceDictionary.Source " + path, HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
+    if (FAILED(hr)) return hr;
+    Log("TRACE", "source resource dictionary load %ls", path.c_str());
+    std::shared_ptr<Node> document(std::move(parsed));
+    if (document->space != Presentation || document->type != L"ResourceDictionary")
+        return Fail(L"resource dictionary root " + document->type, E_INVALIDARG);
+    if (!document->text.empty()) return Fail(L"text content");
+    std::map<std::wstring, std::wstring> spaces;
+    bool ignoreDesign = false;
+    for (const auto& attr : document->attributes)
+        if (attr.space == Xmlns) spaces[attr.name] = attr.value;
+    for (const auto& attr : document->attributes) {
+        if (attr.space == Xmlns || (ignoreDesign && attr.space == Design)) continue;
+        if (attr.space == Compatibility && attr.name == L"Ignorable") {
+            std::wistringstream tokens(attr.value);
+            std::wstring prefix;
+            while (tokens >> prefix) {
+                if (spaces[prefix] != Design) return Fail(L"mc:Ignorable " + prefix);
+                ignoreDesign = true;
+            }
+        } else if (attr.space != Design)
+            return Fail(L"ResourceDictionary." + attr.name);
+    }
+    struct Deferred {
+        std::shared_ptr<Node> document;
+        Node* node;
+        std::wstring key;
+        std::map<std::wstring, std::wstring> spaces;
+        bool ignoreDesign;
+        HRESULT failure = S_OK;
+    };
+    std::vector<std::pair<std::wstring, Node*>> entries;
+    std::set<std::wstring> keys, themeKeys;
+    bool hasTheme = false;
+    for (auto& child : document->children) {
+        if (child->space == Presentation && child->type == L"ResourceDictionary.MergedDictionaries") {
+            hr = RejectText(*child);
+            if (SUCCEEDED(hr)) hr = PrepareMerged(*document, *child);
+            if (FAILED(hr)) return hr;
+            continue;
+        }
+        if (child->space == Presentation && child->type == L"ResourceDictionary.ThemeDictionaries") {
+            if (hasTheme) return Fail(child->type + L" multiple values", E_INVALIDARG);
+            hasTheme = true;
+            if (!child->text.empty()) return Fail(L"text content");
+            for (const auto& attr : child->attributes)
+                if (attr.space != Xmlns) return Fail(child->type + L"." + attr.name);
+            for (auto& theme : child->children) {
+                std::wstring name;
+                if (theme->space != Presentation || theme->type != L"ResourceDictionary")
+                    return Fail(child->type + L" type " + theme->type, E_INVALIDARG);
+                if (!theme->text.empty()) return Fail(L"text content");
+                hr = EntryKey(*theme, name);
+                if (FAILED(hr)) return hr;
+                for (auto& entry : theme->children) {
+                    hr = EntryKey(*entry, name);
+                    if (FAILED(hr)) return hr;
+                    themeKeys.insert(name);
+                }
+            }
+            continue;
+        }
+        if (child->space == Presentation && child->type.find(L'.') != std::wstring::npos) return Fail(child->type);
+        std::wstring key;
+        hr = EntryKey(*child, key);
+        if (FAILED(hr)) return hr;
+        if (!keys.insert(key).second) return Fail(L"ResourceDictionary duplicate key " + key, E_INVALIDARG);
+        entries.emplace_back(key, child.get());
+    }
+    std::vector<ComPtr<IResourceDictionary>> merged;
+    loading.push_back(path);
+    for (const auto& source : document->mergedSources) {
+        ComPtr<IResourceDictionary> value;
+        hr = LoadSourceDictionary(source, loading, value);
+        if (FAILED(hr)) return hr;
+        merged.push_back(std::move(value));
+    }
+    loading.pop_back();
+    hr = MakeResourceDictionary(&dictionary);
+    for (auto& entry : entries) {
+        if (FAILED(hr)) break;
+        auto state = std::make_shared<Deferred>(Deferred{document, entry.second, entry.first, spaces, ignoreDesign});
+        hr = AddDeferredSourceResource(dictionary.Get(), entry.first, [state](ComPtr<IInspectable>& value) -> HRESULT {
+            // Failures are kept: Prepare annotates the node, so it cannot run twice.
+            if (FAILED(state->failure)) return state->failure;
+            try {
+                std::set<std::wstring> names;
+                std::set<int> connections;
+                auto result = RejectText(*state->node);
+                if (SUCCEEDED(result))
+                    result = Prepare(*state->node, state->spaces, state->ignoreDesign, names, connections, false, true);
+                if (SUCCEEDED(result) && !connections.empty()) result = Fail(L"source resource connections");
+                if (SUCCEEDED(result)) result = Build(*state->node);
+                if (FAILED(result)) {
+                    Log("FAIL", "source resource %ls in %ls hr=%08lx", state->key.c_str(),
+                        state->document->document->c_str(), result);
+                    state->failure = result;
+                    return result;
+                }
+                value = state->node->value;
+                return S_OK;
+            } catch (const std::bad_alloc&) {
+                return E_OUTOFMEMORY;
+            }
+        });
+    }
+    if (SUCCEEDED(hr)) hr = SetSourceDictionaryParts(dictionary.Get(), path, std::move(merged), std::move(themeKeys));
+    if (FAILED(hr)) dictionary.Reset();
     return hr;
 }
 HRESULT PrepareApplication(Node& root, ApplicationTheme& theme, bool& hasTheme) {
@@ -878,6 +1100,7 @@ HRESULT LoadApplicationSourceXaml(IInspectable* component, const std::wstring& p
         if (FAILED(hr)) return hr;
         std::unique_ptr<Node> root;
         hr = ReadSource(path, root);
+        if (hr == S_OK) hr = RejectText(*root);
         if (hr != S_OK) return hr;
         Log("TRACE", "application source XAML load %ls", path.c_str());
         ApplicationTheme theme{};
@@ -924,6 +1147,7 @@ HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRu
         std::unique_ptr<Node> root;
         hr = ReadSource(path, root);
         if (hr == S_FALSE) return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        if (SUCCEEDED(hr)) hr = RejectText(*root);
         std::set<std::wstring> names;
         std::set<int> connections;
         if (SUCCEEDED(hr)) hr = Prepare(*root, {}, false, names, connections, true);

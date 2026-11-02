@@ -131,7 +131,7 @@ class SourceApp : Application
         BadApplication("<Application" + Ns + " RequestedTheme=\"Dark\"><Application.Resources><Grid x:Key=\"same\"/><Grid x:Key=\"same\"/></Application.Resources></Application>", unchecked((int)0x80070057));
         BadApplication("<Application" + Ns + "><Application.Resources><ResourceDictionary Source=\"missing.xaml\"/></Application.Resources></Application>", unchecked((int)0x80004001));
         BadApplication("<Application" + Ns + "><Application.Resources><Grid x:Name=\"named\"/></Application.Resources></Application>", unchecked((int)0x80004001));
-        BadApplication("<Application" + Ns + "><Application.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries/></ResourceDictionary></Application.Resources></Application>", unchecked((int)0x80004001));
+        BadApplication("<Application" + Ns + "><Application.Resources><ResourceDictionary><ResourceDictionary.ThemeDictionaries/></ResourceDictionary></Application.Resources></Application>", unchecked((int)0x80004001));
         BadApplication("<Application" + Ns + "><Application.Resources><Grid x:Key=\"one\"/></Application.Resources>", 0);
         BadApplication("<Application" + Ns + "><Application.Resources/>", 0);
         BadApplication("<Application" + Ns + ">", 0);
@@ -142,6 +142,74 @@ class SourceApp : Application
         Check(ReferenceEquals(resources, app.Resources), "explicit assignment must survive invalid App.xaml");
         File.Delete("App.xaml");
         Console.WriteLine("PASS: application source initializes lazily, replaces resources transactionally and rejects unsupported roots");
+    }
+    static string Merged(string sources, string entries)
+    {
+        return "<Application" + Ns + " RequestedTheme=\"Light\"><Application.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries>" +
+            sources + "</ResourceDictionary.MergedDictionaries>" + entries + "</ResourceDictionary></Application.Resources></Application>";
+    }
+    static string Dictionary(string body)
+    {
+        return "<ResourceDictionary" + Ns + " xmlns:d=\"http://schemas.microsoft.com/expression/blend/2008\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"d\">" + body + "</ResourceDictionary>";
+    }
+    static void VerifyMergedSources()
+    {
+        var app = Application.Current;
+        var original = app.Resources;
+        Directory.CreateDirectory("Fixtures/Merged");
+        // Unsupported entries stay unbuilt until looked up; theme keys are indexed but not resolved yet.
+        File.WriteAllText("Fixtures/Merged/a.xaml", Dictionary(
+            "<ResourceDictionary.ThemeDictionaries><ResourceDictionary x:Key=\"Default\"><x:String x:Key=\"themed\">glyph</x:String></ResourceDictionary></ResourceDictionary.ThemeDictionaries>" +
+            "<Grid x:Key=\"shared\"/><Storyboard x:Key=\"a-only\"/><Style x:Key=\"unsupported\" TargetType=\"Frame\"><Setter Property=\"Template\" Value=\"{StaticResource missing}\"/></Style>" +
+            "<x:String x:Key=\"text\">hello</x:String><Grid x:Name=\"named\" d:Width=\"2\"/><Grid x:Key=\"texty\">oops</Grid>" +
+            "<Style x:Key=\"valued\" TargetType=\"TextBlock\"><Setter Property=\"FontWeight\"><Setter.Value><FontWeight>SemiLight</FontWeight></Setter.Value></Setter></Style>"));
+        File.WriteAllText("Fixtures/Merged/b.xaml", Dictionary(
+            "<ResourceDictionary.MergedDictionaries><ResourceDictionary Source=\"Deep/c.xaml\"/></ResourceDictionary.MergedDictionaries><Storyboard x:Key=\"shared\"/>"));
+        Directory.CreateDirectory("Fixtures/Merged/Deep");
+        File.WriteAllText("Fixtures/Merged/Deep/c.xaml", Dictionary("<Grid x:Key=\"deep\"/><Grid x:Key=\"a-only\"/>"));
+        File.WriteAllText("Fixtures/merged.xaml", Merged("<ResourceDictionary Source=\"Merged/a.xaml\"/><ResourceDictionary Source=\"ms-appx:///Fixtures/Merged/b.xaml\"/>", "<Grid x:Key=\"own\"/>"));
+        Application.LoadComponent(app, new Uri("ms-appx:///Fixtures/merged.xaml"));
+        var map = (IDictionary<object, object>)(object)app.Resources;
+        Check(map.Count == 1 && map["own"] is Grid, "merged entries counted as own entries");
+        Check(map["shared"] is Storyboard, "later merged dictionary must win");
+        Check(map["deep"] is Grid, "nested relative merged source");
+        Check(map["a-only"] is Grid, "a later merged dictionary's nested merge must win over an earlier merged entry");
+        Check(ReferenceEquals(map["a-only"], map["a-only"]) && map["named"] is Grid, "deferred entry identity");
+        Check(map.ContainsKey("unsupported") && map.ContainsKey("text") && !map.ContainsKey("missing"), "deferred key index");
+        foreach (var key in new[] { "unsupported", "unsupported", "texty", "text" })
+        {
+            try { var ignored = map[key]; throw new Exception("unsupported entry built: " + key); }
+            catch (NotImplementedException) { }
+        }
+        try { var ignored = map["themed"]; throw new Exception("theme entry resolved"); }
+        catch (NotImplementedException) { }
+        try { var ignored = map["missing"]; throw new Exception("missing entry found"); }
+        catch (KeyNotFoundException) { }
+        WrongThread(() => { var ignored = map["deep"]; });
+        var loaded = app.Resources;
+        File.WriteAllText("Fixtures/Merged/cycle.xaml", Dictionary("<ResourceDictionary.MergedDictionaries><ResourceDictionary Source=\"cycle.xaml\"/></ResourceDictionary.MergedDictionaries>"));
+        File.WriteAllText("Fixtures/Merged/duplicate.xaml", Dictionary("<Grid x:Key=\"same\"/><Storyboard x:Key=\"same\"/>"));
+        File.WriteAllText("Fixtures/Merged/keyless.xaml", Dictionary("<Grid/>"));
+        File.WriteAllText("Fixtures/Merged/root.xaml", "<Grid" + Ns + "/>");
+        File.WriteAllText("Fixtures/Merged/attribute.xaml", Dictionary("").Replace("<ResourceDictionary ", "<ResourceDictionary Source=\"a.xaml\" "));
+        File.WriteAllText("Fixtures/Merged/broken.xaml", Dictionary("<Grid x:Key=\"open\">"));
+        BadApplication(Merged("<ResourceDictionary Source=\"Merged/missing.xaml\"/>", ""), unchecked((int)0x80070002));
+        BadApplication(Merged("<ResourceDictionary Source=\"Merged/cycle.xaml\"/>", ""), unchecked((int)0x80070057));
+        BadApplication(Merged("<ResourceDictionary Source=\"Merged/duplicate.xaml\"/>", ""), unchecked((int)0x80070057));
+        BadApplication(Merged("<ResourceDictionary Source=\"Merged/keyless.xaml\"/>", ""), unchecked((int)0x80070057));
+        BadApplication(Merged("<ResourceDictionary Source=\"Merged/root.xaml\"/>", ""), unchecked((int)0x80070057));
+        BadApplication(Merged("<ResourceDictionary Source=\"Merged/attribute.xaml\"/>", ""), unchecked((int)0x80004001));
+        BadApplication(Merged("<ResourceDictionary Source=\"Merged/broken.xaml\"/>", ""), 0);
+        BadApplication(Merged("<ResourceDictionary Source=\"../Merged/a.xaml\"/>", ""), unchecked((int)0x80004001));
+        BadApplication(Merged("<ResourceDictionary Source=\"http://example.com/a.xaml\"/>", ""), unchecked((int)0x80070057));
+        BadApplication(Merged("<ResourceDictionary Source=\"Merged/a.xaml\" x:Key=\"keyed\"/>", ""), unchecked((int)0x80004001));
+        BadApplication(Merged("<ResourceDictionary><Grid x:Key=\"inline\"/></ResourceDictionary>", ""), unchecked((int)0x80004001));
+        BadApplication(Merged("<Grid/>", ""), unchecked((int)0x80070057));
+        Check(ReferenceEquals(loaded, app.Resources), "invalid merged source replaced resources");
+        app.Resources = original;
+        Directory.Delete("Fixtures/Merged", true);
+        File.Delete("Fixtures/merged.xaml");
+        Console.WriteLine("PASS: merged source dictionaries resolve in order and build entries on first lookup");
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
     static void VerifyResources(SourcePage page)
@@ -460,6 +528,7 @@ class SourceApp : Application
         try { Application.LoadComponent(page, new Uri("ms-appx:///missing.xaml"), ComponentResourceLocation.Nested); throw new Exception("nested resources accepted"); }
         catch (NotImplementedException) { }
         VerifyApplicationSource();
+        VerifyMergedSources();
         VerifyResources(page);
         VerifyGrid(page);
         VerifyBrush(page);
