@@ -238,6 +238,20 @@ class StorageIoProjectionTest
         }
         try { HardwareIdentification.GetPackageSpecificToken(new byte[] { 1 }.AsBuffer()); throw new Exception("nonce-bound token accepted"); }
         catch (NotImplementedException) { }
+        // The game's device ID digest: UTF-8 bytes, SHA1, then Base64.
+        string deviceId = "1234-\u0111\u00e1 \U0001F48E";
+        IBuffer binary = Windows.Security.Cryptography.CryptographicBuffer.ConvertStringToBinary(deviceId, Windows.Security.Cryptography.BinaryStringEncoding.Utf8);
+        var sha1 = Windows.Security.Cryptography.Core.HashAlgorithmProvider.OpenAlgorithm(Windows.Security.Cryptography.Core.HashAlgorithmNames.Sha1);
+        Check(sha1.AlgorithmName == "SHA1" && sha1.HashLength == 20, "SHA1 provider");
+        string digest = Windows.Security.Cryptography.CryptographicBuffer.EncodeToBase64String(sha1.HashData(binary));
+        using (var managedSha1 = System.Security.Cryptography.SHA1.Create())
+            Check(digest == Convert.ToBase64String(managedSha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(deviceId))), "device ID digest");
+        Check(Windows.Security.Cryptography.CryptographicBuffer.EncodeToBase64String(
+            Windows.Security.Cryptography.CryptographicBuffer.ConvertStringToBinary("", Windows.Security.Cryptography.BinaryStringEncoding.Utf16BE)) == "",
+            "empty string converts to an empty buffer");
+        // Windows matches algorithm names exactly.
+        try { Windows.Security.Cryptography.Core.HashAlgorithmProvider.OpenAlgorithm("sha1"); throw new Exception("lower-case algorithm name accepted"); }
+        catch (Exception error) { if (error.HResult != unchecked((int)0x80070490)) throw; }
         byte[] copied = bytes.AsBuffer().ToArray();
         Check(copied.Length == bytes.Length && copied[0] == bytes[0], "buffer extensions");
         Console.WriteLine("PASS: managed storage awaits native files and reads seekable streams and buffers");

@@ -26,10 +26,10 @@ class SurfaceLoadTest
         {
 #if UNIMPLEMENTED
             Marshal.ThrowExceptionForHR(RoInitialize(1));
-            try { Windows.Security.Cryptography.CryptographicBuffer.EncodeToBase64String(null); }
+            try { Windows.Networking.Proximity.PeerFinder.Start(); }
             catch (NotImplementedException error)
             {
-                if (error.Message.IndexOf("Windows.Security.Cryptography.CryptographicBuffer.EncodeToBase64String", StringComparison.Ordinal) < 0) throw;
+                if (error.Message.IndexOf("Windows.Networking.Proximity.PeerFinder.Start", StringComparison.Ordinal) < 0) throw;
                 Console.WriteLine("PASS: unimplemented surface members name themselves");
                 return 0;
             }

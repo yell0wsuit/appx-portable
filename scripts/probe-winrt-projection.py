@@ -471,6 +471,17 @@ def main():
                       "// Windows.Storage.Streams.IDataReader::get_UnconsumedBufferLength, slot 6", "// Windows.Storage.Streams.IDataReader::ReadBytes, slot 14",
                       "// Windows.Foundation.IClosable::Close, slot 6"):
             require(value in generated, "token and reader ABI differs from the SDK header: " + value)
+        # windows.security.cryptography.h and windows.security.cryptography.core.h.
+        for value in ('new global::System.Guid("320b7e22-3cb0-4cdf-8663-1d28910065eb")', 'new global::System.Guid("9fac9741-5cc4-4336-ae38-6212b75a915a")',
+                      'new global::System.Guid("be9b3080-b2c3-422b-bce1-ec90efb5d7b5")', 'new global::System.Guid("6b5e0516-de96-4f0a-8d57-dcc9dae36c76")',
+                      "// Windows.Security.Cryptography.ICryptographicBufferStatics::EncodeToBase64String, slot 14",
+                      "// Windows.Security.Cryptography.ICryptographicBufferStatics::ConvertStringToBinary, slot 15",
+                      "// Windows.Security.Cryptography.Core.IHashAlgorithmProviderStatics::OpenAlgorithm, slot 6",
+                      "// Windows.Security.Cryptography.Core.IHashAlgorithmProvider::get_AlgorithmName, slot 6",
+                      "// Windows.Security.Cryptography.Core.IHashAlgorithmProvider::get_HashLength, slot 7",
+                      "// Windows.Security.Cryptography.Core.IHashAlgorithmProvider::HashData, slot 8",
+                      "// Windows.Security.Cryptography.Core.IHashAlgorithmNamesStatics::get_Sha1, slot 7"):
+            require(value in generated, "cryptography ABI differs from the SDK header: " + value)
         consumer = compile_file("storage-io.exe", [repo / "tests/winrt_projection/storage_io.cs"],
                                 ["/r:" + windows(projection), "/r:" + windows(bridge)])
         marker = output / "mark-async.exe"
@@ -660,7 +671,7 @@ def main():
             run("surface-unimplemented", [unimplemented.name], cwd=folder, environment={"APPX_PORTABLE_LOG": "1"},
                 marker="PASS: unimplemented surface members name themselves")
             trace = (folder / "appx-portable.log").read_text(errors="replace") if (folder / "appx-portable.log").is_file() else ""
-            require("UNIMPL managed Windows.Security.Cryptography.CryptographicBuffer.EncodeToBase64String" in trace,
+            require("UNIMPL managed Windows.Networking.Proximity.PeerFinder.Start" in trace,
                     "an unimplemented surface member was not named in the shim log")
             # Implemented members keep working once every stub surrounds them.
             tasks = probe_async(bootstrap)
