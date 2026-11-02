@@ -617,7 +617,7 @@ thread.
 Application.LoadComponent accepts an Application root with optional x:Class and
 RequestedTheme, plus inline Application.Resources using the existing supported
 resource types. Parsing and resource construction finish before replacing the
-application dictionary or theme. Merged/theme dictionaries, Style/Setter/template
+application dictionary or theme. Inline theme dictionaries, Style/Setter/template
 content, and application resource names/connections remain explicit failures.
 Lazy App.xaml initialization is a compatibility reconstruction; original Windows
 constructor-time loading order has not been verified.
@@ -629,13 +629,30 @@ remain distinguishable from missing entries, and Remove/Clear release owned
 references. Read-only views and enumeration use snapshots; pairs and iterators
 retain their own keys and values. Views support Split and iterators support
 GetMany. Dictionary and snapshot operations enforce their creating thread.
-Non-string keys, non-null Source, merged dictionaries and theme dictionaries
-fail explicitly. The managed ResourceDictionary implements
+Non-string keys, assigning Source, the MergedDictionaries and ThemeDictionaries
+collections fail explicitly. The managed ResourceDictionary implements
 `IDictionary<object, object>` over that native map. Its indexer, mutation,
 key/value views and snapshot enumeration preserve object identity and distinguish
 missing keys from present null values. The class keeps its DependencyObject
 inheritance. Object keys use IInspectable boxing; the native resource engine
 currently accepts only strings. No managed shadow dictionary is created.
+
+An explicit ResourceDictionary in source `*.Resources` may contain
+`ResourceDictionary.MergedDictionaries` whose entries name only a Source: an
+`ms-appx:///` URI or a path relative to the containing file without `.`/`..`
+segments, escapes, queries or fragments. Each source must have a
+ResourceDictionary root and may merge further sources; cycles, missing files,
+duplicate or missing keys, implicit Style keys and other root attributes fail the
+whole load before anything is replaced. A source dictionary's own entries are
+prepared and built on first lookup, then cached; a failed build stays failed and
+logs its key and file. Lookup checks own entries, then theme keys, then merged
+dictionaries from last to first, each with its full lookup; Count and enumeration
+cover own entries, and enumeration builds them. Theme dictionary keys are indexed
+so HasKey reports them, but looking one up fails with E_NOTIMPL. Text content is
+kept on parsed nodes and rejected before any element is prepared, so unbuilt
+entries may carry value elements such as `<FontWeight>`. On-demand entry
+creation follows Windows 8.1+ behavior; it is a reconstruction, not a measured
+trace of this game's original startup.
 
 The source loader accepts `<Page.Resources>`, `<Frame.Resources>` and
 `<Grid.Resources>` with implicit entries or a sole explicit ResourceDictionary.

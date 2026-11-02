@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <set>
 #include <vector>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Foundation;
@@ -25,6 +26,14 @@ using Iterator = IIterator<Pair*>;
 struct Entry {
     std::wstring name;
     ComPtr<IInspectable> key, value;
+    ResourceFactory factory; // Set until a source entry is first built.
+};
+MIDL_INTERFACE("7A86EACA-AD32-491F-AC74-CAF408CD4616") ISourceDictionary : IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE AddDeferred(IInspectable * key, const std::wstring& name,
+                                                  ResourceFactory factory) = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetSourceParts(const std::wstring& source,
+                                                     std::vector<ComPtr<IResourceDictionary>> merged,
+                                                     std::set<std::wstring> themeKeys) = 0;
 };
 template <class F> HRESULT Guard(F&& action) {
     try {
@@ -191,16 +200,61 @@ public:
         return iterator ? iterator.CopyTo(value) : E_OUTOFMEMORY;
     }
 };
-class ResourceDictionary final
-    : public Composable<ResourceDictionary, IResourceDictionary, Map, Iterable, DefaultIDependencyObject> {
+class ResourceDictionary final : public Composable<ResourceDictionary, IResourceDictionary, Map, Iterable,
+                                                    DefaultIDependencyObject, ISourceDictionary> {
     std::map<std::wstring, Entry> entries_;
+    // Source dictionaries: lookup checks own entries, then theme keys, then the
+    // merged dictionaries from last to first, each with its own full lookup.
+    std::vector<ComPtr<IResourceDictionary>> merged_;
+    std::set<std::wstring> themeKeys_;
+    std::wstring source_;
     PropertyValues properties_;
     const DWORD thread_ = GetCurrentThreadId();
     HRESULT CheckThread() const { return GetCurrentThreadId() == thread_ ? S_OK : RPC_E_WRONG_THREAD; }
-    std::shared_ptr<Snapshot> Copy() {
-        auto snapshot = std::make_shared<Snapshot>();
+    // The factory may reenter this dictionary, so the entry is found again afterwards.
+    HRESULT Materialize(const std::wstring& name) {
+        auto found = entries_.find(name);
+        if (found == entries_.end() || !found->second.factory) return S_OK;
+        auto factory = found->second.factory;
+        ComPtr<IInspectable> value;
+        auto hr = factory(value);
+        if (FAILED(hr)) return hr;
+        found = entries_.find(name);
+        if (found != entries_.end() && found->second.factory) {
+            found->second.value = std::move(value);
+            found->second.factory = nullptr;
+        }
+        return S_OK;
+    }
+    HRESULT Copy(std::shared_ptr<Snapshot>& snapshot) {
+        std::vector<std::wstring> names;
+        for (const auto& entry : entries_) names.push_back(entry.first);
+        for (const auto& name : names) {
+            auto hr = Materialize(name);
+            if (FAILED(hr)) return hr;
+        }
+        snapshot = std::make_shared<Snapshot>();
         for (const auto& entry : entries_) snapshot->entries.push_back(entry.second);
-        return snapshot;
+        return S_OK;
+    }
+    HRESULT Find(IInspectable* key, const std::wstring& name, IInspectable** value) {
+        if (entries_.count(name)) {
+            auto hr = Materialize(name);
+            if (FAILED(hr)) return hr;
+            auto found = entries_.find(name);
+            return found == entries_.end() ? E_BOUNDS : found->second.value.CopyTo(value);
+        }
+        if (themeKeys_.count(name)) {
+            Log("FAIL", "ResourceDictionary.ThemeDictionaries lookup %ls hr=%08lx", name.c_str(), E_NOTIMPL);
+            return E_NOTIMPL;
+        }
+        for (auto dictionary = merged_.rbegin(); dictionary != merged_.rend(); ++dictionary) {
+            ComPtr<Map> map;
+            auto hr = dictionary->As(&map);
+            if (SUCCEEDED(hr)) hr = map->Lookup(key, value);
+            if (hr != E_BOUNDS) return hr;
+        }
+        return E_BOUNDS;
     }
 
 public:
@@ -209,7 +263,15 @@ public:
     HRESULT STDMETHODCALLTYPE get_Source(IUriRuntimeClass** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
-        return CheckThread();
+        auto hr = CheckThread();
+        if (FAILED(hr) || source_.empty()) return hr;
+        return Guard([&]() -> HRESULT {
+            ComPtr<IUriRuntimeClassFactory> factory;
+            auto result = RoGetActivationFactory(Wrappers::HStringReference(L"Windows.Foundation.Uri").Get(),
+                                                 IID_PPV_ARGS(&factory));
+            auto uri = L"ms-appx:///" + source_;
+            return FAILED(result) ? result : factory->CreateUri(Wrappers::HStringReference(uri.c_str()).Get(), value);
+        });
     }
     HRESULT STDMETHODCALLTYPE put_Source(IUriRuntimeClass* value) override {
         auto hr = CheckThread();
@@ -254,9 +316,7 @@ public:
         return Guard([&]() -> HRESULT {
             std::wstring name;
             auto result = ReadKey(key, name);
-            if (FAILED(result)) return result;
-            auto found = entries_.find(name);
-            return found == entries_.end() ? E_BOUNDS : found->second.value.CopyTo(value);
+            return FAILED(result) ? result : Find(key, name, value);
         });
     }
     HRESULT STDMETHODCALLTYPE get_Size(UINT32* value) override {
@@ -266,14 +326,28 @@ public:
         if (SUCCEEDED(hr)) *value = static_cast<UINT32>(entries_.size());
         return hr;
     }
+    // Answers from the key index without building deferred entries.
     HRESULT STDMETHODCALLTYPE HasKey(IInspectable* key, boolean* value) override {
         if (!value) return E_POINTER;
         *value = false;
-        ComPtr<IInspectable> ignored;
-        auto hr = Lookup(key, &ignored);
-        if (hr == E_BOUNDS) return S_OK;
-        if (SUCCEEDED(hr)) *value = true;
-        return hr;
+        auto hr = CheckThread();
+        if (FAILED(hr)) return hr;
+        return Guard([&]() -> HRESULT {
+            std::wstring name;
+            auto result = ReadKey(key, name);
+            if (FAILED(result)) return result;
+            if (entries_.count(name) || themeKeys_.count(name)) {
+                *value = true;
+                return S_OK;
+            }
+            for (auto dictionary = merged_.rbegin(); dictionary != merged_.rend() && !*value; ++dictionary) {
+                ComPtr<Map> map;
+                result = dictionary->As(&map);
+                if (SUCCEEDED(result)) result = map->HasKey(key, value);
+                if (FAILED(result)) return result;
+            }
+            return S_OK;
+        });
     }
     HRESULT STDMETHODCALLTYPE Insert(IInspectable* key, IInspectable* value, boolean* replaced) override {
         if (!replaced) return E_POINTER;
@@ -287,9 +361,10 @@ public:
             auto found = entries_.find(name);
             if (found != entries_.end()) {
                 found->second.value = value;
+                found->second.factory = nullptr;
                 *replaced = true;
             } else
-                entries_.emplace(name, Entry{name, key, value});
+                entries_.emplace(name, Entry{name, key, value, nullptr});
             return S_OK;
         });
     }
@@ -314,7 +389,10 @@ public:
         auto hr = CheckThread();
         if (FAILED(hr)) return hr;
         return Guard([&]() -> HRESULT {
-            auto view = Make<ResourceView>(Copy());
+            std::shared_ptr<Snapshot> snapshot;
+            auto result = Copy(snapshot);
+            if (FAILED(result)) return result;
+            auto view = Make<ResourceView>(std::move(snapshot));
             return view ? view.CopyTo(value) : E_OUTOFMEMORY;
         });
     }
@@ -324,8 +402,31 @@ public:
         auto hr = CheckThread();
         if (FAILED(hr)) return hr;
         return Guard([&]() -> HRESULT {
-            auto iterator = Make<ResourceIterator>(Copy());
+            std::shared_ptr<Snapshot> snapshot;
+            auto result = Copy(snapshot);
+            if (FAILED(result)) return result;
+            auto iterator = Make<ResourceIterator>(std::move(snapshot));
             return iterator ? iterator.CopyTo(value) : E_OUTOFMEMORY;
+        });
+    }
+    HRESULT STDMETHODCALLTYPE AddDeferred(IInspectable* key, const std::wstring& name,
+                                          ResourceFactory factory) override {
+        auto hr = CheckThread();
+        if (FAILED(hr)) return hr;
+        return Guard([&]() -> HRESULT {
+            if (!factory) return E_INVALIDARG;
+            return entries_.emplace(name, Entry{name, key, nullptr, std::move(factory)}).second ? S_OK : E_INVALIDARG;
+        });
+    }
+    HRESULT STDMETHODCALLTYPE SetSourceParts(const std::wstring& source, std::vector<ComPtr<IResourceDictionary>> merged,
+                                             std::set<std::wstring> themeKeys) override {
+        auto hr = CheckThread();
+        if (FAILED(hr)) return hr;
+        return Guard([&]() -> HRESULT {
+            source_ = source;
+            merged_ = std::move(merged);
+            themeKeys_ = std::move(themeKeys);
+            return S_OK;
         });
     }
 };
@@ -347,17 +448,35 @@ HRESULT MakeResourceDictionary(IResourceDictionary** value) {
     *value = nullptr;
     return Guard([&]() -> HRESULT { return Compose<ResourceDictionary>(nullptr, nullptr, value); });
 }
-HRESULT AddSourceResource(IResourceDictionary* dictionary, HSTRING key, IInspectable* value) {
+namespace {
+HRESULT BoxKey(HSTRING key, ComPtr<IInspectable>& boxed) {
     ComPtr<IPropertyValueStatics> factory;
     auto hr = RoGetActivationFactory(Wrappers::HStringReference(L"Windows.Foundation.PropertyValue").Get(),
                                      IID_PPV_ARGS(&factory));
+    return FAILED(hr) ? hr : factory->CreateString(key, &boxed);
+}
+}
+HRESULT AddSourceResource(IResourceDictionary* dictionary, HSTRING key, IInspectable* value) {
     ComPtr<IInspectable> boxed;
-    if (SUCCEEDED(hr)) hr = factory->CreateString(key, &boxed);
+    auto hr = BoxKey(key, boxed);
     ComPtr<Map> map;
     if (SUCCEEDED(hr)) hr = dictionary->QueryInterface(IID_PPV_ARGS(&map));
     boolean replaced = false;
     if (SUCCEEDED(hr)) hr = map->Insert(boxed.Get(), value, &replaced);
     return SUCCEEDED(hr) && replaced ? E_INVALIDARG : hr;
+}
+HRESULT AddDeferredSourceResource(IResourceDictionary* dictionary, const std::wstring& key, ResourceFactory factory) {
+    ComPtr<IInspectable> boxed;
+    auto hr = BoxKey(Wrappers::HStringReference(key.c_str(), static_cast<unsigned>(key.size())).Get(), boxed);
+    ComPtr<ISourceDictionary> source;
+    if (SUCCEEDED(hr)) hr = dictionary->QueryInterface(IID_PPV_ARGS(&source));
+    return FAILED(hr) ? hr : source->AddDeferred(boxed.Get(), key, std::move(factory));
+}
+HRESULT SetSourceDictionaryParts(IResourceDictionary* dictionary, const std::wstring& source,
+                                 std::vector<ComPtr<IResourceDictionary>> merged, std::set<std::wstring> themeKeys) {
+    ComPtr<ISourceDictionary> parts;
+    auto hr = dictionary->QueryInterface(IID_PPV_ARGS(&parts));
+    return FAILED(hr) ? hr : parts->SetSourceParts(source, std::move(merged), std::move(themeKeys));
 }
 const ShimClass resourceDictionaryClass{ResourceDictionary::Name, MakeResourceDictionaryFactory,
                                         ShimPolicy::FillMissing};
