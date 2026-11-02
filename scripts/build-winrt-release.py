@@ -69,6 +69,9 @@ def commands(toolchain, metadata, cecil, output, work):
         # C# binds WinRT setters as set_X against the bootstrap; the surface names them put_X.
         ("compile-tasks", t.compile(compiled_tasks, [WINRT / n for n in BRIDGE], ["/target:library", "/r:" + t.path(bootstrap), "/r:" + t.path(interop)])),
         ("rebind-tasks", t.tool(completer) + ["--rebind", t.path(output / "Windows.dll"), t.path(compiled_tasks), t.path(output / TASKS)]),
+        # The artifact itself, on this runtime: every type loads and every signature type resolves.
+        ("compile-surface-check", t.compile(work / "surface-load.exe", [REPO / "tests/winrt_projection/surface_load.cs"])),
+        ("verify-surface", t.tool(work / "surface-load.exe") + [t.path(output / "Windows.dll")]),
     ]
 
 
