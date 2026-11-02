@@ -40,7 +40,28 @@ class StorageProjectionTest
             var child = local.CreateContainer("child-đá", ApplicationDataCreateDisposition.Always);
             child.Values["nested"] = 123;
             Check(ReferenceEquals(child, local.CreateContainer("child-đá", ApplicationDataCreateDisposition.Existing)), "child identity");
+            // The game's metrics pattern: create, then reach the child through Containers.
+            local.CreateContainer("Metrics", ApplicationDataCreateDisposition.Always);
+            local.Containers["Metrics"].Values["LastGamePlayedTime"] = "2026-11-02";
+            local.CreateContainer("temporary", ApplicationDataCreateDisposition.Always);
+            local.DeleteContainer("temporary");
+            Check(ReferenceEquals(local.Containers["child-đá"], child), "Containers returns the same child wrapper");
         }
+        IReadOnlyDictionary<string, ApplicationDataContainer> containers = local.Containers;
+        Check(containers.Count == 2 && containers.ContainsKey("child-đá") && containers.ContainsKey("Metrics"), "Containers Count and ContainsKey");
+        Check(!containers.ContainsKey("temporary"), "deleted container left Containers");
+        Check((string)containers["Metrics"].Values["LastGamePlayedTime"] == "2026-11-02", "Containers indexer reaches persisted values");
+        ApplicationDataContainer missingContainer;
+        Check(!containers.TryGetValue("absent", out missingContainer) && missingContainer == null, "Containers TryGetValue missing");
+        try { var unused = containers["absent"]; throw new Exception("missing container lookup accepted"); }
+        catch (KeyNotFoundException) { }
+        try { containers.ContainsKey(null); throw new Exception("null container key accepted"); }
+        catch (ArgumentNullException) { }
+        var names = new List<string>();
+        foreach (var pair in containers) { Check(ReferenceEquals(pair.Value, containers[pair.Key]), "enumerated container identity"); names.Add(pair.Key); }
+        names.Sort(StringComparer.Ordinal);
+        Check(string.Join("|", names) == "Metrics|child-đá", "Containers enumeration");
+        Check(new List<string>(containers.Keys).Count == 2 && new List<ApplicationDataContainer>(containers.Values).Count == 2, "Containers Keys and Values");
         Check(values.Count == 6, "persisted Count");
         Check((string)values["text-đá\0key"] == "💎\0tail", "Unicode settings key/value");
         Check((int)values["number"] == int.MinValue && (long)values["wide"] == long.MinValue, "signed scalar widths");

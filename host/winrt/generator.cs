@@ -44,6 +44,7 @@ internal static partial class WinrtProjectionGenerator
         if (generic != null)
         {
             if (!selected.Contains(generic.ElementType.FullName)) throw new NotSupportedException("Generic type is not selected: " + type.FullName);
+            if (generic.ElementType.FullName == MapViewName) return "global::System.Collections.Generic.IReadOnlyDictionary<string, " + Name(MapViewValue(generic)) + ">";
             // The CLR projects Windows.Foundation.EventHandler<T> as System.EventHandler<T>.
             string element = generic.ElementType.FullName == EventHandlerName ? "System.EventHandler" : generic.ElementType.FullName.Split('`')[0];
             return "global::" + element + "<" + string.Join(", ", generic.GenericArguments.Select(Name)) + ">";
@@ -188,6 +189,10 @@ internal static partial class WinrtProjectionGenerator
         if (result.FullName == "System.String") return receiver + ".String(" + number + ")";
         if (result.FullName == "System.Object") return Inspectable(receiver + ".Object(" + number + ")");
         if (result.FullName == "Windows.Foundation.TimeSpan") return "new global::System.TimeSpan(" + receiver + ".Int64(" + number + "))";
+        var view = result as GenericInstanceType;
+        if (view != null && view.ElementType.FullName == MapViewName)
+            return Runtime + "NativeStringMapView<" + Name(MapViewValue(view)) + ">.Wrap(" + receiver + ".Object(" + number + "), " +
+                StringMapViewAbi(view) + ", v => " + Wrapped(MapViewValue(view), "v") + ")";
         TypeDefinition definition = Find(result.FullName);
         if (definition.IsEnum)
         {
@@ -799,6 +804,61 @@ internal static partial class WinrtProjectionGenerator
     {
         return Slot(owner, owner.Methods.Single(m => m.Name == method));
     }
+    // IIterable<IKeyValuePair<K, V>>, its iterator, and the pair, as maps and map views share them.
+    private static void IterationContract()
+    {
+        foreach (var contract in new[] {
+            new { Type = Find("Windows.Foundation.Collections.IIterable`1"), Names = new[] { "First" } },
+            new { Type = Find("Windows.Foundation.Collections.IIterator`1"), Names = new[] { "get_Current", "get_HasCurrent", "MoveNext", "GetMany" } },
+            new { Type = Find("Windows.Foundation.Collections.IKeyValuePair`2"), Names = new[] { "get_Key", "get_Value" } } })
+            if (!contract.Type.Methods.Select(m => m.Name).SequenceEqual(contract.Names))
+                throw new NotSupportedException("Unsupported collection ABI: " + contract.Type.FullName + " method order");
+        CollectionMethod(Find("Windows.Foundation.Collections.IIterable`1"), 1, "First", "()->Windows.Foundation.Collections.IIterator`1<!0>");
+        CollectionMethod(Find("Windows.Foundation.Collections.IIterator`1"), 1, "get_Current", "()->!0");
+        CollectionMethod(Find("Windows.Foundation.Collections.IIterator`1"), 1, "get_HasCurrent", "()->System.Boolean");
+        CollectionMethod(Find("Windows.Foundation.Collections.IIterator`1"), 1, "MoveNext", "()->System.Boolean");
+        CollectionMethod(Find("Windows.Foundation.Collections.IKeyValuePair`2"), 2, "get_Key", "()->!0");
+        CollectionMethod(Find("Windows.Foundation.Collections.IKeyValuePair`2"), 2, "get_Value", "()->!1");
+    }
+    private const string MapViewName = "Windows.Foundation.Collections.IMapView`2";
+    private static void ValidateMapView()
+    {
+        if (!selected.Contains(MapViewName) || interfaces[MapViewName].GetAttribute("Adapter") != "StringMapView")
+            throw new NotSupportedException("Map view adapter is not selected: " + MapViewName);
+        var view = Find(MapViewName);
+        if (!view.Methods.Select(m => m.Name).SequenceEqual(new[] { "Lookup", "get_Size", "HasKey", "Split" }))
+            throw new NotSupportedException("Unsupported collection ABI: " + view.FullName + " method order");
+        CollectionMethod(view, 2, "Lookup", "(!0)->!1");
+        CollectionMethod(view, 2, "get_Size", "()->System.UInt32");
+        CollectionMethod(view, 2, "HasKey", "(!0)->System.Boolean");
+        IterationContract();
+    }
+    // IMapView<String, V> projects as IReadOnlyDictionary<string, V> over a selected class or interface V.
+    private static TypeReference MapViewValue(GenericInstanceType view)
+    {
+        ValidateMapView();
+        TypeReference value = view.GenericArguments[1];
+        if (view.GenericArguments[0].FullName != "System.String" || IsDelegate(Parameter(value, view.FullName)))
+            throw new NotSupportedException("Unsupported map view: " + view.FullName);
+        return value;
+    }
+    private static string StringMapViewAbi(GenericInstanceType view)
+    {
+        TypeReference value = MapViewValue(view);
+        var iterable = Find("Windows.Foundation.Collections.IIterable`1");
+        var iterator = Find("Windows.Foundation.Collections.IIterator`1");
+        var pair = Find("Windows.Foundation.Collections.IKeyValuePair`2");
+        var map = Find(MapViewName);
+        string pairSignature = "pinterface({" + Iid(pair) + "};string;" + EventSignature(value) + ")";
+        return "new " + Runtime + "StringMapViewAbi {\n" +
+            "                    View = new global::System.Guid(\"" + Parameterized(map, "string", EventSignature(value)) + "\"),\n" +
+            "                    Iterable = new global::System.Guid(\"" + Parameterized(iterable, pairSignature) + "\"),\n" +
+            "                    Lookup = " + Literal(NamedSlot(map, "Lookup")) + ", Size = " + Literal(NamedSlot(map, "get_Size")) +
+            ", HasKey = " + Literal(NamedSlot(map, "HasKey")) + ", First = " + Literal(NamedSlot(iterable, "First")) + ",\n" +
+            "                    Current = " + Literal(NamedSlot(iterator, "get_Current")) + ", HasCurrent = " + Literal(NamedSlot(iterator, "get_HasCurrent")) +
+            ", MoveNext = " + Literal(NamedSlot(iterator, "MoveNext")) + ", Key = " + Literal(NamedSlot(pair, "get_Key")) +
+            ", Value = " + Literal(NamedSlot(pair, "get_Value")) + " }";
+    }
     private static void DictionaryInterface(StringBuilder output, TypeDefinition type, XmlElement surface)
     {
         if (surface.GetAttribute("Adapter") != "StringObjectMap" || type.Methods.Count != 0 || surface.HasChildNodes ||
@@ -808,25 +868,15 @@ internal static partial class WinrtProjectionGenerator
         var iterable = Find("Windows.Foundation.Collections.IIterable`1");
         var iterator = Find("Windows.Foundation.Collections.IIterator`1");
         var pair = Find("Windows.Foundation.Collections.IKeyValuePair`2");
-        foreach (var contract in new[] {
-            new { Type = map, Names = new[] { "Lookup", "get_Size", "HasKey", "GetView", "Insert", "Remove", "Clear" } },
-            new { Type = iterable, Names = new[] { "First" } },
-            new { Type = iterator, Names = new[] { "get_Current", "get_HasCurrent", "MoveNext", "GetMany" } },
-            new { Type = pair, Names = new[] { "get_Key", "get_Value" } } })
-            if (!contract.Type.Methods.Select(m => m.Name).SequenceEqual(contract.Names))
-                throw new NotSupportedException("Unsupported collection ABI: " + contract.Type.FullName + " method order");
+        if (!map.Methods.Select(m => m.Name).SequenceEqual(new[] { "Lookup", "get_Size", "HasKey", "GetView", "Insert", "Remove", "Clear" }))
+            throw new NotSupportedException("Unsupported collection ABI: " + map.FullName + " method order");
+        IterationContract();
         CollectionMethod(map, 2, "Lookup", "(!0)->!1");
         CollectionMethod(map, 2, "get_Size", "()->System.UInt32");
         CollectionMethod(map, 2, "HasKey", "(!0)->System.Boolean");
         CollectionMethod(map, 2, "Insert", "(!0,!1)->System.Boolean");
         CollectionMethod(map, 2, "Remove", "(!0)->System.Void");
         CollectionMethod(map, 2, "Clear", "()->System.Void");
-        CollectionMethod(iterable, 1, "First", "()->Windows.Foundation.Collections.IIterator`1<!0>");
-        CollectionMethod(iterator, 1, "get_Current", "()->!0");
-        CollectionMethod(iterator, 1, "get_HasCurrent", "()->System.Boolean");
-        CollectionMethod(iterator, 1, "MoveNext", "()->System.Boolean");
-        CollectionMethod(pair, 2, "get_Key", "()->!0");
-        CollectionMethod(pair, 2, "get_Value", "()->!1");
         string pairSignature = "pinterface({" + Iid(pair) + "};string;cinterface(IInspectable))";
         string wrapper = type.FullName.Replace('.', '_');
         output.AppendLine("    public interface " + type.Name + " : global::System.Collections.Generic.IDictionary<string, object> { }");
@@ -1187,6 +1237,13 @@ internal static partial class WinrtProjectionGenerator
                     ComponentConnectorContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "Storage")
                     StorageContract(output, type, element);
+                else if (element.GetAttribute("Adapter") == "StringMapView")
+                {
+                    // IReadOnlyDictionary<string, V> is the projection; each use emits its closed ABI.
+                    if (element.Name != "Interface" || element.HasChildNodes || type.FullName != MapViewName)
+                        throw new NotSupportedException("Unsupported map view surface: " + type.FullName);
+                    ValidateMapView();
+                }
                 else if (element.GetAttribute("Adapter") == "EventHandler")
                 {
                     // System.EventHandler<T> is the projection; only its ABI shape is checked.

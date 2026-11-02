@@ -248,8 +248,14 @@ def main():
                       "Lookup = 6,", "Insert = 10,", "Remove = 11,", "Clear = 12,", "Size = 7, HasKey = 8,",
                       "First = 6, Current = 6,", "HasCurrent = 7, MoveNext = 8,", "Key = 6, Value = 7"):
             require(value in generated, "collection ABI differs from the SDK header: " + value)
+        # Closed IMapView<String, ApplicationDataContainer> and its iteration, from windows.storage.h.
+        for value in ('View = new global::System.Guid("13624f8d-85cc-5780-a78d-64dba58f2c3c")',
+                      'Iterable = new global::System.Guid("a785be1d-159e-53ad-9553-598b03dca048")',
+                      "// Windows.Storage.IApplicationDataContainer::get_Containers, slot 9"):
+            require(value in generated, "container map ABI differs from the SDK header: " + value)
         mutator = compile_file("mutate-collections.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
-        for kind, method in (("insert", "IMap`2.Insert"), ("iterator", "IIterator`1.get_HasCurrent"), ("order", "IMap`2 method order")):
+        for kind, method in (("insert", "IMap`2.Insert"), ("iterator", "IIterator`1.get_HasCurrent"), ("order", "IMap`2 method order"),
+                             ("view-order", "IMapView`2 method order")):
             mutated = output / ("collections-" + kind)
             target = output / ("collections-" + kind + ".cs")
             run("mutate-collections-" + kind, [mutator.name, windows(metadata), windows(mutated), kind])

@@ -28,6 +28,7 @@ class MutateCollectionsMetadata
                     case "read-count": name = "Windows.Storage.Streams.IInputStream"; break;
                     case "buffer-order": name = "Windows.Storage.Streams.IBuffer"; break;
                     case "future-order": name = "Windows.Foundation.IAsyncOperation`1"; break;
+                    case "view-order": name = "Windows.Foundation.Collections.IMapView`2"; break;
                     default: name = "Windows.Foundation.Collections.IMap`2"; break;
                 }
                 var type = module.Types.SingleOrDefault(t => t.FullName == name);
@@ -39,7 +40,7 @@ class MutateCollectionsMetadata
                 else if (args[2] == "typed-event") type.Methods.Single(m => m.Name == "Invoke").Parameters[1].ParameterType = module.TypeSystem.UInt32;
                 else if (args[2] == "network-enum") type.Fields.Single(f => f.Name == "value__").FieldType = module.TypeSystem.Int64;
                 else if (args[2] == "insert") type.Methods.Single(m => m.Name == "Insert").Parameters[1].ParameterType = module.TypeSystem.UInt64;
-                else if (args[2] == "order" || args[2] == "buffer-order" || args[2] == "future-order") { var first = type.Methods[0]; type.Methods.RemoveAt(0); type.Methods.Add(first); }
+                else if (args[2] == "order" || args[2] == "buffer-order" || args[2] == "future-order" || args[2] == "view-order") { var first = type.Methods[0]; type.Methods.RemoveAt(0); type.Methods.Add(first); }
                 else if (args[2] == "iterator") type.Methods.Single(m => m.Name == "get_HasCurrent").ReturnType = module.TypeSystem.UInt32;
                 else if (args[2] == "stream-size") type.Methods.Single(m => m.Name == "get_Size").ReturnType = module.TypeSystem.UInt32;
                 else if (args[2] == "read-count") type.Methods.Single(m => m.Name == "ReadAsync").Parameters[1].ParameterType = module.TypeSystem.UInt64;
