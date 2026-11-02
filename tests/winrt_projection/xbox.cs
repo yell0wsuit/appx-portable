@@ -17,7 +17,7 @@ class XboxProjectionTest
     [DllImport("combase.dll")] private static extern int RoInitialize(uint apartment);
     static void Check(bool value, string name) { if (!value) throw new Exception(name); }
     [MethodImpl(MethodImplOptions.NoInlining)]
-    static void Run(string expectedVersion)
+    static void Run(string expectedVersion, bool generic)
     {
         var fields = new XboxFields { CurrentUser = new User(), Profile = null };
         Check(fields.CurrentUser.Identity == null && fields.Profile == null, "native user is signed out");
@@ -33,6 +33,8 @@ class XboxProjectionTest
             Check(version.FileMajorPart + "." + version.FileMinorPart + "." + version.FileBuildPart + "." + version.FilePrivatePart == expectedVersion,
                 "native version resource must preserve the qualified ABI layout");
         }
+        // The install-time generic projection implements profiles; only the curated one stubs them.
+        if (generic) { Console.WriteLine("PASS: generic Xbox projection uses native signed-out user and service client"); return; }
         var unimplemented = (UserProfile)FormatterServices.GetUninitializedObject(typeof(UserProfile));
         try { string unused = unimplemented.Gamertag; throw new Exception("fabricated profile behavior"); }
         catch (NotImplementedException error) { Check(error.Message == "Microsoft.Xbox.UserProfile.get_Gamertag", "unimplemented profile member names itself"); }
@@ -41,7 +43,7 @@ class XboxProjectionTest
     [STAThread]
     static int Main(string[] args)
     {
-        try { Marshal.ThrowExceptionForHR(RoInitialize(0)); Run(args.Length == 0 ? null : args[0]); return 0; }
+        try { Marshal.ThrowExceptionForHR(RoInitialize(0)); Run(args.Length == 0 || args[0] == "generic" ? null : args[0], args.Length != 0 && args[0] == "generic"); return 0; }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
 }

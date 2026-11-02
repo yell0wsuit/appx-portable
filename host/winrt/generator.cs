@@ -55,6 +55,7 @@ internal static partial class WinrtProjectionGenerator
         if (type.FullName == "Windows.Foundation.Uri") return "global::System.Uri";
         if (type.FullName == "Windows.UI.Xaml.Interop.TypeName") return "global::System.Type";
         if (type.FullName == "Windows.Foundation.TimeSpan") return "global::System.TimeSpan";
+        if (type.FullName == DateTimeName) return "global::System.DateTimeOffset";
         if (!Available(type.FullName))
             throw new NotSupportedException("Type is not selected: " + type.FullName);
         return "global::" + type.FullName;
@@ -190,9 +191,26 @@ internal static partial class WinrtProjectionGenerator
         TypeReference result = method.ReturnType;
         if (result.FullName == "System.Boolean") return receiver + ".Boolean(" + number + ")";
         if (result.FullName == "System.String") return receiver + ".String(" + number + ")";
-        if (result.FullName == "System.UInt32") return receiver + ".UInt32(" + number + ")";
+        // Other scalars travel in the 32- or 64-bit slot getters; floats as their bits.
+        switch (result.FullName)
+        {
+            case "System.UInt32": return receiver + ".UInt32(" + number + ")";
+            case "System.Byte":
+            case "System.SByte":
+            case "System.Int16":
+            case "System.UInt16":
+            case "System.Int32":
+            case "System.Char":
+                return "unchecked((" + Name(result) + ")" + receiver + ".UInt32(" + number + "))";
+            case "System.Int64": return receiver + ".Int64(" + number + ")";
+            case "System.UInt64": return "unchecked((ulong)" + receiver + ".Int64(" + number + "))";
+            case "System.Double": return "global::System.BitConverter.Int64BitsToDouble(" + receiver + ".Int64(" + number + "))";
+            case "System.Single": return "global::System.BitConverter.ToSingle(global::System.BitConverter.GetBytes(" + receiver + ".UInt32(" + number + ")), 0)";
+        }
         if (result.FullName == "System.Object") return Inspectable(receiver + ".Object(" + number + ")");
         if (result.FullName == "Windows.Foundation.TimeSpan") return "new global::System.TimeSpan(" + receiver + ".Int64(" + number + "))";
+        // The CLR projects DateTime, FILETIME ticks in UTC, as a local DateTimeOffset.
+        if (result.FullName == DateTimeName) return "global::System.DateTimeOffset.FromFileTime(" + receiver + ".Int64(" + number + "))";
         var view = result as GenericInstanceType;
         if (view != null && view.ElementType.FullName == MapViewName)
             return Runtime + "NativeStringMapView<" + Name(MapViewValue(view)) + ">.Wrap(" + receiver + ".Object(" + number + "), " +
@@ -305,27 +323,9 @@ internal static partial class WinrtProjectionGenerator
         foreach (MethodDefinition method in methods) MethodOverload(output, type, method, composable, methods.Count > 1);
     }
 
-    private static void MethodOverload(StringBuilder output, TypeDefinition type, MethodDefinition method, bool composable, bool overloaded)
+    // The ABI parameters, the using lines that prepare them, and the call arguments of a method.
+    private static void MarshalArguments(TypeDefinition type, MethodDefinition method, List<string> abi, List<string> setup, List<string> arguments)
     {
-        string name = method.Name;
-        bool returns = method.ReturnType.FullName != "System.Void";
-        bool enumResult = returns && Available(method.ReturnType.FullName) && Find(method.ReturnType.FullName).IsEnum;
-        string scalarResult = Scalar(method.ReturnType);
-        bool stringResult = method.ReturnType.FullName == "System.String";
-        string resultAbi = scalarResult ?? "global::System.IntPtr";
-        if (enumResult)
-        {
-            string width = Find(method.ReturnType.FullName).Fields.Single(f => f.Name == "value__").FieldType.FullName;
-            if (width != "System.Int32" && width != "System.UInt32") throw new NotSupportedException("Unsupported enum return: " + method.ReturnType.FullName);
-            resultAbi = width == "System.Int32" ? "int" : "uint";
-        }
-        else if (returns && scalarResult == null && !stringResult && method.ReturnType.FullName != "System.Object") Parameter(method.ReturnType, type.FullName + "." + name);
-        TypeDefinition owner = MemberInterface(type, method);
-        int slot = Slot(owner, method);
-        string nativeName = name + (overloaded ? "_" + Literal(slot) : "");
-        var abi = new List<string>();
-        var setup = new List<string>();
-        var arguments = new List<string>();
         foreach (ParameterDefinition parameter in method.Parameters)
         {
             string full = parameter.ParameterType.FullName, value = "@" + parameter.Name;
@@ -333,6 +333,12 @@ internal static partial class WinrtProjectionGenerator
             // A fill array is [out] but passed by value; a receive array is by reference.
             if ((parameter.IsOut && !(parameter.ParameterType is ArrayType)) || parameter.ParameterType.IsByReference || parameter.ParameterType.IsPointer)
                 throw new NotSupportedException("Unsupported parameter: " + method.FullName + " " + parameter.Name);
+            if (full == DateTimeName)
+            {
+                abi.Add("long " + local);
+                arguments.Add(value + ".ToFileTime()");
+                continue;
+            }
             string scalar = Scalar(parameter.ParameterType);
             if (scalar != null)
             {
@@ -370,7 +376,7 @@ internal static partial class WinrtProjectionGenerator
             }
             else
             {
-                TypeDefinition definition = Parameter(parameter.ParameterType, type.FullName + "." + name);
+                TypeDefinition definition = Parameter(parameter.ParameterType, type.FullName + "." + method.Name);
                 prepare = IsDelegate(definition) ? Runtime + "ManagedObject.Hold(" + value + ", " + Projected(definition) + ".Interface)"
                     : Argument(parameter.ParameterType, value);
             }
@@ -380,6 +386,30 @@ internal static partial class WinrtProjectionGenerator
             abi.Add(native + " " + local);
             setup.Add("                using (var " + local + " = " + prepare + ")");
         }
+    }
+
+    private static void MethodOverload(StringBuilder output, TypeDefinition type, MethodDefinition method, bool composable, bool overloaded)
+    {
+        string name = method.Name;
+        bool returns = method.ReturnType.FullName != "System.Void";
+        bool enumResult = returns && Available(method.ReturnType.FullName) && Find(method.ReturnType.FullName).IsEnum;
+        string scalarResult = Scalar(method.ReturnType);
+        bool stringResult = method.ReturnType.FullName == "System.String";
+        string resultAbi = scalarResult ?? "global::System.IntPtr";
+        if (enumResult)
+        {
+            string width = Find(method.ReturnType.FullName).Fields.Single(f => f.Name == "value__").FieldType.FullName;
+            if (width != "System.Int32" && width != "System.UInt32") throw new NotSupportedException("Unsupported enum return: " + method.ReturnType.FullName);
+            resultAbi = width == "System.Int32" ? "int" : "uint";
+        }
+        else if (returns && scalarResult == null && !stringResult && method.ReturnType.FullName != "System.Object") Parameter(method.ReturnType, type.FullName + "." + name);
+        TypeDefinition owner = MemberInterface(type, method);
+        int slot = Slot(owner, method);
+        string nativeName = name + (overloaded ? "_" + Literal(slot) : "");
+        var abi = new List<string>();
+        var setup = new List<string>();
+        var arguments = new List<string>();
+        MarshalArguments(type, method, abi, setup, arguments);
         output.AppendLine("        " + StdCall);
         output.AppendLine("        private delegate int Native_" + nativeName + "(global::System.IntPtr self" +
             string.Concat(abi.Select(p => ", " + p)) + (returns ? ", out " + resultAbi + " result" : "") + ");");
@@ -730,12 +760,17 @@ internal static partial class WinrtProjectionGenerator
         var members = new List<string>();
         foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
         {
+            if (member.Name != "Property" && lenient)
+            {
+                Console.Error.WriteLine("Omitted " + iface.FullName + "." + member.GetAttribute("Name") + ": interface " + member.Name.ToLowerInvariant());
+                continue;
+            }
             if (member.Name != "Property") throw new NotSupportedException("Unsupported member kind: " + iface.FullName + "." + member.Name);
             if (members.Contains(member.GetAttribute("Name")))
                 throw new InvalidDataException("Duplicate property: " + iface.FullName + "." + member.GetAttribute("Name"));
             members.Add(member.GetAttribute("Name"));
         }
-        if (members.Count == 0 && iface.Methods.Count != 0) throw new InvalidDataException("Empty runtime surface: " + iface.FullName);
+        if (members.Count == 0 && iface.Methods.Count != 0 && !lenient) throw new InvalidDataException("Empty runtime surface: " + iface.FullName);
         return members;
     }
 
@@ -958,6 +993,90 @@ internal static partial class WinrtProjectionGenerator
             .Select(i => Find(i.InterfaceType.FullName)).ToList();
     }
 
+    // Component mode: a member the generator cannot express becomes a stub with its
+    // exact signature that names itself and throws, as the completed Windows.dll's
+    // do, so one unsupported member does not cost the game the whole component.
+    private static bool lenient;
+
+    private static void Member(StringBuilder output, TypeDefinition type, XmlElement member, Action<StringBuilder> emit, MethodDefinition constructor = null)
+    {
+        var buffer = new StringBuilder();
+        try { emit(buffer); output.Append(buffer); return; }
+        catch (Exception error)
+        {
+            if (!lenient || !(error is NotSupportedException || error is InvalidDataException)) throw;
+            string name = constructor != null ? ".ctor" : member.GetAttribute("Name");
+            Console.Error.WriteLine("Stubbed " + type.FullName + "." + name + ": " + error.Message);
+            var stubs = constructor != null ? new[] { constructor }
+                : member.Name == "Property" ? type.Properties.Where(p => p.Name == name).SelectMany(p => new[] { p.GetMethod, p.SetMethod }).Where(m => m != null).ToArray()
+                : member.Name == "Event" ? type.Events.Where(e => e.Name == name).SelectMany(e => new[] { e.AddMethod, e.RemoveMethod }).ToArray()
+                : type.Methods.Where(m => m.Name == name && !m.IsConstructor).ToArray();
+            foreach (MethodDefinition method in stubs) Stub(output, type, method);
+        }
+    }
+
+    private static void Stub(StringBuilder output, TypeDefinition type, MethodDefinition method)
+    {
+        string signature;
+        try
+        {
+            string parameters = string.Join(", ", method.Parameters.Select(p => (p.ParameterType.IsByReference
+                ? (p.IsOut ? "out " : "ref ") + StubName(((ByReferenceType)p.ParameterType).ElementType) : StubName(p.ParameterType)) + " @" + p.Name));
+            signature = method.IsConstructor ? type.Name + "(" + parameters + ")"
+                : (method.IsStatic ? "static " : "") + (method.ReturnType.FullName == "System.Void" ? "void" : StubName(method.ReturnType)) + " " + method.Name + "(" + parameters + ")";
+        }
+        catch (Exception error)
+        {
+            if (!(error is NotSupportedException || error is InvalidDataException)) throw;
+            Console.Error.WriteLine("Omitted " + type.FullName + "." + method.Name + ": " + error.Message);
+            return;
+        }
+        output.AppendLine("        public " + signature + " { throw " + Runtime + "Errors.Unimplemented(\"" + type.FullName + "." + method.Name + "\"); }");
+    }
+
+    private const string ActivatableName = "Windows.Foundation.Metadata.ActivatableAttribute";
+    private const string DateTimeName = "Windows.Foundation.DateTime";
+
+    // A constructor with arguments calls the matching method of an [Activatable(typeof(IFactory))] interface.
+    private static void FactoryConstructor(StringBuilder output, TypeDefinition type, TypeDefinition primary, MethodDefinition constructor)
+    {
+        var signature = constructor.Parameters.Select(p => p.ParameterType.FullName).ToList();
+        var matches = type.CustomAttributes
+            .Where(a => a.AttributeType.FullName == ActivatableName && a.ConstructorArguments.Count >= 2 && a.ConstructorArguments[0].Value is TypeReference)
+            .Select(a => Find(((TypeReference)a.ConstructorArguments[0].Value).FullName))
+            .SelectMany(f => f.Methods.Where(m => m.ReturnType.FullName == type.FullName &&
+                m.Parameters.Select(p => p.ParameterType.FullName).SequenceEqual(signature)).Select(m => new { Factory = f, Method = m }))
+            .ToList();
+        if (matches.Count != 1) throw new NotSupportedException("No activation factory method for: " + constructor.FullName);
+        TypeDefinition factory = matches[0].Factory;
+        MethodDefinition create = matches[0].Method;
+        int slot = Slot(factory, create);
+        var abi = new List<string>();
+        var setup = new List<string>();
+        var arguments = new List<string>();
+        MarshalArguments(type, create, abi, setup, arguments);
+        string native = "Native_" + factory.Name + "_" + Literal(slot);
+        output.AppendLine("        " + StdCall);
+        output.AppendLine("        private delegate int " + native + "(global::System.IntPtr self" + string.Concat(abi.Select(p => ", " + p)) + ", out global::System.IntPtr result);");
+        output.AppendLine("        // " + factory.FullName + "::" + create.Name + ", slot " + Literal(slot));
+        output.AppendLine("        public " + type.Name + "(" + string.Join(", ", create.Parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ")");
+        output.AppendLine("        {");
+        output.AppendLine("            using (var invocation = " + Runtime + "Errors.Begin())");
+        output.AppendLine("            {");
+        output.AppendLine("                using (var activation = " + Runtime + "NativeObject.Factory(\"" + type.FullName + "\", " + Guid(factory) + "))");
+        foreach (string line in setup) output.AppendLine(line);
+        output.AppendLine("                using (var call = new " + Runtime + "NativeObject.Access(activation))");
+        output.AppendLine("                {");
+        output.AppendLine("                    global::System.IntPtr result;");
+        output.AppendLine("                    int hr = call.Method<" + native + ">(" + Literal(slot) + ")(call.Self" + string.Concat(arguments.Select(p => ", " + p)) + ", out result);");
+        output.AppendLine("                    using (var created = " + Runtime + "NativeObject.TakeResult(hr, result))");
+        output.AppendLine("                        native = created.QueryInterface(" + Guid(primary) + ");");
+        output.AppendLine("                }");
+        output.AppendLine("            }");
+        output.AppendLine("            " + Runtime + "NativeObject.Remember(this, native);");
+        output.AppendLine("        }");
+    }
+
     private const string ClosableName = "Windows.Foundation.IClosable";
     private static bool Closable(TypeDefinition type)
     {
@@ -1009,19 +1128,20 @@ internal static partial class WinrtProjectionGenerator
             foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
             {
                 string name = member.GetAttribute("Name");
-                if (member.Name == "Property" && type.Properties.Any(p => p.Name == name && p.GetMethod.IsStatic)) Property(output, type, name, false);
-                else if (member.Name == "Method" && type.Methods.Any(m => m.Name == name && m.IsStatic)) Method(output, type, name, false);
-                else if (member.Name == "Event" && type.Events.Any(e => e.Name == name && e.AddMethod != null && e.AddMethod.IsStatic)) Event(output, type, name, false);
+                if (member.Name == "Property" && type.Properties.Any(p => p.Name == name && p.GetMethod.IsStatic)) Member(output, type, member, o => Property(o, type, name, false));
+                else if (member.Name == "Method" && type.Methods.Any(m => m.Name == name && m.IsStatic)) Member(output, type, member, o => Method(o, type, name, false));
+                else if (member.Name == "Event" && type.Events.Any(e => e.Name == name && e.AddMethod != null && e.AddMethod.IsStatic)) Member(output, type, member, o => Event(o, type, name, false));
                 else throw new NotSupportedException("Unsupported static member: " + type.FullName + "." + name);
             }
             output.AppendLine("    }");
             return;
         }
         TypeDefinition primary = DefaultInterface(type);
-        if (constructor && !composable && (baseClass != null || !type.Methods.Any(m => m.IsConstructor && m.Parameters.Count == 0) ||
-            !type.CustomAttributes.Any(a => a.AttributeType.FullName == "Windows.Foundation.Metadata.ActivatableAttribute" &&
-                a.ConstructorArguments[0].Type.FullName == "System.UInt32")))
-            throw new NotSupportedException("No default activation constructor: " + type.FullName);
+        bool direct = type.Methods.Any(m => m.IsConstructor && !m.IsStatic && m.Parameters.Count == 0) &&
+            type.CustomAttributes.Any(a => a.AttributeType.FullName == ActivatableName && a.ConstructorArguments[0].Type.FullName == "System.UInt32");
+        var factored = type.Methods.Where(m => m.IsConstructor && !m.IsStatic && m.IsPublic && m.Parameters.Count != 0).ToList();
+        if (constructor && !composable && (baseClass != null || !direct && factored.Count == 0))
+            throw new NotSupportedException("No activation constructor: " + type.FullName);
         if (overridden.Count != 0 && !constructor) throw new InvalidDataException("Overridable without Constructor: " + type.FullName);
 
         // Overridable interfaces with a selected member are answered by the managed outer;
@@ -1090,6 +1210,9 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("            using (value) return new " + type.Name + "(value.QueryInterface(" + Guid(primary) + "));");
         output.AppendLine("        }");
         if (constructor && !composable)
+            foreach (MethodDefinition factoryConstructor in factored)
+                Member(output, type, null, o => FactoryConstructor(o, type, primary, factoryConstructor), factoryConstructor);
+        if (constructor && !composable && direct)
         {
             output.AppendLine("        // IActivationFactory::ActivateInstance, slot 6; default interface from WinMD.");
             output.AppendLine("        public " + type.Name + "()");
@@ -1175,9 +1298,9 @@ internal static partial class WinrtProjectionGenerator
         foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
         {
             if (member.Name == "Method" && closable && member.GetAttribute("Name") == "Close") Dispose(output);
-            else if (member.Name == "Property") Property(output, type, member.GetAttribute("Name"), query);
-            else if (member.Name == "Method") Method(output, type, member.GetAttribute("Name"), query);
-            else if (member.Name == "Event") Event(output, type, member.GetAttribute("Name"), query);
+            else if (member.Name == "Property") Member(output, type, member, o => Property(o, type, member.GetAttribute("Name"), query));
+            else if (member.Name == "Method") Member(output, type, member, o => Method(o, type, member.GetAttribute("Name"), query));
+            else if (member.Name == "Event") Member(output, type, member, o => Event(o, type, member.GetAttribute("Name"), query));
         }
         foreach (string name in implemented)
         {
@@ -1201,6 +1324,7 @@ internal static partial class WinrtProjectionGenerator
         {
             if (args.Length < 3) throw new ArgumentException("generator METADATA_DIRECTORY SURFACE_XML OUTPUT_CS | generator --component INPUT_WINMD OUTPUT_CS");
             bool component = args[0] == "--component";
+            lenient = component;
             string metadata = component ? Path.GetDirectoryName(Path.GetFullPath(args[1])) : args[0];
             var resolver = new DefaultAssemblyResolver();
             resolver.AddSearchDirectory(metadata);

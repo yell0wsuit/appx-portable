@@ -133,6 +133,28 @@ public:
     HRESULT STDMETHODCALLTYPE RaiseExternal() override { return external_ ? external_->Invoke(node_.Get()) : S_OK; }
 };
 // Like a C++/CX engine creating a Platform::Exception in its constructor: the
+MIDL_INTERFACE("8c1f2a90-6d3e-4b57-9e21-3a4c5d6e7f80") IGauge : IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE get_Name(HSTRING*) = 0;
+};
+MIDL_INTERFACE("5b2e7c41-9a0d-4f3b-8c62-1d4e5f6a7b8c") IGaugeFactory : IInspectable {
+    virtual HRESULT STDMETHODCALLTYPE Create(HSTRING, IGauge**) = 0;
+};
+class Gauge final : public RuntimeClass<RuntimeClassFlags<WinRt>, IGauge> {
+    InspectableClass(L"Example.Component.Gauge", BaseTrust);
+    HString name_;
+
+public:
+    explicit Gauge(HSTRING name) { name_.Set(name); }
+    HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override { return name_.CopyTo(value); }
+};
+class GaugeFactory final : public ActivationFactory<Implements<IActivationFactory>, IGaugeFactory> {
+public:
+    HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) noexcept override {
+        *value = nullptr;
+        return E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE Create(HSTRING name, IGauge** value) override { return Make<Gauge>(name).CopyTo(value); }
+};
 // call goes through a dependency the component, not the game, loaded.
 extern "C" HRESULT __cdecl ReportComponentFailure();
 class EngineFactory final : public ActivationFactory<Implements<IActivationFactory>> {
@@ -146,6 +168,8 @@ extern "C" HRESULT WINAPI DllGetActivationFactory(HSTRING name, IActivationFacto
     *factory = nullptr;
     if (wcscmp(WindowsGetStringRawBuffer(name, nullptr), L"Example.External.Node") == 0)
         return Make<NodeFactory>().CopyTo(factory);
+    if (wcscmp(WindowsGetStringRawBuffer(name, nullptr), L"Example.Component.Gauge") == 0)
+        return Make<GaugeFactory>().CopyTo(factory);
     if (wcscmp(WindowsGetStringRawBuffer(name, nullptr), L"Example.Component.Engine") != 0)
         return CLASS_E_CLASSNOTAVAILABLE;
     return Make<EngineFactory>().CopyTo(factory);

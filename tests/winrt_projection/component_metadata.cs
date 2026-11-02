@@ -137,6 +137,31 @@ class ComponentMetadata
                     AddMethod = engine.Methods.Single(m => m.Name == "add_ExternalChanged"),
                     RemoveMethod = engine.Methods.Single(m => m.Name == "remove_ExternalChanged")
                 });
+            // Gauge(string): activated through its factory interface, not ActivateInstance.
+            var gaugeInterface = Type("IGauge", TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract, null);
+            Attribute(gaugeInterface, "Guid", ts.String, "8c1f2a90-6d3e-4b57-9e21-3a4c5d6e7f80");
+            var getName = Method(gaugeInterface, "get_Name", ts.String);
+            gaugeInterface.Properties.Add(new PropertyDefinition("Name", PropertyAttributes.None, ts.String) { GetMethod = getName });
+            var gauge = Type("Gauge", TypeAttributes.Public | TypeAttributes.Sealed, ts.Object);
+            var gaugeFactory = Type("IGaugeFactory", TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract, null);
+            Attribute(gaugeFactory, "Guid", ts.String, "5b2e7c41-9a0d-4f3b-8c62-1d4e5f6a7b8c");
+            Method(gaugeFactory, "Create", gauge, ts.String);
+            Default(gauge, gaugeInterface);
+            var activatable = new TypeReference("Windows.Foundation.Metadata", "ActivatableAttribute", module, ts.CoreLibrary);
+            var factoryActivation = new MethodReference(".ctor", ts.Void, activatable) { HasThis = true };
+            var systemType = module.ImportReference(typeof(Type));
+            factoryActivation.Parameters.Add(new ParameterDefinition(systemType));
+            factoryActivation.Parameters.Add(new ParameterDefinition(ts.UInt32));
+            var gaugeActivation = new CustomAttribute(factoryActivation);
+            gaugeActivation.ConstructorArguments.Add(new CustomAttributeArgument(systemType, gaugeFactory));
+            gaugeActivation.ConstructorArguments.Add(new CustomAttributeArgument(ts.UInt32, (uint)1));
+            gauge.CustomAttributes.Add(gaugeActivation);
+            var gaugeConstructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName | MethodAttributes.HideBySig, ts.Void);
+            gaugeConstructor.Parameters.Add(new ParameterDefinition("name", ParameterAttributes.In, ts.String));
+            gaugeConstructor.ImplAttributes = MethodImplAttributes.Runtime;
+            gauge.Methods.Add(gaugeConstructor);
+            var gaugeName = Method(gauge, "get_Name", ts.String);
+            gauge.Properties.Add(new PropertyDefinition("Name", PropertyAttributes.None, ts.String) { GetMethod = gaugeName });
             if (args.Length > 1 && args[1] == "unsupported") { engine.Methods[1].Parameters[0].ParameterType = new ByReferenceType(ts.Int32); iface.Methods[0].Parameters[0].ParameterType = new ByReferenceType(ts.Int32); }
             if (args.Length > 1 && args[1] == "culture") assembly.Name.Culture = "fr";
             if (args.Length > 1 && args[1] == "signed") { assembly.Name.PublicKey = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }; assembly.Name.HasPublicKey = true; }
