@@ -24,6 +24,7 @@
   <Class Name="Windows.UI.Xaml.Application">
     <Constructor />
     <Property Name="Current" />
+    <Property Name="Resources" />
     <Method Name="Start" />
     <Method Name="LoadComponent" />
     <Method Name="Exit" />
