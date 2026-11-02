@@ -96,6 +96,23 @@ class StorageIoProjectionTest
             await completed.Task;
             Check(ReferenceEquals(load.Completed, handler) && load.ErrorCode == null, "load completion delegate round trip");
         }
+        // Device-ID reads use OpenAsync(Read), rather than OpenReadAsync.
+        using (IRandomAccessStream native = await file.OpenAsync(FileAccessMode.Read))
+        using (var reader = new DataReader(native.GetInputStreamAt(0)))
+        {
+            Check(native.CanRead && !native.CanWrite && native.Size == (ulong)bytes.Length, "OpenAsync read-only stream");
+            Check(await reader.LoadAsync((uint)bytes.Length) == bytes.Length &&
+                reader.ReadString((uint)bytes.Length) == System.Text.Encoding.UTF8.GetString(bytes), "OpenAsync device-ID text");
+        }
+        try { await file.OpenAsync(FileAccessMode.ReadWrite); throw new Exception("writable stream fabricated"); }
+        catch (NotImplementedException) { }
+        string gonePath = Path.GetFullPath("open-vanished.bin");
+        File.WriteAllBytes(gonePath, bytes);
+        StorageFile gone = await StorageFile.GetFileFromPathAsync(gonePath);
+        File.Delete(gonePath);
+        var failedOpen = gone.OpenAsync(FileAccessMode.Read);
+        try { await failedOpen; throw new Exception("deleted file opened"); } catch (FileNotFoundException) { }
+        Check(failedOpen.Status == Windows.Foundation.AsyncStatus.Error && failedOpen.ErrorCode is FileNotFoundException, "OpenAsync native failure");
         var local = Windows.Storage.ApplicationData.Current.LocalFolder;
         string localPath = Path.Combine(local.Path, "saved.bin"); File.WriteAllBytes(localPath, bytes);
         StorageFile saved = await local.GetFileAsync("saved.bin");
