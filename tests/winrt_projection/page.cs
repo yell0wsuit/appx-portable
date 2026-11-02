@@ -40,6 +40,19 @@ class PageApp : Application
     static extern int SetApplicationViewOrientation(int portrait);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int CheckApplicationViewState(int value);
+    static void VerifyApplicationResources()
+    {
+        var app = Application.Current;
+        var original = app.Resources;
+        Check(original != null && ReferenceEquals(original, app.Resources), "default application resource dictionary identity");
+        var replacement = new ResourceDictionary();
+        app.Resources = replacement;
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        Check(ReferenceEquals(app.Resources, replacement), "assigned application resource dictionary identity");
+        app.Resources = original;
+        Check(ReferenceEquals(app.Resources, original), "restored application resource dictionary identity");
+        Console.WriteLine("PASS: Application.Resources retains a default dictionary and assigned managed dictionaries");
+    }
     static void VerifyApplicationView()
     {
         Check((int)Windows.UI.ViewManagement.ApplicationViewState.FullScreenLandscape == 0 &&
@@ -321,6 +334,7 @@ class PageApp : Application
         VerifyVisibility(page);
         VerifyFrameContent(page);
         VerifyWindowSize();
+        VerifyApplicationResources();
         VerifyApplicationView();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");

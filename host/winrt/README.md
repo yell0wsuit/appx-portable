@@ -605,6 +605,10 @@ lazily per element. The managed constructor, property getter/setter and inherite
 local dependency values use the native ABI. Native games retain their existing
 hosting route, and system XAML remains in charge in Islands mode.
 
+Application.Resources uses the same native dictionary with a lazy default per
+application. Its managed getter/setter preserve dictionary identity and retain
+assigned dictionaries. This does not load application-level XAML resources.
+
 The native IResourceDictionary also implements IMap<object,object> and its
 iterable contract. This slice accepts boxed string keys using ordinal string
 comparison. Insert reports replacement, missing keys return E_BOUNDS, null values

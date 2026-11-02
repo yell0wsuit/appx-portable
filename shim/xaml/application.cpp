@@ -9,6 +9,7 @@
 #include "xbf.h"
 #include "element.h"
 #include "source.h"
+#include "resources.h"
 #include "compat/win10/xaml.h"
 #include <shlwapi.h>
 #include <xmllite.h>
@@ -258,7 +259,9 @@ public:
     }
     HRESULT STDMETHODCALLTYPE get_Resources(IResourceDictionary** value) override {
         if (!value) return E_POINTER;
-        return resources_.CopyTo(value);
+        *value = nullptr;
+        auto hr = resources_ ? S_OK : MakeResourceDictionary(&resources_);
+        return FAILED(hr) ? hr : resources_.CopyTo(value);
     }
     HRESULT STDMETHODCALLTYPE put_Resources(IResourceDictionary* value) override {
         resources_ = value;

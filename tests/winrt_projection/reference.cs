@@ -30,6 +30,7 @@ namespace Windows.UI.Xaml
         public Application() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application..ctor"); }
         public static void LoadComponent(object component, global::System.Uri uri) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.LoadComponent"); }
         public static void LoadComponent(object component, global::System.Uri uri, global::Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation location) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.LoadComponent"); }
+        public ResourceDictionary Resources { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public static Application Current { get { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.Current"); } }
         public static void Start(ApplicationInitializationCallback callback) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.Start"); }
         public void Exit() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Application.Exit"); }
