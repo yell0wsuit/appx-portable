@@ -67,8 +67,9 @@ internal static partial class WinrtProjectionGenerator
         if (type.FullName == "System.Object") throw new NotSupportedException("Object is wrapped by Unwrap");
         Name(type);
         if (type.FullName == "Windows.Foundation.Uri") return Projected(Find(type.FullName));
-        // The hand-written storage adapter wraps native buffers.
+        // The hand-written storage adapter wraps native buffers and actions.
         if (type.FullName == "Windows.Storage.Streams.IBuffer") return "global::Windows.Storage.Streams.Buffer";
+        if (type.FullName == "Windows.Foundation.IAsyncAction") return Runtime + "NativeAction";
         return interfaces.ContainsKey(type.FullName) ? Projected(Find(type.FullName)) : "global::" + type.FullName;
     }
 

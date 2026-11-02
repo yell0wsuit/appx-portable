@@ -114,7 +114,11 @@
     <Method Name="GetForCurrentThread" />
     <Property Name="Dispatcher" />
   </Class>
-  <Class Name="Windows.UI.Core.CoreDispatcher" />
+  <Class Name="Windows.UI.Core.CoreDispatcher">
+    <Method Name="RunAsync" />
+  </Class>
+  <Enum Name="Windows.UI.Core.CoreDispatcherPriority" />
+  <Delegate Name="Windows.UI.Core.DispatchedHandler" />
   <Class Name="Windows.Storage.ApplicationData">
     <Property Name="Current" />
     <Property Name="LocalSettings" />

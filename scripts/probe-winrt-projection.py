@@ -25,6 +25,7 @@ HEADER_IIDS = {
     "IActivatedEventArgs": "cf651713-cd08-4fd8-b697-a281b6544e2e", "IWindowStatics": "93328409-4ea1-4afa-83dc-0c4e73e88bb1",
     "IWindow": "3276167d-c9f6-462d-9de2-ae4c1fd8c2e5", "IFrameFactory": "02ee93d4-448e-469e-9799-0a8a1f70f171",
     "IWindowSizeChangedEventHandler": "5c21c742-2ced-4fd9-ba38-7118d40e966b",
+    "ICoreDispatcher": "60db2fa8-b705-4fde-a7d6-ebbb1891d39e", "IDispatchedHandler": "d1f276c4-98d8-4636-bf49-eb79507548e9",
     "IWindowSizeChangedEventArgs": "5a200ec7-0426-47dc-b86c-6f475915e451",
     "IDependencyObject": "5c526665-f60e-4912-af59-5fe0680f089d",
     "IDependencyProperty": "85b13970-9bc4-4e96-acf1-30c8fd3d55c8",
@@ -103,6 +104,7 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.Controls.IContentControl::get_Content, slot 6", "Windows.UI.Xaml.Controls.IContentControl::put_Content, slot 7",
     "Windows.UI.Xaml.IDispatcherTimer::get_Interval, slot 6", "Windows.UI.Xaml.IDispatcherTimer::put_Interval, slot 7",
     "Windows.UI.Xaml.IDispatcherTimer::add_Tick, slot 9", "Windows.UI.Xaml.IDispatcherTimer::remove_Tick, slot 10",
+    "Windows.UI.Core.ICoreDispatcher::RunAsync, slot 8",
     "Windows.UI.Xaml.IDispatcherTimer::Start, slot 11", "Windows.UI.Xaml.IDispatcherTimer::Stop, slot 12",
     "Windows.UI.Xaml.Markup.IComponentConnector::Connect, slot 6",
     "Windows.Foundation.IUriRuntimeClass::get_AbsoluteUri, slot 6", "Windows.Foundation.IUriRuntimeClassFactory::CreateUri, slot 6",
@@ -287,10 +289,10 @@ def main():
 
     def probe_page(projection):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
-        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "IDispatcherTimer", "EventHandler<IInspectable>", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs"):
+        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "IDispatcherTimer", "EventHandler<IInspectable>", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs", "ICoreDispatcher", "IDispatchedHandler"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
-            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IDispatcherTimer::", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged")):
+            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IDispatcherTimer::", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged", "ICoreDispatcher::RunAsync")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
         mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri")):
