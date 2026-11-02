@@ -316,12 +316,21 @@ def main():
 
     def probe_page(projection):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
+        # Closed resource map IDs from windows.ui.xaml.h, independent of WinMD.
+        for iid in ("f5f69427-55ed-5512-8429-d4f6626dfcdd", "33ac68f0-1084-529a-8a17-4e7c8adb7a0c"):
+            require(iid in generated, "ResourceDictionary collection IID differs from SDK header: " + iid)
         for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "IDispatcherTimer", "EventHandler<IInspectable>", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs", "ICoreDispatcher", "IDispatchedHandler", "IDataTransferManager", "IDataTransferManagerStatics", "TypedEventHandler<DataTransferManager, DataRequestedEventArgs>"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
             if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IDispatcherTimer::", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged", "ICoreDispatcher::RunAsync", "IDataTransferManager", ".IDataTransferManagerStatics::")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
         mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
+        mutated = output / "resource-map-shape"
+        target = output / "resource-map-shape.cs"
+        run("mutate-resource-map", [mutator.name, windows(metadata), windows(mutated), "resource-map"])
+        run("reject-resource-map", ["generator.exe", windows(mutated), windows(repo / "host/winrt/bootstrap.xml"), windows(target)],
+            succeeds=False, marker="Unsupported object map adapter: Windows.UI.Xaml.ResourceDictionary")
+        require(not target.exists(), "invalid object map shape produced a usable output")
         for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri")):
             mutated = output / kind
             run("mutate-" + kind, [mutator.name, windows(metadata), windows(mutated), kind])

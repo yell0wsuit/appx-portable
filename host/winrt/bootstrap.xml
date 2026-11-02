@@ -69,7 +69,7 @@
   </Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.FadeInThemeAnimation" />
   <Class Name="Windows.UI.Xaml.Media.Animation.FadeOutThemeAnimation" />
-  <Class Name="Windows.UI.Xaml.ResourceDictionary">
+  <Class Name="Windows.UI.Xaml.ResourceDictionary" Adapter="ObjectMap">
     <Constructor />
   </Class>
   <Class Name="Windows.UI.Xaml.FrameworkElement">

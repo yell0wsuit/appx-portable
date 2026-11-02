@@ -617,8 +617,12 @@ references. Read-only views and enumeration use snapshots; pairs and iterators
 retain their own keys and values. Views support Split and iterators support
 GetMany. Dictionary and snapshot operations enforce their creating thread.
 Non-string keys, non-null Source, merged dictionaries and theme dictionaries
-fail explicitly. Managed dictionary indexer/enumeration projection is still
-unselected; native map behavior is verified through the SDK ABI.
+fail explicitly. The managed ResourceDictionary implements
+`IDictionary<object, object>` over that native map. Its indexer, mutation,
+key/value views and snapshot enumeration preserve object identity and distinguish
+missing keys from present null values. The class keeps its DependencyObject
+inheritance. Object keys use IInspectable boxing; the native resource engine
+currently accepts only strings. No managed shadow dictionary is created.
 
 The source loader accepts `<Page.Resources>`, `<Frame.Resources>` and
 `<Grid.Resources>` with implicit entries or a sole explicit ResourceDictionary.

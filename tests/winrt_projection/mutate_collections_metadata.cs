@@ -17,6 +17,7 @@ class MutateCollectionsMetadata
                 string name;
                 switch (args[2])
                 {
+                    case "resource-map": name = "Windows.UI.Xaml.ResourceDictionary"; break;
                     case "visibility-width": name = "Windows.UI.Xaml.Visibility"; break;
                     case "connector-id": name = "Windows.UI.Xaml.Markup.IComponentConnector"; break;
                     case "uri-return": name = "Windows.Foundation.IUriRuntimeClass"; break;
@@ -38,7 +39,12 @@ class MutateCollectionsMetadata
                 }
                 var type = module.Types.SingleOrDefault(t => t.FullName == name);
                 if (type == null) { File.Copy(path, target, true); continue; }
-                if (args[2] == "visibility-width") type.Fields.Single(f => f.Name == "value__").FieldType = module.TypeSystem.Int64;
+                if (args[2] == "resource-map")
+                {
+                    var map = (GenericInstanceType)type.Interfaces.Single(i => i.InterfaceType.FullName == "Windows.Foundation.Collections.IMap`2<System.Object,System.Object>").InterfaceType;
+                    map.GenericArguments[0] = module.TypeSystem.String;
+                }
+                else if (args[2] == "visibility-width") type.Fields.Single(f => f.Name == "value__").FieldType = module.TypeSystem.Int64;
                 else if (args[2] == "connector-id") type.Methods.Single(m => m.Name == "Connect").Parameters[0].ParameterType = module.TypeSystem.Int64;
                 else if (args[2] == "uri-return") type.Methods.Single(m => m.Name == "get_AbsoluteUri").ReturnType = module.TypeSystem.Object;
                 else if (args[2] == "uri-factory") type.Methods.Single(m => m.Name == "CreateUri").Parameters[0].ParameterType = module.TypeSystem.IntPtr;

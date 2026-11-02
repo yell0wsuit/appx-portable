@@ -899,15 +899,9 @@ internal static partial class WinrtProjectionGenerator
             ", MoveNext = " + Literal(NamedSlot(iterator, "MoveNext")) + ", Key = " + Literal(NamedSlot(pair, "get_Key")) +
             ", Value = " + Literal(NamedSlot(pair, "get_Value")) + " }";
     }
-    private static void DictionaryInterface(StringBuilder output, TypeDefinition type, XmlElement surface)
+    private static void ValidateMap()
     {
-        if (surface.GetAttribute("Adapter") != "StringObjectMap" || type.Methods.Count != 0 || surface.HasChildNodes ||
-            !type.Interfaces.Any(i => i.InterfaceType.FullName == "Windows.Foundation.Collections.IMap`2<System.String,System.Object>"))
-            throw new NotSupportedException("Unsupported dictionary adapter: " + type.FullName);
         var map = Find("Windows.Foundation.Collections.IMap`2");
-        var iterable = Find("Windows.Foundation.Collections.IIterable`1");
-        var iterator = Find("Windows.Foundation.Collections.IIterator`1");
-        var pair = Find("Windows.Foundation.Collections.IKeyValuePair`2");
         if (!map.Methods.Select(m => m.Name).SequenceEqual(new[] { "Lookup", "get_Size", "HasKey", "GetView", "Insert", "Remove", "Clear" }))
             throw new NotSupportedException("Unsupported collection ABI: " + map.FullName + " method order");
         IterationContract();
@@ -917,6 +911,17 @@ internal static partial class WinrtProjectionGenerator
         CollectionMethod(map, 2, "Insert", "(!0,!1)->System.Boolean");
         CollectionMethod(map, 2, "Remove", "(!0)->System.Void");
         CollectionMethod(map, 2, "Clear", "()->System.Void");
+    }
+    private static void DictionaryInterface(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        if (surface.GetAttribute("Adapter") != "StringObjectMap" || type.Methods.Count != 0 || surface.HasChildNodes ||
+            !type.Interfaces.Any(i => i.InterfaceType.FullName == "Windows.Foundation.Collections.IMap`2<System.String,System.Object>"))
+            throw new NotSupportedException("Unsupported dictionary adapter: " + type.FullName);
+        var map = Find("Windows.Foundation.Collections.IMap`2");
+        var iterable = Find("Windows.Foundation.Collections.IIterable`1");
+        var iterator = Find("Windows.Foundation.Collections.IIterator`1");
+        var pair = Find("Windows.Foundation.Collections.IKeyValuePair`2");
+        ValidateMap();
         string pairSignature = "pinterface({" + Iid(pair) + "};string;cinterface(IInspectable))";
         string wrapper = type.FullName.Replace('.', '_');
         output.AppendLine("    public interface " + type.Name + " : global::System.Collections.Generic.IDictionary<string, object> { }");
@@ -925,7 +930,7 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("{");
         output.AppendLine("    internal sealed class " + wrapper + " : " + Runtime + "NativeStringObjectMap, global::" + type.FullName);
         output.AppendLine("    {");
-        output.AppendLine("        private static readonly " + Runtime + "StringObjectMapAbi abi = new " + Runtime + "StringObjectMapAbi {");
+        output.AppendLine("        private static readonly " + Runtime + "MapAbi abi = new " + Runtime + "MapAbi {");
         output.AppendLine("            Map = new global::System.Guid(\"" + Parameterized(map, "string", "cinterface(IInspectable)") + "\"),");
         output.AppendLine("            Iterable = new global::System.Guid(\"" + Parameterized(iterable, pairSignature) + "\"),");
         foreach (string name in new[] { "Lookup", "Insert", "Remove", "Clear" }) output.AppendLine("            " + name + " = " + Literal(NamedSlot(map, name)) + ",");
@@ -1099,8 +1104,57 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("                self.Call(" + Literal(Slot(closable, closable.Methods[0])) + ");");
         output.AppendLine("        }");
     }
+    private static string ObjectMapAbi()
+    {
+        var map = Find("Windows.Foundation.Collections.IMap`2");
+        var iterable = Find("Windows.Foundation.Collections.IIterable`1");
+        var iterator = Find("Windows.Foundation.Collections.IIterator`1");
+        var pair = Find("Windows.Foundation.Collections.IKeyValuePair`2");
+        string inspectable = "cinterface(IInspectable)";
+        string pairSignature = "pinterface({" + Iid(pair) + "};" + inspectable + ";" + inspectable + ")";
+        return "new " + Runtime + "MapAbi {\n" +
+            "            Map = new global::System.Guid(\"" + Parameterized(map, inspectable, inspectable) + "\"),\n" +
+            "            Iterable = new global::System.Guid(\"" + Parameterized(iterable, pairSignature) + "\"),\n" +
+            "            Lookup = " + Literal(NamedSlot(map, "Lookup")) + ", Insert = " + Literal(NamedSlot(map, "Insert")) +
+            ", Remove = " + Literal(NamedSlot(map, "Remove")) + ", Clear = " + Literal(NamedSlot(map, "Clear")) + ",\n" +
+            "            Size = " + Literal(NamedSlot(map, "get_Size")) + ", HasKey = " + Literal(NamedSlot(map, "HasKey")) + ",\n" +
+            "            First = " + Literal(NamedSlot(iterable, "First")) + ", Current = " + Literal(NamedSlot(iterator, "get_Current")) + ",\n" +
+            "            HasCurrent = " + Literal(NamedSlot(iterator, "get_HasCurrent")) + ", MoveNext = " + Literal(NamedSlot(iterator, "MoveNext")) + ",\n" +
+            "            Key = " + Literal(NamedSlot(pair, "get_Key")) + ", Value = " + Literal(NamedSlot(pair, "get_Value")) + " };";
+    }
+    private static void ObjectMapMembers(StringBuilder output)
+    {
+        output.AppendLine("        private static readonly " + Runtime + "MapAbi dictionaryAbi = " + ObjectMapAbi());
+        output.AppendLine("        private " + Runtime + "NativeObjectMap dictionaryMap;");
+        output.AppendLine("        private " + Runtime + "NativeObjectMap CollectionMap { get { return dictionaryMap ?? (dictionaryMap = new " + Runtime + "NativeObjectMap(native, dictionaryAbi, v => " + Inspectable("v") + ")); } }");
+        output.AppendLine("        public object this[object key] { get { return CollectionMap[key]; } set { CollectionMap[key] = value; } }");
+        output.AppendLine("        public int Count { get { return CollectionMap.Count; } }");
+        output.AppendLine("        public bool IsReadOnly { get { return false; } }");
+        output.AppendLine("        public global::System.Collections.Generic.ICollection<object> Keys { get { return CollectionMap.Keys; } }");
+        output.AppendLine("        public global::System.Collections.Generic.ICollection<object> Values { get { return CollectionMap.Values; } }");
+        output.AppendLine("        public bool ContainsKey(object key) { return CollectionMap.ContainsKey(key); }");
+        output.AppendLine("        public bool TryGetValue(object key, out object value) { return CollectionMap.TryGetValue(key, out value); }");
+        output.AppendLine("        public void Add(object key, object value) { CollectionMap.Add(key, value); }");
+        output.AppendLine("        public bool Remove(object key) { return CollectionMap.Remove(key); }");
+        output.AppendLine("        public void Clear() { CollectionMap.Clear(); }");
+        output.AppendLine("        public void Add(global::System.Collections.Generic.KeyValuePair<object, object> item) { CollectionMap.Add(item); }");
+        output.AppendLine("        public bool Contains(global::System.Collections.Generic.KeyValuePair<object, object> item) { return CollectionMap.Contains(item); }");
+        output.AppendLine("        public bool Remove(global::System.Collections.Generic.KeyValuePair<object, object> item) { return CollectionMap.Remove(item); }");
+        output.AppendLine("        public void CopyTo(global::System.Collections.Generic.KeyValuePair<object, object>[] array, int index) { CollectionMap.CopyTo(array, index); }");
+        output.AppendLine("        public global::System.Collections.Generic.IEnumerator<global::System.Collections.Generic.KeyValuePair<object, object>> GetEnumerator() { return CollectionMap.GetEnumerator(); }");
+        output.AppendLine("        global::System.Collections.IEnumerator global::System.Collections.IEnumerable.GetEnumerator() { return GetEnumerator(); }");
+    }
     private static void Class(StringBuilder output, TypeDefinition type, XmlElement surface)
     {
+        bool objectMap = surface.GetAttribute("Adapter") == "ObjectMap";
+        if (surface.HasAttribute("Adapter") && !objectMap)
+            throw new NotSupportedException("Unsupported class adapter: " + type.FullName);
+        if (objectMap)
+        {
+            if (!type.Interfaces.Any(i => i.InterfaceType.FullName == "Windows.Foundation.Collections.IMap`2<System.Object,System.Object>"))
+                throw new NotSupportedException("Unsupported object map adapter: " + type.FullName);
+            ValidateMap();
+        }
         CustomAttribute composition = Attribute(type, "Windows.Foundation.Metadata.ComposableAttribute");
         bool composable = composition != null;
         if (type.BaseType == null || (!type.IsSealed && !composable))
@@ -1165,6 +1219,7 @@ internal static partial class WinrtProjectionGenerator
         if (!root) bases.Add("global::" + baseClass.FullName);
         bases.AddRange(implemented.Select(i => "global::" + i));
         if (closable) bases.Add("global::System.IDisposable");
+        if (objectMap) bases.Add("global::System.Collections.Generic.IDictionary<object, object>");
         if (root) bases.Add(Runtime + "INativeWrapper");
         if (interop)
         {
@@ -1175,6 +1230,7 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("    public " + (type.IsSealed ? "sealed " : "") + "class " + type.Name +
             (bases.Count == 0 ? "" : " : " + string.Join(", ", bases)));
         output.AppendLine("    {");
+        if (objectMap) ObjectMapMembers(output);
         if (root)
         {
             // The non-delegating inner of a composed object, or a native object's interface.
