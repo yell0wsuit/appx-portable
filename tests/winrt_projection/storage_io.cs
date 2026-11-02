@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 
 using Windows.Storage;
 using Windows.Storage.Streams;
+using Windows.System.Profile;
 class StorageIoProjectionTest
 {
     [DllImport("combase.dll")] static extern int RoInitialize(uint apartment);
@@ -127,6 +129,38 @@ class StorageIoProjectionTest
         }
         try { GC.KeepAlive(FileIO.WriteBufferAsync(created, null)); throw new Exception("null buffer accepted"); } catch (NullReferenceException) { }
         try { GC.KeepAlive(FileIO.WriteBufferAsync(null, idBuffer)); throw new Exception("null file accepted"); } catch (NullReferenceException) { }
+        // The game's device token: an unbound package token, read four bytes at a time.
+        HardwareToken token = HardwareIdentification.GetPackageSpecificToken(null);
+        IBuffer id = token.Id;
+        Check(id.Length == 16 && token.Signature.Length == 16 && token.Certificate.Length == 16, "hardware token buffers");
+        var groups = new List<byte>();
+        using (DataReader reader = DataReader.FromBuffer(id))
+        {
+            Check(reader.UnconsumedBufferLength == id.Length, "DataReader starts at the buffer's Length");
+            for (int i = 0; i < id.Length; i += 4)
+            {
+                byte[] group = new byte[4];
+                reader.ReadBytes(group);
+                groups.AddRange(group);
+            }
+            Check(System.Text.Encoding.ASCII.GetString(groups.ToArray()) == "appx-portable\0\0\u0001", "ReadBytes fills the caller's array");
+            Check(reader.UnconsumedBufferLength == 0, "ReadBytes consumes the buffer");
+            reader.ReadBytes(new byte[0]);
+            try { reader.ReadBytes(new byte[1]); throw new Exception("read past the buffer"); }
+            catch (Exception error) { if (error.HResult != unchecked((int)0x8000000B)) throw; }
+            IDisposable closable = reader;
+            closable.Dispose();
+            try { GC.KeepAlive(reader.UnconsumedBufferLength); throw new Exception("closed reader used"); }
+            catch (Exception error) { if (error.HResult != unchecked((int)0x80000013)) throw; }
+        }
+        using (DataReader reader = DataReader.FromBuffer(new byte[] { 7, 8, 9 }.AsBuffer()))
+        {
+            byte[] managedBytes = new byte[3];
+            reader.ReadBytes(managedBytes);
+            Check(managedBytes[0] == 7 && managedBytes[2] == 9, "DataReader reads a managed buffer");
+        }
+        try { HardwareIdentification.GetPackageSpecificToken(new byte[] { 1 }.AsBuffer()); throw new Exception("nonce-bound token accepted"); }
+        catch (NotImplementedException) { }
         byte[] copied = bytes.AsBuffer().ToArray();
         Check(copied.Length == bytes.Length && copied[0] == bytes[0], "buffer extensions");
         Console.WriteLine("PASS: managed storage awaits native files and reads seekable streams and buffers");
