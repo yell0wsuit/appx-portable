@@ -125,12 +125,14 @@
     <Property Name="Name" />
     <Property Name="Locality" />
     <Property Name="Values" />
+    <Property Name="Containers" />
     <Method Name="CreateContainer" />
     <Method Name="DeleteContainer" />
   </Class>
   <Enum Name="Windows.Storage.ApplicationDataLocality" />
   <Enum Name="Windows.Storage.ApplicationDataCreateDisposition" />
   <Interface Name="Windows.Foundation.Collections.IPropertySet" Adapter="StringObjectMap" />
+  <Interface Name="Windows.Foundation.Collections.IMapView`2" Adapter="StringMapView" />
   <Enum Name="Windows.Foundation.AsyncStatus" />
   <Interface Name="Windows.Foundation.IAsyncInfo" Adapter="Async" />
   <Interface Name="Windows.Foundation.IAsyncAction" Adapter="Async" />

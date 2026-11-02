@@ -314,7 +314,66 @@ HRESULT MakeStorageFolder(const std::wstring& path, IStorageFolder** value) {
     return folder ? folder.CopyTo(value) : E_OUTOFMEMORY;
 }
 using ContainerView = __FIMapView_2_HSTRING_Windows__CStorage__CApplicationDataContainer;
-class ContainerMap final : public RuntimeClass<RuntimeClassFlags<WinRt>, ContainerView> {
+using ContainerPairType = __FIKeyValuePair_2_HSTRING_Windows__CStorage__CApplicationDataContainer;
+using ContainerIterable = __FIIterable_1___FIKeyValuePair_2_HSTRING_Windows__CStorage__CApplicationDataContainer;
+using ContainerIteratorType = __FIIterator_1___FIKeyValuePair_2_HSTRING_Windows__CStorage__CApplicationDataContainer;
+using ContainerEntries = std::vector<std::pair<std::wstring, ComPtr<IApplicationDataContainer>>>;
+class ContainerPair final : public RuntimeClass<RuntimeClassFlags<WinRt>, ContainerPairType, FtmBase> {
+    InspectableClass(L"Windows.Foundation.Collections.IKeyValuePair`2", BaseTrust);
+    std::wstring key_;
+    ComPtr<IApplicationDataContainer> value_;
+
+public:
+    ContainerPair(std::wstring key, ComPtr<IApplicationDataContainer> value)
+        : key_(std::move(key)), value_(std::move(value)) {}
+    HRESULT STDMETHODCALLTYPE get_Key(HSTRING* value) override {
+        if (!value) return E_POINTER;
+        return WindowsCreateString(key_.c_str(), static_cast<UINT32>(key_.size()), value);
+    }
+    HRESULT STDMETHODCALLTYPE get_Value(IApplicationDataContainer** value) override {
+        if (!value) return E_POINTER;
+        return value_.CopyTo(value);
+    }
+};
+// Iterates the children present when First() was called.
+class ContainerIterator final : public RuntimeClass<RuntimeClassFlags<WinRt>, ContainerIteratorType, FtmBase> {
+    InspectableClass(L"Windows.Foundation.Collections.IIterator`1", BaseTrust);
+    ContainerEntries entries_;
+    size_t index_ = 0;
+
+public:
+    explicit ContainerIterator(ContainerEntries entries) : entries_(std::move(entries)) {}
+    HRESULT STDMETHODCALLTYPE get_Current(ContainerPairType** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        if (index_ >= entries_.size()) return E_BOUNDS;
+        auto pair = Make<ContainerPair>(entries_[index_].first, entries_[index_].second);
+        return pair ? pair.CopyTo(value) : E_OUTOFMEMORY;
+    }
+    HRESULT STDMETHODCALLTYPE get_HasCurrent(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = index_ < entries_.size();
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE MoveNext(boolean* value) override {
+        if (!value) return E_POINTER;
+        if (index_ < entries_.size()) ++index_;
+        return get_HasCurrent(value);
+    }
+    HRESULT STDMETHODCALLTYPE GetMany(UINT32 capacity, ContainerPairType** values, UINT32* actual) override {
+        if (!actual) return E_POINTER;
+        *actual = 0;
+        if (capacity && !values) return E_POINTER;
+        while (*actual < capacity && index_ < entries_.size()) {
+            auto hr = get_Current(&values[*actual]);
+            if (FAILED(hr)) return hr;
+            ++*actual;
+            ++index_;
+        }
+        return S_OK;
+    }
+};
+class ContainerMap final : public RuntimeClass<RuntimeClassFlags<WinRt>, ContainerView, ContainerIterable> {
     InspectableClass(L"Windows.Foundation.Collections.IMapView`2", BaseTrust);
 
 public:
@@ -344,6 +403,17 @@ public:
         if (!a || !b) return E_POINTER;
         *a = *b = nullptr;
         return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE First(ContainerIteratorType** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        ContainerEntries entries;
+        {
+            std::lock_guard<std::recursive_mutex> lock(mutex);
+            entries.assign(items.begin(), items.end());
+        }
+        auto iterator = Make<ContainerIterator>(std::move(entries));
+        return iterator ? iterator.CopyTo(value) : E_OUTOFMEMORY;
     }
 };
 class Container final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIApplicationDataContainer, FtmBase> {

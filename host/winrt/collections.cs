@@ -25,31 +25,139 @@ namespace AppxPortable.WinRT
 
     }
 
-    // CLR collection semantics over a native IMap<String,IInspectable>. No
-    // managed shadow copy: mutations go through the native map/persistence layer.
-    internal abstract class NativeStringObjectMap : IDictionary<string, object>, INativeWrapper
+    internal sealed class StringMapViewAbi
     {
-        private const int Bounds = unchecked((int)0x8000000b), Changed = unchecked((int)0x8000000c);
-        private readonly NativeObject native;
-        private readonly StringObjectMapAbi abi;
+        internal Guid View { get; set; }
+        internal Guid Iterable { get; set; }
+        internal int Lookup { get; set; }
+        internal int Size { get; set; }
+        internal int HasKey { get; set; }
+        internal int First { get; set; }
+        internal int Current { get; set; }
+        internal int HasCurrent { get; set; }
+        internal int MoveNext { get; set; }
+        internal int Key { get; set; }
+        internal int Value { get; set; }
+    }
+
+    // ABI calls shared by native string-keyed maps and map views.
+    internal static class StringMapCalls
+    {
+        internal const int Bounds = unchecked((int)0x8000000b);
+        private const int Changed = unchecked((int)0x8000000c);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate int LookupCall(IntPtr self, IntPtr key, out IntPtr value);
+        internal delegate int LookupCall(IntPtr self, IntPtr key, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int HasKeyCall(IntPtr self, IntPtr key, out byte value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate int InsertCall(IntPtr self, IntPtr key, IntPtr value, out byte replaced);
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate int RemoveCall(IntPtr self, IntPtr key);
-        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int BooleanCall(IntPtr self, out byte value);
-        protected NativeStringObjectMap(NativeObject value, StringObjectMapAbi abi) { native = value; this.abi = abi; }
-        NativeObject INativeWrapper.Native { get { return native; } }
-        private static void KeyNotNull(string key) { if (key == null) throw new ArgumentNullException("key"); }
-        private static void Check(int hr)
+        internal static void KeyNotNull(string key) { if (key == null) throw new ArgumentNullException("key"); }
+        internal static void Check(int hr)
         {
             if (hr == Changed) throw new InvalidOperationException("The native collection changed during enumeration");
             Errors.Check(hr);
         }
+        internal static bool HasKey(NativeObject.Access access, int slot, NativeString key)
+        {
+            byte found;
+            Check(access.Method<HasKeyCall>(slot)(access.Self, key.Value, out found));
+            return found != 0;
+        }
+        internal static bool Boolean(NativeObject value, int slot)
+        {
+            using (var access = new NativeObject.Access(value))
+            {
+                byte result;
+                Check(access.Method<BooleanCall>(slot)(access.Self, out result));
+                return result != 0;
+            }
+        }
+        internal static void ArraySpace<T>(T[] array, int index, int count)
+        {
+            if (array == null) throw new ArgumentNullException("array");
+            if (index < 0 || index > array.Length) throw new ArgumentOutOfRangeException("index");
+            if (array.Length - index < count) throw new ArgumentException("Array is too small", "array");
+        }
+    }
+
+    // CLR read-only dictionary semantics over a native IMapView<String, V>,
+    // whose values are selected classes or interfaces.
+    internal sealed class NativeStringMapView<T> : IReadOnlyDictionary<string, T>, INativeWrapper where T : class
+    {
+        private readonly NativeObject native;
+        private readonly StringMapViewAbi abi;
+        private readonly Func<NativeObject, T> convert;
+        private NativeStringMapView(NativeObject value, StringMapViewAbi abi, Func<NativeObject, T> convert)
+        {
+            native = value; this.abi = abi; this.convert = convert;
+        }
+        internal static IReadOnlyDictionary<string, T> Wrap(NativeObject value, StringMapViewAbi abi, Func<NativeObject, T> convert)
+        {
+            return NativeObject.Wrap<IReadOnlyDictionary<string, T>>(value, abi.View, v => new NativeStringMapView<T>(v, abi, convert));
+        }
+        NativeObject INativeWrapper.Native { get { return native; } }
+        public int Count { get { return checked((int)native.UInt32(abi.Size)); } }
+        public bool ContainsKey(string key)
+        {
+            StringMapCalls.KeyNotNull(key);
+            using (var access = new NativeObject.Access(native))
+            using (var text = new NativeString(key))
+                return StringMapCalls.HasKey(access, abi.HasKey, text);
+        }
+        public bool TryGetValue(string key, out T value)
+        {
+            StringMapCalls.KeyNotNull(key);
+            value = null;
+            using (var access = new NativeObject.Access(native))
+            using (var text = new NativeString(key))
+            {
+                IntPtr result;
+                int hr = access.Method<StringMapCalls.LookupCall>(abi.Lookup)(access.Self, text.Value, out result);
+                if (hr == StringMapCalls.Bounds) { if (result != IntPtr.Zero) Marshal.Release(result); return false; }
+                value = convert(NativeObject.ObjectResult(hr, result));
+                return true;
+            }
+        }
+        public T this[string key]
+        {
+            get { T value; if (TryGetValue(key, out value)) return value; throw new KeyNotFoundException("Key not found: " + key); }
+        }
+        public IEnumerable<string> Keys { get { foreach (var pair in this) yield return pair.Key; } }
+        public IEnumerable<T> Values { get { foreach (var pair in this) yield return pair.Value; } }
+        public IEnumerator<KeyValuePair<string, T>> GetEnumerator()
+        {
+            using (NativeObject iterable = native.QueryInterface(abi.Iterable))
+            using (NativeObject iterator = iterable.Object(abi.First))
+            {
+                bool current = StringMapCalls.Boolean(iterator, abi.HasCurrent);
+                while (current)
+                {
+                    KeyValuePair<string, T> result;
+                    using (NativeObject pair = iterator.Object(abi.Current))
+                        result = new KeyValuePair<string, T>(pair.String(abi.Key), convert(pair.Object(abi.Value)));
+                    yield return result;
+                    current = StringMapCalls.Boolean(iterator, abi.MoveNext);
+                }
+            }
+        }
+        IEnumerator IEnumerable.GetEnumerator() { return GetEnumerator(); }
+    }
+
+    // CLR collection semantics over a native IMap<String,IInspectable>. No
+    // managed shadow copy: mutations go through the native map/persistence layer.
+    internal abstract class NativeStringObjectMap : IDictionary<string, object>, INativeWrapper
+    {
+        private const int Bounds = StringMapCalls.Bounds;
+        private readonly NativeObject native;
+        private readonly StringObjectMapAbi abi;
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int InsertCall(IntPtr self, IntPtr key, IntPtr value, out byte replaced);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int RemoveCall(IntPtr self, IntPtr key);
+        protected NativeStringObjectMap(NativeObject value, StringObjectMapAbi abi) { native = value; this.abi = abi; }
+        NativeObject INativeWrapper.Native { get { return native; } }
+        private static void KeyNotNull(string key) { StringMapCalls.KeyNotNull(key); }
+        private static void Check(int hr) { StringMapCalls.Check(hr); }
         public bool TryGetValue(string key, out object value)
         {
             KeyNotNull(key);
@@ -60,11 +168,9 @@ namespace AppxPortable.WinRT
             {
                 // Settings maps return success/null for an absent key. Test
                 // membership separately to preserve IDictionary semantics.
-                byte found;
-                Check(access.Method<HasKeyCall>(abi.HasKey)(access.Self, text.Value, out found));
-                if (found == 0) return false;
+                if (!StringMapCalls.HasKey(access, abi.HasKey, text)) return false;
                 IntPtr result;
-                int hr = access.Method<LookupCall>(abi.Lookup)(access.Self, text.Value, out result);
+                int hr = access.Method<StringMapCalls.LookupCall>(abi.Lookup)(access.Self, text.Value, out result);
                 if (hr == Bounds) { if (result != IntPtr.Zero) Marshal.Release(result); return false; }
                 value = NativeObject.Inspectable(NativeObject.ObjectResult(hr, result));
                 return true;
@@ -95,11 +201,7 @@ namespace AppxPortable.WinRT
             using (NativeObject map = native.QueryInterface(abi.Map))
             using (var access = new NativeObject.Access(map))
             using (var text = new NativeString(key))
-            {
-                byte found;
-                Check(access.Method<HasKeyCall>(abi.HasKey)(access.Self, text.Value, out found));
-                return found != 0;
-            }
+                return StringMapCalls.HasKey(access, abi.HasKey, text);
         }
         // As with IDictionary generally, a compound Add or pair removal needs
         // caller synchronization if other actors mutate this native map.
@@ -129,39 +231,25 @@ namespace AppxPortable.WinRT
             return TryGetValue(item.Key, out value) && EqualityComparer<object>.Default.Equals(value, item.Value);
         }
         public bool Remove(KeyValuePair<string, object> item) { return Contains(item) && Remove(item.Key); }
-        private static void ArraySpace<T>(T[] array, int index, int count)
-        {
-            if (array == null) throw new ArgumentNullException("array");
-            if (index < 0 || index > array.Length) throw new ArgumentOutOfRangeException("index");
-            if (array.Length - index < count) throw new ArgumentException("Array is too small", "array");
-        }
+        private static void ArraySpace<T>(T[] array, int index, int count) { StringMapCalls.ArraySpace(array, index, count); }
         public void CopyTo(KeyValuePair<string, object>[] array, int index)
         {
             ArraySpace(array, index, Count);
             foreach (var pair in this) array[index++] = pair;
-        }
-        private bool Boolean(NativeObject value, int slot)
-        {
-            using (var access = new NativeObject.Access(value))
-            {
-                byte result;
-                Check(access.Method<BooleanCall>(slot)(access.Self, out result));
-                return result != 0;
-            }
         }
         public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
         {
             using (NativeObject iterable = native.QueryInterface(abi.Iterable))
             using (NativeObject iterator = iterable.Object(abi.First))
             {
-                bool current = Boolean(iterator, abi.HasCurrent);
+                bool current = StringMapCalls.Boolean(iterator, abi.HasCurrent);
                 while (current)
                 {
                     KeyValuePair<string, object> result;
                     using (NativeObject pair = iterator.Object(abi.Current))
                         result = new KeyValuePair<string, object>(pair.String(abi.Key), NativeObject.Inspectable(pair.Object(abi.Value)));
                     yield return result;
-                    current = Boolean(iterator, abi.MoveNext);
+                    current = StringMapCalls.Boolean(iterator, abi.MoveNext);
                 }
             }
         }

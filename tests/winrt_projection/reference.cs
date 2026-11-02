@@ -195,6 +195,7 @@ namespace Windows.Storage
         public string Name { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.Name"); } }
         public ApplicationDataLocality Locality { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.Locality"); } }
         public global::Windows.Foundation.Collections.IPropertySet Values { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.Values"); } }
+        public global::System.Collections.Generic.IReadOnlyDictionary<string, ApplicationDataContainer> Containers { get { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.Containers"); } }
         public ApplicationDataContainer CreateContainer(string name, ApplicationDataCreateDisposition disposition) { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.CreateContainer"); }
         public void DeleteContainer(string name) { throw new global::System.NotImplementedException("Windows.Storage.ApplicationDataContainer.DeleteContainer"); }
     }
