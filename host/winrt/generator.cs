@@ -21,6 +21,7 @@ internal static partial class WinrtProjectionGenerator
     private static readonly List<ModuleDefinition> modules = new List<ModuleDefinition>();
     private static readonly Dictionary<string, XmlElement> interfaces = new Dictionary<string, XmlElement>(StringComparer.Ordinal);
     private static readonly List<TypeDefinition> classes = new List<TypeDefinition>();
+    private static readonly Dictionary<string, XmlElement> classSurfaces = new Dictionary<string, XmlElement>(StringComparer.Ordinal);
 
     private static TypeDefinition Find(string name)
     {
@@ -1421,6 +1422,14 @@ namespace AppxPortable.WinRT.Projected
             .Select(i => Find(i.InterfaceType.FullName)).ToList();
     }
 
+    private static IEnumerable<string> SelectedOverrides(TypeDefinition type)
+    {
+        XmlElement surface;
+        return classSurfaces.TryGetValue(type.FullName, out surface)
+            ? surface.ChildNodes.OfType<XmlElement>().Where(m => m.Name == "Overridable").Select(m => m.GetAttribute("Name"))
+            : Enumerable.Empty<string>();
+    }
+
     // Component mode: a member the generator cannot express becomes a stub with its
     // exact signature that names itself and throws, as the completed Windows.dll's
     // do, so one unsupported member does not cost the game the whole component.
@@ -1619,7 +1628,7 @@ namespace AppxPortable.WinRT.Projected
         var factored = type.Methods.Where(m => m.IsConstructor && !m.IsStatic && m.IsPublic && m.Parameters.Count != 0).ToList();
         if (constructor && !composable && (baseClass != null || !direct && factored.Count == 0))
             throw new NotSupportedException("No activation constructor: " + type.FullName);
-        if (overridden.Count != 0 && !constructor) throw new InvalidDataException("Overridable without Constructor: " + type.FullName);
+        if (overridden.Count != 0 && !constructor && !composable) throw new InvalidDataException("Overridable without Constructor: " + type.FullName);
 
         // Overridable interfaces with a selected member are answered by the managed outer;
         // the others, across the class chain, keep the native behavior, and a managed
@@ -1628,9 +1637,11 @@ namespace AppxPortable.WinRT.Projected
         foreach (string name in overridden)
             if (overridable.Count(i => i.Methods.Any(m => m.Name == name)) != 1)
                 throw new NotSupportedException("Unsupported overridable: " + type.FullName + "." + name);
-        var exposed = overridable.Where(i => i.Methods.Any(m => overridden.Contains(m.Name))).ToList();
-        var unsupported = Chain(type).SelectMany(Overridables).SelectMany(i => i.Methods).Select(m => m.Name)
-            .Where(n => !overridden.Contains(n)).Distinct().ToList();
+        var inheritedSelections = Chain(type).SelectMany(SelectedOverrides).Distinct().ToList();
+        var inheritedInterfaces = Chain(type).SelectMany(Overridables).Distinct().ToList();
+        var exposed = inheritedInterfaces.Where(i => i.Methods.Any(m => inheritedSelections.Contains(m.Name))).ToList();
+        var unsupported = inheritedInterfaces.SelectMany(i => i.Methods).Select(m => m.Name)
+            .Where(n => !inheritedSelections.Contains(n)).Distinct().ToList();
         // Unsealed classes may be composed or wrap a more derived object: query per call.
         bool query = !type.IsSealed;
         bool root = baseClass == null;
@@ -1749,7 +1760,7 @@ namespace AppxPortable.WinRT.Projected
                 if (method.ReturnType.FullName != "System.Void" || parameter == null || parameter.IsValueType)
                     throw new NotSupportedException("Unsupported overridable shape: " + iface.FullName + "." + method.Name);
                 string thunk = "on" + method.Name;
-                string body = overridden.Contains(method.Name)
+                string body = inheritedSelections.Contains(method.Name)
                     ? "((" + type.Name + ")target)." + method.Name + "(" + Unwrap(method.Parameters[0].ParameterType, "value") + ")"
                     : "((" + type.Name + ")target).BaseOverride(" + Guid(iface) + ", " + Literal(slot) + ", value)";
                 output.AppendLine("            // slot " + Literal(slot));
@@ -1848,7 +1859,10 @@ namespace AppxPortable.WinRT.Projected
                     throw new NotSupportedException("Unsupported surface kind: " + element.Name);
                 if (!selected.Add(element.GetAttribute("Name"))) throw new InvalidDataException("Duplicate selected type");
                 if (element.Name == "Interface") interfaces.Add(element.GetAttribute("Name"), element);
-                if (element.Name == "Class") classes.Add(Find(element.GetAttribute("Name")));
+                if (element.Name == "Class") {
+                    classes.Add(Find(element.GetAttribute("Name")));
+                    classSurfaces.Add(element.GetAttribute("Name"), element);
+                }
             }
             var output = new StringBuilder();
             output.AppendLine(component ? "// Generated from package component metadata. Do not edit." : "// Generated from SDK metadata. Do not edit.");

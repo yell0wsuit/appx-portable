@@ -2,7 +2,17 @@ using System.Reflection;
 [assembly: AssemblyVersion("255.255.255.255")]
 namespace Windows.System
 {
+    public enum VirtualKey { Escape = 27 }
     public enum ProcessorArchitecture { X86 = 0, X64 = 9, Unknown = 65535 }
+}
+namespace Windows.UI.Xaml.Input
+{
+    public sealed class KeyRoutedEventArgs
+    {
+        internal KeyRoutedEventArgs() { }
+        public global::Windows.System.VirtualKey Key { get { throw new global::System.NotImplementedException(); } }
+        public bool Handled { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
 }
 namespace Windows.ApplicationModel
 {
@@ -116,7 +126,12 @@ namespace Windows.UI.Xaml.Controls
     public class Panel : global::Windows.UI.Xaml.FrameworkElement { internal Panel() { } }
     public class Grid : Panel { internal Grid() { } }
     public class Image : global::Windows.UI.Xaml.FrameworkElement { internal Image() { } }
-    public class Control : global::Windows.UI.Xaml.FrameworkElement { internal Control() { } }
+    public class Control : global::Windows.UI.Xaml.FrameworkElement
+    {
+        internal Control() { }
+        protected virtual void OnKeyDown(global::Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { throw new global::System.NotImplementedException(); }
+        protected virtual void OnKeyUp(global::Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { throw new global::System.NotImplementedException(); }
+    }
     public class Viewbox : global::Windows.UI.Xaml.FrameworkElement { internal Viewbox() { } }
     public class ContentPresenter : global::Windows.UI.Xaml.FrameworkElement { internal ContentPresenter() { } }
     public sealed class MediaElement : global::Windows.UI.Xaml.FrameworkElement { internal MediaElement() { } }

@@ -507,8 +507,8 @@ The selected Page constructor now composes over the existing native Page factory
 UserControl supplies the selected base type and Content property; Page.Frame
 reads the native page's host frame. The most-derived projected constructor
 creates the native object once, sharing its root's native/outer fields through
-the marker constructor chain. Derived composable classes can expose their own
-selected override interfaces.
+the marker constructor chain. Derived composable classes expose selected
+override interfaces from their own class and selected ancestors.
 
 OnNavigatedTo, OnNavigatedFrom and OnNavigatingFrom dispatch through the managed
 controlling outer. Their managed base implementations call the nondelegating
@@ -516,6 +516,15 @@ inner's native interface. This preserves the native base behavior and avoids
 recursive override dispatch. NavigationEventArgs and NavigatingCancelEventArgs
 are typed wrappers; NavigationEventArgs.Uri is selected, while their other
 properties remain unselected.
+
+`Control.OnKeyDown` is selected on Control and inherited by Page and Frame
+composition. SDK `IControlOverrides` calls reach the managed virtual, and base
+calls use the native inner's no-op key-down implementation. KeyRoutedEventArgs
+projects Key and Handled; tests verify retained arguments after GC, null arguments,
+partial overrides, base calls, and exception identity. Other Control override
+slots retain their explicit unsupported results and construction guards.
+This verifies callback ABI behavior; keyboard message routing and focus delivery
+remain unimplemented in this path.
 
 `--page-only` and `winrt_page_projection` check a WindowsRuntime-marked consumer
 with two levels of managed Page inheritance, real inherited Content and local
