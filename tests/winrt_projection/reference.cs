@@ -95,6 +95,16 @@ namespace Windows.UI.Xaml
         internal FrameworkElement() { }
         public ResourceDictionary Resources { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public object FindName(string name) { throw new global::System.NotImplementedException(); }
+        public Style Style { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
+    public sealed class Style : DependencyObject { internal Style() { } }
+}
+namespace Windows.UI.Xaml.Media
+{
+    public static class VisualTreeHelper
+    {
+        public static int GetChildrenCount(global::Windows.UI.Xaml.DependencyObject reference) { throw new global::System.NotImplementedException(); }
+        public static global::Windows.UI.Xaml.DependencyObject GetChild(global::Windows.UI.Xaml.DependencyObject reference, int childIndex) { throw new global::System.NotImplementedException(); }
     }
 }
 namespace Windows.UI.Core
@@ -108,6 +118,8 @@ namespace Windows.UI.Xaml.Controls
     public class Image : global::Windows.UI.Xaml.FrameworkElement { internal Image() { } }
     public class Control : global::Windows.UI.Xaml.FrameworkElement { internal Control() { } }
     public class Viewbox : global::Windows.UI.Xaml.FrameworkElement { internal Viewbox() { } }
+    public class ContentPresenter : global::Windows.UI.Xaml.FrameworkElement { internal ContentPresenter() { } }
+    public sealed class MediaElement : global::Windows.UI.Xaml.FrameworkElement { internal MediaElement() { } }
     public class TextBlock : global::Windows.UI.Xaml.FrameworkElement
     {
         internal TextBlock() { }

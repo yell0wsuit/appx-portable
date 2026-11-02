@@ -6,6 +6,7 @@
 #endif
 #include "element.h"
 #include "grid.h"
+#include "style.h"
 #include "compat/win10/input.h"
 #include "generated/controls.h"
 #include "com/factory.h"
@@ -626,13 +627,20 @@ public:
         return S_OK;
     }
 };
-class Frame final : public Element<Frame, DefaultIFrame, DefaultIContentControl, DefaultIControl, INavigate> {
+class Frame final
+    : public Element<Frame, DefaultIFrame, DefaultIContentControl, DefaultIControl, INavigate, ITemplatedElement> {
     struct Entry {
         ComPtr<IInspectable> page, parameter;
         Wrappers::HString typeName;
         TypeKind typeKind = TypeKind_Custom;
     };
     ComPtr<IInspectable> content_;
+    // The applied template: instantiated when Template is set, since the shim has
+    // no layout pass. Content stays this Frame's own; the link shows it in the
+    // template's ContentPresenters.
+    ComPtr<IControlTemplate> template_;
+    ComPtr<IUIElement> templateRoot_;
+    std::shared_ptr<TemplateLink> link_;
     Entry current_;
     // Back entries keep their page instances, as if every page used
     // NavigationCacheMode.Required: GoBack returns to the same MainPage, which
@@ -674,6 +682,7 @@ public:
     static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Controls.Frame";
     explicit Frame(IInspectable* outer) : Element(outer) {}
     ~Frame() {
+        if (link_) link_->parent = nullptr;
         SetHostFrame(content_.Get(), nullptr);
         for (auto& entry : back_) SetHostFrame(entry.page.Get(), nullptr);
     }
@@ -684,6 +693,44 @@ public:
     HRESULT STDMETHODCALLTYPE put_Content(IInspectable* value) override {
         content_ = value;
         return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Template(IControlTemplate** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto hr = CheckSourceThread();
+        return FAILED(hr) ? hr : template_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE put_Template(IControlTemplate* value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        ComPtr<IUnknown> current, next;
+        if (template_) template_.As(&current);
+        if (value) value->QueryInterface(IID_PPV_ARGS(&next));
+        if (current == next) return S_OK;
+        ComPtr<IUIElement> root;
+        std::shared_ptr<TemplateLink> link;
+        if (value) {
+            try {
+                link = std::make_shared<TemplateLink>();
+            } catch (const std::bad_alloc&) {
+                return E_OUTOFMEMORY;
+            }
+            link->parent = static_cast<IContentControl*>(this);
+            hr = InstantiateSourceTemplate(value, Name, link, root);
+            if (FAILED(hr)) return hr;
+        }
+        if (link_) link_->parent = nullptr;
+        template_ = value;
+        templateRoot_ = std::move(root);
+        link_ = std::move(link);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE TemplateRoot(IUIElement** root) override {
+        if (!root) return E_POINTER;
+        *root = nullptr;
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        return template_ ? templateRoot_.CopyTo(root) : S_FALSE;
     }
     HRESULT STDMETHODCALLTYPE get_CanGoBack(boolean* value) override {
         if (!value) return E_POINTER;

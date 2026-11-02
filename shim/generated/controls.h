@@ -1002,4 +1002,96 @@ struct __declspec(uuid("02b9aa11-0b47-4e7d-ad91-3a4168ed230d")) DefaultIPassword
   }
 };
 }
+namespace ABI::Windows::UI::Xaml::Controls {
+struct __declspec(uuid("79fde5b4-cd37-491c-8845-daf472defff6")) DefaultIContentPresenter : public ABI::Windows::UI::Xaml::Controls::IContentPresenter {
+  HRESULT STDMETHODCALLTYPE get_Content(IInspectable** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_Content");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_Content(IInspectable* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_Content");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_ContentTemplate(ABI::Windows::UI::Xaml::IDataTemplate** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_ContentTemplate");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_ContentTemplate(ABI::Windows::UI::Xaml::IDataTemplate* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_ContentTemplate");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_ContentTemplateSelector(ABI::Windows::UI::Xaml::Controls::IDataTemplateSelector** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_ContentTemplateSelector");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_ContentTemplateSelector(ABI::Windows::UI::Xaml::Controls::IDataTemplateSelector* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_ContentTemplateSelector");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_ContentTransitions(__FIVector_1_Windows__CUI__CXaml__CMedia__CAnimation__CTransition** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_ContentTransitions");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_ContentTransitions(__FIVector_1_Windows__CUI__CXaml__CMedia__CAnimation__CTransition* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_ContentTransitions");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_FontSize(DOUBLE* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_FontSize");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_FontSize(DOUBLE value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_FontSize");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_FontFamily(ABI::Windows::UI::Xaml::Media::IFontFamily** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_FontFamily");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_FontFamily(ABI::Windows::UI::Xaml::Media::IFontFamily* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_FontFamily");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_FontWeight(ABI::Windows::UI::Text::FontWeight* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_FontWeight");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_FontWeight(ABI::Windows::UI::Text::FontWeight value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_FontWeight");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_FontStyle(ABI::Windows::UI::Text::FontStyle* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_FontStyle");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_FontStyle(ABI::Windows::UI::Text::FontStyle value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_FontStyle");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_FontStretch(ABI::Windows::UI::Text::FontStretch* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_FontStretch");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_FontStretch(ABI::Windows::UI::Text::FontStretch value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_FontStretch");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_CharacterSpacing(INT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_CharacterSpacing");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_CharacterSpacing(INT32 value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_CharacterSpacing");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_Foreground(ABI::Windows::UI::Xaml::Media::IBrush** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::get_Foreground");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_Foreground(ABI::Windows::UI::Xaml::Media::IBrush* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IContentPresenter::put_Foreground");
+    return E_NOTIMPL;
+  }
+};
+}
 #pragma warning(pop)

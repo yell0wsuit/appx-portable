@@ -617,8 +617,9 @@ thread.
 Application.LoadComponent accepts an Application root with optional x:Class and
 RequestedTheme, plus inline Application.Resources using the existing supported
 resource types. Parsing and resource construction finish before replacing the
-application dictionary or theme. Inline theme dictionaries, Style/Setter/template
-content, and application resource names/connections remain explicit failures.
+application dictionary or theme. Inline theme dictionaries, Styles other than the
+keyed resource form below, and application resource names/connections remain
+explicit failures.
 Lazy App.xaml initialization is a compatibility reconstruction; original Windows
 constructor-time loading order has not been verified.
 
@@ -653,6 +654,31 @@ kept on parsed nodes and rejected before any element is prepared, so unbuilt
 entries may carry value elements such as `<FontWeight>`. On-demand entry
 creation follows Windows 8.1+ behavior; it is a reconstruction, not a measured
 trace of this game's original startup.
+
+A keyed resource `Style` needs a TargetType naming a type source XAML builds
+(Page, Frame, Grid, Image, ProgressRing, TextBlock, Viewbox, MediaElement or
+ContentPresenter). Its setters are resolved when the entry is prepared, by
+TargetType and property name, because framework properties have no
+DependencyProperty identities here; `Frame.Template` with a `ControlTemplate`
+element value is the only setter, and others fail with E_NOTIMPL. BasedOn,
+implicit keys, markup-extension values and Style.Setters/BasedOn/TargetType
+assignment fail explicitly. A ControlTemplate has at most one visual root, an
+optional matching TargetType, its own namescope and no connections. Its prepared
+content is kept by the template, which builds a new copy for each templated
+parent. ContentPresenter shows its templated parent's Content until given its
+own. MediaElement source attributes are AudioCategory and AutoPlay; AudioCategory
+is stored and has no Wine policy effect.
+
+FrameworkElement.Style applies a source Style once, as local values, when the
+element's runtime class exactly matches its TargetType; setting the same Style
+again is a no-op, and replacing or clearing it fails with E_NOTIMPL. Setting
+Frame.Template instantiates the template immediately, since the shim has no
+layout pass, and replaces any previous template root. VisualTreeHelper
+GetChildrenCount/GetChild report a templated Frame's template root, Panel
+children, Viewbox and UserControl children, a ContentPresenter's element content,
+and no children for MediaElement, Image and TextBlock. Untemplated controls and
+other types fail with E_NOTIMPL rather than imitate default templates. Calls
+enforce the element's thread.
 
 The source loader accepts `<Page.Resources>`, `<Frame.Resources>` and
 `<Grid.Resources>` with implicit entries or a sole explicit ResourceDictionary.

@@ -61,6 +61,8 @@
   <Class Name="Windows.UI.Xaml.Controls.Grid" />
   <Class Name="Windows.UI.Xaml.Controls.Image" />
   <Class Name="Windows.UI.Xaml.Controls.Viewbox" />
+  <Class Name="Windows.UI.Xaml.Controls.ContentPresenter" />
+  <Class Name="Windows.UI.Xaml.Controls.MediaElement" />
   <Class Name="Windows.UI.Xaml.Controls.TextBlock"><Property Name="Text" /></Class>
   <Class Name="Windows.UI.Xaml.Controls.ProgressRing"><Property Name="IsActive" /></Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" />
@@ -74,7 +76,13 @@
   </Class>
   <Class Name="Windows.UI.Xaml.FrameworkElement">
     <Property Name="Resources" />
+    <Property Name="Style" />
     <Method Name="FindName" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Style" />
+  <Class Name="Windows.UI.Xaml.Media.VisualTreeHelper">
+    <Method Name="GetChildrenCount" />
+    <Method Name="GetChild" />
   </Class>
   <Enum Name="Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation" />
   <Class Name="Windows.UI.Xaml.Controls.Control" />
