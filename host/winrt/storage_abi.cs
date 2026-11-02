@@ -97,6 +97,28 @@ namespace AppxPortable.WinRT
             }
         }
     }
+    internal sealed class NativeAction : NativeAsync, IAsyncAction
+    {
+        private NativeAction(NativeObject value) : base(value, StorageAbi.ActionFuture) { }
+        internal static IAsyncAction FromNative(NativeObject value)
+        {
+            return NativeObject.Wrap<IAsyncAction>(value, StorageAbi.ActionFuture.Iid, v => new NativeAction(v));
+        }
+        // Rethrows the action's failure, as Windows' GetResults does.
+        public void GetResults() { native.Call(abi.Results); }
+        public AsyncActionCompletedHandler Completed
+        {
+            get { return Get<AsyncActionCompletedHandler>(abi.GetCompleted); }
+            set
+            {
+                Set(abi.PutCompleted, value == null ? null : new Callback
+                {
+                    Original = value,
+                    Completed = (pointer, status) => value(FromNative(NativeObject.Borrow(pointer)), (AsyncStatus)status)
+                }, abi.Completed);
+            }
+        }
+    }
     internal sealed class NativeRead : NativeAsync, IAsyncOperationWithProgress<IBuffer, uint>
     {
         private NativeRead(NativeObject value) : base(value, StorageAbi.ReadFuture) { }
@@ -134,6 +156,8 @@ namespace AppxPortable.WinRT
     {
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int TextCall(IntPtr self, IntPtr text, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int ObjectCall(IntPtr self, IntPtr argument, out IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int ObjectPairCall(IntPtr self, IntPtr first, IntPtr second, out IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int TextOptionCall(IntPtr self, IntPtr text, int option, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int UIntCall(IntPtr self, uint number, out IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int SetUIntCall(IntPtr self, uint number);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int GetWideCall(IntPtr self, out ulong value);
@@ -198,6 +222,17 @@ namespace Windows.Storage
         public string Path { get { using (var item = native.QueryInterface(StorageAbi.Item)) return item.String(StorageAbi.Item_get_Path); } }
         public string Name { get { using (var item = native.QueryInterface(StorageAbi.Item)) return item.String(StorageAbi.Item_get_Name); } }
         public IAsyncOperation<StorageFile> GetFileAsync(string name) { return NativeFuture<StorageFile>.FromNative(StorageCalls.Text(native, StorageAbi.Folder_GetFileAsync, name), StorageAbi.FileFuture, StorageFile.FromNative); }
+        public IAsyncOperation<StorageFile> CreateFileAsync(string desiredName) { return NativeFuture<StorageFile>.FromNative(StorageCalls.Text(native, StorageAbi.Folder_CreateFileAsyncOverloadDefaultOptions, desiredName), StorageAbi.FileFuture, StorageFile.FromNative); }
+        public IAsyncOperation<StorageFile> CreateFileAsync(string desiredName, CreationCollisionOption options)
+        {
+            if (desiredName == null) throw new ArgumentNullException("desiredName");
+            using (var access = new NativeObject.Access(native))
+            using (var text = new NativeString(desiredName))
+            {
+                IntPtr result; int hr = access.Method<StorageCalls.TextOptionCall>(StorageAbi.Folder_CreateFileAsync)(access.Self, text.Value, (int)options, out result);
+                return NativeFuture<StorageFile>.FromNative(NativeObject.TakeResult(hr, result), StorageAbi.FileFuture, StorageFile.FromNative);
+            }
+        }
     }
     public sealed class StorageFile : IStorageFile, INativeWrapper
     {
@@ -230,6 +265,21 @@ namespace Windows.Storage
             {
                 IntPtr result; int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.FileIO_ReadTextAsync)(access.Self, target == null ? IntPtr.Zero : target.Self, out result);
                 return NativeFuture<string>.Wrap(NativeObject.TakeResult(hr, result), StorageAbi.TextFuture, operation => operation.String(StorageAbi.TextFuture.Results));
+            }
+        }
+        public static IAsyncAction WriteBufferAsync(IStorageFile file, IBuffer buffer)
+        {
+            // Nulls reach the native call, which fails with E_POINTER.
+            using (var factory = NativeObject.Factory("Windows.Storage.FileIO", StorageAbi.FileIO))
+            using (var target = file == null ? null : NativeObject.Argument(file, StorageAbi.File))
+            using (var data = buffer == null ? null : NativeObject.Argument(buffer, StorageAbi.Buffer))
+            using (var access = new NativeObject.Access(factory))
+            using (var targetAccess = target == null ? null : new NativeObject.Access(target))
+            using (var dataAccess = data == null ? null : new NativeObject.Access(data))
+            {
+                IntPtr result; int hr = access.Method<StorageCalls.ObjectPairCall>(StorageAbi.FileIO_WriteBufferAsync)(access.Self,
+                    targetAccess == null ? IntPtr.Zero : targetAccess.Self, dataAccess == null ? IntPtr.Zero : dataAccess.Self, out result);
+                return NativeAction.FromNative(NativeObject.TakeResult(hr, result));
             }
         }
     }

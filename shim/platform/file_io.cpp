@@ -2,12 +2,14 @@
 // follow windows.storage.dll: with at least 3 bytes, a byte-order mark selects
 // UTF-8 or UTF-16 and is skipped; otherwise UTF-8. UTF-16 reads bytes / 2 code
 // units, dropping an odd trailing byte. Bytes without a Unicode mapping fail.
+#include "com/async_action.h"
 #include "com/completed_operation.h"
 #include "com/factory.h"
 #include "com/failed_operation.h"
 #include "log.h"
 #include "registry.h"
 #include <windows.storage.h>
+#include <robuffer.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <string>
@@ -24,13 +26,17 @@ HRESULT Unsupported(const char* member) {
     Log("UNIMPL", "FileIO.%s hr=%08lx", member, E_NOTIMPL);
     return E_NOTIMPL;
 }
-HRESULT ReadBytes(IStorageFile* file, std::wstring& path, std::vector<BYTE>& bytes) {
+HRESULT FilePath(IStorageFile* file, std::wstring& path) {
     ComPtr<IStorageItem> item;
     auto hr = file->QueryInterface(IID_PPV_ARGS(&item));
     HString text;
     if (SUCCEEDED(hr)) hr = item->get_Path(text.GetAddressOf());
+    if (SUCCEEDED(hr)) path = text.GetRawBuffer(nullptr);
+    return hr;
+}
+HRESULT ReadBytes(IStorageFile* file, std::wstring& path, std::vector<BYTE>& bytes) {
+    auto hr = FilePath(file, path);
     if (FAILED(hr)) return hr;
-    path = text.GetRawBuffer(nullptr);
     HANDLE handle = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                 nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle == INVALID_HANDLE_VALUE) return HRESULT_FROM_WIN32(GetLastError());
@@ -105,6 +111,26 @@ HRESULT ReadText(IStorageFile* file, UnicodeEncoding encoding, bool detect, Text
         [text](HSTRING* value) { return WindowsCreateString(text.data(), static_cast<UINT32>(text.size()), value); });
     return completed ? completed.CopyTo(operation) : E_OUTOFMEMORY;
 }
+// windows.storage.dll writes through a transacted stream: the file's contents
+// become exactly the buffer's Length bytes. A file deleted meanwhile fails.
+HRESULT WriteBuffer(IStorageFile* file, IBuffer* buffer, std::wstring& path) {
+    auto hr = FilePath(file, path);
+    UINT32 length = 0;
+    if (SUCCEEDED(hr)) hr = buffer->get_Length(&length);
+    ComPtr<::Windows::Storage::Streams::IBufferByteAccess> access;
+    if (SUCCEEDED(hr)) hr = buffer->QueryInterface(IID_PPV_ARGS(&access));
+    BYTE* bytes = nullptr;
+    if (SUCCEEDED(hr)) hr = access->Buffer(&bytes);
+    if (FAILED(hr)) return hr;
+    HANDLE handle = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr,
+                                TRUNCATE_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) return HRESULT_FROM_WIN32(GetLastError());
+    DWORD written = 0;
+    if (length && (!WriteFile(handle, bytes, length, &written, nullptr) || written != length))
+        hr = HRESULT_FROM_WIN32(GetLastError() ? GetLastError() : ERROR_WRITE_FAULT);
+    CloseHandle(handle);
+    return hr;
+}
 class FileIOFactory final : public Factory<IFileIOStatics> {
 public:
     FileIOFactory() : Factory(L"Windows.Storage.FileIO") {}
@@ -154,8 +180,21 @@ public:
                                               __FIAsyncOperation_1_Windows__CStorage__CStreams__CIBuffer**) override {
         return Unsupported("ReadBufferAsync");
     }
-    HRESULT STDMETHODCALLTYPE WriteBufferAsync(IStorageFile*, IBuffer*, IAsyncAction**) override {
-        return Unsupported("WriteBufferAsync");
+    HRESULT STDMETHODCALLTYPE WriteBufferAsync(IStorageFile* file, IBuffer* buffer, IAsyncAction** operation) override {
+        if (!operation) return E_POINTER;
+        *operation = nullptr;
+        if (!file || !buffer) return E_POINTER;
+        auto action = Make<AsyncAction>(true);
+        if (!action) return E_OUTOFMEMORY;
+        std::wstring path;
+        HRESULT error = E_OUTOFMEMORY;
+        try {
+            error = WriteBuffer(file, buffer, path);
+        } catch (const std::bad_alloc&) {}
+        Log("TRACE", "FileIO WriteBufferAsync %ls hr=%08lx", path.c_str(), error);
+        // Write failures complete the action with the error, as Windows does.
+        action->Finish(error);
+        return action.CopyTo(operation);
     }
     HRESULT STDMETHODCALLTYPE WriteBytesAsync(IStorageFile*, UINT32, BYTE*, IAsyncAction**) override {
         return Unsupported("WriteBytesAsync");

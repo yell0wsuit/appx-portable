@@ -147,14 +147,16 @@ public:
         *value = (type & StorageItemTypes_Folder) != 0;
         return S_OK;
     }
-    HRESULT STDMETHODCALLTYPE GetFileAsync(HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+    HRESULT STDMETHODCALLTYPE GetFileAsync(HSTRING name,
+                                           __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
         if (!operation) return E_POINTER;
         *operation = nullptr;
         UINT32 length = 0;
         const wchar_t* raw = WindowsGetStringRawBuffer(name, &length);
         std::wstring text(raw, length);
         std::filesystem::path relative(text);
-        if (text.empty() || text.find(L'\0') != std::wstring::npos || relative.has_root_path() || text.find(L':') != std::wstring::npos)
+        if (text.empty() || text.find(L'\0') != std::wstring::npos || relative.has_root_path() ||
+            text.find(L':') != std::wstring::npos)
             return E_INVALIDARG;
         const auto base = std::filesystem::path(path_).lexically_normal();
         const auto path = (base / relative).lexically_normal();
@@ -162,6 +164,33 @@ public:
         if (child.empty() || *child.begin() == L"..") return E_INVALIDARG;
         const auto full = path.wstring();
         return PathFileAsync(HStringReference(full.c_str(), static_cast<unsigned>(full.size())).Get(), operation);
+    }
+    HRESULT STDMETHODCALLTYPE CreateFileAsyncOverloadDefaultOptions(
+        HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        // windows.storage.dll forwards the default overload with FailIfExists.
+        return CreateFileAsync(name, CreationCollisionOption_FailIfExists, operation);
+    }
+    HRESULT STDMETHODCALLTYPE
+    CreateFileAsync(HSTRING name, CreationCollisionOption options,
+                    __FIAsyncOperation_1_Windows__CStorage__CStorageFile** operation) override {
+        if (!operation) return E_POINTER;
+        *operation = nullptr;
+        std::wstring created;
+        HRESULT error = S_OK;
+        try {
+            error = CreateFileChild(WindowsGetStringRawBuffer(name, nullptr), options, created);
+        } catch (const std::bad_alloc&) {
+            return E_OUTOFMEMORY;
+        }
+        Log("TRACE", "StorageFolder CreateFileAsync %ls option=%d hr=%08lx", created.c_str(), options, error);
+        if (FAILED(error)) {
+            // Windows completes the operation with the error rather than failing the call.
+            ComPtr<IInspectable> failed;
+            const HRESULT hr = MakeFailedOperation(__uuidof(__FIAsyncOperation_1_Windows__CStorage__CStorageFile),
+                                                   error, sizeof(void*), &failed);
+            return SUCCEEDED(hr) ? failed.CopyTo(operation) : hr;
+        }
+        return PathFileAsync(HStringReference(created.c_str(), static_cast<unsigned>(created.size())).Get(), operation);
     }
     HRESULT STDMETHODCALLTYPE CreateFolderAsyncOverloadDefaultOptions(
         HSTRING name, __FIAsyncOperation_1_Windows__CStorage__CStorageFolder** operation) override {
@@ -190,6 +219,32 @@ public:
     }
 
 private:
+    // A taken name fails with ERROR_ALREADY_EXISTS unless the option opens,
+    // replaces or renumbers it ("name (2).ext", keeping the extension).
+    HRESULT CreateFileChild(const std::wstring& name, CreationCollisionOption options, std::wstring& created) const {
+        if (name.empty() || name.find_first_of(L"\\/") != std::wstring::npos)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        const std::filesystem::path base(path_), file(name);
+        created = (base / file).wstring();
+        const DWORD disposition = options == CreationCollisionOption_ReplaceExisting ? CREATE_ALWAYS
+                                  : options == CreationCollisionOption_OpenIfExists  ? OPEN_ALWAYS
+                                                                                     : CREATE_NEW;
+        for (unsigned copy = 2;; ++copy) {
+            HANDLE handle =
+                CreateFileW(created.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                            nullptr, disposition, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (handle != INVALID_HANDLE_VALUE) {
+                CloseHandle(handle);
+                return S_OK;
+            }
+            const DWORD error = GetLastError();
+            if (error != ERROR_FILE_EXISTS) return HRESULT_FROM_WIN32(error);
+            if (options != CreationCollisionOption_GenerateUniqueName) return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            created =
+                (base / (file.stem().wstring() + L" (" + std::to_wstring(copy) + L")" + file.extension().wstring()))
+                    .wstring();
+        }
+    }
     HRESULT CreateChild(const std::wstring& name, CreationCollisionOption options, std::wstring& created) const {
         if (name.empty() || name.find_first_of(L"\\/") != std::wstring::npos)
             return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
