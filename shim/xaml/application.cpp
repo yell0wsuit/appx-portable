@@ -241,11 +241,14 @@ class InitParams final : public RuntimeClass<RuntimeClassFlags<WinRt>, IApplicat
 };
 class Application;
 static Application* live = nullptr; // the game's Application, for Suspending
-class Application final : public Composable<Application, DefaultIApplication, DefaultIApplicationOverrides> {
+class Application final
+    : public Composable<Application, DefaultIApplication, DefaultIApplicationOverrides, IApplicationSource> {
     EventSource<ISuspendingEventHandler> suspending_;
     EventSource<ABI::Windows::Foundation::IEventHandler<IInspectable*>> resuming_;
     EventSource<IUnhandledExceptionEventHandler> unhandled_;
     ComPtr<IResourceDictionary> resources_;
+    const DWORD sourceThread_ = GetCurrentThreadId();
+    bool sourceInitialized_ = false;
     ApplicationTheme theme_ = ApplicationTheme_Dark;
 
 public:
@@ -257,22 +260,46 @@ public:
     HRESULT RaiseSuspending(IInspectable* sender, ABI::Windows::ApplicationModel::ISuspendingEventArgs* args) {
         return suspending_.InvokeAll(sender, args);
     }
+    HRESULT STDMETHODCALLTYPE CheckSourceThread() override {
+        return GetCurrentThreadId() == sourceThread_ ? S_OK : RPC_E_WRONG_THREAD;
+    }
+    HRESULT STDMETHODCALLTYPE CompleteSourceInitialization() override {
+        auto hr = CheckSourceThread();
+        if (SUCCEEDED(hr)) sourceInitialized_ = true;
+        return hr;
+    }
     HRESULT STDMETHODCALLTYPE get_Resources(IResourceDictionary** value) override {
         if (!value) return E_POINTER;
         *value = nullptr;
-        auto hr = resources_ ? S_OK : MakeResourceDictionary(&resources_);
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        if (!sourceInitialized_ && ManagedXamlMode()) {
+            ComPtr<IInspectable> self;
+            hr = QueryInterface(IID_PPV_ARGS(&self));
+            if (SUCCEEDED(hr)) hr = LoadApplicationSourceXaml(self.Get(), L"App.xaml");
+            if (FAILED(hr)) return hr;
+        }
+        if (!resources_) hr = MakeResourceDictionary(&resources_);
+        if (SUCCEEDED(hr)) sourceInitialized_ = true;
         return FAILED(hr) ? hr : resources_.CopyTo(value);
     }
     HRESULT STDMETHODCALLTYPE put_Resources(IResourceDictionary* value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
         resources_ = value;
+        sourceInitialized_ = true;
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_RequestedTheme(ApplicationTheme* value) override {
         if (!value) return E_POINTER;
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
         *value = theme_;
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE put_RequestedTheme(ApplicationTheme value) override {
+        auto hr = CheckSourceThread();
+        if (FAILED(hr)) return hr;
         theme_ = value;
         return S_OK;
     }

@@ -93,6 +93,56 @@ class SourceApp : Application
         Check(child.FindName("root") == null, "expired root namescope resolved a root");
         GC.KeepAlive(child);
     }
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ValidateApplicationTheme(int expected);
+    static void BadApplication(string body, int expected)
+    {
+        var app = Application.Current;
+        var before = app.Resources;
+        File.WriteAllText("Fixtures/application-bad.xaml", body);
+        try { Application.LoadComponent(app, new Uri("ms-appx:///Fixtures/application-bad.xaml")); throw new Exception("bad application accepted"); }
+        catch (Exception error) { if (error.Message == "bad application accepted" || (expected != 0 && Marshal.GetHRForException(error) != expected)) throw; }
+        Check(ReferenceEquals(before, app.Resources), "invalid application source changed resources");
+        Check(ValidateApplicationTheme(1) == 0, "invalid application source changed theme");
+    }
+    static void VerifyApplicationSource()
+    {
+        var app = Application.Current;
+        var head = "<Application" + Ns + " x:Class=\"SourceApp\" RequestedTheme=\"Light\">";
+        File.WriteAllText("App.xaml", head + "<Application.Resources><ResourceDictionary><Grid x:Key=\"startup Ω\"/></ResourceDictionary></Application.Resources></Application>");
+        WrongThread(() => { var ignored = app.Resources; });
+        var resources = app.Resources;
+        var map = (IDictionary<object, object>)(object)resources;
+        Check(map.Count == 1 && map["startup Ω"] is Grid, "App.xaml initializes typed application resources");
+        Check(ReferenceEquals(resources, app.Resources) && ValidateApplicationTheme(1) == 0, "lazy application identity and theme");
+        File.WriteAllText("App.xaml", "<invalid/>");
+        Check(ReferenceEquals(resources, app.Resources), "App.xaml was reloaded after successful initialization");
+        File.WriteAllText("Fixtures/application.xaml", head + "<Application.Resources><Storyboard x:Key=\"transition\"/></Application.Resources></Application>");
+        Application.LoadComponent(app, new Uri("ms-appx:///Fixtures/application.xaml"));
+        var replacement = app.Resources;
+        Check(!ReferenceEquals(resources, replacement), "explicit application resource replacement");
+        Check(((IDictionary<object, object>)(object)replacement)["transition"] is Storyboard && map.ContainsKey("startup Ω"), "application replacement retains old dictionaries");
+        WrongThread(() => Application.LoadComponent(app, new Uri("ms-appx:///Fixtures/application.xaml")));
+        WrongThread(() => app.Resources = resources);
+        BadApplication("<Application" + Ns + " x:Class=\"WrongApp\"/>", unchecked((int)0x80070057));
+        BadApplication("<Application" + Ns + " RequestedTheme=\"Wrong\"/>", unchecked((int)0x80070057));
+        BadApplication("<Application" + Ns + " Width=\"20\"/>", unchecked((int)0x80004001));
+        BadApplication("<Application" + Ns + "><Grid/></Application>", unchecked((int)0x80004001));
+        BadApplication("<Application" + Ns + " RequestedTheme=\"Dark\"><Application.Resources><Grid x:Key=\"same\"/><Grid x:Key=\"same\"/></Application.Resources></Application>", unchecked((int)0x80070057));
+        BadApplication("<Application" + Ns + "><Application.Resources><ResourceDictionary Source=\"missing.xaml\"/></Application.Resources></Application>", unchecked((int)0x80004001));
+        BadApplication("<Application" + Ns + "><Application.Resources><Grid x:Name=\"named\"/></Application.Resources></Application>", unchecked((int)0x80004001));
+        BadApplication("<Application" + Ns + "><Application.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries/></ResourceDictionary></Application.Resources></Application>", unchecked((int)0x80004001));
+        BadApplication("<Application" + Ns + "><Application.Resources><Grid x:Key=\"one\"/></Application.Resources>", 0);
+        BadApplication("<Application" + Ns + "><Application.Resources/>", 0);
+        BadApplication("<Application" + Ns + ">", 0);
+        try { Application.LoadComponent(app, new Uri("ms-appx:///Fixtures/application-missing.xaml")); throw new Exception("missing application accepted"); }
+        catch (FileNotFoundException) { }
+        Check(ReferenceEquals(replacement, app.Resources), "missing application changed resources");
+        app.Resources = resources;
+        Check(ReferenceEquals(resources, app.Resources), "explicit assignment must survive invalid App.xaml");
+        File.Delete("App.xaml");
+        Console.WriteLine("PASS: application source initializes lazily, replaces resources transactionally and rejects unsupported roots");
+    }
     [MethodImpl(MethodImplOptions.NoInlining)]
     static void VerifyResources(SourcePage page)
     {
@@ -409,6 +459,7 @@ class SourceApp : Application
         catch (ArgumentException) { }
         try { Application.LoadComponent(page, new Uri("ms-appx:///missing.xaml"), ComponentResourceLocation.Nested); throw new Exception("nested resources accepted"); }
         catch (NotImplementedException) { }
+        VerifyApplicationSource();
         VerifyResources(page);
         VerifyGrid(page);
         VerifyBrush(page);

@@ -607,7 +607,20 @@ hosting route, and system XAML remains in charge in Islands mode.
 
 Application.Resources uses the same native dictionary with a lazy default per
 application. Its managed getter/setter preserve dictionary identity and retain
-assigned dictionaries. This does not load application-level XAML resources.
+assigned dictionaries. In managed XAML mode, the first getter also loads a
+package's conventional App.xaml when present. An absent file gives the stable
+empty default; explicit assignment or a successful explicit application source
+load suppresses this implicit initialization. Failed initialization remains
+retryable. Resource access and application source loading enforce the creating
+thread.
+
+Application.LoadComponent accepts an Application root with optional x:Class and
+RequestedTheme, plus inline Application.Resources using the existing supported
+resource types. Parsing and resource construction finish before replacing the
+application dictionary or theme. Merged/theme dictionaries, Style/Setter/template
+content, and application resource names/connections remain explicit failures.
+Lazy App.xaml initialization is a compatibility reconstruction; original Windows
+constructor-time loading order has not been verified.
 
 The native IResourceDictionary also implements IMap<object,object> and its
 iterable contract. This slice accepts boxed string keys using ordinal string
