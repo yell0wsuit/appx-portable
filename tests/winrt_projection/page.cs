@@ -26,13 +26,96 @@ class TestPage : Page, Windows.UI.Xaml.Markup.IComponentConnector
     protected override void OnNavigatingFrom(NavigatingCancelEventArgs args) { ++Leaving; if (Failure != null) throw Failure; base.OnNavigatingFrom(args); }
 }
 class DerivedPage : TestPage { }
+class TestXamlMember : Windows.UI.Xaml.Markup.IXamlMember
+{
+    internal Windows.UI.Xaml.Markup.IXamlType Owner;
+    public bool IsAttachable { get { return false; } }
+    public bool IsDependencyProperty { get { return false; } }
+    public bool IsReadOnly { get { return true; } }
+    public string Name { get { return "Content"; } }
+    public Windows.UI.Xaml.Markup.IXamlType TargetType { get { return Owner; } }
+    public Windows.UI.Xaml.Markup.IXamlType Type { get { return null; } }
+    public object GetValue(object instance) { throw new NotSupportedException(); }
+    public void SetValue(object instance, object value) { throw new NotSupportedException(); }
+}
+class TestXamlType : Windows.UI.Xaml.Markup.IXamlType
+{
+    internal readonly Type Type;
+    internal readonly TestXamlMember Content = new TestXamlMember();
+    internal int Activations, Initialized;
+    internal Exception Failure;
+    internal TestXamlType(Type type) { Type = type; Content.Owner = this; }
+    public Windows.UI.Xaml.Markup.IXamlType BaseType { get { return null; } }
+    public Windows.UI.Xaml.Markup.IXamlMember ContentProperty { get { return Content; } }
+    public string FullName { get { return Type.FullName; } }
+    public bool IsArray { get { return false; } }
+    public bool IsCollection { get { return false; } }
+    public bool IsConstructible { get { return true; } }
+    public bool IsDictionary { get { return false; } }
+    public bool IsMarkupExtension { get { return false; } }
+    public bool IsBindable { get { return true; } }
+    public Windows.UI.Xaml.Markup.IXamlType ItemType { get { return null; } }
+    public Windows.UI.Xaml.Markup.IXamlType KeyType { get { return null; } }
+    public Type UnderlyingType { get { return Type; } }
+    public object ActivateInstance() { ++Activations; if (Failure != null) throw Failure; return Activator.CreateInstance(Type, true); }
+    public object CreateFromString(string value) { throw new NotSupportedException(); }
+    public Windows.UI.Xaml.Markup.IXamlMember GetMember(string name) { return name == "Content" ? Content : null; }
+    public void AddToVector(object instance, object value) { throw new NotSupportedException(); }
+    public void AddToMap(object instance, object key, object value) { throw new NotSupportedException(); }
+    public void RunInitializer() { ++Initialized; }
+}
 class PartialPage : Page
 {
     internal int Leaving;
     protected override void OnNavigatingFrom(NavigatingCancelEventArgs args) { ++Leaving; base.OnNavigatingFrom(args); }
 }
-class PageApp : Application
+class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
 {
+    internal readonly Dictionary<Type, TestXamlType> Types = new Dictionary<Type, TestXamlType>();
+    internal readonly List<Type> Requested = new List<Type>();
+    internal readonly List<string> RequestedNames = new List<string>();
+    public Windows.UI.Xaml.Markup.IXamlType GetXamlType(Type type)
+    {
+        Requested.Add(type);
+        TestXamlType value;
+        return type != null && Types.TryGetValue(type, out value) ? value : null;
+    }
+    public Windows.UI.Xaml.Markup.IXamlType GetXamlType(string fullName)
+    {
+        RequestedNames.Add(fullName);
+        foreach (var value in Types.Values) if (value.FullName == fullName) return value;
+        return null;
+    }
+    public Windows.UI.Xaml.Markup.XmlnsDefinition[] GetXmlnsDefinitions() { return new Windows.UI.Xaml.Markup.XmlnsDefinition[0]; }
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int ExerciseXamlMetadata();
+    static void VerifyNavigation()
+    {
+        var app = (PageApp)Application.Current;
+        var type = new TestXamlType(typeof(DerivedPage));
+        app.Types[typeof(DerivedPage)] = type;
+        var frame = new Frame();
+        Check(frame.Navigate(typeof(DerivedPage)), "Frame.Navigate result");
+        Check(app.Requested.Count == 1 && app.Requested[0] == typeof(DerivedPage) && type.Activations == 1, "Navigate resolves the managed page type once");
+        var page = frame.Content as DerivedPage;
+        Check(page != null && page.To == 1 && ReferenceEquals(page.Frame, frame), "navigated page is the activated managed instance");
+        try { frame.Navigate(typeof(PartialPage)); throw new Exception("unknown page navigated"); }
+        catch (Exception error) { if (error.Message == "unknown page navigated") throw; }
+        Check(app.Requested[app.Requested.Count - 1] == typeof(PartialPage) && ReferenceEquals(frame.Content, page), "failed navigation kept the page");
+        type.Failure = new InvalidOperationException("activation failure");
+        try { frame.Navigate(typeof(DerivedPage)); throw new Exception("failed activation navigated"); }
+        catch (InvalidOperationException) { }
+        type.Failure = null;
+        Check(ReferenceEquals(frame.Content, page) && page.From == 0, "failed activation kept the page");
+        Check(frame.Navigate(typeof(DerivedPage), "parameter") && frame.Content is DerivedPage && !ReferenceEquals(frame.Content, page) && page.From == 1, "Navigate with a parameter");
+        app.Requested.Clear();
+        int hr = ExerciseXamlMetadata();
+        Check(hr == 0, "native IXamlMetadataProvider/IXamlType/IXamlMember calls: 0x" + hr.ToString("x8"));
+        Check(app.RequestedNames.Count == 2 && app.RequestedNames[0] == "DerivedPage" && app.RequestedNames[1] == "Missing", "native full-name lookups");
+        Check(app.Requested.Count == 3 && app.Requested[0] == typeof(int) && app.Requested[1] == typeof(Page) && app.Requested[2] == null, "native TypeName kinds map to CLR types");
+        Check(type.Initialized == 1, "native RunInitializer");
+        Console.WriteLine("PASS: Frame.Navigate activates managed pages through the app's XAML metadata provider");
+    }
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int SendWindowSize();
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -416,6 +499,7 @@ class PageApp : Application
         VerifyApplicationResources();
         VerifyResourceMap();
         VerifyApplicationView();
+        VerifyNavigation();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
         VerifySharing();

@@ -167,3 +167,104 @@ extern "C" HRESULT __cdecl ValidateLoadedSource() {
 #include "application_view_projection_fixture.h"
 
 #include "visibility_projection_fixture.h"
+
+// Drives a managed app's XAML metadata CCWs through their SDK ABI. Each failed
+// check returns its own code so the managed caller can name the step.
+extern "C" HRESULT __cdecl ExerciseXamlMetadata() {
+    using namespace ABI::Windows::UI::Xaml;
+    using namespace ABI::Windows::UI::Xaml::Markup;
+    using namespace ABI::Windows::UI::Xaml::Interop;
+    using GetFactory = HRESULT (WINAPI*)(HSTRING, IActivationFactory**);
+    auto getFactory = reinterpret_cast<GetFactory>(GetProcAddress(GetModuleHandleW(L"appxportable.dll"), "ShimGetFactory"));
+    if (!getFactory) return E_UNEXPECTED;
+    ComPtr<IActivationFactory> activation;
+    auto hr = getFactory(Wrappers::HStringReference(L"Windows.UI.Xaml.Application").Get(), &activation);
+    ComPtr<IApplicationStatics> statics;
+    if (SUCCEEDED(hr)) hr = activation.As(&statics);
+    ComPtr<IApplication> application;
+    if (SUCCEEDED(hr)) hr = statics->get_Current(&application);
+    ComPtr<IXamlMetadataProvider> provider;
+    if (SUCCEEDED(hr)) hr = application.As(&provider);
+    if (FAILED(hr)) return hr;
+    auto step = [](int number) { return MAKE_HRESULT(SEVERITY_ERROR, FACILITY_ITF, 0x200 + number); };
+    auto same = [](const wchar_t* expected, HSTRING value) {
+        return wcscmp(expected, WindowsGetStringRawBuffer(value, nullptr)) == 0;
+    };
+    ComPtr<IXamlType> type;
+    hr = provider->GetXamlTypeByFullName(Wrappers::HStringReference(L"DerivedPage").Get(), &type);
+    if (FAILED(hr)) return hr;
+    if (!type) return step(1);
+    Wrappers::HString text;
+    if (FAILED(hr = type->get_FullName(text.GetAddressOf()))) return hr;
+    if (!same(L"DerivedPage", text.Get())) return step(2);
+    TypeName underlying{};
+    if (FAILED(hr = type->get_UnderlyingType(&underlying))) return hr;
+    bool custom = underlying.Kind == TypeKind_Custom && wcsncmp(WindowsGetStringRawBuffer(underlying.Name, nullptr), L"DerivedPage, ", 13) == 0;
+    WindowsDeleteString(underlying.Name);
+    if (!custom) return step(3);
+    boolean flag = false;
+    if (FAILED(hr = type->get_IsConstructible(&flag))) return hr;
+    if (!flag) return step(4);
+    if (FAILED(hr = type->get_IsBindable(&flag))) return hr;
+    if (!flag) return step(5);
+    for (auto getter : {&IXamlType::get_IsArray, &IXamlType::get_IsCollection, &IXamlType::get_IsDictionary,
+                        &IXamlType::get_IsMarkupExtension}) {
+        flag = true;
+        if (FAILED(hr = (type.Get()->*getter)(&flag))) return hr;
+        if (flag) return step(6);
+    }
+    ComPtr<IXamlType> none;
+    if (FAILED(hr = type->get_BaseType(&none))) return hr;
+    if (none) return step(7);
+    if (FAILED(hr = type->get_ItemType(&none)) || FAILED(hr = type->get_KeyType(&none))) return hr;
+    if (none) return step(8);
+    ComPtr<IXamlMember> member;
+    if (FAILED(hr = type->get_ContentProperty(&member))) return hr;
+    if (!member) return step(9);
+    if (FAILED(hr = member->get_Name(text.ReleaseAndGetAddressOf()))) return hr;
+    if (!same(L"Content", text.Get())) return step(10);
+    if (FAILED(hr = member->get_IsReadOnly(&flag))) return hr;
+    if (!flag) return step(11);
+    if (FAILED(hr = member->get_IsAttachable(&flag))) return hr;
+    if (flag) return step(12);
+    if (FAILED(hr = member->get_IsDependencyProperty(&flag))) return hr;
+    if (flag) return step(13);
+    ComPtr<IXamlType> owner;
+    if (FAILED(hr = member->get_TargetType(&owner))) return hr;
+    ComPtr<IUnknown> left, right;
+    type.As(&left);
+    if (owner) owner.As(&right);
+    if (left != right) return step(14);
+    if (FAILED(hr = member->get_Type(&none))) return hr;
+    if (none) return step(15);
+    ComPtr<IXamlMember> again, missing;
+    if (FAILED(hr = type->GetMember(Wrappers::HStringReference(L"Content").Get(), &again))) return hr;
+    if (again != member) return step(16);
+    if (FAILED(hr = type->GetMember(Wrappers::HStringReference(L"Missing").Get(), &missing))) return hr;
+    if (missing) return step(17);
+    if (FAILED(hr = type->RunInitializer())) return hr;
+    ComPtr<IInspectable> instance;
+    if (FAILED(hr = type->ActivateInstance(&instance))) return hr;
+    ComPtr<ABI::Windows::UI::Xaml::Controls::IPage> page;
+    if (!instance || FAILED(instance.As(&page))) return step(18);
+    ComPtr<IInspectable> created, value;
+    if (type->CreateFromString(Wrappers::HStringReference(L"x").Get(), &created) != E_NOTIMPL) return step(19);
+    if (type->AddToVector(instance.Get(), instance.Get()) != E_NOTIMPL) return step(20);
+    if (type->AddToMap(instance.Get(), instance.Get(), instance.Get()) != E_NOTIMPL) return step(21);
+    if (member->GetValue(instance.Get(), &value) != E_NOTIMPL) return step(22);
+    if (member->SetValue(instance.Get(), instance.Get()) != E_NOTIMPL) return step(23);
+    UINT32 count = 1;
+    XmlnsDefinition* definitions = reinterpret_cast<XmlnsDefinition*>(1);
+    if (provider->GetXmlnsDefinitions(&count, &definitions) != E_NOTIMPL || count || definitions) return step(24);
+    if (FAILED(hr = provider->GetXamlTypeByFullName(Wrappers::HStringReference(L"Missing").Get(), &none))) return hr;
+    if (none) return step(25);
+    // Primitive, Metadata and Custom TypeName kinds reach the managed provider as CLR types.
+    TypeName names[] = {{Wrappers::HStringReference(L"Int32").Get(), TypeKind_Primitive},
+                        {Wrappers::HStringReference(L"Windows.UI.Xaml.Controls.Page").Get(), TypeKind_Metadata},
+                        {Wrappers::HStringReference(L"Missing").Get(), TypeKind_Custom}};
+    for (auto& name : names) {
+        if (FAILED(hr = provider->GetXamlType(name, &none))) return hr;
+        if (none) return step(26);
+    }
+    return S_OK;
+}

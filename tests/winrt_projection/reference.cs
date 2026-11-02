@@ -151,6 +151,8 @@ namespace Windows.UI.Xaml.Controls
     public class Frame : ContentControl
     {
         public Frame() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Controls.Frame..ctor"); }
+        public bool Navigate(global::System.Type sourcePageType) { throw new global::System.NotImplementedException(); }
+        public bool Navigate(global::System.Type sourcePageType, object parameter) { throw new global::System.NotImplementedException(); }
     }
 }
 namespace Windows.Devices.Geolocation
@@ -287,6 +289,49 @@ namespace Windows.UI.Xaml.Navigation
 namespace Windows.UI.Xaml.Markup
 {
     public interface IComponentConnector { void Connect(int connectionId, object target); }
+    public interface IXamlMetadataProvider
+    {
+        IXamlType GetXamlType(global::System.Type type);
+        IXamlType GetXamlType(string fullName);
+        XmlnsDefinition[] GetXmlnsDefinitions();
+    }
+    public interface IXamlType
+    {
+        IXamlType BaseType { get; }
+        IXamlMember ContentProperty { get; }
+        string FullName { get; }
+        bool IsArray { get; }
+        bool IsCollection { get; }
+        bool IsConstructible { get; }
+        bool IsDictionary { get; }
+        bool IsMarkupExtension { get; }
+        bool IsBindable { get; }
+        IXamlType ItemType { get; }
+        IXamlType KeyType { get; }
+        global::System.Type UnderlyingType { get; }
+        object ActivateInstance();
+        object CreateFromString(string value);
+        IXamlMember GetMember(string name);
+        void AddToVector(object instance, object value);
+        void AddToMap(object instance, object key, object value);
+        void RunInitializer();
+    }
+    public interface IXamlMember
+    {
+        bool IsAttachable { get; }
+        bool IsDependencyProperty { get; }
+        bool IsReadOnly { get; }
+        string Name { get; }
+        IXamlType TargetType { get; }
+        IXamlType Type { get; }
+        object GetValue(object instance);
+        void SetValue(object instance, object value);
+    }
+    public struct XmlnsDefinition
+    {
+        public string XmlNamespace;
+        public string Namespace;
+    }
 }
 
 namespace Windows.UI.Xaml.Controls.Primitives

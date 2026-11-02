@@ -155,15 +155,19 @@ internal static partial class WinrtProjectionGenerator
             a.Parameters.Select(p => p.ParameterType.FullName).SequenceEqual(b.Parameters.Select(p => p.ParameterType.FullName));
     }
 
-    // The ABI interface declaring a runtime class member: a static interface, or the default interface.
+    // The ABI interface declaring a runtime class member: a static interface, the default
+    // interface, or the one other interface the class implements that declares it.
     private static TypeDefinition MemberInterface(TypeDefinition type, MethodDefinition member)
     {
         if (!member.IsStatic)
         {
             TypeDefinition instance = DefaultInterface(type);
-            if (!instance.Methods.Any(m => SameSignature(m, member)))
+            if (instance.Methods.Any(m => SameSignature(m, member))) return instance;
+            var declaring = type.Interfaces.Select(i => i.InterfaceType).Where(i => !(i is GenericInstanceType))
+                .Select(i => Find(i.FullName)).Where(i => i.Methods.Any(m => SameSignature(m, member))).ToList();
+            if (declaring.Count != 1)
                 throw new NotSupportedException("Member not on default interface: " + type.FullName + "." + member.Name);
-            return instance;
+            return declaring[0];
         }
         var candidates = new List<TypeDefinition>();
         foreach (CustomAttribute attribute in type.CustomAttributes.Where(a =>
@@ -235,7 +239,7 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("                using (var factory = " + Runtime + "NativeObject.Factory(\"" + type.FullName + "\", " + Guid(owner) + "))");
             return "factory";
         }
-        if (!composable) return "native";
+        if (!composable && owner == DefaultInterface(type)) return "native";
         output.AppendLine("                using (var self = native.QueryInterface(" + Guid(owner) + "))");
         return "self";
     }
@@ -316,11 +320,20 @@ internal static partial class WinrtProjectionGenerator
 
     // Emit the selected pointer/TypeName/scalar/input-byte-array ABI directly.
     // Every IID and slot comes from WinMD; unsupported signatures fail generation.
-    private static void Method(StringBuilder output, TypeDefinition type, string name, bool composable)
+    // Arities, when given, selects overloads by parameter count, each matching exactly one.
+    private static void Method(StringBuilder output, TypeDefinition type, string name, bool composable, string arities = "")
     {
         var methods = type.Methods.Where(m => m.Name == name && !m.IsConstructor).ToList();
         if (methods.Count == 0) throw new NotSupportedException("Method not found: " + type.FullName + "." + name);
-        foreach (MethodDefinition method in methods) MethodOverload(output, type, method, composable, methods.Count > 1);
+        bool overloaded = methods.Count > 1;
+        if (arities.Length != 0)
+        {
+            var counts = arities.Split(' ').Select(a => int.Parse(a, CultureInfo.InvariantCulture)).ToList();
+            if (counts.Distinct().Count() != counts.Count || counts.Any(c => methods.Count(m => m.Parameters.Count == c) != 1))
+                throw new NotSupportedException("Unsupported overload arities: " + type.FullName + "." + name + " " + arities);
+            methods = methods.Where(m => counts.Contains(m.Parameters.Count)).ToList();
+        }
+        foreach (MethodDefinition method in methods) MethodOverload(output, type, method, composable, overloaded);
     }
 
     // The ABI parameters, the using lines that prepare them, and the call arguments of a method.
@@ -641,19 +654,261 @@ internal static partial class WinrtProjectionGenerator
         output.AppendLine("                return " + Runtime + "NativeObject.Inspectable(" + Runtime + "NativeObject.Borrow(pointer));");
         output.AppendLine("            }");
         output.AppendLine("        }");
-        output.AppendLine("        internal static " + Runtime + "ManagedObject Compose(object target, params " + Runtime + "NativeInterface[] interfaces)");
-        output.AppendLine("        {");
-        output.AppendLine("            if (target is global::Windows.UI.Xaml.Markup.IComponentConnector)");
-        output.AppendLine("            {");
-        output.AppendLine("                var extended = new " + Runtime + "NativeInterface[interfaces.Length + 1];");
-        output.AppendLine("                global::System.Array.Copy(interfaces, extended, interfaces.Length);");
-        output.AppendLine("                extended[interfaces.Length] = Interface;");
-        output.AppendLine("                interfaces = extended;");
-        output.AppendLine("            }");
-        output.AppendLine("            return " + Runtime + "ManagedObject.For(target, interfaces);");
-        output.AppendLine("        }");
         output.AppendLine("    }");
     }
+
+    // Managed-implemented interfaces a composed object exposes on its controlling outer.
+    private static readonly string[][] ManagedContractList = {
+        new[] { "Windows.UI.Xaml.Markup.IComponentConnector", "Windows_UI_Xaml_Markup_IComponentConnector.Interface" },
+        new[] { "Windows.UI.Xaml.Markup.IXamlMetadataProvider", "Windows_UI_Xaml_Markup_IXamlMetadataProvider.Provider" } };
+    private static bool HasManagedContracts { get { return ManagedContractList.Any(c => selected.Contains(c[0])); } }
+    private static void ManagedContracts(StringBuilder output)
+    {
+        if (!HasManagedContracts) return;
+        output.AppendLine("namespace AppxPortable.WinRT.Projected");
+        output.AppendLine("{");
+        output.AppendLine("    internal static class ManagedContracts");
+        output.AppendLine("    {");
+        output.AppendLine("        internal static " + Runtime + "ManagedObject Compose(object target, params " + Runtime + "NativeInterface[] interfaces)");
+        output.AppendLine("        {");
+        output.AppendLine("            var all = new global::System.Collections.Generic.List<" + Runtime + "NativeInterface>(interfaces);");
+        foreach (string[] contract in ManagedContractList.Where(c => selected.Contains(c[0])))
+            output.AppendLine("            if (target is global::" + contract[0] + ") all.Add(" + contract[1] + ");");
+        output.AppendLine("            return " + Runtime + "ManagedObject.For(target, all.ToArray());");
+        output.AppendLine("        }");
+        output.AppendLine("    }");
+        output.AppendLine("}");
+    }
+
+    // Each method's WinMD name and signature, in vtable order.
+    private static void MethodShapes(TypeDefinition type, params string[] shapes)
+    {
+        var actual = type.Methods.Select(m => m.Name + "(" + string.Join(",", m.Parameters.Select(p => CollectionType(p.ParameterType))) + ")->" +
+            CollectionType(m.ReturnType)).ToArray();
+        if (!type.IsInterface || type.HasGenericParameters || type.Methods.Any(m => m.IsStatic || !m.HasThis) || !actual.SequenceEqual(shapes))
+            throw new NotSupportedException("Unsupported XAML metadata ABI: " + type.FullName);
+    }
+
+    // IXamlMetadataProvider with the IXamlType and IXamlMember it returns, implemented by
+    // managed apps (XamlTypeInfo) and called by native XAML. Native callers receive CCWs.
+    private static void XamlMetadataContract(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        const string ns = "Windows.UI.Xaml.Markup.";
+        if (type.FullName != ns + "IXamlMetadataProvider" || surface.Name != "Interface" || surface.HasChildNodes)
+            throw new NotSupportedException("Unsupported XAML metadata surface");
+        TypeDefinition xamlType = Find(ns + "IXamlType"), member = Find(ns + "IXamlMember"), definition = Find(ns + "XmlnsDefinition");
+        MethodShapes(type, "GetXamlType(Windows.UI.Xaml.Interop.TypeName)->" + ns + "IXamlType",
+            "GetXamlType(System.String)->" + ns + "IXamlType", "GetXmlnsDefinitions()->" + ns + "XmlnsDefinition[]");
+        MethodShapes(xamlType, "get_BaseType()->" + ns + "IXamlType", "get_ContentProperty()->" + ns + "IXamlMember",
+            "get_FullName()->System.String", "get_IsArray()->System.Boolean", "get_IsCollection()->System.Boolean",
+            "get_IsConstructible()->System.Boolean", "get_IsDictionary()->System.Boolean", "get_IsMarkupExtension()->System.Boolean",
+            "get_IsBindable()->System.Boolean", "get_ItemType()->" + ns + "IXamlType", "get_KeyType()->" + ns + "IXamlType",
+            "get_UnderlyingType()->Windows.UI.Xaml.Interop.TypeName", "ActivateInstance()->System.Object",
+            "CreateFromString(System.String)->System.Object", "GetMember(System.String)->" + ns + "IXamlMember",
+            "AddToVector(System.Object,System.Object)->System.Void", "AddToMap(System.Object,System.Object,System.Object)->System.Void",
+            "RunInitializer()->System.Void");
+        MethodShapes(member, "get_IsAttachable()->System.Boolean", "get_IsDependencyProperty()->System.Boolean",
+            "get_IsReadOnly()->System.Boolean", "get_Name()->System.String", "get_TargetType()->" + ns + "IXamlType",
+            "get_Type()->" + ns + "IXamlType", "GetValue(System.Object)->System.Object", "SetValue(System.Object,System.Object)->System.Void");
+        if (!definition.IsValueType || !definition.Fields.Where(f => !f.IsStatic).Select(f => f.Name + ":" + f.FieldType.FullName)
+                .SequenceEqual(new[] { "XmlNamespace:System.String", "Namespace:System.String" }))
+            throw new NotSupportedException("Unsupported XAML metadata ABI: " + definition.FullName);
+        string body = XamlMetadataTemplate
+            .Replace("$StdCall", StdCall).Replace("$Runtime.", Runtime)
+            .Replace("$Provider", Guid(type)).Replace("$Type", Guid(xamlType)).Replace("$Member", Guid(member));
+        output.Append(body);
+    }
+    private const string XamlMetadataTemplate = @"    public interface IXamlMetadataProvider
+    {
+        IXamlType GetXamlType(global::System.Type type);
+        IXamlType GetXamlType(string fullName);
+        XmlnsDefinition[] GetXmlnsDefinitions();
+    }
+    public interface IXamlType
+    {
+        IXamlType BaseType { get; }
+        IXamlMember ContentProperty { get; }
+        string FullName { get; }
+        bool IsArray { get; }
+        bool IsCollection { get; }
+        bool IsConstructible { get; }
+        bool IsDictionary { get; }
+        bool IsMarkupExtension { get; }
+        bool IsBindable { get; }
+        IXamlType ItemType { get; }
+        IXamlType KeyType { get; }
+        global::System.Type UnderlyingType { get; }
+        object ActivateInstance();
+        object CreateFromString(string value);
+        IXamlMember GetMember(string name);
+        void AddToVector(object instance, object value);
+        void AddToMap(object instance, object key, object value);
+        void RunInitializer();
+    }
+    public interface IXamlMember
+    {
+        bool IsAttachable { get; }
+        bool IsDependencyProperty { get; }
+        bool IsReadOnly { get; }
+        string Name { get; }
+        IXamlType TargetType { get; }
+        IXamlType Type { get; }
+        object GetValue(object instance);
+        void SetValue(object instance, object value);
+    }
+    public struct XmlnsDefinition
+    {
+        public string XmlNamespace;
+        public string Namespace;
+    }
+}
+namespace AppxPortable.WinRT.Projected
+{
+    // CCW thunks in SDK vtable order. Object arguments and results that need
+    // boxing or unwrapping are not implemented yet and fail with E_NOTIMPL.
+    internal static class Windows_UI_Xaml_Markup_IXamlMetadataProvider
+    {
+        $StdCall
+        private delegate int TypeNameCall(global::System.IntPtr self, $Runtime.NativeTypeName.Abi type, out global::System.IntPtr result);
+        $StdCall
+        private delegate int PointerCall(global::System.IntPtr self, global::System.IntPtr value, out global::System.IntPtr result);
+        $StdCall
+        private delegate int ArrayCall(global::System.IntPtr self, out uint length, out global::System.IntPtr value);
+        $StdCall
+        private delegate int GetCall(global::System.IntPtr self, out global::System.IntPtr value);
+        $StdCall
+        private delegate int BooleanCall(global::System.IntPtr self, out byte value);
+        $StdCall
+        private delegate int GetTypeNameCall(global::System.IntPtr self, out $Runtime.NativeTypeName.Abi value);
+        $StdCall
+        private delegate int ActionCall(global::System.IntPtr self);
+        $StdCall
+        private delegate int PairCall(global::System.IntPtr self, global::System.IntPtr first, global::System.IntPtr second);
+        $StdCall
+        private delegate int TripleCall(global::System.IntPtr self, global::System.IntPtr first, global::System.IntPtr second, global::System.IntPtr third);
+
+        private static global::Windows.UI.Xaml.Markup.IXamlMetadataProvider AsProvider(object target) { return (global::Windows.UI.Xaml.Markup.IXamlMetadataProvider)target; }
+        private static global::Windows.UI.Xaml.Markup.IXamlType AsType(object target) { return (global::Windows.UI.Xaml.Markup.IXamlType)target; }
+        private static global::Windows.UI.Xaml.Markup.IXamlMember AsMember(object target) { return (global::Windows.UI.Xaml.Markup.IXamlMember)target; }
+
+        // An owned native reference for a returned managed object; null stays null.
+        private static global::System.IntPtr Owned(object value, $Runtime.NativeInterface contract)
+        {
+            if (value == null) return global::System.IntPtr.Zero;
+            if (value is $Runtime.INativeWrapper) throw new global::System.NotSupportedException(""Native XAML metadata objects cannot be returned to native code yet"");
+            $Runtime.ManagedObject managed = $Runtime.ManagedObject.For(value, contract);
+            global::System.Guid iid = contract.Iid;
+            global::System.IntPtr pointer;
+            int hr = global::System.Runtime.InteropServices.Marshal.QueryInterface(managed.Pointer, ref iid, out pointer);
+            global::System.GC.KeepAlive(managed);
+            global::System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(hr);
+            return pointer;
+        }
+        private static global::System.IntPtr OwnedObject(object value)
+        {
+            using ($Runtime.NativeObject boxed = $Runtime.NativeObject.Box(value))
+            {
+                if (boxed == null) return global::System.IntPtr.Zero;
+                global::System.IntPtr pointer = boxed.DangerousGetHandle();
+                global::System.Runtime.InteropServices.Marshal.AddRef(pointer);
+                return pointer;
+            }
+        }
+        private static int Result(global::System.IntPtr self, global::System.Func<object, global::System.IntPtr> call, out global::System.IntPtr result)
+        {
+            global::System.IntPtr value = global::System.IntPtr.Zero;
+            int hr = $Runtime.ManagedObject.Call(self, target => value = call(target));
+            result = hr < 0 ? global::System.IntPtr.Zero : value;
+            if (hr < 0 && value != global::System.IntPtr.Zero) global::System.Runtime.InteropServices.Marshal.Release(value);
+            return hr;
+        }
+        private static int Flag(global::System.IntPtr self, global::System.Func<object, bool> call, out byte result)
+        {
+            bool value = false;
+            int hr = $Runtime.ManagedObject.Call(self, target => value = call(target));
+            result = value ? (byte)1 : (byte)0;
+            return hr;
+        }
+        private static int Text(global::System.IntPtr self, global::System.Func<object, string> call, out global::System.IntPtr result)
+        {
+            return Result(self, target => { using (var text = new $Runtime.NativeString(call(target))) return text.Detach(); }, out result);
+        }
+        private static int Unimplemented(global::System.IntPtr self, string member)
+        {
+            return $Runtime.ManagedObject.Call(self, target => { throw $Runtime.Errors.Unimplemented(member); });
+        }
+
+        private static int GetXamlType(global::System.IntPtr self, $Runtime.NativeTypeName.Abi type, out global::System.IntPtr result)
+        {
+            return Result(self, target => Owned(AsProvider(target).GetXamlType($Runtime.NativeTypeName.ToType(type)), Type), out result);
+        }
+        private static int GetXamlTypeByFullName(global::System.IntPtr self, global::System.IntPtr name, out global::System.IntPtr result)
+        {
+            return Result(self, target => Owned(AsProvider(target).GetXamlType($Runtime.NativeString.Read(name)), Type), out result);
+        }
+        private static int GetXmlnsDefinitions(global::System.IntPtr self, out uint length, out global::System.IntPtr value)
+        {
+            length = 0;
+            value = global::System.IntPtr.Zero;
+            return Unimplemented(self, ""Windows.UI.Xaml.Markup.IXamlMetadataProvider.GetXmlnsDefinitions"");
+        }
+        private static int GetUnderlyingType(global::System.IntPtr self, out $Runtime.NativeTypeName.Abi result)
+        {
+            var value = default($Runtime.NativeTypeName.Abi);
+            int hr = $Runtime.ManagedObject.Call(self, target => value = $Runtime.NativeTypeName.Detach(AsType(target).UnderlyingType));
+            result = value;
+            return hr;
+        }
+        private static int GetMember(global::System.IntPtr self, global::System.IntPtr name, out global::System.IntPtr result)
+        {
+            return Result(self, target => Owned(AsType(target).GetMember($Runtime.NativeString.Read(name)), Member), out result);
+        }
+        private static int CreateFromString(global::System.IntPtr self, global::System.IntPtr text, out global::System.IntPtr result)
+        {
+            result = global::System.IntPtr.Zero;
+            return Unimplemented(self, ""Windows.UI.Xaml.Markup.IXamlType.CreateFromString"");
+        }
+        private static int GetValue(global::System.IntPtr self, global::System.IntPtr instance, out global::System.IntPtr result)
+        {
+            result = global::System.IntPtr.Zero;
+            return Unimplemented(self, ""Windows.UI.Xaml.Markup.IXamlMember.GetValue"");
+        }
+
+        // Windows.UI.Xaml.Markup.IXamlMetadataProvider
+        internal static readonly $Runtime.NativeInterface Provider = new $Runtime.NativeInterface($Provider, true,
+            new TypeNameCall(GetXamlType), new PointerCall(GetXamlTypeByFullName), new ArrayCall(GetXmlnsDefinitions));
+        // Windows.UI.Xaml.Markup.IXamlType
+        internal static readonly $Runtime.NativeInterface Type = new $Runtime.NativeInterface($Type, true,
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Result(self, t => Owned(AsType(t).BaseType, Type), out r)),
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Result(self, t => Owned(AsType(t).ContentProperty, Member), out r)),
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Text(self, t => AsType(t).FullName, out r)),
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsType(t).IsArray, out r)),
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsType(t).IsCollection, out r)),
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsType(t).IsConstructible, out r)),
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsType(t).IsDictionary, out r)),
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsType(t).IsMarkupExtension, out r)),
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsType(t).IsBindable, out r)),
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Result(self, t => Owned(AsType(t).ItemType, Type), out r)),
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Result(self, t => Owned(AsType(t).KeyType, Type), out r)),
+            new GetTypeNameCall(GetUnderlyingType),
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Result(self, t => OwnedObject(AsType(t).ActivateInstance()), out r)),
+            new PointerCall(CreateFromString),
+            new PointerCall(GetMember),
+            new PairCall((self, instance, value) => Unimplemented(self, ""Windows.UI.Xaml.Markup.IXamlType.AddToVector"")),
+            new TripleCall((self, instance, key, value) => Unimplemented(self, ""Windows.UI.Xaml.Markup.IXamlType.AddToMap"")),
+            new ActionCall(self => $Runtime.ManagedObject.Call(self, t => AsType(t).RunInitializer())));
+        // Windows.UI.Xaml.Markup.IXamlMember
+        internal static readonly $Runtime.NativeInterface Member = new $Runtime.NativeInterface($Member, true,
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsMember(t).IsAttachable, out r)),
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsMember(t).IsDependencyProperty, out r)),
+            new BooleanCall((global::System.IntPtr self, out byte r) => Flag(self, t => AsMember(t).IsReadOnly, out r)),
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Text(self, t => AsMember(t).Name, out r)),
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Result(self, t => Owned(AsMember(t).TargetType, Type), out r)),
+            new GetCall((global::System.IntPtr self, out global::System.IntPtr r) => Result(self, t => Owned(AsMember(t).Type, Type), out r)),
+            new PointerCall(GetValue),
+            new PairCall((self, instance, value) => Unimplemented(self, ""Windows.UI.Xaml.Markup.IXamlMember.SetValue"")));
+    }
+";
 
     private static void Property(StringBuilder output, TypeDefinition type, string name, bool composable)
     {
@@ -1295,8 +1550,7 @@ internal static partial class WinrtProjectionGenerator
             if (unsupported.Count != 0)
                 output.AppendLine("            " + Runtime + "ManagedObject.RequireOverrides(GetType(), typeof(" + type.Name + "), " +
                     string.Join(", ", unsupported.Select(n => "\"" + n + "\"")) + ");");
-            string compose = selected.Contains("Windows.UI.Xaml.Markup.IComponentConnector")
-                ? Projected(Find("Windows.UI.Xaml.Markup.IComponentConnector")) + ".Compose" : Runtime + "ManagedObject.For";
+            string compose = HasManagedContracts ? "global::AppxPortable.WinRT.Projected.ManagedContracts.Compose" : Runtime + "ManagedObject.For";
             output.AppendLine("            outer = " + compose + "(this, " + Runtime + "ManagedObject.Identity" +
                 string.Concat(exposed.Select((i, n) => ", Overrides" + Literal(n) + ".Interface")) + ");");
             output.AppendLine("            using (var factory = " + Runtime + "NativeObject.Factory(\"" + type.FullName + "\", " + Guid(factory) + "))");
@@ -1355,7 +1609,7 @@ internal static partial class WinrtProjectionGenerator
         {
             if (member.Name == "Method" && closable && member.GetAttribute("Name") == "Close") Dispose(output);
             else if (member.Name == "Property") Member(output, type, member, o => Property(o, type, member.GetAttribute("Name"), query));
-            else if (member.Name == "Method") Member(output, type, member, o => Method(o, type, member.GetAttribute("Name"), query));
+            else if (member.Name == "Method") Member(output, type, member, o => Method(o, type, member.GetAttribute("Name"), query, member.GetAttribute("Arities")));
             else if (member.Name == "Event") Member(output, type, member, o => Event(o, type, member.GetAttribute("Name"), query));
         }
         foreach (string name in implemented)
@@ -1445,6 +1699,8 @@ internal static partial class WinrtProjectionGenerator
                     UriContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "ComponentConnector")
                     ComponentConnectorContract(output, type, element);
+                else if (element.GetAttribute("Adapter") == "XamlMetadata")
+                    XamlMetadataContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "Storage")
                     StorageContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "StringMapView")
@@ -1481,6 +1737,7 @@ internal static partial class WinrtProjectionGenerator
                 else throw new InvalidDataException("Surface kind does not match metadata: " + type.FullName);
                 output.AppendLine("}");
             }
+            ManagedContracts(output);
             if (interop) Provider(output);
             File.WriteAllText(args[2], output.ToString(), new UTF8Encoding(false));
             Console.WriteLine("Generated " + selected.Count + " metadata types into " + args[2]);

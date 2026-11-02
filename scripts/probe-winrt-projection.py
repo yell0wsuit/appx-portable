@@ -24,6 +24,9 @@ HEADER_IIDS = {
     "IApplicationInitializationCallbackParams": "751b792e-5772-4488-8b87-f547faa64474",
     "IActivatedEventArgs": "cf651713-cd08-4fd8-b697-a281b6544e2e", "IWindowStatics": "93328409-4ea1-4afa-83dc-0c4e73e88bb1",
     "IWindow": "3276167d-c9f6-462d-9de2-ae4c1fd8c2e5", "IFrameFactory": "02ee93d4-448e-469e-9799-0a8a1f70f171",
+    "IFrame": "68ea500b-3fe9-4735-b6a0-e7601933b089", "INavigate": "bf2195a9-f4ea-4336-977c-f8fcf78b0d9e",
+    "IXamlMetadataProvider": "b3765d69-68a5-4b32-8861-fdb90c1f5836", "IXamlType": "7920eab1-a2e5-479a-bd50-6cef3c0b4970",
+    "IXamlMember": "c541f58c-43a9-4216-b718-e0b11b14e93e", "IVisualTreeHelperStatics": "e75758c4-d25d-4b1d-971f-596f17f12baa",
     "IWindowSizeChangedEventHandler": "5c21c742-2ced-4fd9-ba38-7118d40e966b",
     "IDispatchedHandler": "d1f276c4-98d8-4636-bf49-eb79507548e9",
     "IDataTransferManager": "a5caee9b-8708-49d1-8d36-67d25a8da00c", "IDataTransferManagerStatics": "a9da01aa-e00e-4cfe-aa44-2dd932dca3d8",
@@ -55,6 +58,10 @@ HEADER_IIDS = {
     "INetworkInformationStatics": "5074f851-950d-4165-9c15-365619481eea",
     "IConnectionProfile": "71ba143c-598e-49d0-84eb-8febaedcc195", "INetworkStatusChangedEventHandler": "71ba143f-598e-49d0-84eb-8febaedcc195"}
 HEADER_SLOTS = [
+    "Windows.UI.Xaml.Controls.INavigate::Navigate, slot 6", "Windows.UI.Xaml.Controls.IFrame::Navigate, slot 24",
+    "Windows.UI.Xaml.IFrameworkElement::get_Style, slot 38", "Windows.UI.Xaml.IFrameworkElement::put_Style, slot 39",
+    "Windows.UI.Xaml.Media.IVisualTreeHelperStatics::GetChild, slot 10",
+    "Windows.UI.Xaml.Media.IVisualTreeHelperStatics::GetChildrenCount, slot 11",
     "Windows.UI.Xaml.IWindow::add_SizeChanged, slot 16",
     "Windows.UI.Xaml.IWindow::remove_SizeChanged, slot 17",
     "Windows.UI.Xaml.Controls.ITextBlock::get_Text, slot 26",
@@ -319,10 +326,10 @@ def main():
         # Closed resource map IDs from windows.ui.xaml.h, independent of WinMD.
         for iid in ("f5f69427-55ed-5512-8429-d4f6626dfcdd", "33ac68f0-1084-529a-8a17-4e7c8adb7a0c"):
             require(iid in generated, "ResourceDictionary collection IID differs from SDK header: " + iid)
-        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "IDispatcherTimer", "EventHandler<IInspectable>", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs", "ICoreDispatcher", "IDispatchedHandler", "IDataTransferManager", "IDataTransferManagerStatics", "TypedEventHandler<DataTransferManager, DataRequestedEventArgs>"):
+        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "IDispatcherTimer", "EventHandler<IInspectable>", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs", "ICoreDispatcher", "IDispatchedHandler", "IDataTransferManager", "IDataTransferManagerStatics", "TypedEventHandler<DataTransferManager, DataRequestedEventArgs>", "IFrame", "INavigate", "IXamlMetadataProvider", "IXamlType", "IXamlMember", "IVisualTreeHelperStatics"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
-            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IDispatcherTimer::", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged", "ICoreDispatcher::RunAsync", "IDataTransferManager", ".IDataTransferManagerStatics::")):
+            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IDispatcherTimer::", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged", "ICoreDispatcher::RunAsync", "IDataTransferManager", ".IDataTransferManagerStatics::", "::Navigate, slot", "IFrameworkElement::get_Style", "IFrameworkElement::put_Style", "IVisualTreeHelperStatics::")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
         mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         mutated = output / "resource-map-shape"
@@ -331,7 +338,9 @@ def main():
         run("reject-resource-map", ["generator.exe", windows(mutated), windows(repo / "host/winrt/bootstrap.xml"), windows(target)],
             succeeds=False, marker="Unsupported object map adapter: Windows.UI.Xaml.ResourceDictionary")
         require(not target.exists(), "invalid object map shape produced a usable output")
-        for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri")):
+        for kind, member in (("connector-id", "IComponentConnector.Connect"), ("uri-return", "IUriRuntimeClass.get_AbsoluteUri"), ("uri-factory", "IUriRuntimeClassFactory.CreateUri"),
+                             ("xaml-type-order", "Unsupported XAML metadata ABI: Windows.UI.Xaml.Markup.IXamlType"),
+                             ("xaml-member-value", "Unsupported XAML metadata ABI: Windows.UI.Xaml.Markup.IXamlMember")):
             mutated = output / kind
             run("mutate-" + kind, [mutator.name, windows(metadata), windows(mutated), kind])
             run("reject-" + kind, ["generator.exe", windows(mutated), windows(repo / "host/winrt/bootstrap.xml"), windows(output / (kind + ".cs"))], succeeds=False, marker=member)
