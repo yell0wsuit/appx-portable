@@ -200,7 +200,12 @@ class StorageIoProjectionTest
                 reader.ReadBytes(group);
                 groups.AddRange(group);
             }
-            Check(System.Text.Encoding.ASCII.GetString(groups.ToArray()) == "appx-portable\0\0\u0001", "ReadBytes fills the caller's array");
+            Check(groups.SequenceEqual(new byte[] { 1, 0, 65, 80, 2, 0, 80, 88, 3, 0, 48, 48, 9, 0, 48, 49 }), "ReadBytes fills the caller's array");
+            string deviceToken = "";
+            for (int i = 0; i < groups.Count; i += 4)
+                if ((groups[i] == 1 || groups[i] == 2 || groups[i] == 3 || groups[i] == 9) && groups[i + 1] == 0)
+                    deviceToken += string.Format("{0}{1}", groups[i + 2], groups[i + 3]);
+            Check(deviceToken.Length != 0, "the game's hardware-record filter must yield a synthetic device ID");
             Check(reader.UnconsumedBufferLength == 0, "ReadBytes consumes the buffer");
             reader.ReadBytes(new byte[0]);
             try { reader.ReadBytes(new byte[1]); throw new Exception("read past the buffer"); }

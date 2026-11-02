@@ -330,9 +330,9 @@ int main() {
         FAILED(reader->get_UnconsumedBufferLength(&size)) || size != 16)
         return 12;
     byte first = 0;
-    if (FAILED(reader->ReadByte(&first)) || first != 'a') return 13;
+    if (FAILED(reader->ReadByte(&first)) || first != 1) return 13;
     if (FAILED(reader->ReadBytes(15, bytes.data()))) return 14;
-    const byte expected[15] = {'p', 'p', 'x', '-', 'p', 'o', 'r', 't', 'a', 'b', 'l', 'e', 0, 0, 1};
+    const byte expected[15] = {0, 'A', 'P', 2, 0, 'P', 'X', 3, 0, '0', '0', 9, 0, '0', '1'};
     if (memcmp(bytes.data(), expected, 15) != 0 || FAILED(reader->get_UnconsumedBufferLength(&size)) || size != 0)
         return 15;
     if (reader->ReadByte(&first) != E_BOUNDS || FAILED(reader->ReadBytes(0, nullptr))) return 16;

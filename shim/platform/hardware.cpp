@@ -11,7 +11,9 @@ namespace appx {
 namespace {
 // Synthetic compatibility data, not a physical identifier or a cryptographic
 // signature/certificate. Fresh buffers prevent callers from changing the token.
-constexpr std::array<byte, 16> tokenId = {'a', 'p', 'p', 'x', '-', 'p', 'o', 'r', 't', 'a', 'b', 'l', 'e', 0, 0, 1};
+// Hardware IDs are four-byte records: little-endian component type, then value.
+// Keep an invented, stable payload while allowing consumers to recognize the records.
+constexpr std::array<byte, 16> tokenId = {1, 0, 'A', 'P', 2, 0, 'P', 'X', 3, 0, '0', '0', 9, 0, '0', '1'};
 constexpr std::array<byte, 16> tokenSignature = {
     'a', 'p', 'p', 'x', '-', 'o', 'f', 'f', 'l', 'i', 'n', 'e', '-', 's', 'i', 'g',
 };
