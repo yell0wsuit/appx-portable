@@ -24,8 +24,57 @@ class SourcePage : Page, IComponentConnector
         if (FindName("leaf") == null) throw new Exception("names not registered before Connect");
     }
 }
-class SourceApp : Application
+// An app type as generated XamlTypeInfo describes it: system bases are projection types.
+class SourceXamlType : IXamlType
 {
+    readonly string name;
+    readonly Type type;
+    readonly IXamlType baseType;
+    internal SourceXamlType(string name, Type type, IXamlType baseType) { this.name = name; this.type = type; this.baseType = baseType; }
+    public IXamlType BaseType { get { return baseType; } }
+    public IXamlMember ContentProperty { get { return null; } }
+    public string FullName { get { return name; } }
+    public bool IsArray { get { return false; } }
+    public bool IsCollection { get { return false; } }
+    public bool IsConstructible { get { return true; } }
+    public bool IsDictionary { get { return false; } }
+    public bool IsMarkupExtension { get { return false; } }
+    public bool IsBindable { get { return false; } }
+    public IXamlType ItemType { get { return null; } }
+    public IXamlType KeyType { get { return null; } }
+    public Type UnderlyingType { get { return type; } }
+    public object ActivateInstance() { return Activator.CreateInstance(type, true); }
+    public object CreateFromString(string value) { throw new NotSupportedException(); }
+    public IXamlMember GetMember(string member) { return null; }
+    public void AddToVector(object instance, object value) { throw new NotSupportedException(); }
+    public void AddToMap(object instance, object key, object value) { throw new NotSupportedException(); }
+    public void RunInitializer() { }
+}
+class CustomSourcePage : SourcePage { }
+class SourceApp : Application, IXamlMetadataProvider
+{
+    readonly Dictionary<string, IXamlType> types = new Dictionary<string, IXamlType>();
+    internal readonly List<string> Requested = new List<string>();
+    public SourceApp()
+    {
+        var page = new SourceXamlType("Windows.UI.Xaml.Controls.Page", typeof(Page), null);
+        var custom = new SourceXamlType("Fixture.Custom.SourcePage", typeof(CustomSourcePage), page);
+        types.Add(custom.FullName, custom);
+        types.Add("Fixture.Custom.DeepPage", new SourceXamlType("Fixture.Custom.DeepPage", typeof(CustomSourcePage), custom));
+        types.Add("Fixture.Custom.Orphan", new SourceXamlType("Fixture.Custom.Orphan", typeof(CustomSourcePage), null));
+        types.Add("Fixture.Custom.GridPage", new SourceXamlType("Fixture.Custom.GridPage", typeof(CustomSourcePage),
+            new SourceXamlType("Windows.UI.Xaml.Controls.Grid", typeof(Grid), null)));
+        types.Add("Fixture.Custom.StylePage", new SourceXamlType("Fixture.Custom.StylePage", typeof(CustomSourcePage),
+            new SourceXamlType("Windows.UI.Xaml.Style", typeof(Style), null)));
+    }
+    public IXamlType GetXamlType(Type type) { return null; }
+    public IXamlType GetXamlType(string fullName)
+    {
+        Requested.Add(fullName);
+        IXamlType value;
+        return types.TryGetValue(fullName, out value) ? value : null;
+    }
+    public XmlnsDefinition[] GetXmlnsDefinitions() { return new XmlnsDefinition[0]; }
     const string Ns = " xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\"";
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedSource();
@@ -52,6 +101,26 @@ class SourceApp : Application
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ValidateLoadedResources(int stage);
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+    const string Custom = " xmlns:custom=\"using:Fixture.Custom\"";
+    // A root of an app type loads into the component as its system base; other app types fail explicitly.
+    void VerifyCustomRoot(SourcePage page)
+    {
+        foreach (var root in new[] { "SourcePage", "DeepPage" })
+        {
+            Requested.Clear();
+            File.WriteAllText("Fixtures/custom.xaml", "<custom:" + root + Ns + Custom + " x:Name=\"root\"><Grid x:Name=\"leaf\" x:ConnectionId=\"7\"/></custom:" + root + ">");
+            page.Connections.Clear();
+            Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/custom.xaml"));
+            Check(Requested.Count == 1 && Requested[0] == "Fixture.Custom." + root, "custom root resolved by full name: " + root);
+            Check(page.Content is Grid && ReferenceEquals(page.FindName("leaf"), page.Content), "custom root content: " + root);
+            Check(ReferenceEquals(page.FindName("root"), page) && page.Connections.Count == 1 && page.Connections[0] == 7, "custom root names and connections: " + root);
+        }
+        Console.WriteLine("PASS: source XAML roots of app types load as their system base through the metadata provider");
+    }
+    static void BadCustom(SourcePage page, string root, string body, int hr)
+    {
+        Bad(page, "<custom:" + root + Ns + Custom + ">" + body + "</custom:" + root + ">", hr);
+    }
     static void Bad(SourcePage page, string body, int hr)
     {
         File.WriteAllText("Fixtures/bad.xaml", body);
@@ -612,6 +681,11 @@ class SourceApp : Application
         Bad(page, "<Page" + Ns + ">text</Page>", unchecked((int)0x80004001));
         Bad(page, "<Page" + Ns + "><Frame></Page>", 0);
         Bad(page, "<!DOCTYPE Page [<!ENTITY value 'bad'>]><Page" + Ns + "/>", 0);
+        BadCustom(page, "Missing", "", unchecked((int)0x8002802b));
+        BadCustom(page, "Orphan", "", unchecked((int)0x80070057));
+        BadCustom(page, "GridPage", "", unchecked((int)0x80070057));
+        BadCustom(page, "StylePage", "", unchecked((int)0x80004001));
+        Bad(page, "<Page" + Ns + Custom + "><custom:SourcePage/></Page>", unchecked((int)0x80004001));
         Check(ValidateLoadedSource() == 0, "invalid source changed properties or tree");
         try { Application.LoadComponent(page, new Uri("ms-appx:///missing.xaml")); throw new Exception("missing file accepted"); }
         catch (FileNotFoundException) { }
@@ -631,6 +705,7 @@ class SourceApp : Application
         VerifyViewbox(page);
         VerifyAnimations(page);
         VerifyClock(page);
+        VerifyCustomRoot(page);
         File.WriteAllText("Fixtures/error.xaml", "<Page" + Ns + " x:ConnectionId=\"99\"/>");
         page.Failure = new InvalidOperationException("source callback failure");
         try { Application.LoadComponent(page, new Uri("ms-appx:///Fixtures/error.xaml")); throw new Exception("callback error accepted"); }

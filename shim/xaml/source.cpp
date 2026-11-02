@@ -64,6 +64,7 @@ struct Node {
     std::wstring key;
     bool hasKey = false, hasResources = false;
     ComPtr<IResourceDictionary> dictionary;
+    ComPtr<ABI::Windows::UI::Xaml::Markup::IXamlType> customType; // A using: type, built as its system base.
     bool hasWidth = false, hasHeight = false, hasVisibility = false;
     double width = 0, height = 0;
     Visibility visibility = Visibility_Visible;
@@ -234,6 +235,42 @@ HRESULT ParseTargetType(const std::wstring& owner, const std::wstring& value, st
     if (!SourceElementType(value)) return Fail(owner + L".TargetType " + value);
     type = value;
     return S_OK;
+}
+// A using: element names an app type, found through the application's XAML metadata
+// provider. Its nearest system base type selects which source element it is built as.
+HRESULT ResolveCustomType(Node& node) {
+    const auto full = node.space.substr(6) + L"." + node.type;
+    const auto member = node.space + L":" + node.type;
+    ComPtr<IApplication> application;
+    auto hr = CurrentApplication(&application);
+    ComPtr<ABI::Windows::UI::Xaml::Markup::IXamlMetadataProvider> provider;
+    if (SUCCEEDED(hr)) hr = application ? application.As(&provider) : E_NOINTERFACE;
+    if (FAILED(hr)) return Fail(member + L" metadata provider", hr);
+    hr = provider->GetXamlTypeByFullName(Wrappers::HStringReference(full.c_str()).Get(), &node.customType);
+    if (FAILED(hr)) return Fail(member, hr);
+    if (!node.customType) return Fail(member, TYPE_E_ELEMENTNOTFOUND);
+    auto type = node.customType;
+    for (int depth = 0; type && depth < 64; ++depth) {
+        ABI::Windows::UI::Xaml::Interop::TypeName underlying{};
+        hr = type->get_UnderlyingType(&underlying);
+        if (FAILED(hr)) return Fail(member, hr);
+        Wrappers::HString name;
+        name.Attach(underlying.Name);
+        if (underlying.Kind == ABI::Windows::UI::Xaml::Interop::TypeKind_Metadata) {
+            const std::wstring system = name.GetRawBuffer(nullptr);
+            const std::wstring controls = L"Windows.UI.Xaml.Controls.";
+            const auto base = system.compare(0, controls.size(), controls) == 0 ? system.substr(controls.size()) : L"";
+            if (!SourceElementType(base)) return Fail(member + L" base " + system);
+            node.space = Presentation;
+            node.type = base;
+            return S_OK;
+        }
+        ComPtr<ABI::Windows::UI::Xaml::Markup::IXamlType> next;
+        hr = type->get_BaseType(&next);
+        if (FAILED(hr)) return Fail(member, hr);
+        type = next;
+    }
+    return Fail(member + L" system base", E_INVALIDARG);
 }
 HRESULT PrepareTemplate(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
                         const std::wstring& owner) {
@@ -406,6 +443,11 @@ HRESULT PrepareResources(Node& owner, Node& property, std::map<std::wstring, std
 }
 HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
                 std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource) {
+    // Only a root of an app type for now: its instance is the component being loaded.
+    if (root && node.space.compare(0, 6, L"using:") == 0) {
+        auto hr = ResolveCustomType(node);
+        if (FAILED(hr)) return hr;
+    }
     if (node.space != Presentation) return Fail(node.space + L":" + node.type);
     if (node.type == L"Style") return PrepareStyle(node, spaces, ignoreDesign, resource);
     const bool animation = AnimationType(node.type);
