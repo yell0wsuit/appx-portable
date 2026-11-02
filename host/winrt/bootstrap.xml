@@ -168,6 +168,24 @@
   <Class Name="Windows.Storage.Streams.DataWriter" Adapter="Storage" />
   <Class Name="Windows.Storage.Streams.DataReader" Adapter="Storage" />
   <Class Name="Windows.Storage.Streams.DataReaderLoadOperation" Adapter="Storage" />
+  <Class Name="Windows.Security.Cryptography.CryptographicBuffer">
+    <Method Name="ConvertStringToBinary" />
+    <Method Name="EncodeToBase64String" />
+  </Class>
+  <Enum Name="Windows.Security.Cryptography.BinaryStringEncoding" />
+  <Class Name="Windows.Security.Cryptography.Core.HashAlgorithmNames">
+    <Property Name="Md5" />
+    <Property Name="Sha1" />
+    <Property Name="Sha256" />
+    <Property Name="Sha384" />
+    <Property Name="Sha512" />
+  </Class>
+  <Class Name="Windows.Security.Cryptography.Core.HashAlgorithmProvider">
+    <Method Name="OpenAlgorithm" />
+    <Property Name="AlgorithmName" />
+    <Property Name="HashLength" />
+    <Method Name="HashData" />
+  </Class>
   <Class Name="Windows.System.Profile.HardwareIdentification">
     <Method Name="GetPackageSpecificToken" />
   </Class>
