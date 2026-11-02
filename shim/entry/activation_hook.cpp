@@ -2,6 +2,7 @@
 #include "islands/islands.h"
 #include "log.h"
 #include "package/package.h"
+#include "platform/http_request.h"
 #include "platform/mf_stream.h"
 #include <roapi.h>
 #include <psapi.h>
@@ -216,6 +217,19 @@ static FARPROC WINAPI ProcAddress(HMODULE module, LPCSTR name) noexcept {
     return GetProcAddress(module, name);
 }
 
+// Wine's msxml lacks FreeThreadedXMLHTTP60, which games' native code creates for
+// HTTP; the shim's offline request answers it. Other classes reach combase.
+static HRESULT WINAPI CreateInstanceFromApp(REFCLSID clsid, IUnknown* outer, DWORD context, void* reserved, DWORD count,
+                                            MULTI_QI* results) {
+    if (IsEqualCLSID(clsid, appx::freeThreadedHttpClass)) {
+        if (reserved) return E_INVALIDARG;
+        if (!outer && (context & CLSCTX_INPROC_SERVER)) return appx::CreateOfflineHttpRequest(count, results);
+    }
+    using Create = HRESULT(WINAPI*)(REFCLSID, IUnknown*, DWORD, void*, DWORD, MULTI_QI*);
+    static auto original =
+        reinterpret_cast<Create>(GetProcAddress(GetModuleHandleW(L"combase.dll"), "CoCreateInstanceFromApp"));
+    return original ? original(clsid, outer, context, reserved, count, results) : REGDB_E_CLASSNOTREG;
+}
 // Redirect the imports of every module in the game folder, which covers the
 // game and its VC runtime: the activation calls as a fallback for Wine builds
 // without hotpatch prologues, and Wine's aborting stubs whenever on Wine.
@@ -245,6 +259,8 @@ static void PatchModule(HMODULE module, bool activation) noexcept {
             if (OnWine() && strcmp(name, "RoUnregisterForApartmentShutdown") == 0)
                 hook = reinterpret_cast<void*>(&UnregisterForApartmentShutdown);
             if (OnWine() && strcmp(name, "RoTransformError") == 0) hook = reinterpret_cast<void*>(&TransformError);
+            if (OnWine() && strcmp(name, "CoCreateInstanceFromApp") == 0)
+                hook = reinterpret_cast<void*>(&CreateInstanceFromApp);
             if (OnWine() && strcmp(name, "RoCaptureErrorContext") == 0)
                 hook = reinterpret_cast<void*>(&CaptureErrorContext);
             if (OnWine() && _stricmp(reinterpret_cast<const char*>(base + imports->Name), "mfplat.dll") == 0 &&

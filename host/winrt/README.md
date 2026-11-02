@@ -443,6 +443,17 @@ preflight can reach the local Store stub. HTTP remains offline. Options are read
 once and the model is constant for the process; registration retains handlers
 and removal releases them, but it does not monitor physical network changes.
 
+On Wine, game-module imports of `CoCreateInstanceFromApp` supply an offline
+`FreeThreadedXMLHTTP60` object for native metrics requests. Valid requests accept
+Open/Send and report a connection failure asynchronously; they never send network
+data or fabricate a successful response. Callbacks are registered through the
+COM Global Interface Table and resolved on an initialized worker apartment.
+Abort invalidates the request, and already-sent work retains its terminal
+callback. The object is intentionally a one-shot offline request. Other COM
+classes and native Windows keep their original activation path. `httptest`
+checks callback lifetime, cross-thread apartment setup, reentrant cancellation,
+partial interface results and missing-class forwarding; it skips on native Windows.
+
 `--network-only` and `winrt_network_projection` check both modes in separate
 processes, native subscriber lifetime/removal and WindowsRuntimeMarshal event
 registration. `network_projection_fixture.dll` is a test-only SDK ABI caller: it
