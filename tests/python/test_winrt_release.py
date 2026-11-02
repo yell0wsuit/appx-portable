@@ -35,6 +35,14 @@ class ReleaseBuildTests(unittest.TestCase):
         self.assertTrue(steps["rebind-tasks"][-1].endswith("System.Runtime.WindowsRuntime.dll"))
         self.assertIn("/define:APPX_PORTABLE_INTEROP", steps["compile-bootstrap"])
 
+    def test_release_artifact_is_verified_by_the_strict_load_test(self):
+        names = [name for name, _ in release.commands(release.Toolchain(framework=Path("/framework")), Path("/metadata"),
+                                                      Path("/work/Mono.Cecil.dll"), Path("/out"), Path("/work"))]
+        self.assertEqual(names[-2:], ["compile-surface-check", "verify-surface"])
+        steps = self.steps(release.Toolchain(framework=Path("/framework")))
+        self.assertTrue(steps["compile-surface-check"][-1].endswith("surface_load.cs"))
+        self.assertEqual(steps["verify-surface"], [str(Path("/work/surface-load.exe")), str(Path("/out/Windows.dll"))])
+
     def test_no_contract_metadata_reaches_the_output(self):
         steps = self.steps(release.Toolchain(framework=Path("/framework")))
         outputs = [arg for command in steps.values() for arg in command if arg.startswith(("/out:", str(Path("/out"))))]
