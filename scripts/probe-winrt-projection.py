@@ -57,8 +57,18 @@ HEADER_IIDS = {
     "IDispatcherTimer": "d160ce46-cd22-4f5f-8c97-40e61da3e2dc", "EventHandler<IInspectable>": "c50898f6-c536-5f47-8583-8b2c2438a13b",
     "INavigationEventArgs": "b6aa9834-6691-44d1-bdf7-58820c27b0d0", "INavigatingCancelEventArgs": "fd1d67ae-eafb-4079-be80-6dc92a03aedf",
     "INetworkInformationStatics": "5074f851-950d-4165-9c15-365619481eea",
-    "IConnectionProfile": "71ba143c-598e-49d0-84eb-8febaedcc195", "INetworkStatusChangedEventHandler": "71ba143f-598e-49d0-84eb-8febaedcc195"}
+    "IConnectionProfile": "71ba143c-598e-49d0-84eb-8febaedcc195", "INetworkStatusChangedEventHandler": "71ba143f-598e-49d0-84eb-8febaedcc195",
+    "IDesignModeStatics": "2c3893cc-f81a-4e7a-b857-76a80887e185", "IRoutedEventHandler": "a856e674-b0b6-4bc3-bba8-1ba06e40d4b5",
+    "IWindowActivatedEventHandler": "18026348-8619-4c7b-b534-ced45d9de219", "IWindowActivatedEventArgs": "179d65e7-4658-4cb6-aa13-41d094ea255e"}
 HEADER_SLOTS = [
+    "Windows.ApplicationModel.IDesignModeStatics::get_DesignModeEnabled, slot 6",
+    "Windows.UI.Xaml.IFrameworkElement::get_ActualWidth, slot 13", "Windows.UI.Xaml.IFrameworkElement::get_ActualHeight, slot 14",
+    "Windows.UI.Xaml.IFrameworkElement::add_Loaded, slot 43", "Windows.UI.Xaml.IFrameworkElement::remove_Loaded, slot 44",
+    "Windows.UI.Xaml.IFrameworkElement::add_Unloaded, slot 45", "Windows.UI.Xaml.IFrameworkElement::remove_Unloaded, slot 46",
+    "Windows.UI.Xaml.IWindow::get_Bounds, slot 6", "Windows.UI.Xaml.IWindow::get_CoreWindow, slot 10",
+    "Windows.UI.Xaml.IWindow::add_Activated, slot 12", "Windows.UI.Xaml.IWindow::remove_Activated, slot 13",
+    "Windows.UI.Core.IWindowActivatedEventArgs::get_WindowActivationState, slot 6",
+    "Windows.UI.Xaml.Controls.IPage::get_NavigationCacheMode, slot 7", "Windows.UI.Xaml.Controls.IPage::put_NavigationCacheMode, slot 8",
     "Windows.UI.Xaml.Controls.INavigate::Navigate, slot 6", "Windows.UI.Xaml.Controls.IFrame::Navigate, slot 24",
     "Windows.UI.Xaml.IFrameworkElement::get_Style, slot 38", "Windows.UI.Xaml.IFrameworkElement::put_Style, slot 39",
     "Windows.UI.Xaml.Media.IVisualTreeHelperStatics::GetChild, slot 10",

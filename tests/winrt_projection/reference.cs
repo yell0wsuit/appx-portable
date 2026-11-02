@@ -65,7 +65,13 @@ namespace Windows.UI.Xaml
         public void Activate() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.Activate"); }
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_SizeChanged(WindowSizeChangedEventHandler handler) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.add_SizeChanged"); }
         public void remove_SizeChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException("Windows.UI.Xaml.Window.remove_SizeChanged"); }
+        public global::Windows.Foundation.Rect Bounds { get { throw new global::System.NotImplementedException(); } }
+        public global::Windows.UI.Core.CoreWindow CoreWindow { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Activated(WindowActivatedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Activated(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
+    public delegate void WindowActivatedEventHandler(object sender, global::Windows.UI.Core.WindowActivatedEventArgs e);
+    public delegate void RoutedEventHandler(object sender, RoutedEventArgs e);
     public class DispatcherTimer
     {
         public DispatcherTimer() { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer..ctor"); }
@@ -106,8 +112,15 @@ namespace Windows.UI.Xaml
         public ResourceDictionary Resources { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public object FindName(string name) { throw new global::System.NotImplementedException(); }
         public Style Style { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double ActualWidth { get { throw new global::System.NotImplementedException(); } }
+        public double ActualHeight { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Loaded(RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Loaded(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Unloaded(RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Unloaded(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
     public sealed class Style : DependencyObject { internal Style() { } }
+    public class RoutedEventArgs { internal RoutedEventArgs() { } }
 }
 namespace Windows.UI.Xaml.Media
 {
@@ -120,6 +133,12 @@ namespace Windows.UI.Xaml.Media
 namespace Windows.UI.Core
 {
     public sealed class WindowSizeChangedEventArgs { internal WindowSizeChangedEventArgs() { } }
+    public enum CoreWindowActivationState { CodeActivated = 0, Deactivated = 1, PointerActivated = 2 }
+    public sealed class WindowActivatedEventArgs
+    {
+        internal WindowActivatedEventArgs() { }
+        public CoreWindowActivationState WindowActivationState { get { throw new global::System.NotImplementedException(); } }
+    }
 }
 namespace Windows.UI.Xaml.Controls
 {
@@ -159,6 +178,7 @@ namespace Windows.UI.Xaml.Controls
     {
         public Page() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Controls.Page..ctor"); }
         public Frame Frame { get { throw new global::System.NotImplementedException(); } }
+        public global::Windows.UI.Xaml.Navigation.NavigationCacheMode NavigationCacheMode { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         protected virtual void OnNavigatedTo(global::Windows.UI.Xaml.Navigation.NavigationEventArgs args) { throw new global::System.NotImplementedException(); }
         protected virtual void OnNavigatedFrom(global::Windows.UI.Xaml.Navigation.NavigationEventArgs args) { throw new global::System.NotImplementedException(); }
         protected virtual void OnNavigatingFrom(global::Windows.UI.Xaml.Navigation.NavigatingCancelEventArgs args) { throw new global::System.NotImplementedException(); }
@@ -255,6 +275,13 @@ namespace Windows.Networking.Connectivity
 
 namespace Windows.Foundation
 {
+    public struct Rect
+    {
+        public double X { get { throw new global::System.NotImplementedException(); } }
+        public double Y { get { throw new global::System.NotImplementedException(); } }
+        public double Width { get { throw new global::System.NotImplementedException(); } }
+        public double Height { get { throw new global::System.NotImplementedException(); } }
+    }
     public delegate void TypedEventHandler<TSender, TArgs>(TSender sender, TArgs args);
     public enum AsyncStatus { Started = 0, Completed = 1, Canceled = 2, Error = 3 }
     public delegate void AsyncActionCompletedHandler(IAsyncAction asyncInfo, AsyncStatus asyncStatus);
@@ -294,6 +321,7 @@ namespace Windows.ApplicationModel.Activation
 
 namespace Windows.UI.Xaml.Navigation
 {
+    public enum NavigationCacheMode { Disabled = 0, Required = 1, Enabled = 2 }
     public sealed class NavigationEventArgs
     {
         public global::System.Uri Uri { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }

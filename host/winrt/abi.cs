@@ -55,6 +55,9 @@ namespace AppxPortable.WinRT
         // WinRT enums are signed or unsigned 32-bit values; preserve their raw bits.
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int PutUInt32Property(IntPtr self, uint value);
+        // A struct getter writes its SDK layout through the out pointer.
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int GetValue(IntPtr self, IntPtr value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate int Invoke0(IntPtr self);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -280,6 +283,19 @@ namespace AppxPortable.WinRT
                 Errors.Check(call.Method<GetInt64>(slot)(call.Self, out value));
                 return value;
             }
+        }
+
+        // A getter's CLR-redirected struct result, whose fields keep the SDK layout.
+        internal T Value<T>(int slot) where T : struct
+        {
+            IntPtr buffer = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(T)));
+            try
+            {
+                using (var call = new Access(this))
+                    Errors.Check(call.Method<GetValue>(slot)(call.Self, buffer));
+                return (T)Marshal.PtrToStructure(buffer, typeof(T));
+            }
+            finally { Marshal.FreeCoTaskMem(buffer); }
         }
 
         internal void SetInt64(int slot, long value)

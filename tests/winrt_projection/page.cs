@@ -279,6 +279,55 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Console.WriteLine("PASS: Window SizeChanged subscriptions preserve typed callbacks, identity, lifetime and removal");
     }
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int SetHostMinimized(int minimized);
+    // LayoutAwarePage's setup: Window bounds, CoreWindow and activation, and the
+    // page's own Loaded with an ActualWidth/ActualHeight that matches the window.
+    static void VerifyWindowActivation(DerivedPage page)
+    {
+        var window = Window.Current;
+        var bounds = window.Bounds;
+        Check(bounds.X == 0 && bounds.Y == 0 && bounds.Width > 0 && bounds.Height > 0, "Window bounds");
+        Check(window.CoreWindow != null && window.CoreWindow.Dispatcher != null, "Window CoreWindow");
+        Check((int)Windows.UI.Core.CoreWindowActivationState.CodeActivated == 0 &&
+              (int)Windows.UI.Core.CoreWindowActivationState.Deactivated == 1 &&
+              (int)Windows.UI.Core.CoreWindowActivationState.PointerActivated == 2, "CoreWindowActivationState SDK values");
+        Check((int)Windows.UI.Xaml.Navigation.NavigationCacheMode.Disabled == 0 &&
+              (int)Windows.UI.Xaml.Navigation.NavigationCacheMode.Required == 1 &&
+              (int)Windows.UI.Xaml.Navigation.NavigationCacheMode.Enabled == 2, "NavigationCacheMode SDK values");
+        page.NavigationCacheMode = Windows.UI.Xaml.Navigation.NavigationCacheMode.Required;
+        Check(page.NavigationCacheMode == Windows.UI.Xaml.Navigation.NavigationCacheMode.Required, "Page NavigationCacheMode");
+        var frame = new Frame(); window.Content = frame; frame.Content = page;
+        int loaded = 0, removed = 0;
+        RoutedEventArgs loadedArgs = null;
+        FrameworkElement element = page;
+        var skipped = element.add_Loaded((s, e) => ++removed);
+        element.remove_Loaded(skipped);
+        RoutedEventHandler handler = (s, e) =>
+        {
+            Check(ReferenceEquals(s, page), "Loaded sender is the managed Page");
+            loadedArgs = e; ++loaded;
+            Check(element.ActualWidth == window.Bounds.Width && element.ActualHeight == window.Bounds.Height, "loaded Page fills the window");
+        };
+        element.add_Loaded(handler);
+        var unloaded = element.add_Unloaded((s, e) => { });
+        element.remove_Unloaded(unloaded);
+        handler = null;
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        window.Activate();
+        Check(FlushWindowEvents() == 0 && loaded == 1 && removed == 0 && loadedArgs != null, "Page Loaded delivery after activation");
+        var states = new global::System.Collections.Generic.List<Windows.UI.Core.CoreWindowActivationState>();
+        object sender = null;
+        var activated = window.add_Activated((s, e) => { sender = s; states.Add(e.WindowActivationState); });
+        Check(SetHostMinimized(1) == 0 && SetHostMinimized(0) == 0, "host minimize and restore");
+        Check(states.Count == 2 && states[0] == Windows.UI.Core.CoreWindowActivationState.Deactivated &&
+              states[1] == Windows.UI.Core.CoreWindowActivationState.CodeActivated && ReferenceEquals(sender, window),
+              "Window Activated states and sender");
+        window.remove_Activated(activated);
+        Check(SetHostMinimized(1) == 0 && SetHostMinimized(0) == 0 && states.Count == 2, "removed Activated handler was called");
+        Check(loaded == 1, "Loaded raised again on reactivation");
+        Console.WriteLine("PASS: Window bounds, activation, cache mode and Page Loaded reach managed handlers");
+    }
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectWindowContent(int id);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectFrameContent(int id);
@@ -567,7 +616,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         VerifyResourceMap();
         VerifyApplicationView();
         VerifyNavigation();
-        Window.Current.Activate();
+        VerifyWindowActivation(page);
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
         VerifySharing();
         VerifyDispatcher();
