@@ -358,6 +358,19 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
       --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
       --shim "$<TARGET_FILE:appxportable>" --output "${CMAKE_BINARY_DIR}/winrt-storage-projection" --storage-only)
     set_tests_properties(winrt_storage_projection PROPERTIES TIMEOUT 600 LABELS "managed-clr;storage")
+    set(APPX_SURFACE_CONSUMERS "")
+    foreach(consumer Bejeweled3.exe DT.GoogleAnalytics.Metro.dll)
+      if(EXISTS "${CMAKE_SOURCE_DIR}/local/bejeweled-wine/${consumer}")
+        list(APPEND APPX_SURFACE_CONSUMERS --consumer "${CMAKE_SOURCE_DIR}/local/bejeweled-wine/${consumer}")
+      endif()
+    endforeach()
+    add_test(NAME winrt_surface_projection COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"
+      --wine "${APPX_WINE}" --prefix "${APPX_WINE_PREFIX}"
+      --metadata "${APPX_WINRT_METADATA}" --cecil "${APPX_WINRT_CECIL}"
+      --shim "$<TARGET_FILE:appxportable>" --page-fixture "$<TARGET_FILE:page_projection_fixture>"
+      --output "${CMAKE_BINARY_DIR}/winrt-surface-projection" --surface-only ${APPX_SURFACE_CONSUMERS})
+    set_tests_properties(winrt_surface_projection PROPERTIES TIMEOUT 900 LABELS managed-clr)
     if(APPX_XBOX_METADATA)
       add_test(NAME winrt_xbox_projection COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/scripts/probe-winrt-projection.py"

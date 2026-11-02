@@ -149,6 +149,7 @@ def main():
     parser.add_argument("--async-only", action="store_true", help="run the focused WinRT task adapters fixture")
     parser.add_argument("--storage-only", action="store_true", help="run the focused persistent settings projection fixture")
     parser.add_argument("--xbox-only", action="store_true", help="run the focused Xbox projection fixture")
+    parser.add_argument("--surface-only", action="store_true", help="complete the whole SDK surface and run fixtures against it")
     parser.add_argument("--xbox-metadata", type=Path, help="package Microsoft.Xbox.winmd, metadata only")
     parser.add_argument("--game", type=Path, help="copy and launch this installed game after completion")
     parser.add_argument("--expected-game-error", help="required named failure in the copied game managed.log")
@@ -157,20 +158,22 @@ def main():
     parser.add_argument("--consumer", type=Path, action="append", default=[])
     parser.add_argument("--architecture", choices=("x86", "x64"), default="x86")
     args = parser.parse_args()
-    if sum((args.component_only, args.page_only, args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, bool(args.runtime_case))) > 1:
+    if sum((args.component_only, args.page_only, args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.surface_only, bool(args.runtime_case))) > 1:
         parser.error("focused probe modes cannot be combined")
     if (args.component_only or args.page_only or args.splash_only or args.network_only or args.io_only or args.async_only or args.storage_only) and (args.game or args.consumer or args.xbox_metadata):
         parser.error("focused projection probes cannot include game or Xbox inputs")
+    if args.surface_only and (args.game or args.xbox_metadata):
+        parser.error("--surface-only takes consumers but no game or Xbox inputs")
     if args.xbox_only and (not args.xbox_metadata or args.game):
         parser.error("--xbox-only requires --xbox-metadata and cannot launch a game")
     repo = Path(__file__).resolve().parents[1]
     wine, prefix, metadata, shim, output = (getattr(args, name).resolve()
                                           for name in ("wine", "prefix", "metadata", "shim", "output"))
     network_fixture = args.network_fixture.resolve() if args.network_fixture else shim.parent / "network_projection_fixture.dll"
-    if (args.network_only or not any((args.component_only, args.page_only, args.splash_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not network_fixture.is_file():
+    if (args.network_only or not any((args.component_only, args.page_only, args.splash_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.surface_only, args.runtime_case))) and not network_fixture.is_file():
         parser.error("build network_projection_fixture or pass --network-fixture")
     page_fixture = args.page_fixture.resolve() if args.page_fixture else shim.parent / "page_projection_fixture.dll"
-    if (args.page_only or not any((args.component_only, args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not page_fixture.is_file():
+    if (args.page_only or args.surface_only or not any((args.component_only, args.splash_only, args.network_only, args.io_only, args.async_only, args.storage_only, args.xbox_only, args.runtime_case))) and not page_fixture.is_file():
         parser.error("build page_projection_fixture or pass --page-fixture")
     if args.game:
         args.game = args.game.resolve()
@@ -205,13 +208,13 @@ def main():
         if not value:
             raise RuntimeError(message)
 
-    def run(name, command, cwd=output, succeeds=True, marker=None, evidence=None, environment=None):
+    def run(name, command, cwd=output, succeeds=True, marker=None, evidence=None, environment=None, timeout=45):
         log = output / (name + ".log")
         with log.open("w") as stream:
             child = subprocess.Popen([str(wine), *command], env=dict(env, **(environment or {})), cwd=cwd,
                                      stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
             try:
-                code = child.wait(timeout=45)
+                code = child.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
                 os.killpg(child.pid, signal.SIGKILL)
                 child.wait()
@@ -235,13 +238,32 @@ def main():
                    "/langversion:5", "/platform:" + args.architecture, "/out:" + windows(destination)]
         command += ["/r:" + windows(references / name)
                     for name in ("mscorlib.dll", "System.dll", "System.Core.dll", "System.Xml.dll")]
+        against_windows = surface_build and any(flag.startswith("/r:") and flag.endswith("Windows.dll") for flag in extra)
+        if against_windows and "/r:" + windows(surface_build["interop"]) not in extra:
+            extra = list(extra) + ["/r:" + windows(surface_build["interop"])]
         run("compile-" + name.replace("/", "-"), command + list(extra) + [windows(path) for path in sources])
+        # Surface mode: C# binds WinRT setters as set_X; the surface names them put_X.
+        if against_windows:
+            compiled = destination.with_name(destination.stem + ".compiled" + destination.suffix)
+            destination.replace(compiled)
+            run("rebind-" + name.replace("/", "-"), [surface_build["completer"].name, "--rebind", windows(surface_build["surface"]), windows(compiled), windows(destination)],
+                marker="Rebound ")
         return destination
+
+    # The surface mode builds an interop-enabled Windows.dll: fixtures need its
+    # interop assembly, and tests compiled from generated sources its flags.
+    # Assemblies compile against the bootstrap and are deployed with the surface.
+    abi_flags, fixture_support, surface_build = [], [], {}
+
+    def deploy(source, destination):
+        copy_owned_file(surface_build["surface"] if surface_build and Path(source) == surface_build["bootstrap"] else source, destination)
 
     def fixture(name, executable, identity, publisher):
         folder = output / name
         folder.mkdir(exist_ok=True)
         copy_owned_file(shim, folder / "appxportable.dll")
+        for support in fixture_support:
+            copy_owned_file(support, folder / support.name)
         (folder / "AppxManifest.xml").write_text(
             '<Package><Identity Name="' + identity + '" Publisher="' + publisher +
             '" Version="1.0.0.0" ProcessorArchitecture="' + args.architecture +
@@ -282,7 +304,7 @@ def main():
             marker="PublicKeyToken=b77a5c561934e089")
         folder = fixture("async", signed.name, "AsyncProjectionTest", "CN=projection")
         for source in (signed, projection):
-            copy_owned_file(source, folder / source.name)
+            deploy(source, folder / source.name)
         copied_bridge = folder / bridge.name
         if copied_bridge.exists() or copied_bridge.is_symlink():
             copied_bridge.unlink()
@@ -312,7 +334,7 @@ def main():
         run("mark-page", [marker.name, windows(consumer), "page-winrt.exe"], marker="flags=WindowsRuntime")
         folder = fixture("page", consumer.name, "PageProjectionTest", "CN=projection")
         copy_owned_file(output / "page-winrt.exe", folder / consumer.name)
-        copy_owned_file(projection, folder / "Windows.dll")
+        deploy(projection, folder / "Windows.dll")
         copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
         run("page", [consumer.name], cwd=folder, marker="PASS: DispatcherTimer ticks managed handlers on the UI thread with TimeSpan intervals and removal",
             environment={"APPX_PORTABLE_LOG": "1"})
@@ -320,7 +342,7 @@ def main():
         require("managed callback threw System.InvalidOperationException: tick handler failure" in trace,
                 "a managed event handler failure was not reported to the native log")
         runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
-        abi = compile_file("page-abi.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/page.cs"], ["/define:NATIVE_ABI"])
+        abi = compile_file("page-abi.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/page.cs"], ["/define:NATIVE_ABI"] + abi_flags)
         copy_owned_file(abi, folder / abi.name)
         run("page-abi", [abi.name], cwd=folder, marker="PASS: native Page callbacks dispatch through derived managed overrides and base methods")
         alias = compile_file("visibility-alias.exe", [repo / "tests/winrt_projection/visibility_alias.cs"], ["/r:" + windows(reference)])
@@ -337,7 +359,7 @@ def main():
         run("mark-source", [marker.name, windows(source), "source-winrt.exe"], marker="flags=WindowsRuntime")
         folder = fixture("source", source.name, "SourceProjectionTest", "CN=projection")
         copy_owned_file(output / "source-winrt.exe", folder / source.name)
-        copy_owned_file(projection, folder / "Windows.dll")
+        deploy(projection, folder / "Windows.dll")
         copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
         run("source", [source.name], cwd=folder, marker="PASS: source XAML builds native content, properties, names and managed connections; unsupported input fails explicitly")
 
@@ -362,7 +384,7 @@ def main():
         run("mark-splash", [marker.name, windows(consumer), "splash-winrt.exe"], marker="flags=WindowsRuntime")
         folder = fixture("splash", consumer.name, "SplashProjectionTest", "CN=projection")
         copy_owned_file(output / "splash-winrt.exe", folder / consumer.name)
-        copy_owned_file(projection, folder / "Windows.dll")
+        deploy(projection, folder / "Windows.dll")
         run("splash", [consumer.name], cwd=folder, marker="PASS: managed splash identity and typed dismissal follow native activation")
 
     def probe_network(projection, generator):
@@ -387,7 +409,7 @@ def main():
         copy_owned_file(output / "network-winrt.exe", folder / consumer.name)
         copy_owned_file(reference, folder / "Windows.dll")
         run("network-reference-contract", [consumer.name], cwd=folder, succeeds=False, marker="NetworkInformation.GetInternetConnectionProfile")
-        copy_owned_file(projection, folder / "Windows.dll")
+        deploy(projection, folder / "Windows.dll")
         for mode in ("offline", "stub"):
             run("network-" + mode, [consumer.name, mode], cwd=folder, environment={"APPX_PORTABLE_STUB_IAP": "1" if mode == "stub" else "0"},
                 marker="PASS: managed network projection preserves native connectivity and event lifetime (" + mode + ")")
@@ -457,9 +479,9 @@ def main():
         run("mark-storage-io-runtime", [marker.name, "storage-io-winrt.exe", windows(signed), "--runtime-reference"], marker="PublicKeyToken=b77a5c561934e089")
         folder = fixture("storage-io", signed.name, "StorageIoProjectionTest", "CN=projection")
         for source in (signed, projection, bridge):
-            copy_owned_file(source, folder / source.name)
+            deploy(source, folder / source.name)
         runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
-        identity = compile_file("storage-identity.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/storage_identity.cs"])
+        identity = compile_file("storage-identity.exe", runtime + [output / "Windows.generated.cs", repo / "tests/winrt_projection/storage_identity.cs"], abi_flags)
         copy_owned_file(identity, folder / identity.name)
         run("storage-identity", [identity.name], cwd=folder, marker="PASS: buffer projection preserves object identity and native-owned pin lifetime")
         # Each run starts from empty app data: a reused output folder keeps files the test creates.
@@ -473,7 +495,7 @@ def main():
         run("mark-storage", [marker.name, consumer.name, "storage-winrt.exe"], marker="flags=WindowsRuntime")
         folder = fixture("storage", consumer.name, "StorageProjectionTest", "CN=projection")
         copy_owned_file(output / "storage-winrt.exe", folder / consumer.name)
-        copy_owned_file(projection, folder / "Windows.dll")
+        deploy(projection, folder / "Windows.dll")
         # Settings persist from the write run to the read run, never from an earlier probe.
         shutil.rmtree(output / "settings-data", ignore_errors=True)
         environment = {"APPX_PORTABLE_DATA": windows(output / "settings-data")}
@@ -584,6 +606,47 @@ def main():
             runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")]
             projection = compile_file("projection/Windows.dll", runtime + [repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", generated], ["/target:library"])
             probe_storage(marker, projection)
+            return 0
+        if args.surface_only:
+            # The release Windows.dll: the interop bootstrap completed against every SDK type.
+            generator = compile_file("generator.exe", [repo / "host/winrt/generator.cs", repo / "host/winrt/storage_generation.cs", repo / "host/winrt/component_generation.cs"], ["/r:Mono.Cecil.dll"])
+            generated = output / "Windows.generated.cs"
+            run("generate", [generator.name, windows(metadata), windows(repo / "host/winrt/bootstrap.xml"), windows(generated), "--interop"])
+            bridge = compile_file("interop/AppxPortable.WinRT.Interop.dll", [repo / "host/winrt/interop.cs"], ["/target:library"])
+            abi_flags.extend(["/define:APPX_PORTABLE_INTEROP", "/r:" + windows(bridge)])
+            fixture_support.append(bridge)
+            runtime = [repo / "host/winrt" / n for n in ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")]
+            bootstrap = compile_file("interop-projection/Windows.dll", runtime + [generated], ["/target:library"] + abi_flags)
+            completer = compile_file("complete.exe", [repo / "host/winrt/complete.cs"], ["/r:Mono.Cecil.dll"])
+            surface = output / "surface/Windows.dll"
+            surface.parent.mkdir(exist_ok=True)
+            copy_owned_file(bridge, surface.parent / bridge.name)
+            report = output / "surface-report.txt"
+            run("complete-surface", [completer.name, "--all", windows(metadata), windows(bootstrap), windows(surface), windows(report)],
+                marker="Completed ", timeout=900)
+            loader = compile_file("surface-load.exe", [repo / "tests/winrt_projection/surface_load.cs"])
+            run("surface-load", [loader.name, windows(surface)], marker="PASS: surface loads", timeout=600)
+            surface_build.update(completer=completer, bootstrap=bootstrap, surface=surface, interop=bridge)
+            if args.consumer:
+                # Nothing the given consumers reference may be missing from the surface.
+                rechecked = output / "surface-rechecked/Windows.dll"
+                rechecked.parent.mkdir(exist_ok=True)
+                run("surface-consumers", [completer.name, windows(metadata), windows(surface), windows(rechecked)] + [windows(p.resolve()) for p in args.consumer],
+                    marker="Completed 0 types and 0 members", timeout=300)
+            unimplemented = compile_file("surface-unimplemented.exe", [repo / "tests/winrt_projection/surface_load.cs"],
+                                         ["/define:UNIMPLEMENTED", "/r:" + windows(surface)])  # stubs exist only in the surface
+            folder = fixture("surface-unimplemented", unimplemented.name, "SurfaceTest", "CN=projection")
+            copy_owned_file(unimplemented, folder / unimplemented.name)
+            copy_owned_file(surface, folder / "Windows.dll")
+            run("surface-unimplemented", [unimplemented.name], cwd=folder, environment={"APPX_PORTABLE_LOG": "1"},
+                marker="PASS: unimplemented surface members name themselves")
+            trace = (folder / "appx-portable.log").read_text(errors="replace") if (folder / "appx-portable.log").is_file() else ""
+            require("UNIMPL managed Windows.Security.Cryptography.CryptographicBuffer.EncodeToBase64String" in trace,
+                    "an unimplemented surface member was not named in the shim log")
+            # Implemented members keep working once every stub surrounds them.
+            tasks = probe_async(bootstrap)
+            probe_io(bootstrap, tasks)
+            probe_page(bootstrap)
             return 0
         if args.component_only:
             metadata_builder = compile_file("component-metadata.exe", [repo / "tests/winrt_projection/component_metadata.cs"], ["/r:Mono.Cecil.dll"])
@@ -726,7 +789,7 @@ def main():
         results.append(dict(case="header-values", missing=missing, passed=not missing))
         require(not missing, "generated IIDs or slots differ from the SDK headers: " + ", ".join(missing))
         projection = compile_file("projection/Windows.dll", [repo / "host/winrt/abi.cs", repo / "host/winrt/ccw.cs", repo / "host/winrt/dispatcher.cs", repo / "host/winrt/property_abi.cs", repo / "host/winrt/collections.cs", repo / "host/winrt/storage_abi.cs", repo / "host/winrt/array_buffer.cs", generated], ["/target:library"])
-        copy_owned_file(projection, folder / "Windows.dll")
+        deploy(projection, folder / "Windows.dll")
         run("generated-contract", [consumer.name], cwd=folder, marker="PASS: generated Windows projection")
         invalid = [
             ("unknown-member", '<Class Name="Windows.ApplicationModel.Package"><Unknown Name="NoOp" /></Class>', "Unsupported member kind"),
@@ -755,7 +818,7 @@ def main():
             copy_owned_file(mutant, folder / "Windows.dll")
             run("changed-iid-rejected", [consumer.name], cwd=folder, succeeds=False, marker="80004002")
         finally:
-            copy_owned_file(projection, folder / "Windows.dll")
+            deploy(projection, folder / "Windows.dll")
         application = compile_file("application.exe", [repo / "tests/winrt_projection/application.cs"], ["/r:" + windows(reference)])
         run("mark-application", [marker.name, application.name, "application-winrt.exe"], marker="flags=WindowsRuntime")
         app = fixture("application", application.name, "ApplicationProjectionTest", "CN=projection")
