@@ -242,6 +242,17 @@ namespace Windows.Foundation
         void GetResults();
     }
 }
+namespace Windows.ApplicationModel.DataTransfer
+{
+    public sealed class DataRequestedEventArgs { internal DataRequestedEventArgs() { } }
+    public sealed class DataTransferManager
+    {
+        internal DataTransferManager() { }
+        public static DataTransferManager GetForCurrentView() { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_DataRequested(global::Windows.Foundation.TypedEventHandler<DataTransferManager, DataRequestedEventArgs> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_DataRequested(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+}
 namespace Windows.ApplicationModel.Activation
 {
     public sealed class SplashScreen

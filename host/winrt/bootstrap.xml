@@ -187,6 +187,11 @@
     <Method Name="GetNetworkConnectivityLevel" />
   </Class>
   <Enum Name="Windows.Networking.Connectivity.NetworkConnectivityLevel" />
+  <Class Name="Windows.ApplicationModel.DataTransfer.DataTransferManager">
+    <Method Name="GetForCurrentView" />
+    <Event Name="DataRequested" />
+  </Class>
+  <Class Name="Windows.ApplicationModel.DataTransfer.DataRequestedEventArgs" />
   <Class Name="Windows.ApplicationModel.Activation.SplashScreen">
     <Event Name="Dismissed" />
   </Class>

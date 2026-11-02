@@ -90,6 +90,20 @@ class PageApp : Application
     static extern int ConnectWindowContent(int id);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectFrameContent(int id);
+    // The game's share setup: the view's manager accepts DataRequested handlers,
+    // which no Share charm outside Windows 8 ever raises.
+    void VerifySharing()
+    {
+        var manager = global::Windows.ApplicationModel.DataTransfer.DataTransferManager.GetForCurrentView();
+        Check(ReferenceEquals(manager, global::Windows.ApplicationModel.DataTransfer.DataTransferManager.GetForCurrentView()), "DataTransferManager identity");
+        bool raised = false;
+        var first = manager.add_DataRequested((sender, args) => raised = true);
+        var second = manager.add_DataRequested((sender, args) => raised = true);
+        Check(!first.Equals(second), "DataRequested tokens are distinct");
+        manager.remove_DataRequested(first);
+        manager.remove_DataRequested(second);
+        Check(!raised, "DataRequested is not raised without a share request");
+    }
     // The game's splash continuation: RunAsync queues work for the UI thread and
     // completes the returned action once the handler has run.
     void VerifyDispatcher()
@@ -310,6 +324,7 @@ class PageApp : Application
         VerifyApplicationView();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
+        VerifySharing();
         VerifyDispatcher();
     }
     protected override void OnLaunched(Windows.ApplicationModel.Activation.LaunchActivatedEventArgs args) { Verify(new DerivedPage()); }
