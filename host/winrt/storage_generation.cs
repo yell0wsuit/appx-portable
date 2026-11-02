@@ -52,6 +52,23 @@ internal static partial class WinrtProjectionGenerator
             "CloneStream|()->Windows.Storage.Streams.IRandomAccessStream" });
         StorageInterface(output, "Content", "Windows.Storage.Streams.IContentTypeProvider", new[] { "get_ContentType|()->System.String" });
         StorageInterface(output, "Closable", "Windows.Foundation.IClosable", new[] { "Close|()->System.Void" });
+        StorageInterface(output, "Reader", "Windows.Storage.Streams.IDataReader", new[] {
+            "get_UnconsumedBufferLength|()->System.UInt32", "ReadBytes|(System.Byte[])->System.Void",
+            "ReadString|(System.UInt32)->System.String",
+            "LoadAsync|(System.UInt32)->Windows.Storage.Streams.DataReaderLoadOperation",
+            "DetachStream|()->Windows.Storage.Streams.IInputStream" });
+        StorageInterface(output, "ReaderFactory", "Windows.Storage.Streams.IDataReaderFactory", new[] {
+            "CreateDataReader|(Windows.Storage.Streams.IInputStream)->Windows.Storage.Streams.DataReader" });
+        StorageInterface(output, "ReaderStatics", "Windows.Storage.Streams.IDataReaderStatics", new[] {
+            "FromBuffer|(Windows.Storage.Streams.IBuffer)->Windows.Storage.Streams.DataReader" });
+        TypeDefinition reader = Find("Windows.Storage.Streams.DataReader"), load = Find("Windows.Storage.Streams.DataReaderLoadOperation");
+        if (!reader.Methods.Any(m => m.IsConstructor && m.Parameters.Count == 1 &&
+                m.Parameters[0].ParameterType.FullName == "Windows.Storage.Streams.IInputStream") ||
+            !reader.CustomAttributes.Any(a => a.AttributeType.FullName == "Windows.Foundation.Metadata.ActivatableAttribute" &&
+                a.ConstructorArguments[0].Value is TypeReference && ((TypeReference)a.ConstructorArguments[0].Value).FullName == "Windows.Storage.Streams.IDataReaderFactory") ||
+            !load.IsSealed || !load.Interfaces.Any(i => CollectionType(i.InterfaceType) == "Windows.Foundation.IAsyncOperation`1<System.UInt32>"))
+            throw new NotSupportedException("Unsupported stream reader activation or load operation contract");
+        StorageFuture(output, "Load", "System.UInt32", false);
         StorageFuture(output, "File", "Windows.Storage.StorageFile", false);
         StorageFuture(output, "Stream", "Windows.Storage.Streams.IRandomAccessStreamWithContentType", false);
         StorageFuture(output, "Read", "Windows.Storage.Streams.IBuffer", true);
@@ -119,7 +136,8 @@ internal static partial class WinrtProjectionGenerator
             type.FullName + (progress ? "<!0,!1>" : "<!0>"), "Windows.Foundation.AsyncStatus" }))
             throw new NotSupportedException("Unsupported storage completion ABI");
         string signature = "string";
-        if (result != "System.String")
+        if (result == "System.UInt32") signature = "u4";
+        else if (result != "System.String")
         {
             TypeDefinition resultType = Find(result);
             signature = resultType.IsInterface ? "{" + Iid(resultType) + "}" : "rc(" + result + ";{" + Iid(DefaultInterface(resultType)) + "})";

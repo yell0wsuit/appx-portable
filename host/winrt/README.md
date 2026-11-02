@@ -350,9 +350,11 @@ other async result shapes and writable streams remain pending.
 `storage_generation.cs` qualifies the IIDs, consumed method signatures, and slots
 for `storage_abi.cs`, including closed `IAsyncOperation<StorageFile>`,
 `IAsyncOperation<IRandomAccessStreamWithContentType>` and
-`IAsyncOperationWithProgress<IBuffer, uint>`. Generated values are independently
+`IAsyncOperationWithProgress<IBuffer, uint>` and `IAsyncOperation<uint>` for
+DataReaderLoadOperation. Generated values are independently
 checked against SDK ABI headers. Negative metadata fixtures reject changed
-64-bit sizes/read counts and reordered buffer/async slots.
+64-bit sizes/read counts, changed reader factory/load signatures and reordered
+buffer/async slots.
 
 ApplicationData.LocalFolder, StorageFolder.Path/Name/GetFileAsync, and
 StorageFile.GetFileFromPathAsync/Path/Name/OpenReadAsync reach the native shim.
@@ -378,6 +380,19 @@ serializes position changes and avoids capturing the caller's synchronization
 context. The seekable view is limited to read-only streams; writable streams,
 resizing, output streams and additional extension overloads fail explicitly or
 remain unprojected. Disposal closes the underlying WinRT input stream.
+
+DataReader supports FromBuffer and construction over IInputStream. LoadAsync
+appends unread data and returns a concrete DataReaderLoadOperation implementing
+IAsyncOperation<uint>; callbacks preserve operation identity. ReadBytes fills the
+caller's array, and ReadString decodes UTF-8, including embedded NULs. Closing a
+reader closes its attached stream; DetachStream preserves the stream's identity
+and lets it outlive the reader. The native fallback also accepts UTF-16 encoding
+settings, although those properties are not selected in the managed surface.
+Its worker reads in bounded chunks with owned buffers, and cancellation or close
+unblocks pending I/O without invalidating buffers or late completion callbacks.
+Native readertest covers chunking, a 60 MB payload, pending reads, cancellation,
+close and error propagation. Additional IDataReader methods remain unprojected
+or return the shim's explicit unsupported result.
 
 `--io-only` and `winrt_storage_io_projection` cover real file reads, 64-bit
 positions on x86, UTF-8/NUL StreamReader content, missing-file errors, relative

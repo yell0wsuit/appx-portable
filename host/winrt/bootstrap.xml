@@ -163,12 +163,8 @@
   <Interface Name="Windows.Storage.Streams.IRandomAccessStreamWithContentType" Adapter="Storage" />
   <Interface Name="Windows.Storage.Streams.IContentTypeProvider" Adapter="Storage" />
   <Enum Name="Windows.Storage.Streams.InputStreamOptions" />
-  <Class Name="Windows.Storage.Streams.DataReader">
-    <Method Name="FromBuffer" />
-    <Property Name="UnconsumedBufferLength" />
-    <Method Name="ReadBytes" />
-    <Method Name="Close" />
-  </Class>
+  <Class Name="Windows.Storage.Streams.DataReader" Adapter="Storage" />
+  <Class Name="Windows.Storage.Streams.DataReaderLoadOperation" Adapter="Storage" />
   <Class Name="Windows.System.Profile.HardwareIdentification">
     <Method Name="GetPackageSpecificToken" />
   </Class>

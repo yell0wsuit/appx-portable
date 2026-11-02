@@ -56,6 +56,46 @@ class StorageIoProjectionTest
             try { stream.WriteByte(1); throw new Exception("write accepted"); } catch (NotSupportedException) { }
             try { stream.Seek(-1, SeekOrigin.Begin); throw new Exception("negative seek accepted"); } catch (IOException) { }
         }
+        // The game's pak and saved-device-ID paths use DataReader over a native stream.
+        using (var native = await file.OpenReadAsync())
+        using (var reader = new DataReader(native))
+        {
+            DataReaderLoadOperation load = reader.LoadAsync((uint)bytes.Length + 8);
+            Check(load.Id != 0 && await load == bytes.Length, "DataReader.LoadAsync returns bytes actually loaded");
+            Check(reader.UnconsumedBufferLength == bytes.Length, "loaded bytes are available");
+            byte[] actual = new byte[bytes.Length];
+            reader.ReadBytes(actual);
+            Check(actual.SequenceEqual(bytes) && reader.UnconsumedBufferLength == 0, "DataReader reads the native stream bytes");
+            Check(await reader.LoadAsync(8) == 0, "DataReader EOF");
+        }
+        using (var native = await file.OpenReadAsync())
+        using (var reader = new DataReader(native))
+        {
+            Check(await reader.LoadAsync((uint)bytes.Length) == bytes.Length, "device-ID load length");
+            Check(reader.ReadString((uint)bytes.Length) == System.Text.Encoding.UTF8.GetString(bytes), "ReadString UTF8/NUL");
+            Check(ReferenceEquals(reader.DetachStream(), native), "detached stream identity");
+            reader.Dispose();
+            Check(native.Size == (ulong)bytes.Length, "detached stream remains open");
+        }
+        using (var native = await file.OpenReadAsync())
+        using (var reader = new DataReader(native))
+        {
+            DataReaderLoadOperation load = reader.LoadAsync((uint)bytes.Length);
+            var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Windows.Foundation.AsyncOperationCompletedHandler<uint> handler = (sender, status) =>
+            {
+                try
+                {
+                    Check(ReferenceEquals(sender, load), "load callback preserves operation identity");
+                    Check(status == Windows.Foundation.AsyncStatus.Completed && sender.GetResults() == bytes.Length, "load callback result");
+                    completed.SetResult(true);
+                }
+                catch (Exception error) { completed.SetException(error); }
+            };
+            load.Completed = handler;
+            await completed.Task;
+            Check(ReferenceEquals(load.Completed, handler) && load.ErrorCode == null, "load completion delegate round trip");
+        }
         var local = Windows.Storage.ApplicationData.Current.LocalFolder;
         string localPath = Path.Combine(local.Path, "saved.bin"); File.WriteAllBytes(localPath, bytes);
         StorageFile saved = await local.GetFileAsync("saved.bin");
