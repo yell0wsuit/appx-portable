@@ -146,3 +146,20 @@ extern "C" HRESULT __cdecl ValidateLoadedResources(INT32 stage) {
     }
     return S_OK;
 }
+
+extern "C" HRESULT __cdecl ValidateApplicationTheme(INT32 light) {
+    using namespace ABI::Windows::UI::Xaml;
+    using GetFactory = HRESULT(WINAPI*)(HSTRING, IActivationFactory**);
+    auto getFactory =
+        reinterpret_cast<GetFactory>(GetProcAddress(GetModuleHandleW(L"appxportable.dll"), "ShimGetFactory"));
+    if (!getFactory) return E_UNEXPECTED;
+    ComPtr<IActivationFactory> activation;
+    auto hr = getFactory(Wrappers::HStringReference(L"Windows.UI.Xaml.Application").Get(), &activation);
+    ComPtr<IApplicationStatics> factory;
+    if (SUCCEEDED(hr)) hr = activation.As(&factory);
+    ComPtr<IApplication> application;
+    if (SUCCEEDED(hr)) hr = factory->get_Current(&application);
+    ApplicationTheme theme{};
+    if (SUCCEEDED(hr)) hr = application->get_RequestedTheme(&theme);
+    return FAILED(hr) ? hr : theme == (light ? ApplicationTheme_Light : ApplicationTheme_Dark) ? S_OK : E_FAIL;
+}

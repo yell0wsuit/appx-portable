@@ -89,7 +89,19 @@ HRESULT Read(IXmlReader* reader, std::unique_ptr<Node>& root) {
     std::vector<Node*> stack;
     XmlNodeType kind{};
     HRESULT hr;
+    UINT lastLine = 0, lastColumn = 0;
     while ((hr = reader->Read(&kind)) == S_OK) {
+        if (kind == XmlNodeType_Element || kind == XmlNodeType_EndElement) {
+            UINT line = 0, column = 0;
+            reader->GetLineNumber(&line);
+            reader->GetLinePosition(&column);
+            // Wine's reader can replay an earlier node at truncated EOF. A
+            // structural token must advance when line information is available.
+            if (line && column && lastLine && (line < lastLine || (line == lastLine && column <= lastColumn)))
+                return Fail(L"non-advancing XML reader", E_INVALIDARG);
+            lastLine = line;
+            lastColumn = column;
+        }
         if (kind == XmlNodeType_Element) {
             auto node = std::make_unique<Node>();
             const wchar_t *text = nullptr, *space = nullptr;
@@ -158,7 +170,41 @@ HRESULT ParseMargin(const std::wstring& text, Thickness& value) {
     return S_OK;
 }
 HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
-                std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource = false) {
+                std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource = false);
+HRESULT PrepareResources(Node& owner, Node& property, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
+                         std::set<std::wstring>& names, std::set<int>& connections) {
+    if (owner.hasResources) return Fail(property.type + L" multiple values", E_INVALIDARG);
+    owner.hasResources = true;
+    auto resourceSpaces = spaces;
+    auto declarations = [&](Node& holder) -> HRESULT {
+        for (const auto& attr : holder.attributes) {
+            if (attr.space != Xmlns) return Fail(holder.type + L"." + attr.name);
+            resourceSpaces[attr.name] = attr.value;
+        }
+        return S_OK;
+    };
+    auto hr = declarations(property);
+    if (FAILED(hr)) return hr;
+    Node* holder = &property;
+    if (property.children.size() == 1 && property.children[0]->space == Presentation &&
+        property.children[0]->type == L"ResourceDictionary") {
+        holder = property.children[0].get();
+        hr = declarations(*holder);
+        if (FAILED(hr)) return hr;
+    }
+    std::set<std::wstring> keys;
+    for (auto& entry : holder->children) {
+        if (entry->space == Presentation && entry->type == L"ResourceDictionary")
+            return Fail(property.type + L" mixed dictionary entries", E_INVALIDARG);
+        hr = Prepare(*entry, resourceSpaces, ignoreDesign, names, connections, false, true);
+        if (FAILED(hr)) return hr;
+        if (!keys.insert(entry->key).second) return Fail(property.type + L" duplicate key " + entry->key, E_INVALIDARG);
+        owner.resources.push_back(entry.get());
+    }
+    return S_OK;
+}
+HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ignoreDesign,
+                std::set<std::wstring>& names, std::set<int>& connections, bool root, bool resource) {
     if (node.space != Presentation) return Fail(node.space + L":" + node.type);
     const bool animation = AnimationType(node.type);
     const bool brush = BrushDataType(node.type);
@@ -317,35 +363,8 @@ HRESULT Prepare(Node& node, std::map<std::wstring, std::wstring> spaces, bool ig
     }
     for (auto& child : node.children) {
         if (!nonvisual && child->space == Presentation && child->type == node.type + L".Resources") {
-            if (node.hasResources) return Fail(child->type + L" multiple values", E_INVALIDARG);
-            node.hasResources = true;
-            auto resourceSpaces = spaces;
-            auto declarations = [&](Node& holder) -> HRESULT {
-                for (const auto& attr : holder.attributes) {
-                    if (attr.space != Xmlns) return Fail(holder.type + L"." + attr.name);
-                    resourceSpaces[attr.name] = attr.value;
-                }
-                return S_OK;
-            };
-            auto hr = declarations(*child);
+            auto hr = PrepareResources(node, *child, spaces, ignoreDesign, names, connections);
             if (FAILED(hr)) return hr;
-            Node* holder = child.get();
-            if (child->children.size() == 1 && child->children[0]->space == Presentation &&
-                child->children[0]->type == L"ResourceDictionary") {
-                holder = child->children[0].get();
-                hr = declarations(*holder);
-                if (FAILED(hr)) return hr;
-            }
-            std::set<std::wstring> keys;
-            for (auto& entry : holder->children) {
-                if (entry->space == Presentation && entry->type == L"ResourceDictionary")
-                    return Fail(child->type + L" mixed dictionary entries", E_INVALIDARG);
-                hr = Prepare(*entry, resourceSpaces, ignoreDesign, names, connections, false, true);
-                if (FAILED(hr)) return hr;
-                if (!keys.insert(entry->key).second)
-                    return Fail(child->type + L" duplicate key " + entry->key, E_INVALIDARG);
-                node.resources.push_back(entry.get());
-            }
             continue;
         }
         if (node.type == L"Grid" && child->space == Presentation && child->type == L"Grid.Background") {
@@ -802,13 +821,98 @@ HRESULT ResourcePath(ABI::Windows::Foundation::IUriRuntimeClass* uri, std::wstri
     path.erase(0, 1);
     return S_OK;
 }
+HRESULT ReadSource(const std::wstring& path, std::unique_ptr<Node>& root) {
+    ComPtr<IStream> stream;
+    auto hr = OpenPackageResource(CurrentPackage(), path, &stream);
+    if (hr == S_FALSE) return S_FALSE;
+    if (FAILED(hr)) return hr;
+    ComPtr<IXmlReader> reader;
+    hr = CreateXmlReader(IID_PPV_ARGS(&reader), nullptr);
+    if (SUCCEEDED(hr)) hr = reader->SetProperty(XmlReaderProperty_DtdProcessing, DtdProcessing_Prohibit);
+    if (SUCCEEDED(hr)) hr = reader->SetProperty(XmlReaderProperty_MaxElementDepth, 128);
+    if (SUCCEEDED(hr)) hr = reader->SetInput(stream.Get());
+    if (SUCCEEDED(hr)) hr = Read(reader.Get(), root);
+    return hr;
+}
+HRESULT PrepareApplication(Node& root, ApplicationTheme& theme, bool& hasTheme) {
+    if (root.space != Presentation || root.type != L"Application") return Fail(L"application root", E_INVALIDARG);
+    std::map<std::wstring, std::wstring> spaces;
+    for (const auto& attr : root.attributes)
+        if (attr.space == Xmlns)
+            spaces[attr.name] = attr.value;
+        else if (attr.space == Language && attr.name == L"Class")
+            root.className = attr.value;
+        else if (attr.space.empty() && attr.name == L"RequestedTheme") {
+            if (attr.value == L"Dark")
+                theme = ApplicationTheme_Dark;
+            else if (attr.value == L"Light")
+                theme = ApplicationTheme_Light;
+            else
+                return Fail(L"Application.RequestedTheme", E_INVALIDARG);
+            hasTheme = true;
+        } else
+            return Fail(L"Application." + attr.name);
+    std::set<std::wstring> names;
+    std::set<int> connections;
+    for (auto& child : root.children) {
+        if (child->space != Presentation || child->type != L"Application.Resources") return Fail(child->type);
+        auto hr = PrepareResources(root, *child, spaces, false, names, connections);
+        if (FAILED(hr)) return hr;
+    }
+    if (!names.empty() || !connections.empty()) return Fail(L"application resource names/connections");
+    return S_OK;
+}
 }
 HRESULT ResolveSourceResourceUri(ABI::Windows::Foundation::IUriRuntimeClass* uri, std::wstring& path) {
     return uri ? ResourcePath(uri, path) : E_INVALIDARG;
 }
+HRESULT LoadApplicationSourceXaml(IInspectable* component, const std::wstring& path) {
+    try {
+        if (!component) return E_INVALIDARG;
+        ComPtr<IApplicationSource> source;
+        auto hr = component->QueryInterface(IID_PPV_ARGS(&source));
+        if (SUCCEEDED(hr)) hr = source->CheckSourceThread();
+        if (FAILED(hr)) return hr;
+        ComPtr<IApplication> application;
+        hr = component->QueryInterface(IID_PPV_ARGS(&application));
+        if (FAILED(hr)) return hr;
+        std::unique_ptr<Node> root;
+        hr = ReadSource(path, root);
+        if (hr != S_OK) return hr;
+        Log("TRACE", "application source XAML load %ls", path.c_str());
+        ApplicationTheme theme{};
+        bool hasTheme = false;
+        hr = PrepareApplication(*root, theme, hasTheme);
+        if (FAILED(hr)) return hr;
+        if (!root->className.empty()) {
+            Wrappers::HString name;
+            hr = component->GetRuntimeClassName(name.GetAddressOf());
+            if (FAILED(hr)) return hr;
+            if (root->className != name.GetRawBuffer(nullptr)) return Fail(L"x:Class " + root->className, E_INVALIDARG);
+        }
+        // Build/validate the whole resource subtree before changing the application.
+        hr = BuildParts(*root);
+        if (FAILED(hr)) return hr;
+        if (hasTheme) hr = application->put_RequestedTheme(theme);
+        if (SUCCEEDED(hr) && root->hasResources) hr = application->put_Resources(root->dictionary.Get());
+        if (SUCCEEDED(hr)) hr = source->CompleteSourceInitialization();
+        return hr;
+    } catch (const std::bad_alloc&) {
+        return E_OUTOFMEMORY;
+    }
+}
 HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRuntimeClass* uri) {
     try {
         if (!component || !uri) return E_INVALIDARG;
+        ComPtr<IApplication> application;
+        auto applicationHr = component->QueryInterface(IID_PPV_ARGS(&application));
+        if (SUCCEEDED(applicationHr)) {
+            std::wstring path;
+            auto hr = ResourcePath(uri, path);
+            if (SUCCEEDED(hr)) hr = LoadApplicationSourceXaml(component, path);
+            return hr == S_FALSE ? HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) : hr;
+        }
+        if (applicationHr != E_NOINTERFACE) return applicationHr;
         ComPtr<INamedElementRegistry> rootRegistry;
         auto hr = component->QueryInterface(IID_PPV_ARGS(&rootRegistry));
         if (SUCCEEDED(hr)) hr = rootRegistry->CheckSourceThread();
@@ -817,17 +921,9 @@ HRESULT LoadSourceXaml(IInspectable* component, ABI::Windows::Foundation::IUriRu
         hr = ResourcePath(uri, path);
         if (FAILED(hr)) return hr;
         Log("TRACE", "source XAML load %ls", path.c_str());
-        ComPtr<IStream> stream;
-        hr = OpenPackageResource(CurrentPackage(), path, &stream);
-        if (hr == S_FALSE) return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-        if (FAILED(hr)) return hr;
-        ComPtr<IXmlReader> reader;
-        hr = CreateXmlReader(IID_PPV_ARGS(&reader), nullptr);
-        if (SUCCEEDED(hr)) hr = reader->SetProperty(XmlReaderProperty_DtdProcessing, DtdProcessing_Prohibit);
-        if (SUCCEEDED(hr)) hr = reader->SetProperty(XmlReaderProperty_MaxElementDepth, 128);
-        if (SUCCEEDED(hr)) hr = reader->SetInput(stream.Get());
         std::unique_ptr<Node> root;
-        if (SUCCEEDED(hr)) hr = Read(reader.Get(), root);
+        hr = ReadSource(path, root);
+        if (hr == S_FALSE) return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         std::set<std::wstring> names;
         std::set<int> connections;
         if (SUCCEEDED(hr)) hr = Prepare(*root, {}, false, names, connections, true);

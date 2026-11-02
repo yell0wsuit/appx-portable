@@ -44,7 +44,21 @@ class PageApp : Application
     static void VerifyApplicationResources()
     {
         var app = Application.Current;
-        var original = app.Resources;
+        // Explicit initialization without resource entries must suppress an unrelated
+        // conventional App.xaml, just as explicit resource assignment does.
+        ResourceDictionary original;
+        global::System.IO.File.WriteAllText("App.xaml", "<invalid/>");
+        global::System.IO.File.WriteAllText("explicit-empty-app.xaml", "<Application xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"/>");
+        try
+        {
+            Application.LoadComponent(app, new Uri("ms-appx:///explicit-empty-app.xaml"));
+            original = app.Resources;
+        }
+        finally
+        {
+            global::System.IO.File.Delete("App.xaml");
+            global::System.IO.File.Delete("explicit-empty-app.xaml");
+        }
         Check(original != null && ReferenceEquals(original, app.Resources), "default application resource dictionary identity");
         var replacement = new ResourceDictionary();
         app.Resources = replacement;
