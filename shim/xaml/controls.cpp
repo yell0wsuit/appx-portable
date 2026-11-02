@@ -21,6 +21,11 @@ using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::UI::Xaml::Controls;
 using namespace ABI::Windows::UI::Xaml::Interop;
 namespace appx {
+// Control's base key-down callback has no action. Other override slots retain
+// their generated explicit failures until their behavior is implemented.
+struct __declspec(uuid("a09691df-9824-41fe-b530-b0d8990e64c1")) ControlKeyOverrides : DefaultIControlOverrides {
+    HRESULT STDMETHODCALLTYPE OnKeyDown(ABI::Windows::UI::Xaml::Input::IKeyRoutedEventArgs*) override { return S_OK; }
+};
 class RectangleGeometry final : public Composable<RectangleGeometry, ABI::Windows::UI::Xaml::Media::IRectangleGeometry,
                                                   ABI::Windows::UI::Xaml::Media::IGeometry, DefaultIDependencyObject> {
     ABI::Windows::Foundation::Rect rect_{};
@@ -142,7 +147,7 @@ HRESULT MakeBackgroundPanel(IInspectable** value) {
     panel->Release();
     return hr;
 }
-class ProgressRing final : public Element<ProgressRing, IProgressRing, DefaultIControl> {
+class ProgressRing final : public Element<ProgressRing, IProgressRing, DefaultIControl, ControlKeyOverrides> {
     bool active_ = false, hasForeground_ = false;
     ComPtr<ABI::Windows::UI::Xaml::Media::IBrush> foreground_;
     HRESULT Missing(const wchar_t* member) {
@@ -265,7 +270,7 @@ public:
 // Text entry named in Windows 8 source XAML, which games show over their
 // swap chain for names and chat. These hold the text the game sets and raise
 // its change events; nothing draws them and they take no typing.
-class TextBox final : public Element<TextBox, DefaultITextBox, DefaultIControl> {
+class TextBox final : public Element<TextBox, DefaultITextBox, DefaultIControl, ControlKeyOverrides> {
     std::wstring text_;
     INT32 start_ = 0, length_ = 0, maxLength_ = 0;
     bool readOnly_ = false, acceptsReturn_ = false, spellCheck_ = true, prediction_ = true;
@@ -427,7 +432,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE SelectAll() override { return Select(0, static_cast<INT32>(text_.size())); }
 };
-class PasswordBox final : public Element<PasswordBox, DefaultIPasswordBox, DefaultIControl> {
+class PasswordBox final : public Element<PasswordBox, DefaultIPasswordBox, DefaultIControl, ControlKeyOverrides> {
     Wrappers::HString password_, passwordChar_;
     INT32 maxLength_ = 0;
     bool reveal_ = true;
@@ -557,7 +562,7 @@ public:
     }
 };
 class Page final : public Element<Page, DefaultIPage, DefaultIContentControl, DefaultIUserControl, DefaultIControl,
-                                  DefaultIPageOverrides, IHostedPage> {
+                                  DefaultIPageOverrides, ControlKeyOverrides, IHostedPage> {
     ComPtr<IInspectable> content_;
     ABI::Windows::UI::Xaml::Navigation::NavigationCacheMode cache_ =
         ABI::Windows::UI::Xaml::Navigation::NavigationCacheMode_Disabled;
@@ -612,7 +617,7 @@ public:
         return S_OK;
     }
 };
-class UserControl final : public Element<UserControl, DefaultIUserControl, DefaultIControl> {
+class UserControl final : public Element<UserControl, DefaultIUserControl, DefaultIControl, ControlKeyOverrides> {
     ComPtr<IUIElement> content_;
 
 public:
@@ -627,8 +632,8 @@ public:
         return S_OK;
     }
 };
-class Frame final
-    : public Element<Frame, DefaultIFrame, DefaultIContentControl, DefaultIControl, INavigate, ITemplatedElement> {
+class Frame final : public Element<Frame, DefaultIFrame, DefaultIContentControl, DefaultIControl, ControlKeyOverrides,
+                                   INavigate, ITemplatedElement> {
     struct Entry {
         ComPtr<IInspectable> page, parameter;
         Wrappers::HString typeName;

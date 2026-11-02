@@ -93,7 +93,14 @@
     <Method Name="GetChild" />
   </Class>
   <Enum Name="Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation" />
-  <Class Name="Windows.UI.Xaml.Controls.Control" />
+  <Class Name="Windows.UI.Xaml.RoutedEventArgs" />
+  <Class Name="Windows.UI.Xaml.Input.KeyRoutedEventArgs">
+    <Property Name="Key" />
+    <Property Name="Handled" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.Control">
+    <Overridable Name="OnKeyDown" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Controls.ContentControl">
     <Property Name="Content" />
   </Class>

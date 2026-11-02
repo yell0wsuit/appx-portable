@@ -383,6 +383,110 @@ struct __declspec(uuid("a8912263-2951-4f58-a9c5-5a134eaa7f07")) DefaultIControl 
 };
 }
 namespace ABI::Windows::UI::Xaml::Controls {
+struct __declspec(uuid("a09691df-9824-41fe-b530-b0d8990e64c1")) DefaultIControlOverrides : public ABI::Windows::UI::Xaml::Controls::IControlOverrides {
+  HRESULT STDMETHODCALLTYPE OnPointerEntered(ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnPointerEntered");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnPointerPressed(ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnPointerPressed");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnPointerMoved(ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnPointerMoved");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnPointerReleased(ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnPointerReleased");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnPointerExited(ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnPointerExited");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnPointerCaptureLost(ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnPointerCaptureLost");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnPointerCanceled(ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnPointerCanceled");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnPointerWheelChanged(ABI::Windows::UI::Xaml::Input::IPointerRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnPointerWheelChanged");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnTapped(ABI::Windows::UI::Xaml::Input::ITappedRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnTapped");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnDoubleTapped(ABI::Windows::UI::Xaml::Input::IDoubleTappedRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnDoubleTapped");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnHolding(ABI::Windows::UI::Xaml::Input::IHoldingRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnHolding");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnRightTapped(ABI::Windows::UI::Xaml::Input::IRightTappedRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnRightTapped");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnManipulationStarting(ABI::Windows::UI::Xaml::Input::IManipulationStartingRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnManipulationStarting");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnManipulationInertiaStarting(ABI::Windows::UI::Xaml::Input::IManipulationInertiaStartingRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnManipulationInertiaStarting");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnManipulationStarted(ABI::Windows::UI::Xaml::Input::IManipulationStartedRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnManipulationStarted");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnManipulationDelta(ABI::Windows::UI::Xaml::Input::IManipulationDeltaRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnManipulationDelta");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnManipulationCompleted(ABI::Windows::UI::Xaml::Input::IManipulationCompletedRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnManipulationCompleted");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnKeyUp(ABI::Windows::UI::Xaml::Input::IKeyRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnKeyUp");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnKeyDown(ABI::Windows::UI::Xaml::Input::IKeyRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnKeyDown");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnGotFocus(ABI::Windows::UI::Xaml::IRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnGotFocus");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnLostFocus(ABI::Windows::UI::Xaml::IRoutedEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnLostFocus");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnDragEnter(ABI::Windows::UI::Xaml::IDragEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnDragEnter");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnDragLeave(ABI::Windows::UI::Xaml::IDragEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnDragLeave");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnDragOver(ABI::Windows::UI::Xaml::IDragEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnDragOver");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE OnDrop(ABI::Windows::UI::Xaml::IDragEventArgs* e) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::IControlOverrides::OnDrop");
+    return E_NOTIMPL;
+  }
+};
+}
+namespace ABI::Windows::UI::Xaml::Controls {
 struct __declspec(uuid("c589644f-eba8-427a-b75a-9f1f93a11ae9")) DefaultISwapChainPanel : public ABI::Windows::UI::Xaml::Controls::ISwapChainPanel {
   HRESULT STDMETHODCALLTYPE get_CompositionScaleX(FLOAT* value) override {
     appx::Log("UNIMPL", "ABI::Windows::UI::Xaml::Controls::ISwapChainPanel::get_CompositionScaleX");

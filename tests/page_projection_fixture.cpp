@@ -3,12 +3,45 @@
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.xaml.navigation.h>
 #include <windows.ui.xaml.markup.h>
+#include <windows.ui.xaml.input.h>
 #include <wrl.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml::Navigation;
+class TestKeyArgs final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, ABI::Windows::UI::Xaml::Input::IKeyRoutedEventArgs> {
+    InspectableClass(L"Windows.UI.Xaml.Input.KeyRoutedEventArgs", BaseTrust);
+    boolean handled_ = false;
+
+public:
+    HRESULT STDMETHODCALLTYPE get_Key(ABI::Windows::System::VirtualKey* value) override {
+        if (!value) return E_POINTER;
+        *value = ABI::Windows::System::VirtualKey_Escape;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_KeyStatus(ABI::Windows::UI::Core::CorePhysicalKeyStatus*) override {
+        return E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE get_Handled(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = handled_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_Handled(boolean value) override {
+        handled_ = value;
+        return S_OK;
+    }
+};
+extern "C" HRESULT __cdecl InvokeKeyDown(IUnknown* control, boolean withArgs) {
+    if (!control) return E_POINTER;
+    ComPtr<ABI::Windows::UI::Xaml::Controls::IControlOverrides> callbacks;
+    auto hr = control->QueryInterface(IID_PPV_ARGS(&callbacks));
+    auto args = Make<TestKeyArgs>();
+    return FAILED(hr) ? hr : callbacks->OnKeyDown(withArgs ? args.Get() : nullptr);
+}
 class TestNavigationArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, INavigationEventArgs> {
     InspectableClass(L"Windows.UI.Xaml.Navigation.NavigationEventArgs", BaseTrust);
     ComPtr<ABI::Windows::Foundation::IUriRuntimeClass> uri_;
+
 public:
     HRESULT STDMETHODCALLTYPE get_Content(IInspectable** value) override { if (!value) return E_POINTER; *value = nullptr; return S_OK; }
     HRESULT STDMETHODCALLTYPE get_Parameter(IInspectable** value) override { if (!value) return E_POINTER; *value = nullptr; return S_OK; }
@@ -61,6 +94,11 @@ extern "C" HRESULT __cdecl ConnectWindowContent(INT32 id) {
     ComPtr<IInspectable> target;
     if (SUCCEEDED(hr) && content) hr = content.As(&target);
     return FAILED(hr) ? hr : InvokeComponentConnector(content.Get(), id, target.Get());
+}
+extern "C" HRESULT __cdecl InvokeWindowKeyDown(boolean withArgs) {
+    ComPtr<ABI::Windows::UI::Xaml::IUIElement> content;
+    auto hr = WindowContent(&content);
+    return FAILED(hr) ? hr : InvokeKeyDown(content.Get(), withArgs);
 }
 
 // The Window holds a Frame; its ContentControl.Content must be the managed Page's controlling outer.

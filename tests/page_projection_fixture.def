@@ -3,6 +3,8 @@ EXPORTS
   FlushWindowEvents
   ValidateWindowSizeArgs
   InvokePageOverrides
+  InvokeKeyDown
+  InvokeWindowKeyDown
   InvokeComponentConnector
   ConnectWindowContent
   ConnectFrameContent

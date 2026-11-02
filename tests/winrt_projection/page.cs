@@ -21,11 +21,26 @@ class TestPage : Page, Windows.UI.Xaml.Markup.IComponentConnector
     }
     internal NavigationEventArgs ToArgs, FromArgs;
     internal Exception Failure = null;
+    internal int KeyDowns;
+    internal Windows.UI.Xaml.Input.KeyRoutedEventArgs KeyArgs;
+    protected override void OnKeyDown(Windows.UI.Xaml.Input.KeyRoutedEventArgs args)
+    {
+        ++KeyDowns; KeyArgs = args;
+        if (Failure != null) throw Failure;
+        if (args != null) args.Handled = true;
+        base.OnKeyDown(args);
+    }
     protected override void OnNavigatedTo(NavigationEventArgs args) { ++To; ToArgs = args; base.OnNavigatedTo(args); }
     protected override void OnNavigatedFrom(NavigationEventArgs args) { ++From; FromArgs = args; base.OnNavigatedFrom(args); }
     protected override void OnNavigatingFrom(NavigatingCancelEventArgs args) { ++Leaving; if (Failure != null) throw Failure; base.OnNavigatingFrom(args); }
 }
 class DerivedPage : TestPage { }
+#if FULL_SURFACE
+class UnsupportedKeyPage : Page
+{
+    protected override void OnKeyUp(Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { }
+}
+#endif
 class TestXamlMember : Windows.UI.Xaml.Markup.IXamlMember
 {
     internal Windows.UI.Xaml.Markup.IXamlType Owner;
@@ -71,6 +86,8 @@ class PartialPage : Page
 }
 class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
 {
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int InvokeWindowKeyDown(byte withArgs);
     internal readonly Dictionary<Type, TestXamlType> Types = new Dictionary<Type, TestXamlType>();
     internal readonly List<Type> Requested = new List<Type>();
     internal readonly List<string> RequestedNames = new List<string>();
@@ -389,6 +406,8 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int InvokePageOverrides(IntPtr page);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int InvokeKeyDown(IntPtr page, byte withArgs);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int InvokeComponentConnector(IntPtr page, int id, IntPtr target);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectNavigationArgs(IntPtr page, int id);
@@ -409,10 +428,20 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         using (var pointer = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
             Errors.Check(InvokePageOverrides(pointer.DangerousGetHandle()));
     }
+    static void InvokeKey(Page page)
+    {
+        using (var pointer = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
+            Errors.Check(InvokeKeyDown(pointer.DangerousGetHandle(), 1));
+    }
 #endif
     [MethodImpl(MethodImplOptions.NoInlining)]
     void Verify(DerivedPage page)
     {
+#if FULL_SURFACE
+        try { new UnsupportedKeyPage(); throw new Exception("unsupported key override accepted"); }
+        catch (NotImplementedException error) { Check(error.Message.Contains("OnKeyUp override"), "unsupported key override is named"); }
+        Console.WriteLine("PASS: unselected inherited key overrides still fail construction by name");
+#endif
         Check(page.Frame == null, "unhosted Page.Frame");
         var content = new Frame(); page.Content = content;
         Check(ReferenceEquals(page.Content, content), "UserControl content identity on Page");
@@ -439,6 +468,14 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
             try { page.SetValue(mapProperty, new object()); throw new Exception("wrong metadata generic accepted"); }
             catch (ArgumentException) { }
         }
+        Window.Current.Content = page;
+        Check(InvokeWindowKeyDown(1) == 0 && page.KeyDowns == 1, "native inherited key override dispatch");
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        Check(page.KeyArgs != null && page.KeyArgs.Key == Windows.System.VirtualKey.Escape && page.KeyArgs.Handled,
+            "key arguments retain native state after callback and GC");
+        Check(InvokeWindowKeyDown(0) == 0 && page.KeyDowns == 2 && page.KeyArgs == null, "null key argument");
+        Window.Current.Content = new PartialPage();
+        Check(InvokeWindowKeyDown(1) == 0, "unoverridden inherited key callback uses native base");
         Window.Current.Content = page;
         Check(ReferenceEquals(Window.Current.Content, page), "Window preserves derived Page identity");
         Check(ConnectWindowContent(31) == 0, "external component callback HRESULT");
@@ -510,6 +547,16 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         }
         page.Failure = null;
         Console.WriteLine("PASS: native Page callbacks dispatch through derived managed overrides and base methods");
+        page.Failure = new InvalidOperationException("key override failure");
+        using (var scope = Errors.Begin())
+        {
+            try { InvokeKey(page); throw new Exception("key override error accepted"); }
+            catch (InvalidOperationException error) { Check(ReferenceEquals(error, page.Failure), "key override exception identity"); }
+        }
+        page.Failure = null;
+        InvokeKey(page);
+        Check(page.KeyArgs != null && page.KeyArgs.Handled, "key override recovers after failure");
+        Console.WriteLine("PASS: inherited Control key overrides preserve arguments, base calls and exception identity");
 #else
         Check(partial.Frame == null, "partial Page construction");
 #endif

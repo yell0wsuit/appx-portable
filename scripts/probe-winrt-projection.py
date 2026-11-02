@@ -52,6 +52,7 @@ HEADER_IIDS = {
     "IImage": "495b7402-9af3-4e50-aa90-03388f3086d2",
     "IPage": "c4b27075-e641-453e-824d-012fc7cf95cf", "IPageFactory": "dfa149ac-1849-445e-937c-40a9590cc076",
     "IPageOverrides": "230b9cb8-3419-4306-aabe-4a8e680d3627", "IUserControl": "a7a69ec9-ea35-4679-bf29-f4f09286d314",
+    "IControlOverrides": "a09691df-9824-41fe-b530-b0d8990e64c1", "IKeyRoutedEventArgs": "d4cd3dfe-4079-42e9-a39a-3095d3f049c6",
     "IContentControl": "a26dd1dc-cd44-435c-be94-01d6241c231c",
     "IDispatcherTimer": "d160ce46-cd22-4f5f-8c97-40e61da3e2dc", "EventHandler<IInspectable>": "c50898f6-c536-5f47-8583-8b2c2438a13b",
     "INavigationEventArgs": "b6aa9834-6691-44d1-bdf7-58820c27b0d0", "INavigatingCancelEventArgs": "fd1d67ae-eafb-4079-be80-6dc92a03aedf",
@@ -109,6 +110,10 @@ HEADER_SLOTS = [
     "Windows.UI.Xaml.Controls.IPageFactory::CreateInstance, slot 6", "Windows.UI.Xaml.Controls.IPage::get_Frame, slot 6",
     "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatedFrom, slot 6", "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatedTo, slot 7",
     "Windows.UI.Xaml.Controls.IPageOverrides::OnNavigatingFrom, slot 8", "Windows.UI.Xaml.Controls.IUserControl::get_Content, slot 6",
+    "Windows.UI.Xaml.Controls.IControlOverrides::OnKeyDown, slot 24",
+    "Windows.UI.Xaml.Input.IKeyRoutedEventArgs::get_Key, slot 6",
+    "Windows.UI.Xaml.Input.IKeyRoutedEventArgs::get_Handled, slot 8",
+    "Windows.UI.Xaml.Input.IKeyRoutedEventArgs::put_Handled, slot 9",
     "Windows.UI.Xaml.Controls.IUserControl::put_Content, slot 7",
     "Windows.UI.Xaml.Controls.IContentControl::get_Content, slot 6", "Windows.UI.Xaml.Controls.IContentControl::put_Content, slot 7",
     "Windows.UI.Xaml.IDispatcherTimer::get_Interval, slot 6", "Windows.UI.Xaml.IDispatcherTimer::put_Interval, slot 7",
@@ -346,10 +351,10 @@ def main():
         # Closed resource map IDs from windows.ui.xaml.h, independent of WinMD.
         for iid in ("f5f69427-55ed-5512-8429-d4f6626dfcdd", "33ac68f0-1084-529a-8a17-4e7c8adb7a0c"):
             require(iid in generated, "ResourceDictionary collection IID differs from SDK header: " + iid)
-        for name in ("IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "IDispatcherTimer", "EventHandler<IInspectable>", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs", "ICoreDispatcher", "IDispatchedHandler", "IDataTransferManager", "IDataTransferManagerStatics", "TypedEventHandler<DataTransferManager, DataRequestedEventArgs>", "IFrame", "INavigate", "IXamlMetadataProvider", "IXamlType", "IXamlMember", "IVisualTreeHelperStatics"):
+        for name in ("IControlOverrides", "IKeyRoutedEventArgs", "IPage", "IPageFactory", "IPageOverrides", "IUserControl", "IContentControl", "IDispatcherTimer", "EventHandler<IInspectable>", "INavigationEventArgs", "INavigatingCancelEventArgs", "IComponentConnector", "IUriRuntimeClass", "IUriRuntimeClassFactory", "IResourceDictionary", "IResourceDictionaryFactory", "ITimeline", "IStoryboard", "IImage", "IProgressRing", "ITextBlock", "IViewbox", "IGrid", "IPanel", "IWindowSizeChangedEventHandler", "IWindowSizeChangedEventArgs", "ICoreDispatcher", "IDispatchedHandler", "IDataTransferManager", "IDataTransferManagerStatics", "TypedEventHandler<DataTransferManager, DataRequestedEventArgs>", "IFrame", "INavigate", "IXamlMetadataProvider", "IXamlType", "IXamlMember", "IVisualTreeHelperStatics"):
             require(HEADER_IIDS[name] in generated, "Page IID differs from SDK header: " + name)
         for slot in HEADER_SLOTS:
-            if any(name in slot for name in ("Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IDispatcherTimer::", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged", "ICoreDispatcher::RunAsync", "IDataTransferManager", ".IDataTransferManagerStatics::", "::Navigate, slot", "IFrameworkElement::get_Style", "IFrameworkElement::put_Style", "IVisualTreeHelperStatics::")):
+            if any(name in slot for name in ("Controls.IControlOverrides", "Input.IKeyRoutedEventArgs", "Controls.IPage", "Controls.IUserControl", "Controls.IContentControl", "IDispatcherTimer::", "IComponentConnector", "IUriRuntimeClass", "INavigationEventArgs::", "IApplicationStatics::LoadComponent", "IFrameworkElement::FindName", "IFrameworkElement::get_Resources", "IFrameworkElement::put_Resources", "IResourceDictionaryFactory", "IStoryboard::", "IProgressRing::", "ITextBlock::", "IWindow::add_SizeChanged", "IWindow::remove_SizeChanged", "ICoreDispatcher::RunAsync", "IDataTransferManager", ".IDataTransferManagerStatics::", "::Navigate, slot", "IFrameworkElement::get_Style", "IFrameworkElement::put_Style", "IVisualTreeHelperStatics::")):
                 require("// " + slot in generated, "Page slot differs from SDK header: " + slot)
         mutator = compile_file("mutate-component.exe", [repo / "tests/winrt_projection/mutate_collections_metadata.cs"], ["/r:Mono.Cecil.dll"])
         mutated = output / "resource-map-shape"
@@ -369,7 +374,8 @@ def main():
         run("reject-visibility-width", ["generator.exe", windows(output / "visibility-wide"), windows(repo / "host/winrt/bootstrap.xml"), windows(output / "visibility-wide.cs")], succeeds=False, marker="Unsupported enum property ABI: Windows.UI.Xaml.Visibility")
         marker = compile_file("mark-page.exe", [repo / "tests/winrt_projection/mark_reference.cs"], ["/r:Mono.Cecil.dll"])
         reference = compile_file("page-reference/Windows.dll", [repo / "tests/winrt_projection/reference.cs"], ["/target:library"])
-        consumer = compile_file("page.exe", [repo / "tests/winrt_projection/page.cs"], ["/r:" + windows(reference)])
+        consumer = compile_file("page.exe", [repo / "tests/winrt_projection/page.cs"],
+                                ["/r:" + windows(reference)] + (["/define:FULL_SURFACE"] if surface_build else []))
         run("mark-page", [marker.name, windows(consumer), "page-winrt.exe"], marker="flags=WindowsRuntime")
         folder = fixture("page", consumer.name, "PageProjectionTest", "CN=projection")
         copy_owned_file(output / "page-winrt.exe", folder / consumer.name)
