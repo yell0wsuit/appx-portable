@@ -74,6 +74,8 @@ internal static class WinrtProjectionCompleter
     {
         TypeDefinition existing = projection.Types.SingleOrDefault(t => t.FullName == name);
         if (existing != null) return existing;
+        // Its own assembly defines a CLR-redirected type; a copy here would never bind.
+        if (redirected.Contains(name)) throw new NotSupportedException("CLR-redirected type: " + name);
         TypeDefinition source;
         if (!metadata.TryGetValue(name, out source)) throw new InvalidDataException("Metadata type not found: " + name);
         var type = new TypeDefinition(source.Namespace, source.Name,
@@ -168,6 +170,45 @@ internal static class WinrtProjectionCompleter
         // Look in mscorlib and System.dll directly: partial assembly names bind on Mono, not .NET Framework.
         Type runtime = type.IsNested ? null : typeof(object).Assembly.GetType(type.FullName) ?? typeof(Uri).Assembly.GetType(type.FullName);
         return runtime != null ? projection.ImportReference(runtime) : projection.ImportReference(type);
+    }
+
+    // Every WinMD type the CLR projection renames or moves into a System.* assembly,
+    // learned by comparing each member's raw and projected signature.
+    private static void LearnRedirections()
+    {
+        foreach (TypeDefinition raw in metadata.Values)
+        {
+            TypeDefinition clr;
+            if (!projected.TryGetValue(raw.FullName, out clr) || clr.Methods.Count != raw.Methods.Count) continue;
+            for (int i = 0; i < raw.Methods.Count; ++i)
+            {
+                Learn(raw.Methods[i].ReturnType, clr.Methods[i].ReturnType);
+                for (int p = 0; p < raw.Methods[i].Parameters.Count && p < clr.Methods[i].Parameters.Count; ++p)
+                    Learn(raw.Methods[i].Parameters[p].ParameterType, clr.Methods[i].Parameters[p].ParameterType);
+            }
+            foreach (FieldDefinition field in raw.Fields)
+            {
+                FieldDefinition shaped = clr.Fields.SingleOrDefault(f => f.Name == field.Name);
+                if (shaped != null) Learn(field.FieldType, shaped.FieldType);
+            }
+        }
+    }
+
+    private static void Learn(TypeReference raw, TypeReference clr)
+    {
+        if (raw is GenericParameter || clr is GenericParameter) return;
+        var rawSpec = raw as TypeSpecification;
+        var clrSpec = clr as TypeSpecification;
+        if (rawSpec != null && clrSpec != null) Learn(rawSpec.ElementType, clrSpec.ElementType);
+        var rawInstance = raw as GenericInstanceType;
+        var clrInstance = clr as GenericInstanceType;
+        if (rawInstance != null && clrInstance != null)
+            for (int i = 0; i < rawInstance.GenericArguments.Count && i < clrInstance.GenericArguments.Count; ++i)
+                Learn(rawInstance.GenericArguments[i], clrInstance.GenericArguments[i]);
+        if (rawSpec != null || raw.IsNested || !raw.Namespace.StartsWith("Windows.", StringComparison.Ordinal)) return;
+        var scope = Scope(clr) as AssemblyNameReference;
+        if (raw.FullName != clr.FullName || scope != null && scope.Name.StartsWith("System.", StringComparison.Ordinal))
+            redirected.Add(raw.FullName);
     }
 
     private static bool Redirected(TypeReference type)
@@ -426,6 +467,7 @@ internal static class WinrtProjectionCompleter
                 modules.Add(clr);
                 foreach (TypeDefinition type in clr.Types.Where(t => t.Name != "<Module>")) projected[type.FullName] = type;
             }
+            LearnRedirections();
             projection = ModuleDefinition.ReadModule(args[1], new ReaderParameters { InMemory = true });
             modules.Add(projection);
             // Stubs report themselves through the projection runtime before throwing.
