@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -52,6 +53,70 @@ class PageApp : Application
         app.Resources = original;
         Check(ReferenceEquals(app.Resources, original), "restored application resource dictionary identity");
         Console.WriteLine("PASS: Application.Resources retains a default dictionary and assigned managed dictionaries");
+    }
+    static void Expect<T>(Action action) where T : Exception
+    {
+        try { action(); } catch (T) { return; }
+        throw new Exception("Expected " + typeof(T).Name);
+    }
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static WeakReference AddManagedResource(IDictionary<object, object> map)
+    {
+        var marker = new object();
+        map["managed"] = marker;
+        return new WeakReference(marker);
+    }
+    static void VerifyResourceMap()
+    {
+        var dictionary = new ResourceDictionary();
+        var map = (IDictionary<object, object>)(object)dictionary;
+        Check(map.Count == 0 && !map.IsReadOnly, "empty resource map");
+        var pairs = (ICollection<KeyValuePair<object, object>>)map;
+        var keys = map.Keys;
+        var values = map.Values;
+        var child = new Frame();
+        map.Add("Éclair\0Ω", child);
+        map.Add("nullable", null);
+        Check(map.Count == 2 && keys.Count == 2 && values.Count == 2, "live map views");
+        Check(ReferenceEquals(map["Éclair\0Ω"], child), "resource native object identity");
+        object value;
+        Check(map.TryGetValue("nullable", out value) && value == null, "null resource is present");
+        Check(!map.TryGetValue("missing", out value) && value == null, "missing resource");
+        Expect<KeyNotFoundException>(() => { var ignored = map["missing"]; });
+        Expect<ArgumentException>(() => map.Add("nullable", "duplicate"));
+        Expect<ArgumentNullException>(() => map.ContainsKey(null));
+        Expect<ArgumentNullException>(() => map[null] = child);
+        Expect<NotImplementedException>(() => map.ContainsKey(7));
+        Expect<NotSupportedException>(() => keys.Clear());
+        Expect<NotSupportedException>(() => values.Add("no"));
+        map["nullable"] = "updated Ω";
+        Check((string)map["nullable"] == "updated Ω", "resource replacement and boxed string");
+        Check(map.Contains(new KeyValuePair<object, object>("nullable", "updated Ω")), "pair membership");
+        Check(!pairs.Remove(new KeyValuePair<object, object>("nullable", "wrong")), "mismatched pair removal");
+        var copy = new KeyValuePair<object, object>[3];
+        map.CopyTo(copy, 1);
+        Check(copy[0].Key == null && copy[1].Key != null && copy[2].Key != null, "map CopyTo offset");
+        Expect<ArgumentException>(() => map.CopyTo(new KeyValuePair<object, object>[1], 0));
+        Expect<ArgumentOutOfRangeException>(() => keys.CopyTo(new object[2], -1));
+        using (var snapshot = map.GetEnumerator())
+        {
+            Check(snapshot.MoveNext(), "resource enumerator starts");
+            map.Clear();
+            int count = 1;
+            while (snapshot.MoveNext()) ++count;
+            Check(count == 2 && map.Count == 0 && keys.Count == 0, "native snapshot enumeration survives clear");
+        }
+        var weak = AddManagedResource(map);
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        var marker = map["managed"];
+        Check(marker != null && ReferenceEquals(marker, weak.Target), "native map retains managed resource identity");
+        Check(pairs.Remove(new KeyValuePair<object, object>("managed", marker)) && !map.Remove("managed"), "pair and missing removal");
+        Exception failure = null;
+        var worker = new global::System.Threading.Thread(() => { try { var ignored = map.Count; } catch (Exception e) { failure = e; } });
+        worker.Start(); worker.Join();
+        Check(failure != null && Marshal.GetHRForException(failure) == unchecked((int)0x8001010e), "resource map thread affinity");
+        Check(dictionary.GetType().BaseType == typeof(DependencyObject), "resource dictionary inheritance");
+        Console.WriteLine("PASS: managed resource dictionaries use native maps for mutation, lookup, snapshots and identity");
     }
     static void VerifyApplicationView()
     {
@@ -335,6 +400,7 @@ class PageApp : Application
         VerifyFrameContent(page);
         VerifyWindowSize();
         VerifyApplicationResources();
+        VerifyResourceMap();
         VerifyApplicationView();
         Window.Current.Activate();
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");

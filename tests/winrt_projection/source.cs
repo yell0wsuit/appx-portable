@@ -113,6 +113,9 @@ class SourceApp : Application
         Check(ReferenceEquals(page.Targets[5], page.FindName("named")), "named resource connection identity");
         Check(page.FindName("first") == null && page.FindName("distinct") == null, "keys were registered as names");
         Check(ValidateLoadedResources(1) == 0, "implicit resources and named keys");
+        var map = (IDictionary<object, object>)(object)page.Resources;
+        Check(map.Count == 3 && ReferenceEquals(map["named"], page.Targets[5]), "managed lookup sees source-loaded native resources");
+        Check(!map.ContainsKey("visible") && map["distinct"] is Grid, "resource keys differ from names");
         var previous = page.Resources;
         File.WriteAllText("Fixtures/resources.xaml", "<Page" + Ns + " x:Name=\"root\"><Page.Resources><ResourceDictionary>" +
             "<Grid x:Key=\"explicit\" Width=\"44\"/></ResourceDictionary></Page.Resources><Grid x:Name=\"leaf\"/></Page>");
