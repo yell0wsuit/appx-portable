@@ -165,7 +165,8 @@ internal static class WinrtProjectionCompleter
         if (!type.IsNested && metadata.ContainsKey(type.FullName) && !redirected.Contains(type.FullName)) return Ensure(type.FullName);
         // CLR projections name contract facades (System.Runtime, System.ObjectModel);
         // bind the ones the runtime defines to its own assemblies.
-        Type runtime = type.IsNested ? null : Type.GetType(type.FullName) ?? Type.GetType(type.FullName + ", System");
+        // Look in mscorlib and System.dll directly: partial assembly names bind on Mono, not .NET Framework.
+        Type runtime = type.IsNested ? null : typeof(object).Assembly.GetType(type.FullName) ?? typeof(Uri).Assembly.GetType(type.FullName);
         return runtime != null ? projection.ImportReference(runtime) : projection.ImportReference(type);
     }
 
