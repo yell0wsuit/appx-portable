@@ -193,6 +193,7 @@ namespace Fixture
             Check(page.Content == null && page.FindName("title") == null && ReferenceEquals(page.FindName("replacement"), page), "reload replaces tree and names");
             Console.WriteLine("PASS: managed loader builds WPF content with names, connections and game types; unsupported input fails explicitly");
             VerifyCompatibility();
+            VerifyClicks();
             VerifyStyles();
         }
 
@@ -285,8 +286,51 @@ namespace Fixture
                 string failure = Fails("ms-appx:///Pages/unimplemented.xaml", new SourcePage());
                 Check(failure.Contains(unsupported[1]), "unsupported behavior remains named: " + failure);
             }
+            test("wrapper-types", "<Page.Resources><ImageBrush x:Name='ImageBrush'/><BitmapImage x:Name='BitmapImage' UriSource='/Assets/pixel.png'/>" +
+                "<VisualState x:Name='VisualState'/><VisualStateGroup x:Name='VisualStateGroup'/></Page.Resources><StackPanel x:Name='StackPanel'>" +
+                "<Button x:Name='Button' x:ConnectionId='1'/><RadioButton x:Name='RadioButton' x:ConnectionId='2'/><Slider x:Name='Slider' x:ConnectionId='3'/>" +
+                "<Border x:Name='Border'/><ItemsControl x:Name='ItemsControl'/><ListViewItem x:Name='ListViewItem'/>" +
+                "<Ellipse x:Name='Ellipse'/><Rectangle x:Name='Rectangle'/></StackPanel>", page =>
+            {
+                foreach (string type in new[] { "Button", "RadioButton", "Slider", "Border", "StackPanel", "ItemsControl", "ListViewItem", "ImageBrush", "BitmapImage", "VisualState", "VisualStateGroup", "Ellipse", "Rectangle" })
+                {
+                    string ns = type == "ImageBrush" ? "Media" : type == "BitmapImage" ? "Media.Imaging" :
+                        type == "Ellipse" || type == "Rectangle" ? "Shapes" : type == "VisualState" || type == "VisualStateGroup" ? "" : "Controls";
+                    string expected = "Windows.UI.Xaml." + (ns == "" ? "" : ns + ".") + type;
+                    var value = page.FindName(type);
+                    Check(value != null && value.GetType().FullName == expected && ReferenceEquals(value, page.FindName(type)), "typed wrapper identity for " + type + ": " + value);
+                }
+                Check(page.Connections[0].Value.GetType().FullName == "Windows.UI.Xaml.Controls.Button" &&
+                      page.Connections[1].Value.GetType().FullName == "Windows.UI.Xaml.Controls.RadioButton" &&
+                      page.Connections[2].Value.GetType().FullName == "Windows.UI.Xaml.Controls.Slider", "Connect receives typed control wrappers");
+            });
             Check(failures.Count == 0, "compatibility gaps:\n" + string.Join("\n", failures));
             Console.WriteLine("PASS: surveyed compatibility mappings load through WPF");
+        }
+
+        void VerifyClicks()
+        {
+            File.WriteAllText("Pages/click.xaml", "<Page" + Ns + "><Button/></Page>");
+            var page = new SourcePage(); Application.LoadComponent(page, new Uri("ms-appx:///Pages/click.xaml"));
+            var button = (Button)page.Content;
+            var peer = (System.Windows.Controls.Button)PeerOf(button);
+            int clicks = 0;
+            var token = button.add_Click((sender, args) =>
+            {
+                ++clicks;
+                Check(ReferenceEquals(sender, button) && ReferenceEquals(args.OriginalSource, button), "click sender and source use the same wrapper");
+            });
+            peer.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, peer));
+            button.remove_Click(token);
+            peer.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, peer));
+            Check(clicks == 1, "click event removal");
+            var failure = new InvalidOperationException("click callback failure");
+            token = button.add_Click((sender, args) => { throw failure; });
+            try { peer.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, peer)); throw new Exception("click failure accepted"); }
+            catch (InvalidOperationException actual) { Check(ReferenceEquals(actual, failure), "click callback preserves exception identity"); }
+            button.remove_Click(token);
+            Check(ShimLogContains("managed callback threw System.InvalidOperationException: click callback failure"), "click callback exception logged");
+            Console.WriteLine("PASS: typed buttons forward WPF clicks, tokens and callback failures");
         }
 
         const string StylesXaml = "<ResourceDictionary" + Ns + ">" +

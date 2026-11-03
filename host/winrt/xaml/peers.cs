@@ -119,6 +119,7 @@ namespace AppxPortable.WinRT.Xaml
             set { if (value) throw Errors.Unimplemented("Windows.UI.Xaml.Controls.RichTextBlock.IsTextSelectionEnabled"); }
         }
     }
+    public sealed class ProgressRingPeer : System.Windows.Controls.ProgressBar { }
     public sealed class PagePeer : System.Windows.Controls.UserControl { }
     public sealed class FramePeer : System.Windows.Controls.ContentControl { }
     // Placeholders for shim-backed services; they hold a place in the tree.

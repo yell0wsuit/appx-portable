@@ -120,6 +120,27 @@
     <Property Name="FontSize" Wpf="System.Windows.Controls.TextBlock.FontSizeProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.Controls.RichTextBlock" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.RichTextPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.ButtonBase" Adapter="Wpf" Peer="System.Windows.Controls.Primitives.ButtonBase"></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Button" Adapter="Wpf" Peer="System.Windows.Controls.Button"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.ToggleButton" Adapter="Wpf" Peer="System.Windows.Controls.Primitives.ToggleButton"></Class>
+  <Class Name="Windows.UI.Xaml.Controls.RadioButton" Adapter="Wpf" Peer="System.Windows.Controls.RadioButton"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.RangeBase" Adapter="Wpf" Peer="System.Windows.Controls.Primitives.RangeBase"></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Slider" Adapter="Wpf" Peer="System.Windows.Controls.Slider"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.ProgressBar" Adapter="Wpf" Peer="System.Windows.Controls.ProgressBar"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Border" Adapter="Wpf" Peer="System.Windows.Controls.Border"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.StackPanel" Adapter="Wpf" Peer="System.Windows.Controls.StackPanel"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.SelectorItem" Adapter="Wpf" Peer="System.Windows.Controls.ListBoxItem"></Class>
+  <Class Name="Windows.UI.Xaml.Controls.ListViewItem" Adapter="Wpf" Peer="System.Windows.Controls.ListViewItem"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.TileBrush" Adapter="Wpf" Peer="System.Windows.Media.TileBrush"></Class>
+  <Class Name="Windows.UI.Xaml.Media.ImageBrush" Adapter="Wpf" Peer="System.Windows.Media.ImageBrush"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.ImageSource" Adapter="Wpf" Peer="System.Windows.Media.ImageSource"></Class>
+  <Class Name="Windows.UI.Xaml.Media.Imaging.BitmapSource" Adapter="Wpf" Peer="System.Windows.Media.Imaging.BitmapSource"></Class>
+  <Class Name="Windows.UI.Xaml.Media.Imaging.BitmapImage" Adapter="Wpf" Peer="System.Windows.Media.Imaging.BitmapImage"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Shapes.Shape" Adapter="Wpf" Peer="System.Windows.Shapes.Shape"></Class>
+  <Class Name="Windows.UI.Xaml.Shapes.Ellipse" Adapter="Wpf" Peer="System.Windows.Shapes.Ellipse"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Shapes.Rectangle" Adapter="Wpf" Peer="System.Windows.Shapes.Rectangle"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.VisualState" Adapter="Wpf" Peer="System.Windows.VisualState"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.VisualStateGroup" Adapter="Wpf" Peer="System.Windows.VisualStateGroup"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.GeneralTransform" Adapter="Wpf" Peer="System.Windows.Media.GeneralTransform" />
   <Class Name="Windows.UI.Xaml.Media.Transform" Adapter="Wpf" Peer="System.Windows.Media.Transform" />
   <Class Name="Windows.UI.Xaml.Media.CompositeTransform" Adapter="Wpf" Peer="System.Windows.Media.MatrixTransform"><Constructor />
@@ -179,7 +200,7 @@
   <Class Name="Windows.UI.Xaml.VisualStateManager" Adapter="Wpf" />
   <Interface Name="Windows.UI.Xaml.Data.IValueConverter" Adapter="Wpf" />
   <!-- WPF has no ring; an indeterminate ProgressBar stands in. -->
-  <Class Name="Windows.UI.Xaml.Controls.ProgressRing" Adapter="Wpf" Peer="System.Windows.Controls.ProgressBar">
+  <Class Name="Windows.UI.Xaml.Controls.ProgressRing" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ProgressRingPeer">
     <Constructor />
     <Property Name="IsActive" Wpf="System.Windows.Controls.ProgressBar.IsIndeterminateProperty" />
   </Class>

@@ -239,6 +239,7 @@ namespace Windows.UI.Xaml.Controls
         internal ProgressRing() { }
         public bool IsActive { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
+    public class Button : global::Windows.UI.Xaml.Controls.Primitives.ButtonBase { internal Button() { } }
     public class ContentControl : Control
     {
         public ContentControl() { throw new global::System.NotImplementedException(); }
@@ -463,6 +464,12 @@ namespace Windows.UI.Xaml.Markup
 namespace Windows.UI.Xaml.Controls.Primitives
 {
     public enum ComponentResourceLocation { Application, Nested }
+    public class ButtonBase : global::Windows.UI.Xaml.Controls.ContentControl
+    {
+        internal ButtonBase() { }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Click(global::Windows.UI.Xaml.RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Click(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
 }
 
 namespace Windows.UI.Xaml

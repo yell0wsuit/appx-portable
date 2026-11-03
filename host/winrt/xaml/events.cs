@@ -43,19 +43,36 @@ namespace Windows.UI.Xaml
         }
 
         // A UWP handler on a WPF routed event: sender and source are wrappers.
-        private EventRegistrationToken Routed(ref Dictionary<long, Delegate> table, RoutedEventHandler handler, global::System.Windows.RoutedEvent routed)
+        internal EventRegistrationToken Routed(ref Dictionary<long, Delegate> table, RoutedEventHandler handler, global::System.Windows.RoutedEvent routed)
         {
             if (handler == null) throw new ArgumentNullException("handler");
             global::System.Windows.RoutedEventHandler wpf = (sender, args) =>
-                handler(this, new RoutedEventArgs(Values.FromWpf(args.OriginalSource, typeof(object))));
+                Host.Callback(() => handler(this, new RoutedEventArgs(Values.FromWpf(args.OriginalSource, typeof(object)))));
             Element.AddHandler(routed, wpf);
             return Tokens.Add(ref table, wpf);
         }
 
-        private void Unrouted(Dictionary<long, Delegate> table, EventRegistrationToken token, global::System.Windows.RoutedEvent routed)
+        internal void Unrouted(Dictionary<long, Delegate> table, EventRegistrationToken token, global::System.Windows.RoutedEvent routed)
         {
+            CheckThread();
             var wpf = Tokens.Remove(table, token);
             if (wpf != null) Element.RemoveHandler(routed, wpf);
+        }
+    }
+}
+
+namespace Windows.UI.Xaml.Controls.Primitives
+{
+    public partial class ButtonBase
+    {
+        private Dictionary<long, Delegate> clicks;
+        public EventRegistrationToken add_Click(RoutedEventHandler handler)
+        {
+            return Routed(ref clicks, handler, global::System.Windows.Controls.Primitives.ButtonBase.ClickEvent);
+        }
+        public void remove_Click(EventRegistrationToken token)
+        {
+            Unrouted(clicks, token, global::System.Windows.Controls.Primitives.ButtonBase.ClickEvent);
         }
     }
 }
