@@ -15,6 +15,18 @@ import subprocess
 # (windows.applicationmodel.h, windows.applicationmodel.activation.h, windows.ui.xaml.h,
 # windows.ui.xaml.media.animation.h),
 # independent of the metadata the generator reads. Slots follow IInspectable's six.
+# WPF backs Windows.UI.Xaml for managed games under Wine: every Windows.dll built
+# from the bootstrap selection compiles these, against Wine Mono's WPF.
+XAML_SOURCES = ("xaml/host.cs",)
+BOOTSTRAP_GENERATED = ("Windows.generated.cs", "Windows.interop.cs", "Windows.xbox-interop.cs", "Mutated.generated.cs")
+
+
+def wpf_references(mono):
+    gac = mono / "gac"
+    return [gac / n / "4.0.0.0__31bf3856ad364e35" / (n + ".dll") for n in ("PresentationCore", "PresentationFramework", "WindowsBase")] + \
+        [gac / "System.Xaml/4.0.0.0__b77a5c561934e089/System.Xaml.dll"]
+
+
 HEADER_IIDS = {
     "IPackageStatics": "4e534bdf-2960-4878-97a4-9624deb72f2d", "IPackage": "163c792f-bd75-413c-bf23-b1fe7b95d825",
     "IPackageId": "1adb665e-37c7-4790-9980-dd7ae74e8bb2", "ILaunchActivatedEventArgs": "fbc93e26-a14a-4b4f-82b0-33bed920af52",
@@ -260,6 +272,9 @@ def main():
                    "/langversion:5", "/platform:" + args.architecture, "/out:" + windows(destination)]
         command += ["/r:" + windows(references / name)
                     for name in ("mscorlib.dll", "System.dll", "System.Core.dll", "System.Xml.dll")]
+        command += ["/r:" + windows(r) for r in wpf_references(mono)]
+        if any(Path(path).name in BOOTSTRAP_GENERATED for path in sources):
+            sources = list(sources) + [repo / "host/winrt" / n for n in XAML_SOURCES]
         against_windows = surface_build and any(flag.startswith("/r:") and flag.endswith("Windows.dll") for flag in extra)
         if against_windows and "/r:" + windows(surface_build["interop"]) not in extra:
             extra = list(extra) + ["/r:" + windows(surface_build["interop"])]
@@ -391,7 +406,7 @@ def main():
         copy_owned_file(output / "page-winrt.exe", folder / consumer.name)
         deploy(projection, folder / "Windows.dll")
         copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
-        run("page", [consumer.name], cwd=folder, marker="PASS: DispatcherTimer ticks managed handlers on the UI thread with TimeSpan intervals and removal",
+        run("page", [consumer.name], cwd=folder, marker="PASS: WPF dispatcher runs on the XAML view thread's shim loop",
             environment={"APPX_PORTABLE_LOG": "1"})
         trace = (folder / "appx-portable.log").read_text(errors="replace") if (folder / "appx-portable.log").is_file() else ""
         require("managed callback threw System.InvalidOperationException: tick handler failure" in trace,

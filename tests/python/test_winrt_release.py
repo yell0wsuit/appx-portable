@@ -50,6 +50,12 @@ class ReleaseBuildTests(unittest.TestCase):
         self.assertTrue(steps["compile-surface-check"][-1].endswith("surface_load.cs"))
         self.assertEqual(steps["verify-surface"], [str(Path("/work/surface-load.exe")), str(Path("/out/Windows.dll"))])
 
+    def test_bootstrap_compiles_the_wpf_adapter_against_framework_wpf(self):
+        bootstrap = self.steps(release.Toolchain(framework=Path("/framework")))["compile-bootstrap"]
+        for reference in ("WPF/PresentationCore.dll", "WPF/PresentationFramework.dll", "WPF/WindowsBase.dll", "System.Xaml.dll"):
+            self.assertIn("/r:" + str(Path("/framework") / reference), bootstrap)
+        self.assertTrue(any(source.endswith(str(Path("xaml/host.cs"))) for source in bootstrap))
+
     def test_no_contract_metadata_reaches_the_output(self):
         steps = self.steps(release.Toolchain(framework=Path("/framework")))
         outputs = [arg for command in steps.values() for arg in command if arg.startswith(("/out:", str(Path("/out"))))]

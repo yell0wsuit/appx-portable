@@ -17,6 +17,8 @@ REPO = Path(__file__).resolve().parents[1]
 WINRT = REPO / "host/winrt"
 GENERATOR = ("generator.cs", "storage_generation.cs", "component_generation.cs")
 RUNTIME = ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")
+# WPF backs Windows.UI.Xaml for managed games under Wine; compiled into Windows.dll.
+XAML_ADAPTER = ("xaml/host.cs",)
 BRIDGE = ("task_extensions.cs", "stream_extensions.cs")
 REFERENCES = ("mscorlib.dll", "System.dll", "System.Core.dll", "System.Xml.dll")
 INTEROP = "AppxPortable.WinRT.Interop.dll"
@@ -36,10 +38,15 @@ class Toolchain:
                 raise SystemExit("Cannot identify one Wine Mono in " + str(engine))
             self.compiler = [str(self.wine), self.path(monos[0] / "4.5/mcs.exe")]
             self.references = monos[0] / "4.8-api"
+            gac = monos[0] / "gac"
+            self.wpf = [gac / n / "4.0.0.0__31bf3856ad364e35" / (n + ".dll") for n in ("PresentationCore", "PresentationFramework", "WindowsBase")] + \
+                [gac / "System.Xaml/4.0.0.0__b77a5c561934e089/System.Xaml.dll"]
         else:
             framework = Path(framework or os.path.join(os.environ.get("WINDIR", r"C:\Windows"), r"Microsoft.NET\Framework\v4.0.30319"))
             self.compiler = [str(framework / "csc.exe")]
             self.references = framework
+            self.wpf = [framework / "WPF" / n for n in ("PresentationCore.dll", "PresentationFramework.dll", "WindowsBase.dll")] + \
+                [framework / "System.Xaml.dll"]
 
     def path(self, path):
         return "Z:" + str(Path(path).resolve()).replace("/", "\\") if self.wine else str(path)
@@ -50,7 +57,8 @@ class Toolchain:
     def compile(self, output, sources, extra=()):
         return self.compiler + ["/nologo", "/noconfig", "/nostdlib+", "/warnaserror+", "/langversion:5", "/platform:x86",
                                 "/out:" + self.path(output)] + \
-            ["/r:" + self.path(self.references / name) for name in REFERENCES] + list(extra) + [self.path(s) for s in sources]
+            ["/r:" + self.path(self.references / name) for name in REFERENCES] + ["/r:" + self.path(r) for r in self.wpf] + \
+            list(extra) + [self.path(s) for s in sources]
 
 
 def commands(toolchain, metadata, cecil, output, work):
@@ -65,7 +73,7 @@ def commands(toolchain, metadata, cecil, output, work):
         ("compile-completer", t.compile(completer, [WINRT / "complete.cs"], ["/r:" + t.path(cecil)])),
         ("generate-bootstrap", t.tool(generator) + [t.path(metadata), t.path(WINRT / "bootstrap.xml"), t.path(generated), "--interop"]),
         ("compile-interop", t.compile(interop, [WINRT / "interop.cs"], ["/target:library"])),
-        ("compile-bootstrap", t.compile(bootstrap, [WINRT / n for n in RUNTIME] + [generated], interop_flags)),
+        ("compile-bootstrap", t.compile(bootstrap, [WINRT / n for n in RUNTIME + XAML_ADAPTER] + [generated], interop_flags)),
         ("complete-surface", t.tool(completer) + ["--all", t.path(metadata), t.path(bootstrap), t.path(output / "Windows.dll"),
                                                   t.path(output / "surface-report.txt")]),
         # C# binds WinRT setters as set_X against the bootstrap; the surface names them put_X.

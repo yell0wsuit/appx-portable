@@ -404,6 +404,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
             Check(early == 2, "removed Tick handler was called");
             timer.Stop();
             Console.WriteLine("PASS: DispatcherTimer ticks managed handlers on the UI thread with TimeSpan intervals and removal");
+            CheckWpfDispatcher();
             Exit();
         }));
         GC.Collect(); GC.WaitForPendingFinalizers();
@@ -621,7 +622,22 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         VerifySharing();
         VerifyDispatcher();
     }
-    protected override void OnLaunched(Windows.ApplicationModel.Activation.LaunchActivatedEventArgs args) { Verify(new DerivedPage()); }
+    // WPF backs XAML under Wine: its dispatcher lives on the shim's view thread and
+    // the shim's loop pumps it; the queued work is checked once ticks have run.
+    static int wpfThread, wpfRan;
+    static void VerifyWpfDispatcher()
+    {
+        wpfThread = global::System.Threading.Thread.CurrentThread.ManagedThreadId;
+        var grid = new global::System.Windows.Controls.Grid();
+        Check(grid.Dispatcher == global::System.Windows.Threading.Dispatcher.CurrentDispatcher, "WPF object on the view thread");
+        grid.Dispatcher.BeginInvoke(new Action(() => { wpfRan = global::System.Threading.Thread.CurrentThread.ManagedThreadId; }));
+    }
+    static void CheckWpfDispatcher()
+    {
+        Check(wpfRan == wpfThread, "WPF dispatcher work runs on the shim loop");
+        Console.WriteLine("PASS: WPF dispatcher runs on the XAML view thread's shim loop");
+    }
+    protected override void OnLaunched(Windows.ApplicationModel.Activation.LaunchActivatedEventArgs args) { VerifyWpfDispatcher(); Verify(new DerivedPage()); }
 }
 class PageProjectionTest
 {
