@@ -401,6 +401,37 @@ namespace Fixture
                       ReferenceEquals(Windows.UI.Xaml.Media.VisualTreeHelper.GetParent(inner), hosted),
                       "visual-only nodes are skipped: their children stand in their place");
             });
+            test("state-key-frames", () =>
+            {
+                // Bejeweled's sprite buttons: states move an ImageBrush and hide a label with string key frames.
+                File.WriteAllText("Pages/startup-states.xaml", "<Page" + Ns + "><Page.Resources><ControlTemplate x:Key='sprite' TargetType='Button'><Grid x:Name='root'>" +
+                    "<VisualStateManager.VisualStateGroups><VisualStateGroup x:Name='CommonStates'>" +
+                    "<VisualState x:Name='Normal'><Storyboard><ObjectAnimationUsingKeyFrames Storyboard.TargetName='imgBrush' Storyboard.TargetProperty='Transform'>" +
+                    "<DiscreteObjectKeyFrame KeyTime='0' Value='1,0,0,1,0,0'/></ObjectAnimationUsingKeyFrames></Storyboard></VisualState>" +
+                    "<VisualState x:Name='Disabled'><Storyboard><ObjectAnimationUsingKeyFrames Storyboard.TargetName='imgBrush' Storyboard.TargetProperty='Transform'>" +
+                    "<DiscreteObjectKeyFrame KeyTime='0' Value='1,0,0,1,-256,-256'/></ObjectAnimationUsingKeyFrames>" +
+                    "<ObjectAnimationUsingKeyFrames Storyboard.TargetName='label' Storyboard.TargetProperty='Visibility'><DiscreteObjectKeyFrame KeyTime='0' Value='Collapsed'/>" +
+                    "</ObjectAnimationUsingKeyFrames></Storyboard></VisualState></VisualStateGroup></VisualStateManager.VisualStateGroups>" +
+                    "<Rectangle Width='10' Height='10'><Rectangle.Fill><ImageBrush x:Name='imgBrush' Transform='1,0,0,1,0,0'/></Rectangle.Fill></Rectangle>" +
+                    "<TextBlock x:Name='label' Text='x'/></Grid></ControlTemplate></Page.Resources><Button x:Name='sprite' Template='{StaticResource sprite}'/></Page>");
+                var page = new SourcePage(); Application.LoadComponent(page, new Uri("ms-appx:///Pages/startup-states.xaml"));
+                page.Measure(new Windows.Foundation.Size(100, 100));
+                var button = (Windows.UI.Xaml.Controls.Control)page.FindName("sprite");
+                button.IsEnabled = false;   // WPF moves the button to Disabled itself
+                Check(Windows.UI.Xaml.VisualStateManager.GoToState(button, "Normal", false) && Windows.UI.Xaml.VisualStateManager.GoToState(button, "Disabled", false),
+                      "UWP GoToState runs the converted states");
+                var root = (System.Windows.FrameworkElement)System.Windows.Media.VisualTreeHelper.GetChild((System.Windows.DependencyObject)PeerOf(button), 0);
+                Check(System.Windows.VisualStateManager.GetCustomVisualStateManager(root) != null, "the loader attaches the UWP state manager");
+                System.Windows.VisualState disabled = null;
+                foreach (System.Windows.VisualStateGroup group in System.Windows.VisualStateManager.GetVisualStateGroups(root))
+                    foreach (System.Windows.VisualState state in group.States) if (state.Name == "Disabled") disabled = state;
+                var frames = new List<object>();
+                foreach (System.Windows.Media.Animation.ObjectAnimationUsingKeyFrames animation in disabled.Storyboard.Children)
+                    frames.Add(animation.KeyFrames[0].Value);
+                var shifted = frames[0] as System.Windows.Media.Transform;
+                Check(shifted != null && shifted.Value.OffsetX == -256 && shifted.Value.OffsetY == -256 && Equals(frames[1], System.Windows.Visibility.Collapsed),
+                      "string key frames become the animated properties' values: " + string.Join(", ", frames));
+            });
             test("popup-overlay", () =>
             {
                 // MainPage_Loaded opens a code-created popup at window offsets.

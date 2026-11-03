@@ -286,6 +286,14 @@ namespace AppxPortable.WinRT.Xaml
                                 frames.Peek().Theme = Theme(reader);
                                 continue;
                             }
+                            // States convert UWP string key frames (see UwpVisualStateManager).
+                            if (member.IsAttachable && member.Name == "VisualStateGroups" && member.DeclaringType != null &&
+                                member.DeclaringType.UnderlyingType == typeof(System.Windows.VisualStateManager))
+                            {
+                                writer.WriteStartMember(member.DeclaringType.GetAttachableMember("CustomVisualStateManager"));
+                                writer.WriteValue(UwpVisualStateManager.Instance);
+                                writer.WriteEndMember();
+                            }
                             if (member.IsUnknown)
                                 throw new XamlException(Where(reader) + ": no WPF mapping for member " +
                                     (member.DeclaringType == null ? "" : member.DeclaringType.Name + ".") + member.Name);
