@@ -25,7 +25,8 @@ internal static partial class WinrtProjectionGenerator
         StorageInterface(output, "Folder", "Windows.Storage.IStorageFolder", new[] {
             "CreateFileAsyncOverloadDefaultOptions|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>",
             "CreateFileAsync|(System.String,Windows.Storage.CreationCollisionOption)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>",
-            "GetFileAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
+            "GetFileAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>",
+            "GetItemsAsyncOverloadDefaultStartAndCount|()->Windows.Foundation.IAsyncOperation`1<Windows.Foundation.Collections.IVectorView`1<Windows.Storage.IStorageItem>>" });
         StorageInterface(output, "FileStatics", "Windows.Storage.IStorageFileStatics", new[] {
             "GetFileFromPathAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>",
             "GetFileFromApplicationUriAsync|(Windows.Foundation.Uri)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
@@ -96,6 +97,13 @@ internal static partial class WinrtProjectionGenerator
         StorageFuture(output, "Random", "Windows.Storage.Streams.IRandomAccessStream", false);
         StorageFuture(output, "Stream", "Windows.Storage.Streams.IRandomAccessStreamWithContentType", false);
         StorageFuture(output, "Input", "Windows.Storage.Streams.IInputStream", false);
+        // A folder listing: IAsyncOperation<IVectorView<IStorageItem>> and the view's slots.
+        TypeDefinition view = Find("Windows.Foundation.Collections.IVectorView`1");
+        CollectionMethod(view, 1, "GetAt", "(System.UInt32)->!0");
+        CollectionMethod(view, 1, "get_Size", "()->System.UInt32");
+        output.AppendLine("        internal const int View_GetAt = " + NamedSlot(view, "GetAt") + ";");
+        output.AppendLine("        internal const int View_get_Size = " + NamedSlot(view, "get_Size") + ";");
+        StorageFuture(output, "Items", "pinterface({" + Iid(view) + "};{" + Iid(Find("Windows.Storage.IStorageItem")) + "})", false);
         StorageFuture(output, "Read", "Windows.Storage.Streams.IBuffer", true);
         StorageFuture(output, "Text", "System.String", false);
         StorageAction(output);
@@ -162,6 +170,7 @@ internal static partial class WinrtProjectionGenerator
             throw new NotSupportedException("Unsupported storage completion ABI");
         string signature = "string";
         if (result == "System.UInt32") signature = "u4";
+        else if (result.StartsWith("pinterface(", StringComparison.Ordinal)) signature = result;
         else if (result != "System.String")
         {
             TypeDefinition resultType = Find(result);

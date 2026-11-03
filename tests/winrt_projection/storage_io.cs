@@ -280,6 +280,16 @@ class StorageIoProjectionTest
         Check(File.ReadAllBytes(stats.Path).Length == 2, "WriteBytesAsync replaces the bytes");
         try { await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///missing-ranks.txt")); throw new Exception("missing package file opened"); }
         catch (Exception error) { Check(error.HResult == unchecked((int)0x80070002), "missing package file fails with file-not-found: " + error.HResult.ToString("x8")); }
+        // XboxWrapper.ClearCredentialsForFreshInstall: an empty local folder means a fresh install.
+        StorageFolder listed = ApplicationData.Current.LocalFolder;
+        foreach (var stale in Directory.GetFileSystemEntries(listed.Path))
+            if (Directory.Exists(stale)) Directory.Delete(stale, true); else File.Delete(stale);
+        Check((await listed.GetItemsAsync()).Count == 0, "an empty folder lists nothing");
+        File.WriteAllText(Path.Combine(listed.Path, "xuid.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(listed.Path, "Cache"));
+        IReadOnlyList<IStorageItem> items = await listed.GetItemsAsync();
+        Check(items.Count == 2 && items.Any(i => i is StorageFile && i.Name == "xuid.txt") && items.Any(i => i is StorageFolder && i.Name == "Cache"),
+              "GetItemsAsync lists files and folders as their storage types");
         Console.WriteLine("PASS: managed storage awaits native files and reads seekable streams and buffers");
     }
     [MTAThread]

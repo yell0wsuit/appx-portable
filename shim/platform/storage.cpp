@@ -112,6 +112,82 @@ HRESULT ResolveDataRoot(std::filesystem::path& root) {
     return E_ACCESSDENIED;
 }
 }
+using ItemView = ABI::Windows::Foundation::Collections::IVectorView<IStorageItem*>;
+using ItemIterable = ABI::Windows::Foundation::Collections::IIterable<IStorageItem*>;
+using ItemIterator = ABI::Windows::Foundation::Collections::IIterator<IStorageItem*>;
+class StorageItemIterator final : public RuntimeClass<RuntimeClassFlags<WinRt>, ItemIterator, FtmBase> {
+    InspectableClass(L"Windows.Foundation.Collections.IIterator`1<Windows.Storage.IStorageItem>", BaseTrust);
+    std::vector<ComPtr<IStorageItem>> items_;
+    UINT32 index_ = 0;
+
+public:
+    explicit StorageItemIterator(std::vector<ComPtr<IStorageItem>> items) : items_(std::move(items)) {}
+    HRESULT STDMETHODCALLTYPE get_Current(IStorageItem** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return index_ < items_.size() ? items_[index_].CopyTo(value) : E_BOUNDS;
+    }
+    HRESULT STDMETHODCALLTYPE get_HasCurrent(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = index_ < items_.size();
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE MoveNext(boolean* value) override {
+        if (index_ < items_.size()) ++index_;
+        return get_HasCurrent(value);
+    }
+    HRESULT STDMETHODCALLTYPE GetMany(UINT32 capacity, IStorageItem** values, UINT32* actual) override {
+        if (!actual) return E_POINTER;
+        *actual = 0;
+        if (capacity && !values) return E_POINTER;
+        while (*actual < capacity && index_ < items_.size()) items_[index_++].CopyTo(&values[(*actual)++]);
+        return S_OK;
+    }
+};
+// A folder listing: the files and folders it held when it was taken.
+class StorageItemView final : public RuntimeClass<RuntimeClassFlags<WinRt>, ItemView, ItemIterable, FtmBase> {
+    InspectableClass(L"Windows.Foundation.Collections.IVectorView`1<Windows.Storage.IStorageItem>", BaseTrust);
+    std::vector<ComPtr<IStorageItem>> items_;
+
+public:
+    explicit StorageItemView(std::vector<ComPtr<IStorageItem>> items) : items_(std::move(items)) {}
+    HRESULT STDMETHODCALLTYPE GetAt(UINT32 index, IStorageItem** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return index < items_.size() ? items_[index].CopyTo(value) : E_BOUNDS;
+    }
+    HRESULT STDMETHODCALLTYPE get_Size(UINT32* value) override {
+        if (!value) return E_POINTER;
+        *value = static_cast<UINT32>(items_.size());
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE IndexOf(IStorageItem* item, UINT32* index, boolean* found) override {
+        if (!index || !found) return E_POINTER;
+        *index = 0;
+        *found = false;
+        for (UINT32 i = 0; i < items_.size(); ++i)
+            if (items_[i].Get() == item) {
+                *index = i;
+                *found = true;
+                break;
+            }
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetMany(UINT32 start, UINT32 capacity, IStorageItem** values, UINT32* actual) override {
+        if (!actual) return E_POINTER;
+        *actual = 0;
+        if (capacity && !values) return E_POINTER;
+        if (start > items_.size()) return E_BOUNDS;
+        for (UINT32 i = start; i < items_.size() && *actual < capacity; ++i) items_[i].CopyTo(&values[(*actual)++]);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE First(ItemIterator** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto iterator = Make<StorageItemIterator>(items_);
+        return iterator ? iterator.CopyTo(value) : E_OUTOFMEMORY;
+    }
+};
 class Folder final
     : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIStorageFolder, DefaultIStorageItem, FtmBase> {
     InspectableClass(L"Windows.Storage.StorageFolder", BaseTrust);
@@ -119,6 +195,40 @@ class Folder final
 
 public:
     explicit Folder(std::wstring path) : path_(std::move(path)) {}
+    // The folder's files and folders, as path-only items like the rest of this folder's.
+    HRESULT STDMETHODCALLTYPE GetItemsAsyncOverloadDefaultStartAndCount(
+        __FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem** operation) override {
+        if (!operation) return E_POINTER;
+        *operation = nullptr;
+        std::vector<ComPtr<IStorageItem>> items;
+        std::error_code error;
+        for (const auto& entry : std::filesystem::directory_iterator(path_, error)) {
+            ComPtr<IStorageItem> item;
+            const auto path = entry.path().wstring();
+            if (entry.is_directory(error)) {
+                ComPtr<IStorageFolder> folder = Make<Folder>(path);
+                if (!folder || FAILED(folder.As(&item))) return E_OUTOFMEMORY;
+            } else {
+                ComPtr<ABI::Windows::Foundation::IAsyncOperation<StorageFile*>> lookup;
+                ComPtr<IStorageFile> file;
+                auto hr = PathFileAsync(HStringReference(path.c_str(), static_cast<unsigned>(path.size())).Get(), &lookup);
+                if (SUCCEEDED(hr)) hr = lookup->GetResults(&file);
+                if (FAILED(hr) || !file || FAILED(file.As(&item))) continue;  // gone or unreadable meanwhile
+            }
+            items.push_back(item);
+        }
+        Log("TRACE", "StorageFolder GetItemsAsync %ls items=%zu error=%d", path_.c_str(), items.size(), error.value());
+        if (error) {
+            ComPtr<IInspectable> failed;
+            const HRESULT hr = MakeFailedOperation(__uuidof(__FIAsyncOperation_1___FIVectorView_1_Windows__CStorage__CIStorageItem),
+                                                   HRESULT_FROM_WIN32(error.value()), sizeof(void*), &failed);
+            return SUCCEEDED(hr) ? failed.CopyTo(operation) : hr;
+        }
+        ComPtr<ItemView> view = Make<StorageItemView>(std::move(items));
+        if (!view) return E_OUTOFMEMORY;
+        auto completed = Make<CompletedOperation<ItemView*, ItemView*>>([view](ItemView** value) { return view.CopyTo(value); });
+        return completed ? completed.CopyTo(operation) : E_OUTOFMEMORY;
+    }
     HRESULT STDMETHODCALLTYPE get_Path(HSTRING* value) override {
         if (!value) return E_POINTER;
         return WindowsCreateString(path_.data(), static_cast<UINT32>(path_.size()), value);
