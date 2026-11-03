@@ -72,5 +72,32 @@ class BejeweledPatchTests(unittest.TestCase):
         self.assertEqual(self.asset.read_bytes(), self.patched)
 
 
+class BejeweledWpfPatchTests(unittest.TestCase):
+    def test_wpf_style_references_are_opt_in_repeatable_and_restorable(self):
+        original = b'<ResourceDictionary><Style x:Key="ButtonBackgroundBrush" TargetType="Button"/><Setter Property="Background" Value="{StaticResource ButtonBackgroundBrush}"/></ResourceDictionary>'
+        expected = original.replace(b"{StaticResource ButtonBackgroundBrush}", b"{StaticResource ButtonBackgroundThemeBrush}")
+        with tempfile.TemporaryDirectory() as folder:
+            game = Path(folder)
+            (game / "Common").mkdir()
+            styles = game / "Common/BejeweledStyles.xaml"
+            styles.write_bytes(original)
+            app = game / "App.xaml"
+            app.write_bytes(b"keep default app")
+            with patch.object(PATCHER, "WPF_ORIGINAL_SHA256", PATCHER.sha256(original)), patch.object(PATCHER, "WPF_PATCHED_SHA256", PATCHER.sha256(expected)):
+                self.assertEqual(PATCHER.main([str(game), "--wpf", "--check"]), 0)
+                self.assertEqual(styles.read_bytes(), original)
+                self.assertEqual(PATCHER.main([str(game), "--wpf"]), 0)
+                self.assertEqual(styles.read_bytes(), expected)
+                self.assertEqual(PATCHER.main([str(game), "--wpf"]), 0)
+                self.assertEqual(PATCHER.main([str(game), "--wpf", "--restore"]), 0)
+                self.assertEqual(styles.read_bytes(), original)
+                self.assertEqual(app.read_bytes(), b"keep default app")
+                backup = styles.with_name(styles.name + ".wpf-original")
+                self.assertEqual(backup.read_bytes(), original)
+                styles.write_bytes(original + b"modified")
+                self.assertEqual(PATCHER.main([str(game), "--wpf"]), 1)
+                self.assertEqual(styles.read_bytes(), original + b"modified")
+
+
 if __name__ == "__main__":
     unittest.main()

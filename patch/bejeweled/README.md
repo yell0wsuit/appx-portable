@@ -20,3 +20,18 @@ py patch/bejeweled/patch.py 'D:\Programs\appx\PopCap.BejweledLIVE_4.0.0.10_x86__
 Use `--check` to inspect without writing, or `--restore` to restore the verified
 original. Reapplying the patch is safe. Live validation confirmed readable
 volume headings, toggle labels, and buttons in the settings panel.
+
+For the managed Wine WPF adapter, use the separate opt-in style-reference patch:
+
+```sh
+python3 patch/bejeweled/patch.py /path/to/staged/game --wpf
+```
+
+The shipped `Common/BejeweledStyles.xaml` defines seven empty Button styles where
+snapped-mode setters expect brushes, thickness, a font family, and a size. WPF
+seals application styles eagerly and rejects their types before any page loads.
+The Wine patch redirects only those StaticResource references to the adapter's
+corresponding dark theme keys. It preserves the original as
+`BejeweledStyles.xaml.wpf-original`, verifies both input and output hashes, and
+supports `--check` and `--restore`. It does not run with the default Windows theme
+patch. The local `game.py` WPF launch harness applies it explicitly.
