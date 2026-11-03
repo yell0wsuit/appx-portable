@@ -90,4 +90,52 @@ struct __declspec(uuid("e7bed191-0bb9-4189-8394-31761b476fd7")) DefaultISchedule
   }
 };
 }
+namespace ABI::Windows::UI::Notifications {
+struct __declspec(uuid("997e2675-059e-4e60-8b06-1760917c8b80")) DefaultIToastNotification : public ABI::Windows::UI::Notifications::IToastNotification {
+  HRESULT STDMETHODCALLTYPE get_Content(ABI::Windows::Data::Xml::Dom::IXmlDocument** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::get_Content");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_ExpirationTime(__FIReference_1_Windows__CFoundation__CDateTime* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::put_ExpirationTime");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_ExpirationTime(__FIReference_1_Windows__CFoundation__CDateTime** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::get_ExpirationTime");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE add_Dismissed(__FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_Windows__CUI__CNotifications__CToastDismissedEventArgs* handler, EventRegistrationToken* token) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::add_Dismissed");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE remove_Dismissed(EventRegistrationToken token) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::remove_Dismissed");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE add_Activated(__FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_IInspectable* handler, EventRegistrationToken* token) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::add_Activated");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE remove_Activated(EventRegistrationToken token) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::remove_Activated");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE add_Failed(__FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_Windows__CUI__CNotifications__CToastFailedEventArgs* handler, EventRegistrationToken* token) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::add_Failed");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE remove_Failed(EventRegistrationToken token) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotification::remove_Failed");
+    return E_NOTIMPL;
+  }
+};
+}
+namespace ABI::Windows::UI::Notifications {
+struct __declspec(uuid("04124b20-82c6-4229-b109-fd9ed4662b53")) DefaultIToastNotificationFactory : public ABI::Windows::UI::Notifications::IToastNotificationFactory {
+  HRESULT STDMETHODCALLTYPE CreateToastNotification(ABI::Windows::Data::Xml::Dom::IXmlDocument* content, ABI::Windows::UI::Notifications::IToastNotification** value) override {
+    appx::Log("UNIMPL", "ABI::Windows::UI::Notifications::IToastNotificationFactory::CreateToastNotification");
+    return E_NOTIMPL;
+  }
+};
+}
 #pragma warning(pop)

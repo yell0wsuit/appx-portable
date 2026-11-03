@@ -322,4 +322,60 @@ struct __declspec(uuid("8c60ad77-83a4-4ec1-9c54-7ba429e13da6")) DefaultIXmlNodeL
   }
 };
 }
+namespace ABI::Windows::Data::Xml::Dom {
+struct __declspec(uuid("ac144aa4-b4f1-4db6-b206-8a22c308db0a")) DefaultIXmlAttribute : public ABI::Windows::Data::Xml::Dom::IXmlAttribute {
+  HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlAttribute::get_Name");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_Specified(boolean* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlAttribute::get_Specified");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE get_Value(HSTRING* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlAttribute::get_Value");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE put_Value(HSTRING value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlAttribute::put_Value");
+    return E_NOTIMPL;
+  }
+};
+}
+namespace ABI::Windows::Data::Xml::Dom {
+struct __declspec(uuid("b3a69eb0-aab0-4b82-a6fa-b1453f7c021b")) DefaultIXmlNamedNodeMap : public ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap {
+  HRESULT STDMETHODCALLTYPE get_Length(UINT32* value) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap::get_Length");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE Item(UINT32 index, ABI::Windows::Data::Xml::Dom::IXmlNode** node) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap::Item");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE GetNamedItem(HSTRING name, ABI::Windows::Data::Xml::Dom::IXmlNode** node) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap::GetNamedItem");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE SetNamedItem(ABI::Windows::Data::Xml::Dom::IXmlNode* node, ABI::Windows::Data::Xml::Dom::IXmlNode** previousNode) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap::SetNamedItem");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE RemoveNamedItem(HSTRING name, ABI::Windows::Data::Xml::Dom::IXmlNode** previousNode) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap::RemoveNamedItem");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE GetNamedItemNS(IInspectable* namespaceUri, HSTRING name, ABI::Windows::Data::Xml::Dom::IXmlNode** node) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap::GetNamedItemNS");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE RemoveNamedItemNS(IInspectable* namespaceUri, HSTRING name, ABI::Windows::Data::Xml::Dom::IXmlNode** previousNode) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap::RemoveNamedItemNS");
+    return E_NOTIMPL;
+  }
+  HRESULT STDMETHODCALLTYPE SetNamedItemNS(ABI::Windows::Data::Xml::Dom::IXmlNode* node, ABI::Windows::Data::Xml::Dom::IXmlNode** previousNode) override {
+    appx::Log("UNIMPL", "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap::SetNamedItemNS");
+    return E_NOTIMPL;
+  }
+};
+}
 #pragma warning(pop)

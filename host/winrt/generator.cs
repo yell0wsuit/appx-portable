@@ -166,6 +166,7 @@ internal static partial class WinrtProjectionGenerator
     // interface, or the one other interface the class implements that declares it.
     private static TypeDefinition MemberInterface(TypeDefinition type, MethodDefinition member)
     {
+        if (type.IsInterface) return type;
         if (!member.IsStatic)
         {
             TypeDefinition instance = DefaultInterface(type);
@@ -248,7 +249,7 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("                using (var factory = " + Runtime + "NativeObject.Factory(\"" + type.FullName + "\", " + Guid(owner) + "))");
             return "factory";
         }
-        if (!composable && owner == DefaultInterface(type)) return "native";
+        if (type.IsInterface ? owner == type : !composable && owner == DefaultInterface(type)) return "native";
         output.AppendLine("                using (var self = native.QueryInterface(" + Guid(owner) + "))");
         return "self";
     }
@@ -1217,6 +1218,7 @@ namespace AppxPortable.WinRT.Projected
         var members = new List<string>();
         foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
         {
+            if (member.Name == "Method") continue;
             if (member.Name != "Property" && lenient)
             {
                 Console.Error.WriteLine("Omitted " + iface.FullName + "." + member.GetAttribute("Name") + ": interface " + member.Name.ToLowerInvariant());
@@ -1408,9 +1410,18 @@ namespace AppxPortable.WinRT.Projected
         if (type.HasGenericParameters) throw new NotSupportedException("Unsupported generic interface: " + type.FullName);
         if (surface.HasAttribute("Adapter")) { DictionaryInterface(output, type, surface); return; }
         List<string> members = InterfaceMembers(type, surface);
+        // Interface methods: one non-overloaded instance method per listed name.
+        var methods = surface.ChildNodes.OfType<XmlElement>().Where(m => m.Name == "Method").Select(m =>
+        {
+            var found = type.Methods.Where(d => d.Name == m.GetAttribute("Name")).ToList();
+            if (found.Count != 1) throw new NotSupportedException("Unsupported interface method: " + type.FullName + "." + m.GetAttribute("Name"));
+            return found[0];
+        }).ToList();
         output.AppendLine("    public interface " + type.Name);
         output.AppendLine("    {");
         foreach (string name in members) output.AppendLine("        " + Name(Getter(type, name).GetMethod.ReturnType) + " " + name + " { get; }");
+        foreach (MethodDefinition method in methods)
+            output.AppendLine("        " + Name(method.ReturnType) + " " + method.Name + "(" + string.Join(", ", method.Parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ");");
         output.AppendLine("    }");
         output.AppendLine("}");
         output.AppendLine("namespace AppxPortable.WinRT.Projected");
@@ -1433,6 +1444,7 @@ namespace AppxPortable.WinRT.Projected
         output.AppendLine("            });");
         output.AppendLine("        }");
         foreach (string name in members) InterfaceProperty(output, type, name, false);
+        foreach (MethodDefinition method in methods) MethodOverload(output, type, method, false, false);
         output.AppendLine("    }");
     }
 

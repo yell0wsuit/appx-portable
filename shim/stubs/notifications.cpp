@@ -5,6 +5,7 @@
 #include "xml.h"
 #include <mutex>
 #include <vector>
+#include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Notifications;
 namespace appx {
@@ -200,6 +201,61 @@ public:
         return MakeToastTemplate(type, value);
     }
 };
+// A toast the game fills and shows; notifications are disabled, so the notifier
+// accepts it silently and none of its events is ever raised.
+class Toast final : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIToastNotification, FtmBase> {
+    InspectableClass(L"Windows.UI.Notifications.ToastNotification", BaseTrust);
+    APPX_LOG_MISSING_INTERFACES("Toast")
+    ComPtr<ABI::Windows::Data::Xml::Dom::IXmlDocument> content_;
+    ComPtr<__FIReference_1_Windows__CFoundation__CDateTime> expiration_;
+    EventSource<__FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_Windows__CUI__CNotifications__CToastDismissedEventArgs> dismissed_;
+    EventSource<__FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_IInspectable> activated_;
+    EventSource<__FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_Windows__CUI__CNotifications__CToastFailedEventArgs> failed_;
+
+public:
+    explicit Toast(ABI::Windows::Data::Xml::Dom::IXmlDocument* content) : content_(content) {}
+    HRESULT STDMETHODCALLTYPE get_Content(ABI::Windows::Data::Xml::Dom::IXmlDocument** value) override {
+        if (!value) return E_POINTER;
+        return content_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE put_ExpirationTime(__FIReference_1_Windows__CFoundation__CDateTime* value) override {
+        expiration_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_ExpirationTime(__FIReference_1_Windows__CFoundation__CDateTime** value) override {
+        if (!value) return E_POINTER;
+        return expiration_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE add_Dismissed(
+        __FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_Windows__CUI__CNotifications__CToastDismissedEventArgs* handler,
+        EventRegistrationToken* token) override {
+        return dismissed_.Add(handler, token);
+    }
+    HRESULT STDMETHODCALLTYPE remove_Dismissed(EventRegistrationToken token) override { return dismissed_.Remove(token); }
+    HRESULT STDMETHODCALLTYPE add_Activated(__FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_IInspectable* handler,
+                                            EventRegistrationToken* token) override {
+        return activated_.Add(handler, token);
+    }
+    HRESULT STDMETHODCALLTYPE remove_Activated(EventRegistrationToken token) override { return activated_.Remove(token); }
+    HRESULT STDMETHODCALLTYPE add_Failed(
+        __FITypedEventHandler_2_Windows__CUI__CNotifications__CToastNotification_Windows__CUI__CNotifications__CToastFailedEventArgs* handler,
+        EventRegistrationToken* token) override {
+        return failed_.Add(handler, token);
+    }
+    HRESULT STDMETHODCALLTYPE remove_Failed(EventRegistrationToken token) override { return failed_.Remove(token); }
+};
+class ToastNotificationFactory final : public Factory<DefaultIToastNotificationFactory> {
+public:
+    ToastNotificationFactory() : Factory(L"Windows.UI.Notifications.ToastNotification") {}
+    HRESULT STDMETHODCALLTYPE CreateToastNotification(ABI::Windows::Data::Xml::Dom::IXmlDocument* content,
+                                                      IToastNotification** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        if (!content) return E_INVALIDARG;
+        auto toast = Make<Toast>(content);
+        return toast ? toast.CopyTo(value) : E_OUTOFMEMORY;
+    }
+};
 class ScheduledToastFactory final : public Factory<DefaultIScheduledToastNotificationFactory> {
 public:
     ScheduledToastFactory() : Factory(L"Windows.UI.Notifications.ScheduledToastNotification") {}
@@ -223,6 +279,10 @@ HRESULT MakeToastFactory(IActivationFactory** value) {
     auto factory = Make<ToastFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
+HRESULT MakeToastNotificationFactory(IActivationFactory** value) {
+    auto factory = Make<ToastNotificationFactory>();
+    return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
+}
 HRESULT MakeScheduledToastFactory(IActivationFactory** value) {
     auto factory = Make<ScheduledToastFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
@@ -231,4 +291,7 @@ const ShimClass toastsClass{L"Windows.UI.Notifications.ToastNotificationManager"
                             InIslands};
 const ShimClass scheduledToastClass{L"Windows.UI.Notifications.ScheduledToastNotification", MakeScheduledToastFactory,
                                     ShimPolicy::Replace, InIslands};
+// Windows' own toast object where it exists (Islands); the shim's under Wine.
+const ShimClass toastNotificationClass{L"Windows.UI.Notifications.ToastNotification", MakeToastNotificationFactory,
+                                       ShimPolicy::FillMissing};
 }

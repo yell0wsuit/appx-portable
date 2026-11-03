@@ -427,21 +427,91 @@ namespace Windows.ApplicationModel.Store
     }
     public static class CurrentApp { public static LicenseInformation LicenseInformation { get { throw new global::System.NotImplementedException(); } } }
 }
-namespace Windows.Data.Xml.Dom { public sealed class XmlDocument { internal XmlDocument() { } } }
+namespace Windows.Data.Xml.Dom
+{
+    public interface IXmlNode
+    {
+        XmlNamedNodeMap Attributes { get; }
+        IXmlNode AppendChild(IXmlNode newChild);
+    }
+    public sealed class XmlNodeList : global::System.Collections.Generic.IReadOnlyList<IXmlNode>
+    {
+        internal XmlNodeList() { }
+        public uint Length { get { throw new global::System.NotImplementedException(); } }
+        public IXmlNode Item(uint index) { throw new global::System.NotImplementedException(); }
+        public int Count { get { throw new global::System.NotImplementedException(); } }
+        IXmlNode global::System.Collections.Generic.IReadOnlyList<IXmlNode>.this[int index] { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Collections.Generic.IEnumerator<IXmlNode> GetEnumerator() { throw new global::System.NotImplementedException(); }
+        global::System.Collections.IEnumerator global::System.Collections.IEnumerable.GetEnumerator() { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class XmlNamedNodeMap : global::System.Collections.Generic.IReadOnlyList<IXmlNode>
+    {
+        internal XmlNamedNodeMap() { }
+        public uint Length { get { throw new global::System.NotImplementedException(); } }
+        public IXmlNode Item(uint index) { throw new global::System.NotImplementedException(); }
+        public IXmlNode GetNamedItem(string name) { throw new global::System.NotImplementedException(); }
+        public int Count { get { throw new global::System.NotImplementedException(); } }
+        IXmlNode global::System.Collections.Generic.IReadOnlyList<IXmlNode>.this[int index] { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Collections.Generic.IEnumerator<IXmlNode> GetEnumerator() { throw new global::System.NotImplementedException(); }
+        global::System.Collections.IEnumerator global::System.Collections.IEnumerable.GetEnumerator() { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class XmlText : IXmlNode
+    {
+        internal XmlText() { }
+        public XmlNamedNodeMap Attributes { get { throw new global::System.NotImplementedException(); } }
+        public IXmlNode AppendChild(IXmlNode newChild) { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class XmlAttribute : IXmlNode
+    {
+        internal XmlAttribute() { }
+        public string Name { get { throw new global::System.NotImplementedException(); } }
+        public string Value { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public XmlNamedNodeMap Attributes { get { throw new global::System.NotImplementedException(); } }
+        public IXmlNode AppendChild(IXmlNode newChild) { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class XmlElement : IXmlNode
+    {
+        internal XmlElement() { }
+        public string GetAttribute(string attributeName) { throw new global::System.NotImplementedException(); }
+        public void SetAttribute(string attributeName, string attributeValue) { throw new global::System.NotImplementedException(); }
+        public XmlNamedNodeMap Attributes { get { throw new global::System.NotImplementedException(); } }
+        public IXmlNode AppendChild(IXmlNode newChild) { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class XmlDocument : IXmlNode
+    {
+        internal XmlDocument() { }
+        public XmlNodeList GetElementsByTagName(string tagName) { throw new global::System.NotImplementedException(); }
+        public XmlText CreateTextNode(string data) { throw new global::System.NotImplementedException(); }
+        public IXmlNode SelectSingleNode(string xpath) { throw new global::System.NotImplementedException(); }
+        public string GetXml() { throw new global::System.NotImplementedException(); }
+        public XmlNamedNodeMap Attributes { get { throw new global::System.NotImplementedException(); } }
+        public IXmlNode AppendChild(IXmlNode newChild) { throw new global::System.NotImplementedException(); }
+    }
+}
 namespace Windows.UI.Notifications
 {
     public enum ToastTemplateType { ToastText01 = 4 }
+    public enum TileTemplateType { TileWideImageAndText01 = 12 }
+    public sealed class TileNotification { public TileNotification(global::Windows.Data.Xml.Dom.XmlDocument content) { throw new global::System.NotImplementedException(); } }
     public sealed class TileUpdater
     {
         internal TileUpdater() { }
         public void Clear() { throw new global::System.NotImplementedException(); }
         public void EnableNotificationQueue(bool enable) { throw new global::System.NotImplementedException(); }
+        public void Update(TileNotification notification) { throw new global::System.NotImplementedException(); }
     }
     public static class TileUpdateManager
     {
         public static TileUpdater CreateTileUpdaterForApplication() { throw new global::System.NotImplementedException(); }
+        public static global::Windows.Data.Xml.Dom.XmlDocument GetTemplateContent(TileTemplateType type) { throw new global::System.NotImplementedException(); }
     }
-    public sealed class ToastNotifier { internal ToastNotifier() { } }
+    public sealed class ToastNotification
+    {
+        public ToastNotification(global::Windows.Data.Xml.Dom.XmlDocument content) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Activated(global::Windows.Foundation.TypedEventHandler<ToastNotification, object> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Activated(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class ToastNotifier { internal ToastNotifier() { } public void Show(ToastNotification notification) { throw new global::System.NotImplementedException(); } }
     public static class ToastNotificationManager
     {
         public static ToastNotifier CreateToastNotifier() { throw new global::System.NotImplementedException(); }

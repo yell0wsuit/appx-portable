@@ -140,7 +140,9 @@
       "ABI::Windows::UI::Notifications::IToastNotifier",
       "ABI::Windows::UI::Notifications::IToastNotificationManagerStatics",
       "ABI::Windows::UI::Notifications::IScheduledToastNotification",
-      "ABI::Windows::UI::Notifications::IScheduledToastNotificationFactory"
+      "ABI::Windows::UI::Notifications::IScheduledToastNotificationFactory",
+      "ABI::Windows::UI::Notifications::IToastNotification",
+      "ABI::Windows::UI::Notifications::IToastNotificationFactory"
     ]
   },
   "package.h": {
@@ -210,7 +212,9 @@
     "header": "windows.ui.notifications.h",
     "interfaces": [
       "ABI::Windows::UI::Notifications::ITileUpdater",
-      "ABI::Windows::UI::Notifications::ITileUpdateManagerStatics"
+      "ABI::Windows::UI::Notifications::ITileUpdateManagerStatics",
+      "ABI::Windows::UI::Notifications::ITileNotification",
+      "ABI::Windows::UI::Notifications::ITileNotificationFactory"
     ]
   },
   "uicore.h": {
@@ -256,7 +260,9 @@
       "ABI::Windows::Data::Xml::Dom::IXmlElement",
       "ABI::Windows::Data::Xml::Dom::IXmlText",
       "ABI::Windows::Data::Xml::Dom::IXmlCharacterData",
-      "ABI::Windows::Data::Xml::Dom::IXmlNodeList"
+      "ABI::Windows::Data::Xml::Dom::IXmlNodeList",
+      "ABI::Windows::Data::Xml::Dom::IXmlAttribute",
+      "ABI::Windows::Data::Xml::Dom::IXmlNamedNodeMap"
     ]
   },
   "device_enumeration.h": {

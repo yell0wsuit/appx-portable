@@ -345,6 +345,31 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         var tiles = global::Windows.UI.Notifications.TileUpdateManager.CreateTileUpdaterForApplication();
         tiles.EnableNotificationQueue(true);
         tiles.Clear();
+        // TileNotificationController.CreateMultiTextImageNotification, as the game writes it.
+        var content = global::Windows.UI.Notifications.TileUpdateManager.GetTemplateContent(global::Windows.UI.Notifications.TileTemplateType.TileWideImageAndText01);
+        var texts = System.Linq.Enumerable.ToArray<global::Windows.Data.Xml.Dom.IXmlNode>(content.GetElementsByTagName("text"));
+        texts[0].AppendChild(content.CreateTextNode("Best 1,000"));
+        foreach (global::Windows.Data.Xml.Dom.IXmlNode image in System.Linq.Enumerable.ToArray<global::Windows.Data.Xml.Dom.IXmlNode>(content.GetElementsByTagName("image")))
+            foreach (global::Windows.Data.Xml.Dom.IXmlNode node in image.Attributes)
+            {
+                var attribute = (global::Windows.Data.Xml.Dom.XmlAttribute)node;
+                if (attribute.Name == "src") attribute.Value = "Assets/Tiles/Logo_Wide.png";
+            }
+        var bindings = content.GetElementsByTagName("binding");
+        Check(bindings.Length == 1, "tile template binding");
+        ((global::Windows.Data.Xml.Dom.XmlElement)bindings.Item(0)).SetAttribute("branding", "none");
+        Check(content.GetXml() == "<tile><visual><binding template=\"TileWideImageAndText01\" branding=\"none\"><image id=\"1\" src=\"Assets/Tiles/Logo_Wide.png\"/>" +
+              "<text id=\"1\">Best 1,000</text></binding></visual></tile>", "tile template edits: " + content.GetXml());
+        tiles.Update(new global::Windows.UI.Notifications.TileNotification(content));
+        // LiveConnectionWidget.ShowDisconnectedToast addresses the root by path.
+        var toast = global::Windows.UI.Notifications.ToastNotificationManager.GetTemplateContent(global::Windows.UI.Notifications.ToastTemplateType.ToastText01);
+        ((global::Windows.Data.Xml.Dom.XmlElement)toast.SelectSingleNode("/toast")).SetAttribute("duration", "short");
+        Check(toast.GetXml().StartsWith("<toast duration=\"short\">") &&
+              System.Linq.Enumerable.First<global::Windows.Data.Xml.Dom.IXmlNode>(toast.GetElementsByTagName("text")).Attributes.GetNamedItem("id") != null, "toast template path and attributes");
+        var disconnected = new global::Windows.UI.Notifications.ToastNotification(toast);
+        var activation = disconnected.add_Activated((sender, args) => { });
+        disconnected.remove_Activated(activation);
+        global::Windows.UI.Notifications.ToastNotificationManager.CreateToastNotifier().Show(disconnected);
         Check(global::Windows.UI.Notifications.ToastNotificationManager.CreateToastNotifier() != null &&
               global::Windows.UI.Notifications.ToastNotificationManager.GetTemplateContent(global::Windows.UI.Notifications.ToastTemplateType.ToastText01) != null,
               "toast notifier and template");
@@ -362,7 +387,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Check(element.Dispatcher != null && element.Dispatcher.HasThreadAccess, "XAML objects report the view's CoreDispatcher");
         var visibility = Window.Current.add_VisibilityChanged((sender, args) => { });
         Window.Current.remove_VisibilityChanged(visibility);
-        Console.WriteLine("PASS: startup settings, license, tile, toast and CoreWindow input services reach the shim");
+        Console.WriteLine("PASS: startup settings, license, tile and toast templates, and CoreWindow input services reach the shim");
     }
     // The game's splash continuation: RunAsync queues work for the UI thread and
     // completes the returned action once the handler has run.

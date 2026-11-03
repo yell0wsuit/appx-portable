@@ -110,6 +110,95 @@ int main(int argc, char** argv) {
     if (FAILED(notifier->RemoveFromSchedule(scheduled.Get()))) return 25;
     list.Reset();
     if (FAILED(notifier->GetScheduledToastNotifications(&list)) || FAILED(list->get_Size(&count)) || count) return 26;
+    if (!islands) {
+        // Notification code addresses template parts by path and edits image
+        // sources through attribute nodes, which stay bound to their element.
+        ComPtr<IXmlNodeSelector> selector;
+        ComPtr<IXmlNode> toastNode;
+        if (FAILED(document.As(&selector)) || FAILED(selector->SelectSingleNode(HStringReference(L"/toast").Get(), &toastNode)) ||
+            !toastNode)
+            return 32;
+        ComPtr<IXmlNodeList> bindings;
+        if (FAILED(selector->SelectNodes(HStringReference(L"//binding").Get(), &bindings)) ||
+            FAILED(bindings->get_Length(&length)) || length != 1)
+            return 33;
+        ComPtr<IXmlNode> missing;
+        if (selector->SelectSingleNode(HStringReference(L"/toast[1]").Get(), &missing) != E_NOTIMPL) return 34;
+        if (FAILED(get(HStringReference(L"Windows.UI.Notifications.TileUpdateManager").Get(), &factory))) return 35;
+        ComPtr<ITileUpdateManagerStatics> tiles;
+        ComPtr<IXmlDocument> tile;
+        if (FAILED(factory.As(&tiles)) || FAILED(tiles->GetTemplateContent(TileTemplateType_TileWide310x150ImageAndText01, &tile)) ||
+            !tile)
+            return 36;
+        ComPtr<IXmlNodeList> images;
+        if (FAILED(tile->GetElementsByTagName(HStringReference(L"image").Get(), &images)) ||
+            FAILED(images->get_Length(&length)) || length != 1 ||
+            FAILED(tile->GetElementsByTagName(HStringReference(L"text").Get(), &texts)) ||
+            FAILED(texts->get_Length(&length)) || length != 1)
+            return 37;
+        ComPtr<IXmlNode> image;
+        ComPtr<IXmlNamedNodeMap> attributes;
+        if (FAILED(images->Item(0, &image)) || FAILED(image->get_Attributes(&attributes)) || !attributes ||
+            FAILED(attributes->get_Length(&length)) || length != 2)
+            return 38;
+        // The managed projection enumerates the map as IIterable<IXmlNode>.
+        ComPtr<ABI::Windows::Foundation::Collections::IIterable<IXmlNode*>> entries;
+        if (FAILED(attributes.As(&entries)) || FAILED(entries->First(&cursor))) return 39;
+        bool edited = false;
+        while (SUCCEEDED(cursor->get_HasCurrent(&has)) && has) {
+            ComPtr<IXmlNode> node;
+            ComPtr<IXmlAttribute> attribute;
+            HString name;
+            NodeType kind{};
+            if (FAILED(cursor->get_Current(&node)) || FAILED(node.As(&attribute)) ||
+                FAILED(node->get_NodeType(&kind)) || kind != NodeType_AttributeNode ||
+                FAILED(attribute->get_Name(name.GetAddressOf())))
+                return 40;
+            if (!wcscmp(name.GetRawBuffer(nullptr), L"src")) {
+                if (FAILED(attribute->put_Value(HStringReference(L"Assets/Tiles/Logo_Wide.png").Get()))) return 41;
+                edited = true;
+            }
+            cursor->MoveNext(&has);
+        }
+        ComPtr<IXmlElement> element;
+        HString source;
+        if (!edited || FAILED(image.As(&element)) ||
+            FAILED(element->GetAttribute(HStringReference(L"src").Get(), source.GetAddressOf())) ||
+            wcscmp(source.GetRawBuffer(nullptr), L"Assets/Tiles/Logo_Wide.png"))
+            return 42;
+        ComPtr<IXmlNode> named;
+        ComPtr<IXmlNode> none;
+        if (FAILED(attributes->GetNamedItem(HStringReference(L"id").Get(), &named)) || !named ||
+            FAILED(attributes->GetNamedItem(HStringReference(L"alt").Get(), &none)) || none)
+            return 43;
+        if (FAILED(tile.As(&serializer)) || FAILED(serializer->GetXml(xml.ReleaseAndGetAddressOf())) ||
+            !wcsstr(xml.GetRawBuffer(nullptr),
+                    L"<tile><visual><binding template=\"TileWideImageAndText01\"><image id=\"1\" src=\"Assets/Tiles/Logo_Wide.png\"/><text id=\"1\"/>")) {
+            printf("tile xml=%ls\n", xml.GetRawBuffer(nullptr));
+            return 44;
+        }
+        // Under Wine the shim makes the notification objects games build from templates.
+        if (FAILED(get(HStringReference(L"Windows.UI.Notifications.TileNotification").Get(), &factory))) return 46;
+        ComPtr<ITileNotificationFactory> tileFactory;
+        ComPtr<ITileNotification> tileNotification;
+        ComPtr<IXmlDocument> held;
+        if (FAILED(factory.As(&tileFactory)) || FAILED(tileFactory->CreateTileNotification(tile.Get(), &tileNotification)) ||
+            FAILED(tileNotification->get_Content(&held)) || held != tile ||
+            tileFactory->CreateTileNotification(nullptr, &tileNotification) != E_INVALIDARG)
+            return 47;
+        if (FAILED(get(HStringReference(L"Windows.UI.Notifications.ToastNotification").Get(), &factory))) return 48;
+        ComPtr<IToastNotificationFactory> toastFactory;
+        ComPtr<IToastNotification> toast;
+        EventRegistrationToken activated{};
+        if (FAILED(factory.As(&toastFactory)) || FAILED(toastFactory->CreateToastNotification(document.Get(), &toast)) ||
+            FAILED(toast->get_Content(&held)) || held != document || FAILED(notifier->Show(toast.Get())))
+            return 49;
+        auto handler = Callback<ABI::Windows::Foundation::ITypedEventHandler<ToastNotification*, IInspectable*>>(
+            [](IToastNotification*, IInspectable*) { return S_OK; });
+        if (FAILED(toast->add_Activated(handler.Get(), &activated)) || FAILED(toast->remove_Activated(activated))) return 50;
+        ComPtr<IXmlDocument> unknown;
+        if (tiles->GetTemplateContent(static_cast<TileTemplateType>(46), &unknown) != E_INVALIDARG) return 45;
+    }
     puts("toasttest: notifications disabled; schedule accepted silently");
     return 0;
 }

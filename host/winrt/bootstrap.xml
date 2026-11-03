@@ -535,6 +535,7 @@
   </Class>
   <Class Name="Windows.UI.Notifications.TileNotification">
     <Constructor />
+    <Property Name="Content" />
   </Class>
   <Class Name="Windows.UI.Notifications.ToastNotificationManager">
     <Method Name="CreateToastNotifier" />
@@ -544,8 +545,63 @@
   <Class Name="Windows.UI.Notifications.ToastNotifier">
     <Method Name="Show" />
   </Class>
-  <Class Name="Windows.UI.Notifications.ToastNotification" />
-  <Class Name="Windows.Data.Xml.Dom.XmlDocument" />
+  <Class Name="Windows.UI.Notifications.ToastNotification">
+    <Constructor />
+    <Property Name="Content" />
+    <Event Name="Activated" />
+  </Class>
+  <!-- The shim's small DOM: what notification code reads and edits in templates. -->
+  <Enum Name="Windows.Data.Xml.Dom.NodeType" />
+  <Interface Name="Windows.Data.Xml.Dom.IXmlNode">
+    <Property Name="NodeType" />
+    <Property Name="NodeName" />
+    <Property Name="ParentNode" />
+    <Property Name="FirstChild" />
+    <Property Name="Attributes" />
+    <Method Name="AppendChild" />
+  </Interface>
+  <Class Name="Windows.Data.Xml.Dom.XmlDocument">
+    <Property Name="DocumentElement" />
+    <Property Name="FirstChild" />
+    <Property Name="InnerText" />
+    <Method Name="CreateElement" />
+    <Method Name="CreateTextNode" />
+    <Method Name="GetElementsByTagName" />
+    <Method Name="SelectSingleNode" />
+    <Method Name="SelectNodes" />
+    <Method Name="GetXml" />
+    <Method Name="AppendChild" />
+  </Class>
+  <Class Name="Windows.Data.Xml.Dom.XmlElement">
+    <Property Name="TagName" />
+    <Property Name="InnerText" />
+    <Property Name="Attributes" />
+    <Property Name="FirstChild" />
+    <Method Name="GetAttribute" />
+    <Method Name="SetAttribute" />
+    <Method Name="GetElementsByTagName" />
+    <Method Name="SelectSingleNode" />
+    <Method Name="AppendChild" />
+    <Method Name="GetXml" />
+  </Class>
+  <Class Name="Windows.Data.Xml.Dom.XmlText">
+    <Property Name="Data" />
+    <Method Name="AppendChild" />
+  </Class>
+  <Class Name="Windows.Data.Xml.Dom.XmlAttribute">
+    <Property Name="Name" />
+    <Property Name="Value" />
+    <Method Name="AppendChild" />
+  </Class>
+  <Class Name="Windows.Data.Xml.Dom.XmlNodeList">
+    <Property Name="Length" />
+    <Method Name="Item" />
+  </Class>
+  <Class Name="Windows.Data.Xml.Dom.XmlNamedNodeMap">
+    <Property Name="Length" />
+    <Method Name="Item" />
+    <Method Name="GetNamedItem" />
+  </Class>
   <Class Name="Windows.ApplicationModel.Activation.SplashScreen">
     <Event Name="Dismissed" />
   </Class>

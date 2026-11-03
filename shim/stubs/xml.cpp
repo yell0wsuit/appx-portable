@@ -6,6 +6,7 @@
 #include <vector>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::Data::Xml::Dom;
+using ABI::Windows::UI::Notifications::TileTemplateType;
 using ABI::Windows::UI::Notifications::ToastTemplateType;
 namespace appx {
 namespace {
@@ -124,6 +125,8 @@ public:
         return iterator ? iterator.CopyTo(value) : E_OUTOFMEMORY;
     }
 };
+HRESULT MakeAttributes(IXmlNode* element, IXmlNamedNodeMap** value);
+HRESULT Select(Node* context, const std::wstring& path, bool single, std::vector<ComPtr<IXmlNode>>& found);
 // Shared tree state. Children are owned; the parent link is borrowed and
 // cleared when the parent goes away.
 class Node {
@@ -253,6 +256,28 @@ public:
     }
     HRESULT STDMETHODCALLTYPE get_InnerText(HSTRING* value) override { return Copy(InnerText(), value); }
     HRESULT STDMETHODCALLTYPE GetXml(HSTRING* value) override { return Copy(Xml(), value); }
+    // Elements expose live attribute nodes; other nodes have no attribute map.
+    HRESULT STDMETHODCALLTYPE get_Attributes(IXmlNamedNodeMap** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return type_ == NodeType_ElementNode ? MakeAttributes(self_, value) : S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE SelectSingleNode(HSTRING xpath, IXmlNode** node) override {
+        if (!node) return E_POINTER;
+        *node = nullptr;
+        std::vector<ComPtr<IXmlNode>> found;
+        auto hr = Select(this, Text(xpath), true, found);
+        return FAILED(hr) || found.empty() ? hr : found.front().CopyTo(node);
+    }
+    HRESULT STDMETHODCALLTYPE SelectNodes(HSTRING xpath, IXmlNodeList** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        std::vector<ComPtr<IXmlNode>> found;
+        auto hr = Select(this, Text(xpath), false, found);
+        if (FAILED(hr)) return hr;
+        auto list = Make<NodeList>(std::move(found));
+        return list ? list.CopyTo(value) : E_OUTOFMEMORY;
+    }
 };
 class TextNode final : public NodeBase<TextNode, DefaultIXmlText, DefaultIXmlCharacterData> {
     InspectableClass(L"Windows.Data.Xml.Dom.XmlText", BaseTrust);
@@ -339,6 +364,135 @@ public:
         return list ? list.CopyTo(value) : E_OUTOFMEMORY;
     }
 };
+// An element's attribute as a node: its value lives in the element, so edits
+// through the node are seen by GetAttribute and serialization.
+class Attribute final : public NodeBase<Attribute, DefaultIXmlAttribute> {
+    InspectableClass(L"Windows.Data.Xml.Dom.XmlAttribute", BaseTrust);
+    APPX_LOG_MISSING_INTERFACES("Attribute")
+    ComPtr<IXmlNode> owner_;
+    std::pair<std::wstring, std::wstring>* Entry() const {
+        auto* element = From(owner_.Get());
+        for (auto& attribute : element->attributes_)
+            if (attribute.first == name_) return &attribute;
+        return nullptr;
+    }
+
+public:
+    Attribute(IXmlNode* owner, std::wstring name) : NodeBase(NodeType_AttributeNode, std::move(name)), owner_(owner) {}
+    HRESULT STDMETHODCALLTYPE get_Name(HSTRING* value) override { return Copy(name_, value); }
+    HRESULT STDMETHODCALLTYPE get_Specified(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = Entry() != nullptr;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Value(HSTRING* value) override {
+        auto* entry = Entry();
+        return Copy(entry ? entry->second : std::wstring(), value);
+    }
+    HRESULT STDMETHODCALLTYPE put_Value(HSTRING value) override {
+        auto* entry = Entry();
+        if (entry)
+            entry->second = Text(value);
+        else
+            From(owner_.Get())->attributes_.emplace_back(name_, Text(value));
+        return S_OK;
+    }
+};
+// XmlNamedNodeMap also projects as IVectorView/IIterable<IXmlNode>.
+class NamedNodeMap final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, DefaultIXmlNamedNodeMap, NodeView, NodeIterable, FtmBase> {
+    InspectableClass(L"Windows.Data.Xml.Dom.XmlNamedNodeMap", BaseTrust);
+    APPX_LOG_MISSING_INTERFACES("NamedNodeMap")
+    ComPtr<NodeList> items_;
+
+public:
+    explicit NamedNodeMap(ComPtr<NodeList> items) : items_(std::move(items)) {}
+    HRESULT STDMETHODCALLTYPE get_Length(UINT32* value) override { return items_->get_Length(value); }
+    HRESULT STDMETHODCALLTYPE Item(UINT32 index, IXmlNode** node) override { return items_->Item(index, node); }
+    HRESULT STDMETHODCALLTYPE GetNamedItem(HSTRING name, IXmlNode** node) override {
+        if (!node) return E_POINTER;
+        *node = nullptr;
+        UINT32 size{};
+        items_->get_Size(&size);
+        auto key = Text(name);
+        for (UINT32 i = 0; i < size; ++i) {
+            ComPtr<IXmlNode> item;
+            items_->GetAt(i, &item);
+            auto* attribute = Node::From(item.Get());
+            if (attribute && attribute->name_ == key) return item.CopyTo(node);
+        }
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetAt(UINT32 index, IXmlNode** node) override { return items_->GetAt(index, node); }
+    HRESULT STDMETHODCALLTYPE get_Size(UINT32* value) override { return items_->get_Size(value); }
+    HRESULT STDMETHODCALLTYPE IndexOf(IXmlNode* node, UINT32* index, boolean* found) override {
+        return items_->IndexOf(node, index, found);
+    }
+    HRESULT STDMETHODCALLTYPE GetMany(UINT32 start, UINT32 capacity, IXmlNode** values, UINT32* actual) override {
+        return items_->GetMany(start, capacity, values, actual);
+    }
+    HRESULT STDMETHODCALLTYPE First(NodeIteratorType** value) override { return items_->First(value); }
+};
+HRESULT MakeAttributes(IXmlNode* element, IXmlNamedNodeMap** value) {
+    std::vector<ComPtr<IXmlNode>> nodes;
+    for (const auto& attribute : Node::From(element)->attributes_) {
+        auto node = Make<Attribute>(element, attribute.first);
+        if (!node) return E_OUTOFMEMORY;
+        nodes.emplace_back(node);
+    }
+    auto list = Make<NodeList>(std::move(nodes));
+    if (!list) return E_OUTOFMEMORY;
+    auto map = Make<NamedNodeMap>(list);
+    return map ? map.CopyTo(value) : E_OUTOFMEMORY;
+}
+// The location paths notification code uses: "/a/b", "a/b", "//a" and "*".
+// Predicates, axes and functions fail loudly instead of matching nothing.
+HRESULT Select(Node* context, const std::wstring& path, bool single, std::vector<ComPtr<IXmlNode>>& found) {
+    if (path.empty() || path.find_first_of(L"[]@()=:.|") != std::wstring::npos) {
+        Log("UNIMPL", "XmlNodeSelector path %ls", path.c_str());
+        return E_NOTIMPL;
+    }
+    std::vector<Node*> current{context};
+    size_t at = 0;
+    bool descendant = false;
+    if (path[0] == L'/') {
+        while (current[0]->parent_) current[0] = current[0]->parent_;
+        at = 1;
+        if (path.size() > 1 && path[1] == L'/') {
+            descendant = true;
+            at = 2;
+        }
+    }
+    std::vector<ComPtr<IXmlNode>> matched;
+    while (at <= path.size()) {
+        size_t end = path.find(L'/', at);
+        auto step = path.substr(at, end == std::wstring::npos ? std::wstring::npos : end - at);
+        if (step.empty()) return E_INVALIDARG;
+        matched.clear();
+        for (auto* node : current) {
+            if (descendant)
+                node->Collect(step, matched);
+            else
+                for (const auto& child : node->children_) {
+                    auto* element = Node::From(child.Get());
+                    if (element && element->type_ == NodeType_ElementNode && (step == L"*" || element->name_ == step))
+                        matched.push_back(child);
+                }
+        }
+        current.clear();
+        for (const auto& node : matched) current.push_back(Node::From(node.Get()));
+        descendant = false;
+        if (end == std::wstring::npos) break;
+        at = end + 1;
+        if (at < path.size() && path[at] == L'/') {
+            descendant = true;
+            ++at;
+        }
+    }
+    if (single && matched.size() > 1) matched.resize(1);
+    found = std::move(matched);
+    return S_OK;
+}
 HRESULT Append(IXmlNode* parent, const wchar_t* name,
                std::initializer_list<std::pair<const wchar_t*, const wchar_t*>> attributes, ComPtr<IXmlNode>& child) {
     auto element = Make<Element>(name);
@@ -353,6 +507,63 @@ HRESULT Append(IXmlNode* parent, const wchar_t* name,
     child = std::move(node);
     return S_OK;
 }
+}
+namespace {
+// Builds <ROOT><visual><binding template=NAME> with images then texts, numbered from 1.
+HRESULT MakeTemplate(const wchar_t* root, const wchar_t* name, int images, int texts, IXmlDocument** value) {
+    auto document = Make<Document>();
+    if (!document) return E_OUTOFMEMORY;
+    ComPtr<IXmlNode> top, element, visual, binding, child;
+    auto hr = document.As(&top);
+    if (SUCCEEDED(hr)) hr = Append(top.Get(), root, {}, element);
+    if (SUCCEEDED(hr)) hr = Append(element.Get(), L"visual", {}, visual);
+    if (SUCCEEDED(hr)) hr = Append(visual.Get(), L"binding", {{L"template", name}}, binding);
+    for (int i = 1; SUCCEEDED(hr) && i <= images; ++i) {
+        auto id = std::to_wstring(i);
+        hr = Append(binding.Get(), L"image", {{L"id", id.c_str()}, {L"src", L""}}, child);
+    }
+    for (int i = 1; SUCCEEDED(hr) && i <= texts; ++i) {
+        auto id = std::to_wstring(i);
+        hr = Append(binding.Get(), L"text", {{L"id", id.c_str()}}, child);
+    }
+    return SUCCEEDED(hr) ? document.CopyTo(value) : hr;
+}
+}
+// Windows 8 tile template catalog (TileTemplateType 0-45): image and text slots.
+// The tile itself is never shown; apps fill these documents before Update.
+HRESULT MakeTileTemplate(TileTemplateType type, IXmlDocument** value) {
+    if (!value) return E_POINTER;
+    *value = nullptr;
+    struct Shape {
+        const wchar_t* name;
+        int images, texts;
+    };
+    static const Shape shapes[] = {
+        {L"TileSquareImage", 1, 0}, {L"TileSquareBlock", 0, 2}, {L"TileSquareText01", 0, 4},
+        {L"TileSquareText02", 0, 2}, {L"TileSquareText03", 0, 4}, {L"TileSquareText04", 0, 1},
+        {L"TileSquarePeekImageAndText01", 1, 4}, {L"TileSquarePeekImageAndText02", 1, 2},
+        {L"TileSquarePeekImageAndText03", 1, 4}, {L"TileSquarePeekImageAndText04", 1, 1},
+        {L"TileWideImage", 1, 0}, {L"TileWideImageCollection", 5, 0}, {L"TileWideImageAndText01", 1, 1},
+        {L"TileWideImageAndText02", 1, 2}, {L"TileWideBlockAndText01", 0, 6}, {L"TileWideBlockAndText02", 0, 3},
+        {L"TileWidePeekImageCollection01", 5, 2}, {L"TileWidePeekImageCollection02", 5, 5},
+        {L"TileWidePeekImageCollection03", 5, 1}, {L"TileWidePeekImageCollection04", 5, 1},
+        {L"TileWidePeekImageCollection05", 6, 2}, {L"TileWidePeekImageCollection06", 6, 1},
+        {L"TileWidePeekImageAndText01", 1, 1}, {L"TileWidePeekImageAndText02", 1, 5},
+        {L"TileWidePeekImage01", 1, 2}, {L"TileWidePeekImage02", 1, 5}, {L"TileWidePeekImage03", 1, 1},
+        {L"TileWidePeekImage04", 1, 1}, {L"TileWidePeekImage05", 2, 2}, {L"TileWidePeekImage06", 2, 1},
+        {L"TileWideSmallImageAndText01", 1, 1}, {L"TileWideSmallImageAndText02", 1, 5},
+        {L"TileWideSmallImageAndText03", 1, 1}, {L"TileWideSmallImageAndText04", 1, 2},
+        {L"TileWideSmallImageAndText05", 1, 2}, {L"TileWideText01", 0, 5}, {L"TileWideText02", 0, 9},
+        {L"TileWideText03", 0, 1}, {L"TileWideText04", 0, 1}, {L"TileWideText05", 0, 5},
+        {L"TileWideText06", 0, 10}, {L"TileWideText07", 0, 9}, {L"TileWideText08", 0, 10},
+        {L"TileWideText09", 0, 2}, {L"TileWideText10", 0, 9}, {L"TileWideText11", 0, 10},
+    };
+    auto index = static_cast<size_t>(type);
+    if (index >= sizeof(shapes) / sizeof(shapes[0])) {
+        Log("UNIMPL", "tile template %d", static_cast<int>(type));
+        return E_INVALIDARG;
+    }
+    return MakeTemplate(L"tile", shapes[index].name, shapes[index].images, shapes[index].texts, value);
 }
 HRESULT MakeToastTemplate(ToastTemplateType type, IXmlDocument** value) {
     using namespace ABI::Windows::UI::Notifications;
