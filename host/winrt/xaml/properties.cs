@@ -7,6 +7,17 @@ namespace Windows.UI.Xaml
 {
     public partial class DependencyObject
     {
+        // Peers that are not WPF DispatcherObjects (ResourceDictionary) keep their creating thread.
+        private readonly int thread = global::System.Threading.Thread.CurrentThread.ManagedThreadId;
+
+        // WinRT XAML objects belong to their thread: RPC_E_WRONG_THREAD elsewhere.
+        internal void CheckThread()
+        {
+            var owner = peer as global::System.Windows.Threading.DispatcherObject;
+            if (owner != null ? !owner.CheckAccess() : global::System.Threading.Thread.CurrentThread.ManagedThreadId != thread)
+                throw new global::System.Runtime.InteropServices.COMException("The XAML object belongs to another thread.", unchecked((int)0x8001010e));
+        }
+
         public object GetValue(DependencyProperty dp)
         {
             return Values.Get(this, DependencyProperty.WpfOf(dp), dp.Type);

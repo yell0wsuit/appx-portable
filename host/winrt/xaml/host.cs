@@ -30,6 +30,18 @@ namespace AppxPortable.WinRT.Xaml
 
 namespace Windows.UI.Xaml
 {
+    // The native Application keeps its bootstrap and lifetime; its resources are WPF.
+    public partial class Application
+    {
+        private ResourceDictionary resources;
+
+        public ResourceDictionary Resources
+        {
+            get { return resources ?? (resources = new ResourceDictionary()); }
+            set { resources = value; }
+        }
+    }
+
     // The native Window keeps bounds, activation and CoreWindow; its content is WPF.
     public sealed partial class Window
     {

@@ -66,15 +66,28 @@
   <Class Name="Windows.UI.Xaml.DependencyPropertyChangedEventArgs" Adapter="Wpf" />
   <Delegate Name="Windows.UI.Xaml.PropertyChangedCallback" Adapter="Wpf" />
   <Enum Name="Windows.UI.Xaml.Visibility" />
+  <Enum Name="Windows.UI.Xaml.HorizontalAlignment" />
+  <Enum Name="Windows.UI.Xaml.VerticalAlignment" />
   <Class Name="Windows.UI.Xaml.UIElement" Adapter="Wpf" Peer="System.Windows.UIElement">
     <Property Name="Visibility" Wpf="System.Windows.UIElement.VisibilityProperty" />
     <Property Name="VisibilityProperty" Wpf="System.Windows.UIElement.VisibilityProperty" />
+    <Property Name="Opacity" Wpf="System.Windows.UIElement.OpacityProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.FrameworkElement" Adapter="Wpf" Peer="System.Windows.FrameworkElement">
     <Property Name="ActualWidth" Wpf="System.Windows.FrameworkElement.ActualWidthProperty" />
     <Property Name="ActualHeight" Wpf="System.Windows.FrameworkElement.ActualHeightProperty" />
+    <Property Name="Width" Wpf="System.Windows.FrameworkElement.WidthProperty" />
+    <Property Name="Height" Wpf="System.Windows.FrameworkElement.HeightProperty" />
+    <Property Name="Margin" Wpf="System.Windows.FrameworkElement.MarginProperty" />
+    <Property Name="HorizontalAlignment" Wpf="System.Windows.FrameworkElement.HorizontalAlignmentProperty" />
+    <Property Name="VerticalAlignment" Wpf="System.Windows.FrameworkElement.VerticalAlignmentProperty" />
+    <Property Name="DataContext" Wpf="System.Windows.FrameworkElement.DataContextProperty" />
+    <Property Name="DataContextProperty" Wpf="System.Windows.FrameworkElement.DataContextProperty" />
+    <Property Name="Tag" Wpf="System.Windows.FrameworkElement.TagProperty" />
+    <Property Name="Style" Wpf="System.Windows.FrameworkElement.StyleProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.Controls.Panel" Adapter="Wpf" Peer="System.Windows.Controls.Panel" />
+  <Class Name="Windows.UI.Xaml.Controls.UIElementCollection" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Controls.Grid" Adapter="Wpf" Peer="System.Windows.Controls.Grid">
     <Constructor />
     <Property Name="RowProperty" Wpf="System.Windows.Controls.Grid.RowProperty" />
@@ -112,8 +125,14 @@
   <Class Name="Windows.UI.Xaml.RoutedEventArgs" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Input.KeyRoutedEventArgs" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Controls.Control" Adapter="Wpf" Peer="System.Windows.Controls.Control"><Constructor /></Class>
-  <Class Name="Windows.UI.Xaml.Controls.ContentControl" Adapter="Wpf" Peer="System.Windows.Controls.ContentControl"><Constructor /></Class>
-  <Class Name="Windows.UI.Xaml.Controls.UserControl" Adapter="Wpf" Peer="System.Windows.Controls.UserControl"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.ContentControl" Adapter="Wpf" Peer="System.Windows.Controls.ContentControl">
+    <Constructor />
+    <Property Name="Content" Wpf="System.Windows.Controls.ContentControl.ContentProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.UserControl" Adapter="Wpf" Peer="System.Windows.Controls.UserControl">
+    <Constructor />
+    <Property Name="Content" Wpf="System.Windows.Controls.ContentControl.ContentProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Controls.Page" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.PagePeer"><Constructor /></Class>
   <Enum Name="Windows.UI.Xaml.Navigation.NavigationCacheMode" />
   <Class Name="Windows.UI.Xaml.Navigation.NavigationEventArgs" Adapter="Wpf" />

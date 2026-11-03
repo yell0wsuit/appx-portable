@@ -9,7 +9,7 @@ namespace AppxPortable.WinRT.Xaml
         internal static System.Windows.DependencyObject Dependency(global::Windows.UI.Xaml.DependencyObject owner)
         {
             if (owner == null) throw new ArgumentNullException("owner");
-            Peers.CheckThread(owner.peer);
+            owner.CheckThread();
             var peer = owner.peer as System.Windows.DependencyObject;
             if (peer == null) throw new NotSupportedException("No WPF dependency object behind " + owner.GetType().FullName);
             return peer;
@@ -38,6 +38,11 @@ namespace AppxPortable.WinRT.Xaml
             if (wrapper != null) value = wrapper.peer;
             if (type.IsInstanceOfType(value)) return value;
             if (value.GetType().IsEnum && type.IsEnum) return Enumeration(value, type);
+            if (value is global::Windows.UI.Xaml.Thickness && type == typeof(System.Windows.Thickness))
+            {
+                var thickness = (global::Windows.UI.Xaml.Thickness)value;
+                return new System.Windows.Thickness(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
+            }
             // As SetValue on either platform: a value of the wrong type is an invalid argument.
             throw new ArgumentException("No WPF conversion: " + value.GetType().FullName + " -> " + type.FullName);
         }
@@ -49,6 +54,11 @@ namespace AppxPortable.WinRT.Xaml
             if (Peers.IsPeer(value)) value = Peers.Wrap(value);
             if (type.IsInstanceOfType(value) && !IsWpf(value.GetType())) return value;
             if (value.GetType().IsEnum && type.IsEnum) return Enumeration(value, type);
+            if (value is System.Windows.Thickness && type.IsAssignableFrom(typeof(global::Windows.UI.Xaml.Thickness)))
+            {
+                var thickness = (System.Windows.Thickness)value;
+                return new global::Windows.UI.Xaml.Thickness(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
+            }
             throw new NotSupportedException("No UWP conversion: " + value.GetType().FullName + " -> " + type.FullName);
         }
 

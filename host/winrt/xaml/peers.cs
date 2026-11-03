@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace AppxPortable.WinRT.Xaml
 {
@@ -68,14 +67,6 @@ namespace AppxPortable.WinRT.Xaml
                 return wrapper;
             }
             throw new NotSupportedException("No UWP wrapper for " + peer.GetType().FullName);
-        }
-
-        // WinRT XAML objects belong to their thread: RPC_E_WRONG_THREAD elsewhere.
-        internal static void CheckThread(object peer)
-        {
-            var owner = peer as System.Windows.Threading.DispatcherObject;
-            if (owner != null && !owner.CheckAccess())
-                throw new COMException("The XAML object belongs to another thread.", unchecked((int)0x8001010e));
         }
     }
 

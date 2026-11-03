@@ -17,7 +17,7 @@ import subprocess
 # independent of the metadata the generator reads. Slots follow IInspectable's six.
 # WPF backs Windows.UI.Xaml for managed games under Wine: every Windows.dll built
 # from the bootstrap selection compiles these, against Wine Mono's WPF.
-XAML_SOURCES = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs")
+XAML_SOURCES = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs")
 BOOTSTRAP_GENERATED = ("Windows.generated.cs", "Windows.interop.cs", "Windows.xbox-interop.cs", "Mutated.generated.cs")
 
 

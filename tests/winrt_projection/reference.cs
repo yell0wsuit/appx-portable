@@ -113,10 +113,25 @@ namespace Windows.UI.Xaml
         public object ReadLocalValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.ReadLocalValue"); }
     }
     public enum Visibility { Visible = 0, Collapsed = 1 }
+    public enum HorizontalAlignment { Left = 0, Center = 1, Right = 2, Stretch = 3 }
+    public struct Thickness
+    {
+        private double _Left, _Top, _Right, _Bottom;
+        public Thickness(double left, double top, double right, double bottom) { _Left = left; _Top = top; _Right = right; _Bottom = bottom; }
+        public double Left { get { return _Left; } }
+        public double Top { get { return _Top; } }
+        public double Right { get { return _Right; } }
+        public double Bottom { get { return _Bottom; } }
+        public static bool operator ==(Thickness a, Thickness b) { throw new global::System.NotImplementedException(); }
+        public static bool operator !=(Thickness a, Thickness b) { throw new global::System.NotImplementedException(); }
+        public override bool Equals(object o) { throw new global::System.NotImplementedException(); }
+        public override int GetHashCode() { throw new global::System.NotImplementedException(); }
+    }
     public class UIElement : DependencyObject
     {
         internal UIElement() { }
         public Visibility Visibility { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double Opacity { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
     public class FrameworkElement : UIElement
     {
@@ -125,14 +140,25 @@ namespace Windows.UI.Xaml
         public object FindName(string name) { throw new global::System.NotImplementedException(); }
         public Style Style { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public double ActualWidth { get { throw new global::System.NotImplementedException(); } }
+        public double Width { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double Height { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public Thickness Margin { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public HorizontalAlignment HorizontalAlignment { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public object DataContext { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public object Tag { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public DependencyObject Parent { get { throw new global::System.NotImplementedException(); } }
         public double ActualHeight { get { throw new global::System.NotImplementedException(); } }
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Loaded(RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
         public void remove_Loaded(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Unloaded(RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
         public void remove_Unloaded(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
-    public sealed class Style : DependencyObject { internal Style() { } }
-    public class RoutedEventArgs { internal RoutedEventArgs() { } }
+    public sealed class Style : DependencyObject { public Style() { throw new global::System.NotImplementedException(); } }
+    public class RoutedEventArgs
+    {
+        public RoutedEventArgs() { throw new global::System.NotImplementedException(); }
+        public object OriginalSource { get { throw new global::System.NotImplementedException(); } }
+    }
 }
 namespace Windows.UI.Xaml.Media
 {
@@ -140,6 +166,7 @@ namespace Windows.UI.Xaml.Media
     {
         public static int GetChildrenCount(global::Windows.UI.Xaml.DependencyObject reference) { throw new global::System.NotImplementedException(); }
         public static global::Windows.UI.Xaml.DependencyObject GetChild(global::Windows.UI.Xaml.DependencyObject reference, int childIndex) { throw new global::System.NotImplementedException(); }
+        public static global::Windows.UI.Xaml.DependencyObject GetParent(global::Windows.UI.Xaml.DependencyObject reference) { throw new global::System.NotImplementedException(); }
     }
 }
 namespace Windows.UI.Core
@@ -154,7 +181,28 @@ namespace Windows.UI.Core
 }
 namespace Windows.UI.Xaml.Controls
 {
-    public class Panel : global::Windows.UI.Xaml.FrameworkElement { internal Panel() { } }
+    public sealed class UIElementCollection : global::System.Collections.Generic.IList<global::Windows.UI.Xaml.UIElement>
+    {
+        internal UIElementCollection() { }
+        public global::Windows.UI.Xaml.UIElement this[int index] { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public int Count { get { throw new global::System.NotImplementedException(); } }
+        public bool IsReadOnly { get { throw new global::System.NotImplementedException(); } }
+        public int IndexOf(global::Windows.UI.Xaml.UIElement item) { throw new global::System.NotImplementedException(); }
+        public void Insert(int index, global::Windows.UI.Xaml.UIElement item) { throw new global::System.NotImplementedException(); }
+        public void RemoveAt(int index) { throw new global::System.NotImplementedException(); }
+        public void Add(global::Windows.UI.Xaml.UIElement item) { throw new global::System.NotImplementedException(); }
+        public void Clear() { throw new global::System.NotImplementedException(); }
+        public bool Contains(global::Windows.UI.Xaml.UIElement item) { throw new global::System.NotImplementedException(); }
+        public void CopyTo(global::Windows.UI.Xaml.UIElement[] array, int index) { throw new global::System.NotImplementedException(); }
+        public bool Remove(global::Windows.UI.Xaml.UIElement item) { throw new global::System.NotImplementedException(); }
+        public global::System.Collections.Generic.IEnumerator<global::Windows.UI.Xaml.UIElement> GetEnumerator() { throw new global::System.NotImplementedException(); }
+        global::System.Collections.IEnumerator global::System.Collections.IEnumerable.GetEnumerator() { throw new global::System.NotImplementedException(); }
+    }
+    public class Panel : global::Windows.UI.Xaml.FrameworkElement
+    {
+        internal Panel() { }
+        public UIElementCollection Children { get { throw new global::System.NotImplementedException(); } }
+    }
     public class Grid : Panel
     {
         public Grid() { throw new global::System.NotImplementedException(); }
@@ -185,12 +233,12 @@ namespace Windows.UI.Xaml.Controls
     }
     public class ContentControl : Control
     {
-        internal ContentControl() { }
+        public ContentControl() { throw new global::System.NotImplementedException(); }
         public object Content { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
     public class UserControl : Control
     {
-        internal UserControl() { }
+        public UserControl() { throw new global::System.NotImplementedException(); }
         public global::Windows.UI.Xaml.UIElement Content { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
     public class Page : UserControl
@@ -403,9 +451,25 @@ namespace Windows.UI.Xaml.Controls.Primitives
 
 namespace Windows.UI.Xaml
 {
-    public class ResourceDictionary : DependencyObject
+    public class ResourceDictionary : DependencyObject, global::System.Collections.Generic.IDictionary<object, object>
     {
         public ResourceDictionary() { throw new global::System.NotImplementedException(); }
+        public object this[object key] { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::System.Collections.Generic.ICollection<object> Keys { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Collections.Generic.ICollection<object> Values { get { throw new global::System.NotImplementedException(); } }
+        public int Count { get { throw new global::System.NotImplementedException(); } }
+        public bool IsReadOnly { get { throw new global::System.NotImplementedException(); } }
+        public void Add(object key, object value) { throw new global::System.NotImplementedException(); }
+        public bool ContainsKey(object key) { throw new global::System.NotImplementedException(); }
+        public bool Remove(object key) { throw new global::System.NotImplementedException(); }
+        public bool TryGetValue(object key, out object value) { throw new global::System.NotImplementedException(); }
+        public void Add(global::System.Collections.Generic.KeyValuePair<object, object> item) { throw new global::System.NotImplementedException(); }
+        public void Clear() { throw new global::System.NotImplementedException(); }
+        public bool Contains(global::System.Collections.Generic.KeyValuePair<object, object> item) { throw new global::System.NotImplementedException(); }
+        public void CopyTo(global::System.Collections.Generic.KeyValuePair<object, object>[] array, int index) { throw new global::System.NotImplementedException(); }
+        public bool Remove(global::System.Collections.Generic.KeyValuePair<object, object> item) { throw new global::System.NotImplementedException(); }
+        public global::System.Collections.Generic.IEnumerator<global::System.Collections.Generic.KeyValuePair<object, object>> GetEnumerator() { throw new global::System.NotImplementedException(); }
+        global::System.Collections.IEnumerator global::System.Collections.IEnumerable.GetEnumerator() { throw new global::System.NotImplementedException(); }
     }
 }
 

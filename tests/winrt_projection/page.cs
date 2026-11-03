@@ -192,7 +192,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         map.Add("Éclair\0Ω", child);
         map.Add("nullable", null);
         Check(map.Count == 2 && keys.Count == 2 && values.Count == 2, "live map views");
-        Check(ReferenceEquals(map["Éclair\0Ω"], child), "resource native object identity");
+        Check(ReferenceEquals(map["Éclair\0Ω"], child), "resource object identity");
         object value;
         Check(map.TryGetValue("nullable", out value) && value == null, "null resource is present");
         Check(!map.TryGetValue("missing", out value) && value == null, "missing resource");
@@ -200,7 +200,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Expect<ArgumentException>(() => map.Add("nullable", "duplicate"));
         Expect<ArgumentNullException>(() => map.ContainsKey(null));
         Expect<ArgumentNullException>(() => map[null] = child);
-        Expect<NotImplementedException>(() => map.ContainsKey(7));
+        Check(!map.ContainsKey(typeof(Page)), "type keys are valid resource keys");
         Expect<NotSupportedException>(() => keys.Clear());
         Expect<NotSupportedException>(() => values.Add("no"));
         map["nullable"] = "updated Ω";
@@ -218,19 +218,19 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
             map.Clear();
             int count = 1;
             while (snapshot.MoveNext()) ++count;
-            Check(count == 2 && map.Count == 0 && keys.Count == 0, "native snapshot enumeration survives clear");
+            Check(count == 2 && map.Count == 0 && keys.Count == 0, "snapshot enumeration survives clear");
         }
         var weak = AddManagedResource(map);
         GC.Collect(); GC.WaitForPendingFinalizers();
         var marker = map["managed"];
-        Check(marker != null && ReferenceEquals(marker, weak.Target), "native map retains managed resource identity");
+        Check(marker != null && ReferenceEquals(marker, weak.Target), "map retains managed resource identity");
         Check(pairs.Remove(new KeyValuePair<object, object>("managed", marker)) && !map.Remove("managed"), "pair and missing removal");
         Exception failure = null;
         var worker = new global::System.Threading.Thread(() => { try { var ignored = map.Count; } catch (Exception e) { failure = e; } });
         worker.Start(); worker.Join();
         Check(failure != null && Marshal.GetHRForException(failure) == unchecked((int)0x8001010e), "resource map thread affinity");
         Check(dictionary.GetType().BaseType == typeof(DependencyObject), "resource dictionary inheritance");
-        Console.WriteLine("PASS: managed resource dictionaries use native maps for mutation, lookup, snapshots and identity");
+        Console.WriteLine("PASS: resource dictionaries use WPF dictionaries for mutation, lookup, snapshots and identity");
     }
     static void VerifyApplicationView()
     {
@@ -486,6 +486,65 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Check(wrong != null && Marshal.GetHRForException(wrong) == unchecked((int)0x8001010e), "wrapper thread affinity");
         Console.WriteLine("PASS: WPF-backed elements map properties, dependency properties and thread affinity");
     }
+    static void VerifyWpfTree()
+    {
+        var root = new Windows.UI.Xaml.Controls.Grid(); var child = new Windows.UI.Xaml.Controls.TextBlock();
+        root.Children.Add(child);
+        Check(root.Children.Count == 1 && ReferenceEquals(root.Children[0], child) && root.Children.IndexOf(child) == 0, "Children identity");
+        Check(ReferenceEquals(child.Parent, root), "Parent is the wrapper");
+        var rootPeer = (global::System.Windows.FrameworkElement)PeerOf(root);
+        rootPeer.Measure(new global::System.Windows.Size(800, 600)); rootPeer.Arrange(new global::System.Windows.Rect(0, 0, 800, 600));
+        Check(Windows.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root) == 1 && ReferenceEquals(Windows.UI.Xaml.Media.VisualTreeHelper.GetChild(root, 0), child) &&
+              ReferenceEquals(Windows.UI.Xaml.Media.VisualTreeHelper.GetParent(child), root), "visual tree uses the same wrappers");
+        var toggle = new global::System.Windows.Controls.Primitives.ToggleButton();   // a WPF type with no registered wrapper
+        ((global::System.Windows.Controls.Grid)rootPeer).Children.Add(toggle);
+        var fallback = root.Children[1];
+        Check(fallback is Windows.UI.Xaml.Controls.ContentControl && ReferenceEquals(fallback, root.Children[1]), "unregistered peer wraps as nearest registered base, stably");
+        root.Children.RemoveAt(1); Check(root.Children.Count == 1 && toggle.Parent == null, "Children removal");
+        global::System.Windows.NameScope.SetNameScope(rootPeer, new global::System.Windows.NameScope());
+        rootPeer.RegisterName("label", PeerOf(child));
+        Check(ReferenceEquals(root.FindName("label"), child) && root.FindName("missing") == null, "FindName returns wrappers");
+        child.Margin = new Thickness(1, 2, 3, 4); child.HorizontalAlignment = HorizontalAlignment.Center; child.Width = 120; child.Opacity = 0.5;
+        var childPeer = (global::System.Windows.FrameworkElement)PeerOf(child);
+        Check(childPeer.Margin == new global::System.Windows.Thickness(1, 2, 3, 4) && child.Margin == new Thickness(1, 2, 3, 4), "Margin converts Thickness both ways");
+        Check(childPeer.HorizontalAlignment == global::System.Windows.HorizontalAlignment.Center && child.Width == 120 && childPeer.Opacity == 0.5, "layout properties reach the peer");
+        Check(double.IsNaN(root.Height), "unset Height is NaN");
+        var model = new object(); root.DataContext = model; root.Tag = "tag";
+        Check(ReferenceEquals(child.DataContext, model) && (string)root.Tag == "tag", "DataContext inherits through WPF");
+        root.Resources["k"] = child;
+        Check(ReferenceEquals(root.Resources["k"], child) && rootPeer.Resources["k"] == PeerOf(child), "resources store peers, return wrappers");
+        var style = new Style(); root.Style = style;
+        Check(ReferenceEquals(root.Style, style) && rootPeer.Style == PeerOf(style), "Style identity");
+        var content = new Windows.UI.Xaml.Controls.ContentControl(); content.Content = child.Parent == null ? (object)child : "text";
+        Check((string)content.Content == "text", "ContentControl boxed content");
+        var user = new Windows.UI.Xaml.Controls.UserControl(); var inner = new Windows.UI.Xaml.Controls.Grid(); user.Content = inner;
+        Check(ReferenceEquals(user.Content, inner) && ((global::System.Windows.Controls.UserControl)PeerOf(user)).Content == PeerOf(inner), "UserControl content identity");
+        var app = Application.Current; var dictionary = app.Resources;
+        Check(dictionary != null && ReferenceEquals(dictionary, app.Resources), "default Application.Resources identity");
+        var replacement = new ResourceDictionary(); app.Resources = replacement;
+        Check(ReferenceEquals(app.Resources, replacement), "assigned Application.Resources identity");
+        app.Resources = dictionary;
+        int loaded = 0, removed = 0; object sender = null; RoutedEventArgs args = null;
+        var skipped = child.add_Loaded((s, e) => ++removed); child.remove_Loaded(skipped);
+        child.add_Loaded((s, e) => { ++loaded; sender = s; args = e; });
+        var window = Window.Current; var previous = window.Content;
+        window.Content = root;
+        Check(ReferenceEquals(window.Content, root) && ReferenceEquals(HostRoot(), PeerOf(root)), "Window.Content identity and compositor root");
+        // A test-only presentation source raises Loaded; the compositor owns the real one (Plan 2).
+        var source = new global::System.Windows.Interop.HwndSource(new global::System.Windows.Interop.HwndSourceParameters("probe")) { RootVisual = rootPeer };
+        deferred.Add(() =>
+        {
+            Check(loaded == 1 && removed == 0 && ReferenceEquals(sender, child) && args != null && ReferenceEquals(args.OriginalSource, child), "Loaded reaches managed handlers with wrappers");
+            source.RootVisual = null; source.Dispose();
+            Console.WriteLine("PASS: WPF-backed tree keeps wrapper identity for children, names, resources and Loaded");
+        });
+        window.Content = previous;
+    }
+    static object HostRoot()
+    {
+        var host = typeof(DependencyObject).Assembly.GetType("AppxPortable.WinRT.Xaml.Host");
+        return host.GetProperty("Root", global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.NonPublic).GetValue(null, null);
+    }
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
 #if NATIVE_ABI
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -525,6 +584,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
     void Verify(DerivedPage page)
     {
         VerifyWpfElements();
+        VerifyWpfTree();
 #if NATIVE_XAML && FULL_SURFACE
         try { new UnsupportedKeyPage(); throw new Exception("unsupported key override accepted"); }
         catch (NotImplementedException error) { Check(error.Message.Contains("OnKeyUp override"), "unsupported key override is named"); }
@@ -663,8 +723,8 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         VerifyWindowSize();
 #if NATIVE_XAML
         VerifyApplicationResources();
-        VerifyResourceMap();
 #endif
+        VerifyResourceMap();
         VerifyApplicationView();
 #if NATIVE_XAML
         VerifyNavigation();
@@ -684,8 +744,10 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Check(grid.Dispatcher == global::System.Windows.Threading.Dispatcher.CurrentDispatcher, "WPF object on the view thread");
         grid.Dispatcher.BeginInvoke(new Action(() => { wpfRan = global::System.Threading.Thread.CurrentThread.ManagedThreadId; }));
     }
+    static readonly List<Action> deferred = new List<Action>();
     static void CheckWpfDispatcher()
     {
+        foreach (var check in deferred) check();
         Check(wpfRan == wpfThread, "WPF dispatcher work runs on the shim loop");
         Console.WriteLine("PASS: WPF dispatcher runs on the XAML view thread's shim loop");
     }
