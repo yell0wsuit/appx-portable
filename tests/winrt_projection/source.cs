@@ -21,6 +21,14 @@ namespace Fixture
         }
     }
     // A game control with its own dependency property, as generated code registers it.
+    // A WPF element whose visual child is a visual-only node (no UWP counterpart).
+    class VisualHost : System.Windows.FrameworkElement
+    {
+        readonly System.Windows.Media.ContainerVisual container = new System.Windows.Media.ContainerVisual();
+        public VisualHost(System.Windows.UIElement inner) { container.Children.Add(inner); AddVisualChild(container); }
+        protected override int VisualChildrenCount { get { return 1; } }
+        protected override System.Windows.Media.Visual GetVisualChild(int index) { return container; }
+    }
     // Frame journal pages: MainPage keeps itself with NavigationCacheMode.Required.
     class CachedPage : Page
     {
@@ -370,6 +378,28 @@ namespace Fixture
                 Check(ReferenceEquals(list.ItemContainerGenerator, list.ItemContainerGenerator), "generator identity");
                 Check(list.ItemContainerGenerator.IndexFromContainer(second) == 1 && ReferenceEquals(list.ItemContainerGenerator.ContainerFromIndex(1), second),
                       "IndexFromContainer and ContainerFromIndex use WPF's generator");
+                // MainPage.OnListViewLoaded: the list's ScrollViewer among its template's descendants.
+                var pending = new Stack<DependencyObject>(); pending.Push(list);
+                ScrollViewer scroller = null;
+                while (pending.Count > 0 && scroller == null)
+                {
+                    var node = pending.Pop();
+                    scroller = node as ScrollViewer;
+                    for (int i = Windows.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(node) - 1; i >= 0; --i)
+                        pending.Push(Windows.UI.Xaml.Media.VisualTreeHelper.GetChild(node, i));
+                }
+                Check(scroller != null, "a list's template descendants include its ScrollViewer");
+            });
+            test("visual-only-nodes", () =>
+            {
+                var root = new Grid(); var inner = new Grid();
+                var host = new VisualHost((System.Windows.UIElement)PeerOf(inner));
+                ((System.Windows.Controls.Grid)PeerOf(root)).Children.Add(host);
+                var hosted = Windows.UI.Xaml.Media.VisualTreeHelper.GetChild(root, 0);
+                Check(Windows.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(hosted) == 1 &&
+                      ReferenceEquals(Windows.UI.Xaml.Media.VisualTreeHelper.GetChild(hosted, 0), inner) &&
+                      ReferenceEquals(Windows.UI.Xaml.Media.VisualTreeHelper.GetParent(inner), hosted),
+                      "visual-only nodes are skipped: their children stand in their place");
             });
             test("popup-overlay", () =>
             {

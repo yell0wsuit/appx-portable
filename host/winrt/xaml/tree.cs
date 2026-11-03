@@ -201,19 +201,43 @@ namespace Windows.UI.Xaml.Media
     {
         private VisualTreeHelper() { }
 
+        // WPF's tree also holds visual-only nodes (ContainerVisual, DrawingVisual) that
+        // UWP's element tree has no counterpart for; their children stand in their place.
         public static int GetChildrenCount(DependencyObject reference)
         {
-            return global::System.Windows.Media.VisualTreeHelper.GetChildrenCount(Values.Dependency(reference));
+            return Children(Values.Dependency(reference)).Count;
         }
 
         public static DependencyObject GetChild(DependencyObject reference, int childIndex)
         {
-            return Peers.Wrap(global::System.Windows.Media.VisualTreeHelper.GetChild(Values.Dependency(reference), childIndex));
+            var children = Children(Values.Dependency(reference));
+            if (childIndex < 0 || childIndex >= children.Count) throw new global::System.ArgumentOutOfRangeException("childIndex");
+            return Peers.Wrap(children[childIndex]);
         }
 
         public static DependencyObject GetParent(DependencyObject reference)
         {
-            return Peers.Wrap(global::System.Windows.Media.VisualTreeHelper.GetParent(Values.Dependency(reference)));
+            var parent = global::System.Windows.Media.VisualTreeHelper.GetParent(Values.Dependency(reference));
+            while (parent != null && !Peers.IsPeer(parent)) parent = global::System.Windows.Media.VisualTreeHelper.GetParent(parent);
+            return Peers.Wrap(parent);
+        }
+
+        private static List<global::System.Windows.DependencyObject> Children(global::System.Windows.DependencyObject reference)
+        {
+            var children = new List<global::System.Windows.DependencyObject>();
+            Collect(reference, children);
+            return children;
+        }
+
+        private static void Collect(global::System.Windows.DependencyObject node, List<global::System.Windows.DependencyObject> into)
+        {
+            int count = global::System.Windows.Media.VisualTreeHelper.GetChildrenCount(node);
+            for (int i = 0; i < count; ++i)
+            {
+                var child = global::System.Windows.Media.VisualTreeHelper.GetChild(node, i);
+                if (Peers.IsPeer(child)) into.Add(child);
+                else Collect(child, into);
+            }
         }
     }
 }

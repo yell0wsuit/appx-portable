@@ -18,7 +18,18 @@ namespace AppxPortable.WinRT.Xaml
         static Peers()
         {
             WpfWrappers.Register();
+            // WPF templates create the stock types these wrappers' peers derive from.
+            // CheckBox is not here: a template's CheckBox is not a ToggleSwitch.
+            Stock(typeof(global::Windows.UI.Xaml.Controls.ScrollViewer), typeof(System.Windows.Controls.ScrollViewer));
+            Stock(typeof(global::Windows.UI.Xaml.Controls.ItemsPresenter), typeof(System.Windows.Controls.ItemsPresenter));
+            Stock(typeof(global::Windows.UI.Xaml.Controls.ListView), typeof(System.Windows.Controls.ListView));
             Overrides.Register();
+        }
+
+        private static void Stock(Type wrapper, Type stock)
+        {
+            Type peer;
+            if (peerTypes.TryGetValue(wrapper, out peer) && !factories.ContainsKey(stock)) factories.Add(stock, factories[peer]);
         }
 
         internal static void Register(Type wrapper, Type peer, Func<object, global::Windows.UI.Xaml.DependencyObject> factory)
