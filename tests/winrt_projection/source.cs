@@ -182,6 +182,9 @@ namespace Fixture
         }
 
         const string StylesXaml = "<ResourceDictionary" + Ns + ">" +
+            "<ResourceDictionary.ThemeDictionaries><ResourceDictionary x:Key='Default'><x:String x:Key='Glyph'>back</x:String></ResourceDictionary>" +
+            "<ResourceDictionary x:Key='HighContrast'><x:String x:Key='Glyph'>hc</x:String><x:String x:Key='Big'>shadowed</x:String></ResourceDictionary>" +
+            "</ResourceDictionary.ThemeDictionaries>" +
             "<Style x:Key='Big' TargetType='TextBlock'><Setter Property='FontSize' Value='42'/></Style>" +
             "<Style x:Key='Btn' TargetType='Button'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='Button'>" +
             "<Grid x:Name='root'><VisualStateManager.VisualStateGroups><VisualStateGroup x:Name='CommonStates'>" +
@@ -203,6 +206,7 @@ namespace Fixture
             Application.LoadComponent(this, new Uri("ms-appx:///App.xaml"));
             Check(Resources.MergedDictionaries.Count == 1 && Resources.MergedDictionaries[0].ContainsKey("Big") && Resources.ContainsKey("Big"),
                   "App.xaml merges a relative Source dictionary");
+            Check((string)Resources["Glyph"] == "back" && Resources["Big"] is Style, "the dark (Default) theme dictionary applies after the dictionary's own keys");
             File.WriteAllText("Pages/styled.xaml", StyledXaml);
             var page = new SourcePage();
             Application.LoadComponent(page, new Uri("ms-appx:///Pages/styled.xaml"));

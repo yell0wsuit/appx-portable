@@ -121,6 +121,7 @@ namespace AppxPortable.WinRT.Xaml
         private sealed class Frame
         {
             internal bool Got, InDictionary, Keyed;
+            internal System.Windows.ResourceDictionary Theme;
             internal XamlType Type;
             internal XamlMember Member;
             internal string Name, Source;
@@ -142,9 +143,16 @@ namespace AppxPortable.WinRT.Xaml
 
             internal void Run(TextReader text)
             {
-                var context = UwpSchemaContext.Instance;
                 var dependency = root as System.Windows.DependencyObject;
                 if (dependency != null) System.Windows.NameScope.SetNameScope(dependency, names);
+                using (var xml = System.Xml.XmlReader.Create(text))
+                    Run(new XamlXmlReader(xml, UwpSchemaContext.Instance, new XamlXmlReaderSettings { ProvideLineInfo = true }));
+            }
+
+            // Builds the nodes into the root, or into a new object it returns.
+            internal object Run(XamlReader reader)
+            {
+                var context = UwpSchemaContext.Instance;
                 var settings = new XamlObjectWriterSettings { RootObjectInstance = root };
                 settings.AfterPropertiesHandler = (sender, args) => Closed(args.Instance);
                 settings.AfterEndInitHandler = (sender, args) =>
@@ -155,17 +163,14 @@ namespace AppxPortable.WinRT.Xaml
                     LoadDictionary((System.Windows.ResourceDictionary)args.Instance, uri);
                 };
                 var writer = new XamlObjectWriter(context, settings);
-                using (var xml = System.Xml.XmlReader.Create(text))
+                try { Transform(reader, writer); writer.Close(); }
+                catch (Exception error)
                 {
-                    var reader = new XamlXmlReader(xml, context, new XamlXmlReaderSettings { ProvideLineInfo = true });
-                    try { Transform(reader, writer); writer.Close(); }
-                    catch (Exception error)
-                    {
-                        if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
-                        if (error is XamlException && error.Message.StartsWith(source, StringComparison.Ordinal)) throw;
-                        throw new XamlException(source + ": " + Describe(error), error);
-                    }
+                    if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
+                    if (error is XamlException && error.Message.StartsWith(source, StringComparison.Ordinal)) throw;
+                    throw new XamlException(source + ": " + Describe(error), error);
                 }
+                return writer.Result;
             }
 
             // The writer wraps the cause (a missing resource key, a setter's error).
@@ -177,13 +182,13 @@ namespace AppxPortable.WinRT.Xaml
                 return string.Join(" -> ", parts);
             }
 
-            private string Where(XamlXmlReader reader)
+            private string Where(XamlReader reader)
             {
-                var line = (IXamlLineInfo)reader;
-                return source + (line.HasLineInfo ? " line " + line.LineNumber : "");
+                var line = reader as IXamlLineInfo;
+                return source + (line != null && line.HasLineInfo ? " line " + line.LineNumber : "");
             }
 
-            private void Transform(XamlXmlReader reader, XamlObjectWriter writer)
+            private void Transform(XamlReader reader, XamlObjectWriter writer)
             {
                 reader.Read();
                 while (!reader.IsEof)
@@ -225,6 +230,11 @@ namespace AppxPortable.WinRT.Xaml
                                 reader.Read(); reader.Read();
                                 continue;
                             }
+                            if (member.Name == "ThemeDictionaries" && Dictionary(member.DeclaringType))
+                            {
+                                frames.Peek().Theme = Theme(reader);
+                                continue;
+                            }
                             if (member.IsUnknown)
                                 throw new XamlException(Where(reader) + ": no WPF mapping for member " +
                                     (member.DeclaringType == null ? "" : member.DeclaringType.Name + ".") + member.Name);
@@ -257,6 +267,48 @@ namespace AppxPortable.WinRT.Xaml
                 }
             }
 
+            private static bool Dictionary(XamlType type)
+            {
+                return type != null && type.UnderlyingType != null && typeof(System.Windows.ResourceDictionary).IsAssignableFrom(type.UnderlyingType);
+            }
+
+            // ResourceDictionary.ThemeDictionaries: only the dark theme exists here, so
+            // its dictionary (Dark, else Default) is built and the rest are skipped.
+            private System.Windows.ResourceDictionary Theme(XamlReader reader)
+            {
+                var nodes = new XamlNodeList(reader.SchemaContext);
+                // Reading the subtree to its end leaves the reader on the following node.
+                using (var subtree = reader.ReadSubtree()) XamlServices.Transform(subtree, nodes.Writer, false);
+                nodes.Writer.Close();
+                List<XamlNodeList> entries = new List<XamlNodeList>();
+                var keys = new List<string>();
+                XamlNodeList current = null;
+                int depth = 0;
+                string key = null;
+                var all = nodes.GetReader();
+                while (all.Read())
+                {
+                    bool start = all.NodeType == XamlNodeType.StartObject || all.NodeType == XamlNodeType.GetObject;
+                    if (start && ++depth == 1 && all.NodeType == XamlNodeType.StartObject) { current = new XamlNodeList(reader.SchemaContext); key = null; }
+                    if (current != null && depth >= 1 && all.NodeType == XamlNodeType.StartMember && all.Member == XamlLanguage.Key && depth == 1)
+                    {
+                        all.Read(); key = all.Value as string; all.Read();
+                        continue;
+                    }
+                    if (current != null) current.Writer.WriteNode(all);
+                    if (all.NodeType == XamlNodeType.EndObject && --depth == 0 && current != null)
+                    {
+                        current.Writer.Close();
+                        entries.Add(current); keys.Add(key);
+                        current = null;
+                    }
+                }
+                int chosen = keys.IndexOf("Dark");
+                if (chosen < 0) chosen = keys.IndexOf("Default");
+                if (chosen < 0) return null;
+                return (System.Windows.ResourceDictionary)new Loading(component, null, source).Run(entries[chosen].GetReader());
+            }
+
             // The object starting now is an entry of the dictionary being filled.
             private bool InDictionary()
             {
@@ -277,6 +329,8 @@ namespace AppxPortable.WinRT.Xaml
                 var frame = closing;
                 closing = null;
                 if (frame == null || failure != null) return;
+                // Looked up after the dictionary's own and merged entries, as in UWP.
+                if (frame.Theme != null) ((System.Windows.ResourceDictionary)instance).MergedDictionaries.Insert(0, frame.Theme);
                 if (frame.Source != null) pending[instance] = Combine(source, frame.Source);
                 if (frame.Name != null && names.FindName(frame.Name) == null) names.RegisterName(frame.Name, instance);
                 if (frame.Connection == null) return;
