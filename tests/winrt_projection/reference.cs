@@ -215,10 +215,15 @@ namespace Windows.UI.Xaml.Controls
         public static int GetRow(global::Windows.UI.Xaml.FrameworkElement element) { throw new global::System.NotImplementedException(); }
         public static void SetRow(global::Windows.UI.Xaml.FrameworkElement element, int value) { throw new global::System.NotImplementedException(); }
     }
-    public class Image : global::Windows.UI.Xaml.FrameworkElement { internal Image() { } }
+    public class Image : global::Windows.UI.Xaml.FrameworkElement
+    {
+        internal Image() { }
+        public global::Windows.UI.Xaml.Media.ImageSource Source { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public class Control : global::Windows.UI.Xaml.FrameworkElement
     {
         internal Control() { }
+        public bool IsEnabled { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         protected virtual void OnKeyDown(global::Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { throw new global::System.NotImplementedException(); }
         protected virtual void OnKeyUp(global::Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { throw new global::System.NotImplementedException(); }
         protected virtual void OnGotFocus(global::Windows.UI.Xaml.RoutedEventArgs e) { throw new global::System.NotImplementedException(); }
@@ -552,5 +557,19 @@ namespace Windows.UI.Xaml.Data
     {
         object Convert(object value, global::System.Type targetType, object parameter, string language);
         object ConvertBack(object value, global::System.Type targetType, object parameter, string language);
+    }
+}
+
+namespace Windows.UI.Xaml.Media
+{
+    public class ImageSource : global::Windows.UI.Xaml.DependencyObject { internal ImageSource() { } }
+}
+namespace Windows.UI.Xaml.Media.Imaging
+{
+    public class BitmapSource : global::Windows.UI.Xaml.Media.ImageSource { internal BitmapSource() { } }
+    public sealed class BitmapImage : BitmapSource
+    {
+        public BitmapImage() { throw new global::System.NotImplementedException(); }
+        public BitmapImage(global::System.Uri source) { throw new global::System.NotImplementedException(); }
     }
 }

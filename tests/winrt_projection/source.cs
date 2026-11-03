@@ -265,6 +265,10 @@ namespace Fixture
             {
                 var source = ((System.Windows.Controls.Image)PeerOf(page.FindName("image"))).Source as System.Windows.Media.Imaging.BitmapSource;
                 Check(source != null && source.PixelWidth == 1, "package image URI resolves to WPF pixels");
+                var bitmap = new Windows.UI.Xaml.Media.Imaging.BitmapImage(new Uri("ms-appx:///Assets/pixel.png"));
+                var wrapper = (Image)page.FindName("image"); wrapper.Source = bitmap;
+                Check(ReferenceEquals(wrapper.Source, bitmap) && ((System.Windows.Media.Imaging.BitmapSource)((System.Windows.Controls.Image)PeerOf(wrapper)).Source).PixelWidth == 1,
+                      "code-created package bitmap reaches Image.Source with wrapper identity");
             });
             test("missing-bitmap", "<Page.Resources><BitmapImage x:Key='missing' UriSource='/Assets/missing.png'/></Page.Resources>", page => { });
             test("presenter-content", "<ContentPresenter x:Name='presenter'><Grid/></ContentPresenter>", page =>
@@ -303,6 +307,12 @@ namespace Fixture
                 Check(page.Connections[0].Value.GetType().FullName == "Windows.UI.Xaml.Controls.Button" &&
                       page.Connections[1].Value.GetType().FullName == "Windows.UI.Xaml.Controls.RadioButton" &&
                       page.Connections[2].Value.GetType().FullName == "Windows.UI.Xaml.Controls.Slider", "Connect receives typed control wrappers");
+            });
+            test("enabled", "<Button x:Name='enabled'/>", page =>
+            {
+                var control = (Control)page.FindName("enabled");
+                control.IsEnabled = false;
+                Check(!control.IsEnabled && !((System.Windows.Controls.Button)PeerOf(control)).IsEnabled, "code-side enabled state reaches WPF");
             });
             Check(failures.Count == 0, "compatibility gaps:\n" + string.Join("\n", failures));
             Console.WriteLine("PASS: surveyed compatibility mappings load through WPF");

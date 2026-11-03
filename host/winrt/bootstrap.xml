@@ -99,7 +99,9 @@
     <Method Name="GetColumn" Wpf="System.Windows.Controls.Grid.ColumnProperty" />
     <Method Name="SetColumn" Wpf="System.Windows.Controls.Grid.ColumnProperty" />
   </Class>
-  <Class Name="Windows.UI.Xaml.Controls.Image" Adapter="Wpf" Peer="System.Windows.Controls.Image"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Image" Adapter="Wpf" Peer="System.Windows.Controls.Image"><Constructor />
+    <Property Name="Source" Wpf="System.Windows.Controls.Image.SourceProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Controls.Viewbox" Adapter="Wpf" Peer="System.Windows.Controls.Viewbox"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Controls.ContentPresenter" Adapter="Wpf" Peer="System.Windows.Controls.ContentPresenter"><Constructor />
     <Property Name="Content" Wpf="System.Windows.Controls.ContentPresenter.ContentProperty" />
@@ -222,6 +224,7 @@
   <Class Name="Windows.UI.Xaml.RoutedEventArgs" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Input.KeyRoutedEventArgs" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Controls.Control" Adapter="Wpf" Peer="System.Windows.Controls.Control"><Constructor />
+    <Property Name="IsEnabled" Wpf="System.Windows.UIElement.IsEnabledProperty" />
     <Property Name="TabNavigation" Wpf="System.Windows.Input.KeyboardNavigation.TabNavigationProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.Controls.ContentControl" Adapter="Wpf" Peer="System.Windows.Controls.ContentControl">
