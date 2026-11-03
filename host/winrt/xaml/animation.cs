@@ -19,7 +19,7 @@ namespace Windows.UI.Xaml.Media.Animation
 namespace AppxPortable.WinRT.Xaml
 {
     // Theme fades animate Opacity; their exact Windows timing is not reproduced.
-    internal sealed class FadeInPeer : System.Windows.Media.Animation.DoubleAnimation
+    public sealed class FadeInPeer : System.Windows.Media.Animation.DoubleAnimation
     {
         public FadeInPeer()
         {
@@ -31,7 +31,7 @@ namespace AppxPortable.WinRT.Xaml
         protected override System.Windows.Freezable CreateInstanceCore() { return new FadeInPeer(); }
     }
 
-    internal sealed class FadeOutPeer : System.Windows.Media.Animation.DoubleAnimation
+    public sealed class FadeOutPeer : System.Windows.Media.Animation.DoubleAnimation
     {
         public FadeOutPeer()
         {

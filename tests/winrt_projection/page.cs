@@ -616,9 +616,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         VerifyVisibility(page);
         VerifyFrameContent(page);
         VerifyWindowSize();
-#if NATIVE_XAML
         VerifyApplicationResources();
-#endif
         VerifyResourceMap();
         VerifyApplicationView();
         VerifyNavigation();

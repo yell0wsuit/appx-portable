@@ -26,6 +26,9 @@ namespace AppxPortable.WinRT.Xaml
             peerTypes.Add(wrapper, peer);
         }
 
+        // UWP wrapper types and the WPF types they create.
+        internal static IEnumerable<KeyValuePair<Type, Type>> PeerTypes { get { return peerTypes; } }
+
         // The WPF type a UWP wrapper type creates, or null if it has none.
         internal static Type PeerType(Type wrapper)
         {
@@ -83,10 +86,11 @@ namespace AppxPortable.WinRT.Xaml
     }
 
     // Distinct peers keep wrapper lookup unambiguous where UWP types share a WPF type.
-    internal sealed class PagePeer : System.Windows.Controls.UserControl { }
-    internal sealed class FramePeer : System.Windows.Controls.ContentControl { }
+    // They are public because XAML creates only types visible to it.
+    public sealed class PagePeer : System.Windows.Controls.UserControl { }
+    public sealed class FramePeer : System.Windows.Controls.ContentControl { }
     // Placeholders for shim-backed services; they hold a place in the tree.
-    internal abstract class NativeHostPeer : System.Windows.FrameworkElement { }
-    internal sealed class MediaElementPeer : NativeHostPeer { }
-    internal sealed class SwapChainPanelPeer : NativeHostPeer { }
+    public abstract class NativeHostPeer : System.Windows.FrameworkElement { internal NativeHostPeer() { } }
+    public sealed class MediaElementPeer : NativeHostPeer { }
+    public sealed class SwapChainPanelPeer : NativeHostPeer { }
 }

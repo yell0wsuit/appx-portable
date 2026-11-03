@@ -17,7 +17,7 @@ import subprocess
 # independent of the metadata the generator reads. Slots follow IInspectable's six.
 # WPF backs Windows.UI.Xaml for managed games under Wine: every Windows.dll built
 # from the bootstrap selection compiles these, against Wine Mono's WPF.
-XAML_SOURCES = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs", "xaml/navigation.cs", "xaml/animation.cs")
+XAML_SOURCES = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs", "xaml/navigation.cs", "xaml/animation.cs", "xaml/loader.cs")
 BOOTSTRAP_GENERATED = ("Windows.generated.cs", "Windows.interop.cs", "Windows.xbox-interop.cs", "Mutated.generated.cs")
 
 
@@ -425,15 +425,14 @@ def main():
         copy_owned_file(output / "visibility-put.exe", alias_folder / alias.name)
         copy_owned_file(completed, alias_folder / "Windows.dll")
         run("visibility-abi-alias", [alias.name], cwd=alias_folder, marker="PASS: WinRT put_Visibility forwards to the WPF peer")
-        if True:  # the managed source loader replaces the native one (rewritten with it)
-            return
         source = compile_file("source.exe", [repo / "tests/winrt_projection/source.cs"], ["/r:" + windows(reference)])
         run("mark-source", [marker.name, windows(source), "source-winrt.exe"], marker="flags=WindowsRuntime")
         folder = fixture("source", source.name, "SourceProjectionTest", "CN=projection")
         copy_owned_file(output / "source-winrt.exe", folder / source.name)
         deploy(projection, folder / "Windows.dll")
         copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
-        run("source", [source.name], cwd=folder, marker="PASS: source XAML builds native content, properties, names and managed connections; unsupported input fails explicitly")
+        run("source", [source.name], cwd=folder, environment={"APPX_PORTABLE_LOG": "1"},
+            marker="PASS: managed loader builds WPF content with names, connections and game types; unsupported input fails explicitly")
 
     def probe_splash(projection, generator):
         generated = (output / "Windows.generated.cs").read_text(encoding="utf-8")
