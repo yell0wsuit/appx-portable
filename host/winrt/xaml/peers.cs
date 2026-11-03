@@ -109,6 +109,9 @@ namespace AppxPortable.WinRT.Xaml
 
     // Distinct peers keep wrapper lookup unambiguous where UWP types share a WPF type.
     // They are public because XAML creates only types visible to it.
+    // WPF text typography backs the initial RichTextBlock surface; Blocks and overflow
+    // remain explicit completion stubs until their document mapping is implemented.
+    public sealed class RichTextPeer : System.Windows.Controls.TextBlock { }
     public sealed class PagePeer : System.Windows.Controls.UserControl { }
     public sealed class FramePeer : System.Windows.Controls.ContentControl { }
     // Placeholders for shim-backed services; they hold a place in the tree.

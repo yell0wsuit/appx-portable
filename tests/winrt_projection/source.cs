@@ -174,6 +174,16 @@ namespace Fixture
             var ring = ringPage.FindName("ring") as ProgressRing;
             Check(ring != null && ring.IsActive, "UWP member names of mapped peers resolve in markup");
 
+            // RichTextBlock's typographic styles use WPF's text rendering.
+            File.WriteAllText("Pages/rich.xaml", "<Page" + Ns + "><Page.Resources><Style x:Key='rich' TargetType='RichTextBlock'>" +
+                "<Setter Property='FontSize' Value='20'/><Setter Property='TextWrapping' Value='Wrap'/><Setter Property='TextTrimming' Value='WordEllipsis'/>" +
+                "</Style></Page.Resources><RichTextBlock x:Name='rich' Style='{StaticResource rich}'/></Page>");
+            var richPage = new SourcePage();
+            Application.LoadComponent(richPage, new Uri("ms-appx:///Pages/rich.xaml"));
+            var rich = (System.Windows.Controls.TextBlock)PeerOf(richPage.FindName("rich"));
+            Check(rich.FontSize == 20 && rich.TextWrapping == System.Windows.TextWrapping.Wrap && rich.TextTrimming == System.Windows.TextTrimming.WordEllipsis,
+                  "RichTextBlock styles reach WPF text properties");
+
             File.WriteAllText("Pages/replacement.xaml", "<Page" + Ns + " x:Name='replacement'/>");
             Application.LoadComponent(page, new Uri("ms-appx:///Pages/replacement.xaml"));
             Check(page.Content == null && page.FindName("title") == null && ReferenceEquals(page.FindName("replacement"), page), "reload replaces tree and names");

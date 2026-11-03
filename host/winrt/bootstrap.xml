@@ -110,6 +110,7 @@
     <Property Name="Foreground" Wpf="System.Windows.Controls.TextBlock.ForegroundProperty" />
     <Property Name="FontSize" Wpf="System.Windows.Controls.TextBlock.FontSizeProperty" />
   </Class>
+  <Class Name="Windows.UI.Xaml.Controls.RichTextBlock" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.RichTextPeer"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.Brush" Adapter="Wpf" Peer="System.Windows.Media.Brush" />
   <Class Name="Windows.UI.Xaml.Media.SolidColorBrush" Adapter="Wpf" Peer="System.Windows.Media.SolidColorBrush">
     <Constructor />
