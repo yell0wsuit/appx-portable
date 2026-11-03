@@ -64,6 +64,17 @@ namespace Windows.UI.Xaml
         public int Count { get { return Map.Count; } }
         public bool IsReadOnly { get { return false; } }
 
+        public Uri Source
+        {
+            get { return XamlLoader.SourceOf(Map); }
+            set { XamlLoader.LoadDictionary(Map, value); }
+        }
+
+        public IList<ResourceDictionary> MergedDictionaries
+        {
+            get { return new PeerList<ResourceDictionary, global::System.Windows.ResourceDictionary>(this, Map.MergedDictionaries); }
+        }
+
         private static object Read(global::System.Windows.ResourceDictionary map, object key)
         {
             return global::AppxPortable.WinRT.Xaml.Values.FromWpf(map[key], typeof(object));
@@ -209,6 +220,38 @@ namespace Windows.UI.Xaml.Media
 
 namespace AppxPortable.WinRT.Xaml
 {
+    // A live list of wrappers over a WPF collection of their peers.
+    internal sealed class PeerList<TWrapper, TPeer> : IList<TWrapper>
+        where TWrapper : global::Windows.UI.Xaml.DependencyObject where TPeer : class
+    {
+        private readonly global::Windows.UI.Xaml.DependencyObject owner;
+        private readonly IList<TPeer> items;
+
+        internal PeerList(global::Windows.UI.Xaml.DependencyObject owner, IList<TPeer> items) { this.owner = owner; this.items = items; }
+
+        private IList<TPeer> Items { get { owner.CheckThread(); return items; } }
+
+        private static TPeer Peer(TWrapper item)
+        {
+            if (item == null) throw new ArgumentNullException("item");
+            return (TPeer)Peers.Of(item);
+        }
+
+        public TWrapper this[int index] { get { return (TWrapper)Peers.Wrap(Items[index]); } set { Items[index] = Peer(value); } }
+        public int Count { get { return Items.Count; } }
+        public bool IsReadOnly { get { return false; } }
+        public int IndexOf(TWrapper item) { return item == null ? -1 : Items.IndexOf(Peer(item)); }
+        public void Insert(int index, TWrapper item) { Items.Insert(index, Peer(item)); }
+        public void RemoveAt(int index) { Items.RemoveAt(index); }
+        public void Add(TWrapper item) { Items.Add(Peer(item)); }
+        public void Clear() { Items.Clear(); }
+        public bool Contains(TWrapper item) { return item != null && Items.Contains(Peer(item)); }
+        public void CopyTo(TWrapper[] array, int index) { LiveView<TWrapper>.CopyTo(this.ToList(), array, index); }
+        public bool Remove(TWrapper item) { return item != null && Items.Remove(Peer(item)); }
+        public IEnumerator<TWrapper> GetEnumerator() { return Items.Select(p => (TWrapper)Peers.Wrap(p)).ToList().GetEnumerator(); }
+        IEnumerator IEnumerable.GetEnumerator() { return GetEnumerator(); }
+    }
+
     // A read-only view whose contents are read from its owner on each use.
     internal sealed class LiveView<T> : ICollection<T>
     {

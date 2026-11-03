@@ -16,6 +16,29 @@ namespace AppxPortable.WinRT.Xaml
             if (dispatcher == null) dispatcher = Dispatcher.CurrentDispatcher;
         }
 
+        private static System.Windows.ResourceDictionary resources;
+
+        // WPF finds application resources through System.Windows.Application: its
+        // dictionary merges the theme, then the app's Application.Resources.
+        internal static void EnsureTheme()
+        {
+            if (resources != null) return;
+            EnsureDispatcher();
+            var application = System.Windows.Application.Current ??
+                new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+            resources = new System.Windows.ResourceDictionary();
+            using (var theme = typeof(Host).Assembly.GetManifestResourceStream("AppxPortable.WinRT.Xaml.theme.xaml"))
+                resources.MergedDictionaries.Add((System.Windows.ResourceDictionary)System.Windows.Markup.XamlReader.Load(theme));
+            application.Resources = resources;
+        }
+
+        internal static void SetResources(global::Windows.UI.Xaml.ResourceDictionary value)
+        {
+            EnsureTheme();
+            while (resources.MergedDictionaries.Count > 1) resources.MergedDictionaries.RemoveAt(1);
+            if (value != null) resources.MergedDictionaries.Add((System.Windows.ResourceDictionary)Peers.Of(value));
+        }
+
         // Game code called from WPF: a failure is logged as the shim logs native
         // callbacks', then passed on to WPF's caller.
         internal static void Callback(System.Action call)
@@ -49,8 +72,12 @@ namespace Windows.UI.Xaml
 
         public ResourceDictionary Resources
         {
-            get { return resources ?? (resources = new ResourceDictionary()); }
-            set { resources = value; }
+            get
+            {
+                if (resources == null) AppxPortable.WinRT.Xaml.Host.SetResources(resources = new ResourceDictionary());
+                return resources;
+            }
+            set { AppxPortable.WinRT.Xaml.Host.SetResources(resources = value); }
         }
     }
 

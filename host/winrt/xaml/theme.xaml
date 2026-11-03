@@ -1,0 +1,129 @@
+<!-- System theme resources Windows 8 apps refer to without defining, dark theme.
+     Our own approximations of the documented look, not SDK theme XAML; keys are
+     added as apps need them. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+     <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush"
+                      Color="#FF1D1D1D"/>
+     <SolidColorBrush x:Key="ApplicationForegroundThemeBrush"
+                      Color="#DEFFFFFF"/>
+     <SolidColorBrush x:Key="ApplicationHeaderForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ApplicationSecondaryForegroundThemeBrush"
+                      Color="#99FFFFFF"/>
+     <SolidColorBrush x:Key="ApplicationPointerOverForegroundThemeBrush"
+                      Color="#DEFFFFFF"/>
+     <SolidColorBrush x:Key="ApplicationPressedForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+
+     <SolidColorBrush x:Key="AppBarItemBackgroundThemeBrush"
+                      Color="#00000000"/>
+     <SolidColorBrush x:Key="AppBarItemForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="AppBarItemDisabledForegroundThemeBrush"
+                      Color="#66FFFFFF"/>
+     <SolidColorBrush x:Key="AppBarItemPointerOverBackgroundThemeBrush"
+                      Color="#21FFFFFF"/>
+     <SolidColorBrush x:Key="AppBarItemPointerOverForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="AppBarItemPressedForegroundThemeBrush"
+                      Color="#FF000000"/>
+
+     <SolidColorBrush x:Key="BackButtonBackgroundThemeBrush"
+                      Color="#00000000"/>
+     <SolidColorBrush x:Key="BackButtonForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="BackButtonPointerOverBackgroundThemeBrush"
+                      Color="#21FFFFFF"/>
+     <SolidColorBrush x:Key="BackButtonPointerOverForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="BackButtonPressedForegroundThemeBrush"
+                      Color="#FF000000"/>
+
+     <SolidColorBrush x:Key="ButtonBackgroundThemeBrush"
+                      Color="#00000000"/>
+     <SolidColorBrush x:Key="ButtonBorderThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <Thickness x:Key="ButtonBorderThemeThickness">2</Thickness>
+     <SolidColorBrush x:Key="ButtonForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ButtonDisabledBackgroundThemeBrush"
+                      Color="#00000000"/>
+     <SolidColorBrush x:Key="ButtonDisabledBorderThemeBrush"
+                      Color="#66FFFFFF"/>
+     <SolidColorBrush x:Key="ButtonDisabledForegroundThemeBrush"
+                      Color="#66FFFFFF"/>
+     <SolidColorBrush x:Key="ButtonPointerOverBackgroundThemeBrush"
+                      Color="#21FFFFFF"/>
+     <SolidColorBrush x:Key="ButtonPointerOverForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ButtonPressedBackgroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ButtonPressedForegroundThemeBrush"
+                      Color="#FF000000"/>
+
+     <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI</FontFamily>
+     <sys:Double x:Key="ControlContentThemeFontSize">14.667</sys:Double>
+     <SolidColorBrush x:Key="FocusVisualBlackStrokeThemeBrush"
+                      Color="#FF000000"/>
+     <SolidColorBrush x:Key="FocusVisualWhiteStrokeThemeBrush"
+                      Color="#FFFFFFFF"/>
+
+     <SolidColorBrush x:Key="ListViewItemOverlayBackgroundThemeBrush"
+                      Color="#A6000000"/>
+     <SolidColorBrush x:Key="ListViewItemOverlayForegroundThemeBrush"
+                      Color="#DEFFFFFF"/>
+     <SolidColorBrush x:Key="ListViewItemOverlaySecondaryForegroundThemeBrush"
+                      Color="#99FFFFFF"/>
+     <SolidColorBrush x:Key="ListViewItemPlaceholderBackgroundThemeBrush"
+                      Color="#FF3D3D3D"/>
+
+     <SolidColorBrush x:Key="ProgressBarBackgroundThemeBrush"
+                      Color="#59FFFFFF"/>
+     <SolidColorBrush x:Key="ProgressBarBorderThemeBrush"
+                      Color="#00000000"/>
+     <Thickness x:Key="ProgressBarBorderThemeThickness">0</Thickness>
+     <SolidColorBrush x:Key="ProgressBarForegroundThemeBrush"
+                      Color="#FF5B2EC5"/>
+     <SolidColorBrush x:Key="ProgressBarIndeterminateForegroundThemeBrush"
+                      Color="#FF9A67FF"/>
+     <sys:Double x:Key="ProgressBarThemeMinHeight">6</sys:Double>
+
+     <SolidColorBrush x:Key="ToggleButtonBackgroundThemeBrush"
+                      Color="#00000000"/>
+     <SolidColorBrush x:Key="ToggleButtonBorderThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <Thickness x:Key="ToggleButtonBorderThemeThickness">2</Thickness>
+     <SolidColorBrush x:Key="ToggleButtonForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonCheckedForegroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonCheckedDisabledBackgroundThemeBrush"
+                      Color="#66FFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonCheckedDisabledForegroundThemeBrush"
+                      Color="#FF000000"/>
+     <SolidColorBrush x:Key="ToggleButtonCheckedPointerOverBackgroundThemeBrush"
+                      Color="#FF7E52D9"/>
+     <SolidColorBrush x:Key="ToggleButtonCheckedPointerOverBorderThemeBrush"
+                      Color="#FF7E52D9"/>
+     <SolidColorBrush x:Key="ToggleButtonCheckedPressedBackgroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonCheckedPressedBorderThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonCheckedPressedForegroundThemeBrush"
+                      Color="#FF000000"/>
+     <SolidColorBrush x:Key="ToggleButtonDisabledBorderThemeBrush"
+                      Color="#66FFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonDisabledForegroundThemeBrush"
+                      Color="#66FFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonPointerOverBackgroundThemeBrush"
+                      Color="#21FFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonPressedBackgroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+     <SolidColorBrush x:Key="ToggleButtonPressedForegroundThemeBrush"
+                      Color="#FF000000"/>
+
+     <SolidColorBrush x:Key="ToolTipBackgroundThemeBrush"
+                      Color="#FFFFFFFF"/>
+</ResourceDictionary>

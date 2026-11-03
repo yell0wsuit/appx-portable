@@ -127,6 +127,57 @@ namespace Fixture
             Application.LoadComponent(page, new Uri("ms-appx:///Pages/replacement.xaml"));
             Check(page.Content == null && page.FindName("title") == null && ReferenceEquals(page.FindName("replacement"), page), "reload replaces tree and names");
             Console.WriteLine("PASS: managed loader builds WPF content with names, connections and game types; unsupported input fails explicitly");
+            VerifyStyles();
+        }
+
+        const string StylesXaml = "<ResourceDictionary" + Ns + ">" +
+            "<Style x:Key='Big' TargetType='TextBlock'><Setter Property='FontSize' Value='42'/></Style>" +
+            "<Style x:Key='Btn' TargetType='Button'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='Button'>" +
+            "<Grid x:Name='root'><VisualStateManager.VisualStateGroups><VisualStateGroup x:Name='CommonStates'>" +
+            "<VisualState x:Name='Normal'/><VisualState x:Name='PointerOver'/></VisualStateGroup></VisualStateManager.VisualStateGroups>" +
+            "<Border x:Name='face' Background='{TemplateBinding Background}'><ContentPresenter/></Border></Grid>" +
+            "</ControlTemplate></Setter.Value></Setter></Style></ResourceDictionary>";
+        const string AppXaml = "<Application x:Class='Fixture.SourceApp' RequestedTheme='Dark'" + Ns + "><Application.Resources><ResourceDictionary>" +
+            "<ResourceDictionary.MergedDictionaries><ResourceDictionary Source='Common/Styles.xaml'/></ResourceDictionary.MergedDictionaries>" +
+            "</ResourceDictionary></Application.Resources></Application>";
+        const string StyledXaml = "<Page" + Ns + "><StackPanel>" +
+            "<TextBlock x:Name='big' Style='{StaticResource Big}' Foreground='{ThemeResource ApplicationForegroundThemeBrush}'/>" +
+            "<Button x:Name='button' Style='{StaticResource Btn}' Background='Red' Content='go'/></StackPanel></Page>";
+
+        void VerifyStyles()
+        {
+            Directory.CreateDirectory("Common");
+            File.WriteAllText("Common/Styles.xaml", StylesXaml);
+            File.WriteAllText("App.xaml", AppXaml);
+            Application.LoadComponent(this, new Uri("ms-appx:///App.xaml"));
+            Check(Resources.MergedDictionaries.Count == 1 && Resources.MergedDictionaries[0].ContainsKey("Big") && Resources.ContainsKey("Big"),
+                  "App.xaml merges a relative Source dictionary");
+            File.WriteAllText("Pages/styled.xaml", StyledXaml);
+            var page = new SourcePage();
+            Application.LoadComponent(page, new Uri("ms-appx:///Pages/styled.xaml"));
+            var big = (TextBlock)page.FindName("big");
+            Check(big.FontSize == 42, "page Style from App.xaml's merged dictionary: " + big.FontSize);
+            var foreground = big.Foreground as Windows.UI.Xaml.Media.SolidColorBrush;
+            Check(foreground != null && foreground.Color.A != 0, "ThemeResource resolves the theme's ApplicationForegroundThemeBrush");
+            var button = (Control)page.FindName("button");
+            var peer = PeerOf(button) as System.Windows.Controls.Control;
+            Check(peer != null && peer.ApplyTemplate(), "Button template applies");
+            var root = Windows.UI.Xaml.Media.VisualTreeHelper.GetChild(button, 0);
+            Check(root is Grid && ReferenceEquals(root, Windows.UI.Xaml.Media.VisualTreeHelper.GetChild(button, 0)), "template root wraps stably");
+            Check(VisualStateManager.GoToState(button, "PointerOver", false) && !VisualStateManager.GoToState(button, "Missing", false), "VisualStateManager states");
+            var code = new ResourceDictionary { Source = new Uri("ms-appx:///Common/Styles.xaml") };
+            Check(code.ContainsKey("Btn") && code.Source.OriginalString == "ms-appx:///Common/Styles.xaml", "code ResourceDictionary.Source loads the package file");
+            File.WriteAllText("Pages/nokey.xaml", "<Page" + Ns + "><TextBlock Style='{StaticResource Nope}'/></Page>");
+            string missing = Fails("ms-appx:///Pages/nokey.xaml", new SourcePage());
+            Check(missing.Contains("Nope") && missing.Contains("nokey.xaml"), "unknown resource key is named with its file: " + missing);
+            File.WriteAllText("light.xaml", AppXaml.Replace("Dark", "Light"));
+            string light = Fails("ms-appx:///light.xaml", this);
+            Check(light.Contains("Light"), "an unsupported theme is named: " + light);
+            Console.WriteLine("PASS: styles, templates, merged and theme resources load through WPF");
+        }
+        static object PeerOf(object wrapper)
+        {
+            return typeof(DependencyObject).GetField("peer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(wrapper);
         }
 
         protected override void OnLaunched(Windows.ApplicationModel.Activation.LaunchActivatedEventArgs args)

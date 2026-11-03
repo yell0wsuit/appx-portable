@@ -64,12 +64,43 @@ namespace AppxPortable.WinRT.Xaml
             var app = component as global::Windows.UI.Xaml.Application;
             var wrapper = component as global::Windows.UI.Xaml.DependencyObject;
             if (app == null && wrapper == null) throw new NotSupportedException("Cannot load XAML into " + component.GetType().FullName);
-            Host.EnsureDispatcher();
+            Host.EnsureTheme();
             object root = app != null ? new ApplicationPeer() : Values.Dependency(wrapper);
             Reset(root);
             var load = new Loading(component, root, source);
             load.Run(text);
             if (app != null) app.Resources = (global::Windows.UI.Xaml.ResourceDictionary)Peers.Wrap(((ApplicationPeer)root).Resources);
+        }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.ResourceDictionary, Uri> sources =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.ResourceDictionary, Uri>();
+
+        // ResourceDictionary.Source: the package file's entries load into the dictionary.
+        internal static void LoadDictionary(System.Windows.ResourceDictionary dictionary, Uri uri)
+        {
+            if (uri == null) throw new ArgumentNullException("value");
+            Host.EnsureTheme();
+            string path = Resolve(uri);
+            using (var text = File.OpenText(path)) new Loading(null, dictionary, uri.OriginalString).Run(text);
+            sources.Remove(dictionary);
+            sources.Add(dictionary, uri);
+        }
+
+        internal static Uri SourceOf(System.Windows.ResourceDictionary dictionary)
+        {
+            Uri value;
+            return sources.TryGetValue(dictionary, out value) ? value : null;
+        }
+
+        // A Source relative to the file naming it, as package paths are.
+        private static Uri Combine(string source, string value)
+        {
+            if (value.Contains("://")) return new Uri(value);
+            string directory = "/";
+            Uri current;
+            if (Uri.TryCreate(source, UriKind.Absolute, out current))
+                directory = current.AbsolutePath.Substring(0, current.AbsolutePath.LastIndexOf('/') + 1);
+            return new Uri("ms-appx://" + (value.StartsWith("/", StringComparison.Ordinal) ? value : directory + value));
         }
 
         // Loading again replaces the component's tree and names, as in UWP.
@@ -84,7 +115,7 @@ namespace AppxPortable.WinRT.Xaml
         private sealed class Frame
         {
             internal bool Got;
-            internal string Name;
+            internal string Name, Source;
             internal int? Connection;
         }
 
@@ -96,6 +127,8 @@ namespace AppxPortable.WinRT.Xaml
             private readonly Stack<Frame> frames = new Stack<Frame>();
             private Frame closing;
             private Exception failure;
+            // Source dictionaries load once their own initialization has ended.
+            private readonly Dictionary<object, Uri> pending = new Dictionary<object, Uri>();
 
             internal Loading(object component, object root, string source) { this.component = component; this.root = root; this.source = source; }
 
@@ -106,6 +139,13 @@ namespace AppxPortable.WinRT.Xaml
                 if (dependency != null) System.Windows.NameScope.SetNameScope(dependency, names);
                 var settings = new XamlObjectWriterSettings { RootObjectInstance = root };
                 settings.AfterPropertiesHandler = (sender, args) => Closed(args.Instance);
+                settings.AfterEndInitHandler = (sender, args) =>
+                {
+                    Uri uri;
+                    if (!pending.TryGetValue(args.Instance, out uri)) return;
+                    pending.Remove(args.Instance);
+                    LoadDictionary((System.Windows.ResourceDictionary)args.Instance, uri);
+                };
                 var writer = new XamlObjectWriter(context, settings);
                 using (var xml = System.Xml.XmlReader.Create(text))
                 {
@@ -115,9 +155,18 @@ namespace AppxPortable.WinRT.Xaml
                     {
                         if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
                         if (error is XamlException && error.Message.StartsWith(source, StringComparison.Ordinal)) throw;
-                        throw new XamlException(source + ": " + error.Message, error);
+                        throw new XamlException(source + ": " + Describe(error), error);
                     }
                 }
+            }
+
+            // The writer wraps the cause (a missing resource key, a setter's error).
+            private static string Describe(Exception error)
+            {
+                var parts = new List<string>();
+                for (var current = error; current != null; current = current.InnerException)
+                    if (!parts.Contains(current.Message)) parts.Add(current.Message);
+                return string.Join(" -> ", parts);
             }
 
             private string Where(XamlXmlReader reader)
@@ -155,6 +204,14 @@ namespace AppxPortable.WinRT.Xaml
                                 reader.Read(); reader.Read();
                                 continue;
                             }
+                            if (member.Name == "Source" && member.DeclaringType != null && member.DeclaringType.UnderlyingType != null &&
+                                typeof(System.Windows.ResourceDictionary).IsAssignableFrom(member.DeclaringType.UnderlyingType))
+                            {
+                                reader.Read();
+                                frames.Peek().Source = (string)reader.Value;
+                                reader.Read(); reader.Read();
+                                continue;
+                            }
                             if (member.IsUnknown)
                                 throw new XamlException(Where(reader) + ": no WPF mapping for member " +
                                     (member.DeclaringType == null ? "" : member.DeclaringType.Name + ".") + member.Name);
@@ -184,6 +241,7 @@ namespace AppxPortable.WinRT.Xaml
                 var frame = closing;
                 closing = null;
                 if (frame == null || failure != null) return;
+                if (frame.Source != null) pending[instance] = Combine(source, frame.Source);
                 if (frame.Name != null && names.FindName(frame.Name) == null) names.RegisterName(frame.Name, instance);
                 if (frame.Connection == null) return;
                 var connector = component as global::Windows.UI.Xaml.Markup.IComponentConnector;
@@ -196,7 +254,15 @@ namespace AppxPortable.WinRT.Xaml
     }
 
     // An Application's XAML root: it collects the resources UWP keeps on Application.
-    public sealed class ApplicationPeer : System.Windows.FrameworkElement { }
+    public sealed class ApplicationPeer : System.Windows.FrameworkElement
+    {
+        // Only the dark theme is provided (theme.xaml).
+        public string RequestedTheme
+        {
+            get { return "Dark"; }
+            set { if (value != "Dark") throw new NotSupportedException("Only the dark theme is provided, not " + value); }
+        }
+    }
 
     internal sealed class UwpSchemaContext : XamlSchemaContext
     {
@@ -223,6 +289,9 @@ namespace AppxPortable.WinRT.Xaml
             Type peer;
             if (xamlNamespace == Presentation && (typeArguments == null || typeArguments.Length == 0) && uwp.TryGetValue(name, out peer))
                 return wpf.GetXamlType(peer);
+            // Theme resources are fixed (dark theme), so a static lookup serves.
+            if (xamlNamespace == Presentation && (name == "ThemeResource" || name == "ThemeResourceExtension"))
+                return wpf.GetXamlType(typeof(System.Windows.StaticResourceExtension));
             if (xamlNamespace.StartsWith("using:", StringComparison.Ordinal)) return App(xamlNamespace.Substring(6) + "." + name);
             return wpf.GetXamlType(new XamlTypeName(xamlNamespace, name,
                 typeArguments == null ? null : typeArguments.Select(t => new XamlTypeName(t))));

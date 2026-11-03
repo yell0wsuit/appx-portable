@@ -18,7 +18,8 @@ WINRT = REPO / "host/winrt"
 GENERATOR = ("generator.cs", "storage_generation.cs", "component_generation.cs", "wpf_generation.cs")
 RUNTIME = ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")
 # WPF backs Windows.UI.Xaml for managed games under Wine; compiled into Windows.dll.
-XAML_ADAPTER = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs", "xaml/navigation.cs", "xaml/animation.cs", "xaml/loader.cs")
+XAML_ADAPTER = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs", "xaml/navigation.cs", "xaml/animation.cs", "xaml/loader.cs", "xaml/states.cs")
+XAML_THEME = "xaml/theme.xaml"
 BRIDGE = ("task_extensions.cs", "stream_extensions.cs")
 REFERENCES = ("mscorlib.dll", "System.dll", "System.Core.dll", "System.Xml.dll")
 INTEROP = "AppxPortable.WinRT.Interop.dll"
@@ -68,12 +69,13 @@ def commands(toolchain, metadata, cecil, output, work):
     generated, bootstrap = work / "Windows.generated.cs", work / "bootstrap/Windows.dll"
     interop, compiled_tasks = output / INTEROP, work / ("compiled/" + TASKS)
     interop_flags = ["/target:library", "/define:APPX_PORTABLE_INTEROP", "/r:" + t.path(interop)]
+    theme = "/resource:" + t.path(WINRT / XAML_THEME) + ",AppxPortable.WinRT.Xaml.theme.xaml"
     return [
         ("compile-generator", t.compile(generator, [WINRT / n for n in GENERATOR], ["/r:" + t.path(cecil)])),
         ("compile-completer", t.compile(completer, [WINRT / "complete.cs"], ["/r:" + t.path(cecil)])),
         ("generate-bootstrap", t.tool(generator) + [t.path(metadata), t.path(WINRT / "bootstrap.xml"), t.path(generated), "--interop"]),
         ("compile-interop", t.compile(interop, [WINRT / "interop.cs"], ["/target:library"])),
-        ("compile-bootstrap", t.compile(bootstrap, [WINRT / n for n in RUNTIME + XAML_ADAPTER] + [generated], interop_flags)),
+        ("compile-bootstrap", t.compile(bootstrap, [WINRT / n for n in RUNTIME + XAML_ADAPTER] + [generated], interop_flags + [theme])),
         ("complete-surface", t.tool(completer) + ["--all", t.path(metadata), t.path(bootstrap), t.path(output / "Windows.dll"),
                                                   t.path(output / "surface-report.txt")]),
         # C# binds WinRT setters as set_X against the bootstrap; the surface names them put_X.

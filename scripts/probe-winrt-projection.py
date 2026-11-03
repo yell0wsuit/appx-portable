@@ -17,7 +17,8 @@ import subprocess
 # independent of the metadata the generator reads. Slots follow IInspectable's six.
 # WPF backs Windows.UI.Xaml for managed games under Wine: every Windows.dll built
 # from the bootstrap selection compiles these, against Wine Mono's WPF.
-XAML_SOURCES = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs", "xaml/navigation.cs", "xaml/animation.cs", "xaml/loader.cs")
+XAML_SOURCES = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs", "xaml/navigation.cs", "xaml/animation.cs", "xaml/loader.cs", "xaml/states.cs")
+XAML_THEME, XAML_THEME_NAME = "xaml/theme.xaml", "AppxPortable.WinRT.Xaml.theme.xaml"
 BOOTSTRAP_GENERATED = ("Windows.generated.cs", "Windows.interop.cs", "Windows.xbox-interop.cs", "Mutated.generated.cs")
 
 
@@ -275,6 +276,7 @@ def main():
         command += ["/r:" + windows(r) for r in wpf_references(mono)]
         if any(Path(path).name in BOOTSTRAP_GENERATED for path in sources):
             sources = list(sources) + [repo / "host/winrt" / n for n in XAML_SOURCES]
+            command.append("/resource:" + windows(repo / "host/winrt" / XAML_THEME) + "," + XAML_THEME_NAME)
         against_windows = surface_build and any(flag.startswith("/r:") and flag.endswith("Windows.dll") for flag in extra)
         if against_windows and "/r:" + windows(surface_build["interop"]) not in extra:
             extra = list(extra) + ["/r:" + windows(surface_build["interop"])]

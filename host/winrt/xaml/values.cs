@@ -38,6 +38,11 @@ namespace AppxPortable.WinRT.Xaml
             if (wrapper != null) value = wrapper.peer;
             if (type.IsInstanceOfType(value)) return value;
             if (value.GetType().IsEnum && type.IsEnum) return Enumeration(value, type);
+            if (value is global::Windows.UI.Color && type == typeof(System.Windows.Media.Color))
+            {
+                var color = (global::Windows.UI.Color)value;
+                return System.Windows.Media.Color.FromArgb(color.A, color.R, color.G, color.B);
+            }
             if (value is global::Windows.UI.Xaml.Thickness && type == typeof(System.Windows.Thickness))
             {
                 var thickness = (global::Windows.UI.Xaml.Thickness)value;
@@ -54,6 +59,11 @@ namespace AppxPortable.WinRT.Xaml
             if (Peers.IsPeer(value)) value = Peers.Wrap(value);
             if (type.IsInstanceOfType(value) && !IsWpf(value.GetType())) return value;
             if (value.GetType().IsEnum && type.IsEnum) return Enumeration(value, type);
+            if (value is System.Windows.Media.Color && type.IsAssignableFrom(typeof(global::Windows.UI.Color)))
+            {
+                var color = (System.Windows.Media.Color)value;
+                return global::Windows.UI.Color.FromArgb(color.A, color.R, color.G, color.B);
+            }
             if (value is System.Windows.Thickness && type.IsAssignableFrom(typeof(global::Windows.UI.Xaml.Thickness)))
             {
                 var thickness = (System.Windows.Thickness)value;

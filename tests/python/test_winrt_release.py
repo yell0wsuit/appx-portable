@@ -55,6 +55,7 @@ class ReleaseBuildTests(unittest.TestCase):
         for reference in ("WPF/PresentationCore.dll", "WPF/PresentationFramework.dll", "WPF/WindowsBase.dll", "System.Xaml.dll"):
             self.assertIn("/r:" + str(Path("/framework") / reference), bootstrap)
         self.assertTrue(any(source.endswith(str(Path("xaml/host.cs"))) for source in bootstrap))
+        self.assertTrue(any(flag.startswith("/resource:") and flag.endswith(",AppxPortable.WinRT.Xaml.theme.xaml") for flag in bootstrap))
 
     def test_no_contract_metadata_reaches_the_output(self):
         steps = self.steps(release.Toolchain(framework=Path("/framework")))

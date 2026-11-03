@@ -153,6 +153,11 @@ namespace Windows.UI.Xaml
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Unloaded(RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
         public void remove_Unloaded(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
+    public class VisualStateManager : DependencyObject
+    {
+        public VisualStateManager() { throw new global::System.NotImplementedException(); }
+        public static bool GoToState(global::Windows.UI.Xaml.Controls.Control control, string stateName, bool useTransitions) { throw new global::System.NotImplementedException(); }
+    }
     public sealed class Style : DependencyObject { public Style() { throw new global::System.NotImplementedException(); } }
     public class RoutedEventArgs
     {
@@ -225,6 +230,8 @@ namespace Windows.UI.Xaml.Controls
     {
         public TextBlock() { throw new global::System.NotImplementedException(); }
         public static global::Windows.UI.Xaml.DependencyProperty TextProperty { get { throw new global::System.NotImplementedException(); } }
+        public global::Windows.UI.Xaml.Media.Brush Foreground { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double FontSize { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public string Text { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
     public class ProgressRing : Control
@@ -463,6 +470,8 @@ namespace Windows.UI.Xaml
     public class ResourceDictionary : DependencyObject, global::System.Collections.Generic.IDictionary<object, object>
     {
         public ResourceDictionary() { throw new global::System.NotImplementedException(); }
+        public global::System.Uri Source { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::System.Collections.Generic.IList<ResourceDictionary> MergedDictionaries { get { throw new global::System.NotImplementedException(); } }
         public object this[object key] { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public global::System.Collections.Generic.ICollection<object> Keys { get { throw new global::System.NotImplementedException(); } }
         public global::System.Collections.Generic.ICollection<object> Values { get { throw new global::System.NotImplementedException(); } }
@@ -505,5 +514,27 @@ namespace Windows.UI.ViewManagement
     public sealed class ApplicationView
     {
         public static ApplicationViewState Value { get { throw new global::System.NotImplementedException("ApplicationView.Value"); } }
+    }
+}
+
+namespace Windows.UI.Xaml.Media
+{
+    public class Brush : global::Windows.UI.Xaml.DependencyObject { internal Brush() { } }
+    public sealed class SolidColorBrush : Brush
+    {
+        public SolidColorBrush() { throw new global::System.NotImplementedException(); }
+        public global::Windows.UI.Color Color { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
+}
+
+namespace Windows.UI
+{
+    public struct Color
+    {
+        private byte _A, _R, _G, _B;
+        public byte A { get { return _A; } set { _A = value; } }
+        public byte R { get { return _R; } set { _R = value; } }
+        public byte G { get { return _G; } set { _G = value; } }
+        public byte B { get { return _B; } set { _B = value; } }
     }
 }

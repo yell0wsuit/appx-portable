@@ -107,7 +107,15 @@
     <Constructor />
     <Property Name="Text" Wpf="System.Windows.Controls.TextBlock.TextProperty" />
     <Property Name="TextProperty" Wpf="System.Windows.Controls.TextBlock.TextProperty" />
+    <Property Name="Foreground" Wpf="System.Windows.Controls.TextBlock.ForegroundProperty" />
+    <Property Name="FontSize" Wpf="System.Windows.Controls.TextBlock.FontSizeProperty" />
   </Class>
+  <Class Name="Windows.UI.Xaml.Media.Brush" Adapter="Wpf" Peer="System.Windows.Media.Brush" />
+  <Class Name="Windows.UI.Xaml.Media.SolidColorBrush" Adapter="Wpf" Peer="System.Windows.Media.SolidColorBrush">
+    <Constructor />
+    <Property Name="Color" Wpf="System.Windows.Media.SolidColorBrush.ColorProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.VisualStateManager" Adapter="Wpf" />
   <!-- WPF has no ring; an indeterminate ProgressBar stands in. -->
   <Class Name="Windows.UI.Xaml.Controls.ProgressRing" Adapter="Wpf" Peer="System.Windows.Controls.ProgressBar">
     <Constructor />
