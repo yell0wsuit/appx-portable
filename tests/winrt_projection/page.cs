@@ -389,6 +389,63 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Window.Current.remove_VisibilityChanged(visibility);
         Console.WriteLine("PASS: startup settings, license, tile and toast templates, and CoreWindow input services reach the shim");
     }
+    // Native pointer behind a wrapper or peer, for calling the shim object directly.
+    static IntPtr NativeOf(object owner, bool peerField)
+    {
+        object handle;
+        if (peerField) handle = owner.GetType().GetField("native", global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.NonPublic).GetValue(owner);
+        else
+        {
+            var wrapper = typeof(Application).Assembly.GetType("AppxPortable.WinRT.INativeWrapper", true);
+            handle = wrapper.GetProperty("Native").GetValue(owner, null);
+        }
+        Check(handle != null, "a native object backs " + owner.GetType().Name);
+        return ((SafeHandle)handle).DangerousGetHandle();
+    }
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SetSwapChainCall(IntPtr self, IntPtr swapChain);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetFlagCall(IntPtr self, out byte value);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetNumberCall(IntPtr self, out double value);
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetIntCall(IntPtr self, out int value);
+    static T Slot<T>(IntPtr self, int slot) where T : class
+    {
+        return (T)(object)Marshal.GetDelegateForFunctionPointer(Marshal.ReadIntPtr(Marshal.ReadIntPtr(self), slot * IntPtr.Size), typeof(T));
+    }
+    static int renders;
+    // Shim-backed XAML services: the board panel, background music and the clock.
+    void VerifyShimServices()
+    {
+        // Bej3Proxy.Init hands the panel to native code that sets its swap chain.
+        var panel = new Windows.UI.Xaml.Controls.SwapChainBackgroundPanel();
+        IntPtr native = NativeOf(panel, false), panelNative;
+        Check(Marshal.QueryInterface(native, ref SwapChainBackgroundPanelNativeIid, out panelNative) == 0, "panel answers ISwapChainBackgroundPanelNative");
+        Check(Slot<SetSwapChainCall>(panelNative, 3)(panelNative, IntPtr.Zero) == 0, "SetSwapChain reaches the shim panel");
+        Marshal.Release(panelNative);
+        Check(NativeOf(panel, false) == native, "panel keeps one native identity");
+        // MainPage_Loaded configures the template's music element; its values reach the shim player.
+        var music = new Windows.UI.Xaml.Controls.MediaElement();
+        music.AutoPlay = false;
+        music.AudioCategory = Windows.UI.Xaml.Media.AudioCategory.BackgroundCapableMedia;
+        music.IsLooping = true;
+        music.Volume = 0.25;
+        music.Source = new Uri("ms-appx:///Assets/missing-music.mp3");
+        IntPtr player = NativeOf(PeerOf(music), true);
+        byte flag; double volume; int category;
+        Check(Slot<GetFlagCall>(player, 36)(player, out flag) == 0 && flag == 1, "IsLooping reaches the shim player");
+        Check(Slot<GetFlagCall>(player, 13)(player, out flag) == 0 && flag == 0, "AutoPlay reaches the shim player");
+        Check(Slot<GetNumberCall>(player, 15)(player, out volume) == 0 && volume == 0.25, "Volume reaches the shim player");
+        Check(Slot<GetIntCall>(player, 45)(player, out category) == 0 && category == (int)Windows.UI.Xaml.Media.AudioCategory.BackgroundCapableMedia, "AudioCategory reaches the shim player");
+        Check(music.IsLooping && music.Volume == 0.25 && music.Source.AbsoluteUri == "ms-appx:///Assets/missing-music.mp3", "media values read back");
+        music.Play(); music.Pause(); music.Stop();
+        // The board renders from CompositionTarget.Rendering on the shim's clock.
+        var token = Windows.UI.Xaml.Media.CompositionTarget.add_Rendering((sender, args) => ++renders);
+        deferred.Add(() =>
+        {
+            Check(renders > 0, "CompositionTarget.Rendering ticks from the shim clock");
+            Windows.UI.Xaml.Media.CompositionTarget.remove_Rendering(token);
+            Console.WriteLine("PASS: swap chain panel, media element and rendering clock are shim-backed");
+        });
+    }
+    static Guid SwapChainBackgroundPanelNativeIid = new Guid("43bebd4e-add5-4035-8f85-5608d08e9dc9");
     // The game's splash continuation: RunAsync queues work for the UI thread and
     // completes the returned action once the handler has run.
     void VerifyDispatcher()
@@ -620,9 +677,12 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         child.add_Loaded((s, e) => { ++loaded; sender = s; args = e; });
         var window = Window.Current; var previous = window.Content;
         window.Content = root;
-        Check(ReferenceEquals(window.Content, root) && ReferenceEquals(HostRoot(), PeerOf(root)), "Window.Content identity and compositor root");
-        // A test-only presentation source raises Loaded; the compositor owns the real one (Plan 2).
-        var source = new global::System.Windows.Interop.HwndSource(new global::System.Windows.Interop.HwndSourceParameters("probe")) { RootVisual = rootPeer };
+        // The compositor root layers the window content under the popup overlay.
+        var layers = HostRoot() as global::System.Windows.Controls.Grid;
+        Check(ReferenceEquals(window.Content, root) && layers != null && layers.Children.Count == 2 && ReferenceEquals(layers.Children[0], PeerOf(root)) &&
+              layers.Children[1] is global::System.Windows.Controls.Canvas, "Window.Content identity and compositor root");
+        // A test-only presentation source raises Loaded; the compositor owns the real one.
+        var source = new global::System.Windows.Interop.HwndSource(new global::System.Windows.Interop.HwndSourceParameters("probe")) { RootVisual = layers };
         deferred.Add(() =>
         {
             Check(loaded == 1 && removed == 0 && ReferenceEquals(sender, child) && args != null && ReferenceEquals(args.OriginalSource, child), "Loaded reaches managed handlers with wrappers");
@@ -688,6 +748,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Console.WriteLine("PASS: managed Page composes WPF-backed inheritance, content and window identity");
         VerifySharing();
         VerifyStartupServices();
+        VerifyShimServices();
         VerifyDispatcher();
     }
     // WPF backs XAML under Wine: its dispatcher lives on the shim's view thread and

@@ -889,3 +889,14 @@ const ShimClass frameClass{L"Windows.UI.Xaml.Controls.Frame", MakeControlFactory
 const ShimClass pageClass{L"Windows.UI.Xaml.Controls.Page", MakeControlFactory};
 const ShimClass userControlClass{L"Windows.UI.Xaml.Controls.UserControl", MakeControlFactory};
 }
+// Shim-backed services of managed games' WPF XAML: standalone native objects
+// behind WPF-backed wrappers, which keep their place in the WPF tree. Not
+// activatable classes, so native XAML games' activation is unchanged.
+extern "C" HRESULT __cdecl ShimCreateXamlService(const wchar_t* name, IInspectable** value) noexcept {
+    if (!name || !value) return E_POINTER;
+    *value = nullptr;
+    if (!wcscmp(name, L"Windows.UI.Xaml.Controls.MediaElement")) return appx::MakeMediaElement(value);
+    if (!wcscmp(name, L"Windows.UI.Xaml.Controls.SwapChainBackgroundPanel")) return appx::MakeBackgroundPanel(value);
+    appx::Log("UNIMPL", "ShimCreateXamlService %ls", name);
+    return CLASS_E_CLASSNOTAVAILABLE;
+}

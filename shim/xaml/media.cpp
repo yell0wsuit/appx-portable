@@ -288,7 +288,7 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
     EventSource<IRoutedEventHandler> opened_, ended_;
     EventSource<IExceptionRoutedEventHandler> failed_;
     HWND surface_ = nullptr;
-    boolean autoPlay_ = true, muted_ = false;
+    boolean autoPlay_ = true, muted_ = false, looping_ = false;
     // Kept for callers; Wine has no background audio policy for it to select.
     AudioCategory audioCategory_ = AudioCategory_Other;
     double volume_ = 1;
@@ -452,6 +452,7 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
         video_.SetFit(FitFor(stretch_));
         engine_->SetVolume(volume_);
         engine_->SetMuted(muted_);
+        engine_->SetLoop(looping_);
         Log("TRACE", "MediaElement opening %ls", path.c_str());
         auto* source = SysAllocString(url);
         if (!source) return E_OUTOFMEMORY;
@@ -537,7 +538,8 @@ public:
         auto hr = engine_->Play();
         if (SUCCEEDED(hr)) {
             state_ = MediaElementState_Playing;
-            ShowWindow(surface_, SW_SHOW);
+            // Audio-only sources (background music) have nothing to show.
+            if (engine_->HasVideo()) ShowWindow(surface_, SW_SHOW);
         }
         return hr;
     }
@@ -575,6 +577,15 @@ public:
     HRESULT STDMETHODCALLTYPE put_IsMuted(boolean value) override {
         muted_ = value;
         return engine_ ? engine_->SetMuted(value) : S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_IsLooping(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = looping_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_IsLooping(boolean value) override {
+        looping_ = value;
+        return engine_ ? engine_->SetLoop(value) : S_OK;
     }
     HRESULT STDMETHODCALLTYPE get_Volume(double* value) override {
         if (!value) return E_POINTER;

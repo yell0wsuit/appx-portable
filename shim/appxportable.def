@@ -9,3 +9,4 @@ EXPORTS
   ShimRunNativeApplication
   ShimReportUnimplemented
   ShimReportException
+  ShimCreateXamlService

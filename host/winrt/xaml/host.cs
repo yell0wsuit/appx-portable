@@ -53,12 +53,12 @@ namespace AppxPortable.WinRT.Xaml
 
         // The window's content and the WPF tree the compositor draws.
         internal static global::Windows.UI.Xaml.UIElement Content { get; private set; }
-        internal static System.Windows.UIElement Root { get; private set; }
+        internal static System.Windows.UIElement Root { get { return Layers; } }
 
         internal static void SetContent(global::Windows.UI.Xaml.UIElement content)
         {
             Content = content;
-            Root = (System.Windows.UIElement)Peers.Of(content);
+            ShowContent((System.Windows.UIElement)Peers.Of(content));
         }
     }
 }

@@ -185,6 +185,7 @@ namespace AppxPortable.WinRT.Xaml
         public static readonly DependencyProperty ContentTransitionsProperty = Transition("ContentTransitions");
         public static readonly DependencyProperty HeaderTransitionsProperty = Transition("HeaderTransitions");
         public static readonly DependencyProperty TransitionsProperty = Transition("Transitions");
+        public static readonly DependencyProperty ChildTransitionsProperty = Transition("ChildTransitions");
         private static DependencyProperty Transition(string name)
         {
             var property = DependencyProperty.RegisterAttached(name, typeof(TransitionCollectionPeer), typeof(CompatibilityProperties));
@@ -208,6 +209,8 @@ namespace AppxPortable.WinRT.Xaml
         public static void SetContentTransitions(DependencyObject d, TransitionCollectionPeer value) { d.SetValue(ContentTransitionsProperty, value); }
         public static TransitionCollectionPeer GetHeaderTransitions(DependencyObject d) { return (TransitionCollectionPeer)d.GetValue(HeaderTransitionsProperty); }
         public static void SetHeaderTransitions(DependencyObject d, TransitionCollectionPeer value) { d.SetValue(HeaderTransitionsProperty, value); }
+        public static TransitionCollectionPeer GetChildTransitions(DependencyObject d) { return (TransitionCollectionPeer)d.GetValue(ChildTransitionsProperty); }
+        public static void SetChildTransitions(DependencyObject d, TransitionCollectionPeer value) { d.SetValue(ChildTransitionsProperty, value); }
         public static TransitionCollectionPeer GetTransitions(DependencyObject d) { return (TransitionCollectionPeer)d.GetValue(TransitionsProperty); }
         public static void SetTransitions(DependencyObject d, TransitionCollectionPeer value) { d.SetValue(TransitionsProperty, value); }
     }

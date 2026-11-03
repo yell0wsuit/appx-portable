@@ -19,7 +19,9 @@ internal static partial class WinrtProjectionGenerator
     // Shim-backed XAML classes; every other Windows.UI.Xaml class is WPF-backed.
     private static readonly string[] nativeXaml = {
         "Windows.UI.Xaml.Application", "Windows.UI.Xaml.ApplicationInitializationCallbackParams",
-        "Windows.UI.Xaml.Window", "Windows.UI.Xaml.DispatcherTimer" };
+        "Windows.UI.Xaml.Window", "Windows.UI.Xaml.DispatcherTimer",
+        // Rendering follows the shim's present-paced clock, where games present.
+        "Windows.UI.Xaml.Media.CompositionTarget" };
 
     private static bool IsWpf(string name) { return wpfTypes.Contains(name); }
 

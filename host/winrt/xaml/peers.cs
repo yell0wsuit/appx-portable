@@ -124,21 +124,6 @@ namespace AppxPortable.WinRT.Xaml
     public sealed class FramePeer : System.Windows.Controls.ContentControl { }
     // Placeholders for shim-backed services; they hold a place in the tree.
     public abstract class NativeHostPeer : System.Windows.FrameworkElement { internal NativeHostPeer() { } }
-    public sealed class MediaElementPeer : NativeHostPeer
-    {
-        // Source templates can describe these services now; realizing them requires
-        // the native playback bridge in Plan 2, with an explicit failure until then.
-        public bool AutoPlay
-        {
-            get { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.MediaElement.AutoPlay"); }
-            set { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.MediaElement.AutoPlay"); }
-        }
-        public string AudioCategory
-        {
-            get { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.MediaElement.AudioCategory"); }
-            set { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.MediaElement.AudioCategory"); }
-        }
-    }
     public sealed class ItemsPresenterPeer : System.Windows.Controls.ItemsPresenter
     {
         public object Header

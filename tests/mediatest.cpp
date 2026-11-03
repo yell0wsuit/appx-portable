@@ -112,6 +112,11 @@ int wmain(int argc, wchar_t** argv) {
             ComPtr<IInspectable> object;
             CHECK(SUCCEEDED(element->FindName(HStringReference(L"mediaElement").Get(), &object)));
             CHECK(SUCCEEDED(object.As(&media)));
+            // Background music loops; the flag is kept before the engine opens.
+            boolean looping = true;
+            CHECK(SUCCEEDED(media->get_IsLooping(&looping)) && !looping);
+            CHECK(SUCCEEDED(media->put_IsLooping(true)) && SUCCEEDED(media->get_IsLooping(&looping)) && looping);
+            CHECK(SUCCEEDED(media->put_IsLooping(false)));
             ComPtr<ABI::Windows::Foundation::IUriRuntimeClassFactory> uris;
             CHECK(SUCCEEDED(
                 RoGetActivationFactory(HStringReference(L"Windows.Foundation.Uri").Get(), IID_PPV_ARGS(&uris))));

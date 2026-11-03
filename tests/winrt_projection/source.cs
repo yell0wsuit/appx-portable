@@ -334,6 +334,36 @@ namespace Fixture
                 var applied = ((System.Windows.UIElement)PeerOf(child)).RenderTransform.Transform(new System.Windows.Point(1, 1));
                 Check(ReferenceEquals(child.RenderTransform, move) && applied.X == 6 && applied.Y == 7, "RenderTransform and TranslateTransform");
             });
+            test("popup-overlay", () =>
+            {
+                // MainPage_Loaded opens a code-created popup at window offsets.
+                var popup = new Windows.UI.Xaml.Controls.Primitives.Popup();
+                var child = new Grid();
+                popup.Child = child;
+                popup.HorizontalOffset = 40; popup.VerticalOffset = 25;
+                int closed = 0;
+                var token = popup.add_Closed((sender, args) => { Check(ReferenceEquals(sender, popup), "Closed sender"); ++closed; });
+                var visual = (System.Windows.UIElement)PeerOf(child);
+                Check(System.Windows.Media.VisualTreeHelper.GetParent(visual) == null, "a closed popup shows nothing");
+                popup.IsOpen = true;
+                var overlay = System.Windows.Media.VisualTreeHelper.GetParent(visual) as System.Windows.Controls.Canvas;
+                Check(overlay != null && System.Windows.Controls.Canvas.GetLeft(visual) == 40 && System.Windows.Controls.Canvas.GetTop(visual) == 25,
+                      "an open popup's child sits in the window overlay at its offsets");
+                Check(System.Windows.Media.VisualTreeHelper.GetParent(overlay) is System.Windows.Controls.Grid, "the overlay is a layer of the window root");
+                popup.HorizontalOffset = 50;
+                Check(System.Windows.Controls.Canvas.GetLeft(visual) == 50, "moving an open popup");
+                popup.IsOpen = false;
+                Check(System.Windows.Media.VisualTreeHelper.GetParent(visual) == null && closed == 1, "closing removes the child and raises Closed");
+                // Light dismiss: a press on the overlay outside the child closes it.
+                popup.IsLightDismissEnabled = true;
+                popup.IsOpen = true;
+                Check(overlay.Background != null, "light dismiss makes the overlay take presses");
+                var press = new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left);
+                press.RoutedEvent = System.Windows.UIElement.MouseDownEvent;
+                overlay.RaiseEvent(press);
+                Check(!popup.IsOpen && closed == 2 && overlay.Background == null, "a press outside the child dismisses it");
+                popup.remove_Closed(token);
+            });
             Check(failures.Count == 0, "startup surface gaps:\n" + string.Join("\n", failures));
             Console.WriteLine("PASS: startup layout, events, storyboards, journal and color members map onto WPF");
         }
@@ -349,7 +379,7 @@ namespace Fixture
                     File.WriteAllText(file, "<Page" + Ns + ">" + markup + "</Page>");
                     var page = new SourcePage(); Application.LoadComponent(page, new Uri("ms-appx:///" + file)); verify(page);
                 }
-                catch (Exception error) { failures.Add(name + ": " + error.Message); }
+                catch (Exception error) { failures.Add(name + ": " + error); }
             };
             test("transitions", "<Page.Resources><Style x:Key='enter' TargetType='Grid'><Setter Property='ChildrenTransitions'><Setter.Value>" +
                 "<TransitionCollection><EntranceThemeTransition IsStaggeringEnabled='False'/><EntranceThemeTransition/><ContentThemeTransition/><AddDeleteThemeTransition/><ReorderThemeTransition/>" +
@@ -422,13 +452,19 @@ namespace Fixture
                 new[] { "<ScrollViewer ZoomMode='Enabled'/>", "ScrollViewer.ZoomMode" },
                 new[] { "<ListView IsSwipeEnabled='True'/>", "ListViewBase.IsSwipeEnabled" },
                 new[] { "<RichTextBlock IsTextSelectionEnabled='True'/>", "RichTextBlock.IsTextSelectionEnabled" },
-                new[] { "<MediaElement AutoPlay='True'/>", "MediaElement.AutoPlay" },
                 new[] { "<ItemsPresenter Header='header'/>", "ItemsPresenter.Header" } })
             {
                 File.WriteAllText("Pages/unimplemented.xaml", "<Page" + Ns + ">" + unsupported[0] + "</Page>");
                 string failure = Fails("ms-appx:///Pages/unimplemented.xaml", new SourcePage());
                 Check(failure.Contains(unsupported[1]), "unsupported behavior remains named: " + failure);
             }
+            // RootFrameStyle's background music: markup values reach the media peer.
+            test("media-markup", "<MediaElement x:Name='music' AutoPlay='False' IsLooping='True' Volume='0.5' AudioCategory='BackgroundCapableMedia'/>", page =>
+            {
+                var music = (Windows.UI.Xaml.Controls.MediaElement)page.FindName("music");
+                Check(!music.AutoPlay && music.IsLooping && music.Volume == 0.5 && music.AudioCategory == Windows.UI.Xaml.Media.AudioCategory.BackgroundCapableMedia,
+                      "media markup values");
+            });
             test("wrapper-types", "<Page.Resources><ImageBrush x:Name='ImageBrush'/><BitmapImage x:Name='BitmapImage' UriSource='/Assets/pixel.png'/>" +
                 "<VisualState x:Name='VisualState'/><VisualStateGroup x:Name='VisualStateGroup'/></Page.Resources><StackPanel x:Name='StackPanel'>" +
                 "<Button x:Name='Button' x:ConnectionId='1'/><RadioButton x:Name='RadioButton' x:ConnectionId='2'/><Slider x:Name='Slider' x:ConnectionId='3'/>" +

@@ -289,7 +289,19 @@ namespace Windows.UI.Xaml.Controls
         public void ScrollToHorizontalOffset(double offset) { throw new global::System.NotImplementedException(); }
     }
     public class ContentPresenter : global::Windows.UI.Xaml.FrameworkElement { internal ContentPresenter() { } }
-    public sealed class MediaElement : global::Windows.UI.Xaml.FrameworkElement { internal MediaElement() { } }
+    public sealed class MediaElement : global::Windows.UI.Xaml.FrameworkElement
+    {
+        public MediaElement() { throw new global::System.NotImplementedException(); }
+        public global::System.Uri Source { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public bool AutoPlay { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public bool IsLooping { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double Volume { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::Windows.UI.Xaml.Media.AudioCategory AudioCategory { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public void Play() { throw new global::System.NotImplementedException(); }
+        public void Pause() { throw new global::System.NotImplementedException(); }
+        public void Stop() { throw new global::System.NotImplementedException(); }
+    }
+    public class SwapChainBackgroundPanel : Grid { public SwapChainBackgroundPanel() { throw new global::System.NotImplementedException(); } }
     public class TextBlock : global::Windows.UI.Xaml.FrameworkElement
     {
         public TextBlock() { throw new global::System.NotImplementedException(); }
@@ -680,6 +692,17 @@ namespace Windows.UI.Xaml.Markup
 namespace Windows.UI.Xaml.Controls.Primitives
 {
     public enum ComponentResourceLocation { Application, Nested }
+    public sealed class Popup : global::Windows.UI.Xaml.FrameworkElement
+    {
+        public Popup() { throw new global::System.NotImplementedException(); }
+        public global::Windows.UI.Xaml.UIElement Child { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public bool IsOpen { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double HorizontalOffset { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double VerticalOffset { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public bool IsLightDismissEnabled { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Closed(global::System.EventHandler<object> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Closed(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
     public class ButtonBase : global::Windows.UI.Xaml.Controls.ContentControl
     {
         internal ButtonBase() { }
@@ -799,6 +822,12 @@ namespace Windows.UI.ViewManagement
 namespace Windows.UI.Xaml.Media
 {
     public class Brush : global::Windows.UI.Xaml.DependencyObject { internal Brush() { } }
+    public enum AudioCategory { Other = 0, ForegroundOnlyMedia = 1, BackgroundCapableMedia = 2 }
+    public static class CompositionTarget
+    {
+        public static global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Rendering(global::System.EventHandler<object> handler) { throw new global::System.NotImplementedException(); }
+        public static void remove_Rendering(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
     public class GeneralTransform : global::Windows.UI.Xaml.DependencyObject { internal GeneralTransform() { } }
     public class Transform : GeneralTransform { internal Transform() { } }
     public sealed class TranslateTransform : Transform

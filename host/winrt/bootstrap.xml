@@ -135,9 +135,26 @@
     <Constructor />
     <Property Name="HeaderTransitions" Wpf="AppxPortable.WinRT.Xaml.CompatibilityProperties.HeaderTransitionsProperty" />
   </Class>
-  <!-- Shim-backed services (Plan 2): a transparent placeholder holds their place in the tree. -->
+  <!-- Shim-backed services: the WPF peer holds their place in the tree; the shim object does the work. -->
+  <Enum Name="Windows.UI.Xaml.Media.AudioCategory" />
   <Class Name="Windows.UI.Xaml.Controls.MediaElement" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.MediaElementPeer">
     <Constructor />
+    <Property Name="Source" Wpf="AppxPortable.WinRT.Xaml.MediaElementPeer.SourceProperty" />
+    <Property Name="AutoPlay" Wpf="AppxPortable.WinRT.Xaml.MediaElementPeer.AutoPlayProperty" />
+    <Property Name="IsMuted" Wpf="AppxPortable.WinRT.Xaml.MediaElementPeer.IsMutedProperty" />
+    <Property Name="IsLooping" Wpf="AppxPortable.WinRT.Xaml.MediaElementPeer.IsLoopingProperty" />
+    <Property Name="Volume" Wpf="AppxPortable.WinRT.Xaml.MediaElementPeer.VolumeProperty" />
+    <Property Name="AudioCategory" Wpf="AppxPortable.WinRT.Xaml.MediaElementPeer.AudioCategoryProperty" />
+  </Class>
+  <!-- Open popups draw in the window root's overlay layer, inside the composited frame. -->
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.Popup" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.PopupPeer">
+    <Constructor />
+    <Property Name="Child" Wpf="AppxPortable.WinRT.Xaml.PopupPeer.ChildProperty" />
+    <Property Name="IsOpen" Wpf="AppxPortable.WinRT.Xaml.PopupPeer.IsOpenProperty" />
+    <Property Name="HorizontalOffset" Wpf="AppxPortable.WinRT.Xaml.PopupPeer.HorizontalOffsetProperty" />
+    <Property Name="VerticalOffset" Wpf="AppxPortable.WinRT.Xaml.PopupPeer.VerticalOffsetProperty" />
+    <Property Name="IsLightDismissEnabled" Wpf="AppxPortable.WinRT.Xaml.PopupPeer.IsLightDismissEnabledProperty" />
+    <Property Name="ChildTransitions" Wpf="AppxPortable.WinRT.Xaml.CompatibilityProperties.ChildTransitionsProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.Controls.SwapChainBackgroundPanel" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.SwapChainPanelPeer">
     <Constructor />
@@ -607,6 +624,9 @@
   </Class>
   <Delegate Name="Windows.Foundation.TypedEventHandler`2" Adapter="TypedEvent" />
   <Delegate Name="Windows.Foundation.EventHandler`1" Adapter="EventHandler" />
+  <Class Name="Windows.UI.Xaml.Media.CompositionTarget">
+    <Event Name="Rendering" />
+  </Class>
   <Class Name="Windows.UI.Xaml.DispatcherTimer">
     <Constructor />
     <Property Name="Interval" />
