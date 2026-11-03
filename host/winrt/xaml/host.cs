@@ -16,6 +16,18 @@ namespace AppxPortable.WinRT.Xaml
             if (dispatcher == null) dispatcher = Dispatcher.CurrentDispatcher;
         }
 
+        // Game code called from WPF: a failure is logged as the shim logs native
+        // callbacks', then passed on to WPF's caller.
+        internal static void Callback(System.Action call)
+        {
+            try { call(); }
+            catch (System.Exception error)
+            {
+                Errors.Log(error);
+                throw;
+            }
+        }
+
         // The window's content and the WPF tree the compositor draws.
         internal static global::Windows.UI.Xaml.UIElement Content { get; private set; }
         internal static System.Windows.UIElement Root { get; private set; }

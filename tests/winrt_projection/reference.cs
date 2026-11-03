@@ -216,6 +216,7 @@ namespace Windows.UI.Xaml.Controls
         internal Control() { }
         protected virtual void OnKeyDown(global::Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { throw new global::System.NotImplementedException(); }
         protected virtual void OnKeyUp(global::Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { throw new global::System.NotImplementedException(); }
+        protected virtual void OnGotFocus(global::Windows.UI.Xaml.RoutedEventArgs e) { throw new global::System.NotImplementedException(); }
     }
     public class Viewbox : global::Windows.UI.Xaml.FrameworkElement { internal Viewbox() { } }
     public class ContentPresenter : global::Windows.UI.Xaml.FrameworkElement { internal ContentPresenter() { } }
@@ -389,11 +390,19 @@ namespace Windows.ApplicationModel.Activation
 namespace Windows.UI.Xaml.Navigation
 {
     public enum NavigationCacheMode { Disabled = 0, Required = 1, Enabled = 2 }
+    public enum NavigationMode { New = 0, Back = 1, Forward = 2, Refresh = 3 }
     public sealed class NavigationEventArgs
     {
         public global::System.Uri Uri { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public object Content { get { throw new global::System.NotImplementedException(); } }
+        public object Parameter { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Type SourcePageType { get { throw new global::System.NotImplementedException(); } }
+        public NavigationMode NavigationMode { get { throw new global::System.NotImplementedException(); } }
     }
-    public sealed class NavigatingCancelEventArgs { }
+    public sealed class NavigatingCancelEventArgs
+    {
+        public bool Cancel { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
 }
 
 namespace Windows.UI.Xaml.Markup
@@ -480,9 +489,14 @@ namespace Windows.UI.Xaml.Media.Animation
     {
         public Storyboard() { throw new global::System.NotImplementedException(); }
         public void Begin() { throw new global::System.NotImplementedException(); }
+        public void Stop() { throw new global::System.NotImplementedException(); }
     }
     public class FadeInThemeAnimation : Timeline { internal FadeInThemeAnimation() { } }
-    public class FadeOutThemeAnimation : Timeline { internal FadeOutThemeAnimation() { } }
+    public class FadeOutThemeAnimation : Timeline
+    {
+        public FadeOutThemeAnimation() { throw new global::System.NotImplementedException(); }
+        public string TargetName { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
 }
 
 namespace Windows.UI.ViewManagement

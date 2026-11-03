@@ -77,13 +77,15 @@ namespace AppxPortable.WinRT
             if (hr >= 0) hr = unchecked((int)0x80004005);
             // Native event raisers (WRL EventSource) discard handler HRESULTs, so a
             // failure no managed caller will rethrow is logged rather than lost.
-            if (current == null || !current.Report(hr, error))
-            {
-                try { ShimReportException(error.ToString()); }
-                catch (DllNotFoundException) { }
-                catch (EntryPointNotFoundException) { }
-            }
+            if (current == null || !current.Report(hr, error)) Log(error);
             return hr;
+        }
+        // A managed callback's failure, in the shim log; the caller still sees it.
+        internal static void Log(Exception error)
+        {
+            try { ShimReportException(error.ToString()); }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
         }
         internal static void Check(int hr)
         {

@@ -115,8 +115,14 @@
   </Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" Adapter="Wpf" Peer="System.Windows.Media.Animation.Timeline" />
   <Class Name="Windows.UI.Xaml.Media.Animation.Storyboard" Adapter="Wpf" Peer="System.Windows.Media.Animation.Storyboard"><Constructor /></Class>
-  <Class Name="Windows.UI.Xaml.Media.Animation.FadeInThemeAnimation" Adapter="Wpf" />
-  <Class Name="Windows.UI.Xaml.Media.Animation.FadeOutThemeAnimation" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Media.Animation.FadeInThemeAnimation" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.FadeInPeer">
+    <Constructor />
+    <Property Name="TargetName" Wpf="System.Windows.Media.Animation.Storyboard.TargetNameProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.FadeOutThemeAnimation" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.FadeOutPeer">
+    <Constructor />
+    <Property Name="TargetName" Wpf="System.Windows.Media.Animation.Storyboard.TargetNameProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.ResourceDictionary" Adapter="Wpf" Peer="System.Windows.ResourceDictionary"><Constructor /></Class>
   <Delegate Name="Windows.UI.Xaml.RoutedEventHandler" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Style" Adapter="Wpf" Peer="System.Windows.Style"><Constructor /></Class>
@@ -135,6 +141,7 @@
   </Class>
   <Class Name="Windows.UI.Xaml.Controls.Page" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.PagePeer"><Constructor /></Class>
   <Enum Name="Windows.UI.Xaml.Navigation.NavigationCacheMode" />
+  <Enum Name="Windows.UI.Xaml.Navigation.NavigationMode" />
   <Class Name="Windows.UI.Xaml.Navigation.NavigationEventArgs" Adapter="Wpf" />
   <Class Name="Windows.Foundation.Uri" Adapter="Uri" />
   <Interface Name="Windows.UI.Xaml.Markup.IComponentConnector" Adapter="ComponentConnector" />

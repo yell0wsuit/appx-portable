@@ -18,7 +18,7 @@ WINRT = REPO / "host/winrt"
 GENERATOR = ("generator.cs", "storage_generation.cs", "component_generation.cs", "wpf_generation.cs")
 RUNTIME = ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs", "storage_abi.cs", "array_buffer.cs")
 # WPF backs Windows.UI.Xaml for managed games under Wine; compiled into Windows.dll.
-XAML_ADAPTER = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs")
+XAML_ADAPTER = ("xaml/host.cs", "xaml/peers.cs", "xaml/values.cs", "xaml/properties.cs", "xaml/tree.cs", "xaml/events.cs", "xaml/navigation.cs", "xaml/animation.cs")
 BRIDGE = ("task_extensions.cs", "stream_extensions.cs")
 REFERENCES = ("mscorlib.dll", "System.dll", "System.Core.dll", "System.Xml.dll")
 INTEROP = "AppxPortable.WinRT.Interop.dll"

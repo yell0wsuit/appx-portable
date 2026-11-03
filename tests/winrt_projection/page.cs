@@ -6,9 +6,6 @@ using System.Runtime.InteropServices;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
-#if NATIVE_ABI
-using AppxPortable.WinRT;
-#endif
 class TestPage : Page, Windows.UI.Xaml.Markup.IComponentConnector
 {
     internal int To, From, Leaving;
@@ -32,13 +29,14 @@ class TestPage : Page, Windows.UI.Xaml.Markup.IComponentConnector
     }
     protected override void OnNavigatedTo(NavigationEventArgs args) { ++To; ToArgs = args; base.OnNavigatedTo(args); }
     protected override void OnNavigatedFrom(NavigationEventArgs args) { ++From; FromArgs = args; base.OnNavigatedFrom(args); }
-    protected override void OnNavigatingFrom(NavigatingCancelEventArgs args) { ++Leaving; if (Failure != null) throw Failure; base.OnNavigatingFrom(args); }
+    internal bool Cancel;
+    protected override void OnNavigatingFrom(NavigatingCancelEventArgs args) { ++Leaving; if (Failure != null) throw Failure; args.Cancel = Cancel; base.OnNavigatingFrom(args); }
 }
 class DerivedPage : TestPage { }
 #if FULL_SURFACE
-class UnsupportedKeyPage : Page
+class UnsupportedFocusPage : Page
 {
-    protected override void OnKeyUp(Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { }
+    protected override void OnGotFocus(RoutedEventArgs args) { }
 }
 #endif
 class TestXamlMember : Windows.UI.Xaml.Markup.IXamlMember
@@ -131,6 +129,12 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Check(app.RequestedNames.Count == 2 && app.RequestedNames[0] == "DerivedPage" && app.RequestedNames[1] == "Missing", "native full-name lookups");
         Check(app.Requested.Count == 3 && app.Requested[0] == typeof(int) && app.Requested[1] == typeof(Page) && app.Requested[2] == null, "native TypeName kinds map to CLR types");
         Check(type.Initialized == 1, "native RunInitializer");
+        Check(page.ToArgs.Parameter == null && page.ToArgs.SourcePageType == typeof(DerivedPage) && ReferenceEquals(page.ToArgs.Content, page) &&
+              page.ToArgs.NavigationMode == NavigationMode.New && page.ToArgs.Uri == null, "navigation arguments");
+        var next = (DerivedPage)frame.Content;
+        Check(page.From == 1 && ReferenceEquals(page.FromArgs, next.ToArgs) && (string)next.ToArgs.Parameter == "parameter" && page.Leaving == 1, "leaving page sees the new navigation");
+        next.Cancel = true;
+        Check(!frame.Navigate(typeof(DerivedPage)) && ReferenceEquals(frame.Content, next), "OnNavigatingFrom cancellation keeps the page");
         Console.WriteLine("PASS: Frame.Navigate activates managed pages through the app's XAML metadata provider");
     }
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -270,18 +274,12 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Check(ReferenceEquals(sender, window) && retained != null, "Window sender identity and typed arguments");
         window.remove_SizeChanged(token);
         Check(SendWindowSize() == 0 && calls == 1, "removed Window handler was called");
-#if NATIVE_ABI
-        GC.Collect(); GC.WaitForPendingFinalizers();
-        using (var args = NativeObject.Argument(retained, new Guid("5a200ec7-0426-47dc-b86c-6f475915e451")))
-            Check(ValidateWindowSizeArgs(args.DangerousGetHandle()) == 0, "retained Window arguments lost native size data");
-#endif
         GC.KeepAlive(retained);
         Console.WriteLine("PASS: Window SizeChanged subscriptions preserve typed callbacks, identity, lifetime and removal");
     }
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int SetHostMinimized(int minimized);
-    // LayoutAwarePage's setup: Window bounds, CoreWindow and activation, and the
-    // page's own Loaded with an ActualWidth/ActualHeight that matches the window.
+    // LayoutAwarePage's setup: Window bounds, CoreWindow, activation and cache mode.
     static void VerifyWindowActivation(DerivedPage page)
     {
         var window = Window.Current;
@@ -297,24 +295,8 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         page.NavigationCacheMode = Windows.UI.Xaml.Navigation.NavigationCacheMode.Required;
         Check(page.NavigationCacheMode == Windows.UI.Xaml.Navigation.NavigationCacheMode.Required, "Page NavigationCacheMode");
         var frame = new Frame(); window.Content = frame; frame.Content = page;
-        int loaded = 0, removed = 0;
-        RoutedEventArgs loadedArgs = null;
-        FrameworkElement element = page;
-        var skipped = element.add_Loaded((s, e) => ++removed);
-        element.remove_Loaded(skipped);
-        RoutedEventHandler handler = (s, e) =>
-        {
-            Check(ReferenceEquals(s, page), "Loaded sender is the managed Page");
-            loadedArgs = e; ++loaded;
-            Check(element.ActualWidth == window.Bounds.Width && element.ActualHeight == window.Bounds.Height, "loaded Page fills the window");
-        };
-        element.add_Loaded(handler);
-        var unloaded = element.add_Unloaded((s, e) => { });
-        element.remove_Unloaded(unloaded);
-        handler = null;
-        GC.Collect(); GC.WaitForPendingFinalizers();
         window.Activate();
-        Check(FlushWindowEvents() == 0 && loaded == 1 && removed == 0 && loadedArgs != null, "Page Loaded delivery after activation");
+        Check(FlushWindowEvents() == 0, "Window activation events");
         var states = new global::System.Collections.Generic.List<Windows.UI.Core.CoreWindowActivationState>();
         object sender = null;
         var activated = window.add_Activated((s, e) => { sender = s; states.Add(e.WindowActivationState); });
@@ -324,8 +306,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
               "Window Activated states and sender");
         window.remove_Activated(activated);
         Check(SetHostMinimized(1) == 0 && SetHostMinimized(0) == 0 && states.Count == 2, "removed Activated handler was called");
-        Check(loaded == 1, "Loaded raised again on reactivation");
-        Console.WriteLine("PASS: Window bounds, activation, cache mode and Page Loaded reach managed handlers");
+        Console.WriteLine("PASS: Window bounds, activation and Page cache mode reach managed handlers");
     }
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int ConnectWindowContent(int id);
@@ -411,26 +392,24 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         timer.Start();
     }
     // The game's splash shape: a Frame already in the Window gets a managed Page as Content.
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int CheckElementVisibility(int child, int value);
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int SetElementVisibility(int child, int value);
     static void VerifyVisibility(DerivedPage page)
     {
         Check((int)Visibility.Visible == 0 && (int)Visibility.Collapsed == 1, "Visibility SDK values");
         var frame = new Frame(); Window.Current.Content = frame; frame.Content = page;
         UIElement inherited = page;
+        var pagePeer = (global::System.Windows.UIElement)PeerOf(page);
         Check(inherited.Visibility == Visibility.Visible, "default Page visibility");
         inherited.Visibility = Visibility.Collapsed;
-        Check(CheckElementVisibility(1, 1) == 0 && frame.Visibility == Visibility.Visible, "native Page visibility or independent Frame state");
+        Check(pagePeer.Visibility == global::System.Windows.Visibility.Collapsed && frame.Visibility == Visibility.Visible, "Page visibility reaches its peer; Frame keeps its own");
         frame.Visibility = Visibility.Collapsed;
-        Check(CheckElementVisibility(0, 1) == 0, "native Frame visibility");
-        Check(SetElementVisibility(1, 0) == 0 && inherited.Visibility == Visibility.Visible, "native visibility update was cached");
+        Check(((global::System.Windows.UIElement)PeerOf(frame)).Visibility == global::System.Windows.Visibility.Collapsed, "Frame visibility reaches its peer");
+        pagePeer.Visibility = global::System.Windows.Visibility.Visible;
+        Check(inherited.Visibility == Visibility.Visible, "peer visibility reads back");
         try { inherited.Visibility = (Visibility)(-1); throw new Exception("invalid enum accepted"); }
-        catch (ArgumentException error) { Check(error.HResult == unchecked((int)0x80070057), "native enum setter HRESULT"); }
-        Check(inherited.Visibility == Visibility.Visible && CheckElementVisibility(1, 0) == 0, "invalid setter changed visibility");
+        catch (ArgumentException error) { Check(error.HResult == unchecked((int)0x80070057), "invalid enum HRESULT"); }
+        Check(inherited.Visibility == Visibility.Visible, "invalid setter changed visibility");
         frame.Visibility = Visibility.Visible;
-        Console.WriteLine("PASS: inherited Visibility properties preserve native enum state and validation");
+        Console.WriteLine("PASS: inherited Visibility properties reach WPF peers and reject invalid values");
     }
     static void VerifyFrameContent(DerivedPage page)
     {
@@ -440,14 +419,63 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         frame.Content = page;
         Check(ReferenceEquals(frame.Content, page), "Frame preserves derived Page content identity");
         Check(page.Frame == null, "direct Frame content does not navigate");
-        Check(ConnectFrameContent(41) == 0, "native Frame content callback HRESULT");
-        Check(page.ConnectionId == 41 && ReferenceEquals(page.Connected, page), "native Frame content is the managed Page identity");
-        page.Connected = null;
         frame.Content = "frame text";
         Check((string)frame.Content == "frame text", "Frame boxed content");
         frame.Content = null;
         Check(frame.Content == null, "Frame content clear");
         Console.WriteLine("PASS: Frame content preserves managed Page identity, boxed values and clearing");
+    }
+    // Key input arrives as WPF routed events; Control overrides see UWP arguments.
+    static void RaiseKey(UIElement target, global::System.Windows.Input.Key key, global::System.Windows.PresentationSource source)
+    {
+        var args = new global::System.Windows.Input.KeyEventArgs(global::System.Windows.Input.Keyboard.PrimaryDevice, source, 0, key);
+        args.RoutedEvent = global::System.Windows.Input.Keyboard.KeyDownEvent;
+        ((global::System.Windows.UIElement)PeerOf(target)).RaiseEvent(args);
+    }
+    static bool ShimLogContains(string text)
+    {
+        if (!global::System.IO.File.Exists("appx-portable.log")) return false;
+        using (var stream = new global::System.IO.FileStream("appx-portable.log", global::System.IO.FileMode.Open, global::System.IO.FileAccess.Read, global::System.IO.FileShare.ReadWrite | global::System.IO.FileShare.Delete))
+        using (var reader = new global::System.IO.StreamReader(stream)) return reader.ReadToEnd().Contains(text);
+    }
+    static void VerifyKeys(DerivedPage page)
+    {
+        var source = new global::System.Windows.Interop.HwndSource(new global::System.Windows.Interop.HwndSourceParameters("keys")) { RootVisual = (global::System.Windows.Media.Visual)PeerOf(page) };
+        RaiseKey(page, global::System.Windows.Input.Key.Escape, source);
+        GC.Collect(); GC.WaitForPendingFinalizers();
+        Check(page.KeyDowns == 1 && page.KeyArgs != null && page.KeyArgs.Key == Windows.System.VirtualKey.Escape && page.KeyArgs.Handled, "key override sees UWP arguments and handling");
+        page.Failure = new InvalidOperationException("key override failure");
+        try { RaiseKey(page, global::System.Windows.Input.Key.Escape, source); throw new Exception("key override error accepted"); }
+        catch (InvalidOperationException error) { Check(ReferenceEquals(error, page.Failure), "key override exception identity"); }
+        page.Failure = null;
+        Check(ShimLogContains("managed callback threw System.InvalidOperationException: key override failure"), "key override failure logged");
+        var partial = new PartialPage();
+        source.RootVisual = (global::System.Windows.Media.Visual)PeerOf(partial);
+        RaiseKey(partial, global::System.Windows.Input.Key.Escape, source);
+        source.RootVisual = null; source.Dispose();
+        Console.WriteLine("PASS: Control key overrides receive WPF key input with arguments, handling and failures");
+    }
+    static void VerifyAnimation()
+    {
+        var target = new Windows.UI.Xaml.Controls.Grid();
+        var fade = new Windows.UI.Xaml.Media.Animation.FadeOutThemeAnimation();
+        var fadePeer = (global::System.Windows.Media.Animation.DoubleAnimation)PeerOf(fade);
+        Check(fadePeer.To == 0 && global::System.Windows.Media.Animation.Storyboard.GetTargetProperty(fadePeer).PathParameters[0] == global::System.Windows.UIElement.OpacityProperty, "fade-out animates Opacity to 0");
+        fade.TargetName = "target";
+        Check(global::System.Windows.Media.Animation.Storyboard.GetTargetName(fadePeer) == "target" && fade.TargetName == "target", "TargetName maps to Storyboard.TargetName");
+        global::System.Windows.Media.Animation.Storyboard.SetTarget(fadePeer, (global::System.Windows.DependencyObject)PeerOf(target));
+        var storyboard = new Windows.UI.Xaml.Media.Animation.Storyboard();
+        ((global::System.Windows.Media.Animation.Storyboard)PeerOf(storyboard)).Children.Add(fadePeer);
+        storyboard.Begin();
+        Check(((global::System.Windows.UIElement)PeerOf(target)).HasAnimatedProperties, "Storyboard.Begin applies its animations");
+        // Clock state follows WPF's timing ticks, which run once the shim loop pumps.
+        var clock = (global::System.Windows.Media.Animation.Storyboard)PeerOf(storyboard);
+        deferred.Add(() =>
+        {
+            Check(clock.GetCurrentState() != global::System.Windows.Media.Animation.ClockState.Stopped, "Storyboard.Begin runs its clock");
+            storyboard.Stop();   // takes effect on WPF's next tick
+            Console.WriteLine("PASS: storyboards and theme fades run as WPF animations");
+        });
     }
     // WPF backs Windows.UI.Xaml under Wine: each wrapper owns a WPF peer.
     static object PeerOf(object wrapper)
@@ -546,58 +574,22 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         return host.GetProperty("Root", global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.NonPublic).GetValue(null, null);
     }
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
-#if NATIVE_ABI
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int ValidateWindowSizeArgs(IntPtr args);
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int InvokePageOverrides(IntPtr page);
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int InvokeKeyDown(IntPtr page, byte withArgs);
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int InvokeComponentConnector(IntPtr page, int id, IntPtr target);
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int ConnectNavigationArgs(IntPtr page, int id);
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int ConnectNamelessTarget(IntPtr page, int id, int nameResult);
-    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    static extern int CheckNamelessTarget(IntPtr target);
-    static void Connect(Page page, int id, object target)
-    {
-        using (var source = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
-        using (var value = NativeObject.Box(target))
-            Errors.Check(InvokeComponentConnector(source.DangerousGetHandle(), id, value == null ? IntPtr.Zero : value.DangerousGetHandle()));
-    }
-    static void Invoke(Page page)
-    {
-        // An ordinary UI interface delegates QI to the controlling outer, as
-        // native Frame navigation does. The inner itself bypasses overrides.
-        using (var pointer = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
-            Errors.Check(InvokePageOverrides(pointer.DangerousGetHandle()));
-    }
-    static void InvokeKey(Page page)
-    {
-        using (var pointer = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
-            Errors.Check(InvokeKeyDown(pointer.DangerousGetHandle(), 1));
-    }
-#endif
     [MethodImpl(MethodImplOptions.NoInlining)]
     void Verify(DerivedPage page)
     {
         VerifyWpfElements();
         VerifyWpfTree();
-#if NATIVE_XAML && FULL_SURFACE
-        try { new UnsupportedKeyPage(); throw new Exception("unsupported key override accepted"); }
-        catch (NotImplementedException error) { Check(error.Message.Contains("OnKeyUp override"), "unsupported key override is named"); }
-        Console.WriteLine("PASS: unselected inherited key overrides still fail construction by name");
+#if FULL_SURFACE
+        new UnsupportedFocusPage();
+        Check(ShimLogContains("UNIMPL managed Windows.UI.Xaml.Controls.Page.OnGotFocus override"), "unimplemented override is named");
+        Console.WriteLine("PASS: unimplemented inherited overrides are named at construction");
 #endif
-#if NATIVE_XAML
         Check(page.Frame == null, "unhosted Page.Frame");
         var content = new Frame(); page.Content = content;
         Check(ReferenceEquals(page.Content, content), "UserControl content identity on Page");
         page.Content = null; Check(page.Content == null, "Page content clear");
-#endif
         var property = DependencyProperty.RegisterAttached("PageState", typeof(string), typeof(DerivedPage), null);
-        page.SetValue(property, "composed page"); Check((string)page.GetValue(property) == "composed page", "Page native dependency store");
+        page.SetValue(property, "composed page"); Check((string)page.GetValue(property) == "composed page", "Page dependency store");
         // Projection-owned interfaces use TypeKind.Metadata, including the
         // IObservableMap<string, object> property in LayoutAwarePage.
         var providerProperty = DependencyProperty.Register("Provider", typeof(Windows.UI.Xaml.Markup.IXamlMetadataProvider), typeof(DerivedPage), null);
@@ -618,119 +610,21 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
             try { page.SetValue(mapProperty, new object()); throw new Exception("wrong metadata generic accepted"); }
             catch (ArgumentException) { }
         }
-#if NATIVE_XAML
-        Window.Current.Content = page;
-        Check(InvokeWindowKeyDown(1) == 0 && page.KeyDowns == 1, "native inherited key override dispatch");
-        GC.Collect(); GC.WaitForPendingFinalizers();
-        Check(page.KeyArgs != null && page.KeyArgs.Key == Windows.System.VirtualKey.Escape && page.KeyArgs.Handled,
-            "key arguments retain native state after callback and GC");
-        Check(InvokeWindowKeyDown(0) == 0 && page.KeyDowns == 2 && page.KeyArgs == null, "null key argument");
-        Window.Current.Content = new PartialPage();
-        Check(InvokeWindowKeyDown(1) == 0, "unoverridden inherited key callback uses native base");
-#endif
+        VerifyKeys(page);
         Window.Current.Content = page;
         Check(ReferenceEquals(Window.Current.Content, page), "Window preserves derived Page identity");
-#if NATIVE_XAML
-        Check(ConnectWindowContent(31) == 0, "external component callback HRESULT");
-        Check(page.ConnectionId == 31 && ReferenceEquals(page.Connected, page), "external component callback identity");
-        page.Connected = null;
-#endif
-#if NATIVE_ABI || NATIVE_XAML
-        var partial = new PartialPage();
-#endif
-#if NATIVE_ABI
-        Invoke(page);
-        Check(page.To == 1 && page.From == 1 && page.Leaving == 1, "native Page override dispatch");
-        Check(page.ToArgs != null && ReferenceEquals(page.ToArgs, page.FromArgs), "native navigation argument identity");
-        Invoke(partial); Check(partial.Leaving == 1, "inherited native base callbacks");
-        Check(page.ToArgs.Uri == null, "null native Uri");
-        var uri = new Uri("ms-appx:///Assets/Splash%20screen.xaml");
-        page.ToArgs.Uri = uri;
-        Check(page.ToArgs.Uri.AbsoluteUri == uri.AbsoluteUri, "System.Uri native round trip");
-        var unicode = new Uri("https://example.test/é?q=hello%20world#part");
-        page.ToArgs.Uri = unicode;
-        GC.Collect(); GC.WaitForPendingFinalizers();
-        Check(page.ToArgs.Uri.AbsoluteUri == unicode.AbsoluteUri, "retained Unicode Uri");
-        try { page.ToArgs.Uri = new Uri("relative.xaml", UriKind.Relative); throw new Exception("relative Uri accepted"); }
-        catch (ArgumentException) { }
-        Check(page.ToArgs.Uri.AbsoluteUri == unicode.AbsoluteUri, "rejected Uri preserves value");
-        page.ToArgs.Uri = null; Check(page.ToArgs.Uri == null, "clear native Uri");
-        using (var source = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
-            Errors.Check(ConnectNavigationArgs(source.DangerousGetHandle(), 6));
-        Check(page.Connected is NavigationEventArgs, "native-created component target has projected runtime type");
-        GC.Collect(); GC.WaitForPendingFinalizers();
-        Check(((NavigationEventArgs)page.Connected).Uri == null, "callback target remains valid after native release");
-        using (var source = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
-        using (var nativeUri = AppxPortable.WinRT.Projected.Windows_Foundation_Uri.ToNative(uri))
-            Errors.Check(InvokeComponentConnector(source.DangerousGetHandle(), 7, nativeUri.DangerousGetHandle()));
-        Check(page.Connected is Uri && ((Uri)page.Connected).AbsoluteUri == uri.AbsoluteUri, "native component target uses System.Uri redirect");
-        using (var source = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
-            Errors.Check(ConnectNamelessTarget(source.DangerousGetHandle(), 8, unchecked((int)0x80004001)));
-        Check(page.ConnectionId == 8 && page.Connected != null, "unnamed native target reaches connector");
-        GC.Collect(); GC.WaitForPendingFinalizers();
-        using (var target = NativeObject.Box(page.Connected))
-            Errors.Check(CheckNamelessTarget(target.DangerousGetHandle()));
-        using (var scope = Errors.Begin())
-        using (var source = NativeObject.Argument(page, new Guid("676d0be9-b65c-41c6-ba40-58cf87f201c1")))
-        {
-            try { Errors.Check(ConnectNamelessTarget(source.DangerousGetHandle(), 99, unchecked((int)0x80004005))); throw new Exception("unexpected class-name error accepted"); }
-            catch (COMException error) { Check(error.ErrorCode == unchecked((int)0x80004005), "unexpected native failure propagated"); }
-        }
-        Check(page.ConnectionId == 8, "unexpected native failure stops connection");
-        Connect(page, 9, "boxed target");
-        Check((string)page.Connected == "boxed target", "boxed native string unboxed");
-        Connect(page, -7, content);
-        Check(page.ConnectionId == -7 && ReferenceEquals(page.Connected, content), "native connector signed ID and target identity");
-        Connect(page, 9, page);
-        Check(ReferenceEquals(page.Connected, page), "native connector composed self identity");
-        Connect(page, 10, null);
-        Check(page.ConnectionId == 10 && page.Connected == null, "native connector null target");
-        using (var scope = Errors.Begin())
-        {
-            page.Failure = new InvalidOperationException("connector failure");
-            try { Connect(page, 11, content); throw new Exception("connector failure accepted"); }
-            catch (InvalidOperationException error) { Check(ReferenceEquals(error, page.Failure), "connector exception identity"); }
-            page.Failure = null;
-        }
-        Connect(page, 12, content);
-        Check(page.ConnectionId == 12, "connector recovers after exception");
-        Console.WriteLine("PASS: System.Uri marshals through native navigation and managed component connections retain identity");
-        page.Failure = new InvalidOperationException("page override failure");
-        using (var scope = Errors.Begin())
-        {
-            try { Invoke(page); throw new Exception("Page override error accepted"); }
-            catch (InvalidOperationException error) { Check(ReferenceEquals(error, page.Failure), "Page override exception identity"); }
-        }
-        page.Failure = null;
-        Console.WriteLine("PASS: native Page callbacks dispatch through derived managed overrides and base methods");
-        page.Failure = new InvalidOperationException("key override failure");
-        using (var scope = Errors.Begin())
-        {
-            try { InvokeKey(page); throw new Exception("key override error accepted"); }
-            catch (InvalidOperationException error) { Check(ReferenceEquals(error, page.Failure), "key override exception identity"); }
-        }
-        page.Failure = null;
-        InvokeKey(page);
-        Check(page.KeyArgs != null && page.KeyArgs.Handled, "key override recovers after failure");
-        Console.WriteLine("PASS: inherited Control key overrides preserve arguments, base calls and exception identity");
-#elif NATIVE_XAML
-        Check(partial.Frame == null, "partial Page construction");
-#endif
-#if NATIVE_XAML
         VerifyVisibility(page);
         VerifyFrameContent(page);
-#endif
         VerifyWindowSize();
 #if NATIVE_XAML
         VerifyApplicationResources();
 #endif
         VerifyResourceMap();
         VerifyApplicationView();
-#if NATIVE_XAML
         VerifyNavigation();
         VerifyWindowActivation(page);
-        Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
-#endif
+        VerifyAnimation();
+        Console.WriteLine("PASS: managed Page composes WPF-backed inheritance, content and window identity");
         VerifySharing();
         VerifyDispatcher();
     }

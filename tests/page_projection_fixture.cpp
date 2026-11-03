@@ -283,8 +283,8 @@ extern "C" HRESULT __cdecl ExerciseXamlMetadata() {
     if (FAILED(hr = type->RunInitializer())) return hr;
     ComPtr<IInspectable> instance;
     if (FAILED(hr = type->ActivateInstance(&instance))) return hr;
-    ComPtr<ABI::Windows::UI::Xaml::Controls::IPage> page;
-    if (!instance || FAILED(instance.As(&page))) return step(18);
+    // Under Wine, WPF backs managed pages: the instance is the managed page's CCW.
+    if (!instance) return step(18);
     ComPtr<IInspectable> created, value;
     if (type->CreateFromString(Wrappers::HStringReference(L"x").Get(), &created) != E_NOTIMPL) return step(19);
     if (type->AddToVector(instance.Get(), instance.Get()) != E_NOTIMPL) return step(20);

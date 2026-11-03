@@ -14,7 +14,11 @@ namespace AppxPortable.WinRT.Xaml
             new Dictionary<Type, Func<object, global::Windows.UI.Xaml.DependencyObject>>();
         private static readonly Dictionary<Type, Type> peerTypes = new Dictionary<Type, Type>();
 
-        static Peers() { WpfWrappers.Register(); }
+        static Peers()
+        {
+            WpfWrappers.Register();
+            Overrides.Register();
+        }
 
         internal static void Register(Type wrapper, Type peer, Func<object, global::Windows.UI.Xaml.DependencyObject> factory)
         {
@@ -33,6 +37,14 @@ namespace AppxPortable.WinRT.Xaml
         {
             Host.EnsureDispatcher();
             wrappers.Add(wrapper.peer, wrapper);
+            Overrides.Check(wrapper.GetType());
+        }
+
+        // The wrapper a peer already has, without creating one.
+        internal static global::Windows.UI.Xaml.DependencyObject Existing(object peer)
+        {
+            global::Windows.UI.Xaml.DependencyObject wrapper;
+            return peer != null && wrappers.TryGetValue(peer, out wrapper) ? wrapper : null;
         }
 
         internal static object Of(global::Windows.UI.Xaml.DependencyObject wrapper)
