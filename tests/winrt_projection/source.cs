@@ -315,6 +315,12 @@ namespace Fixture
                 control.IsEnabled = false;
                 Check(!control.IsEnabled && !((System.Windows.Controls.Button)PeerOf(control)).IsEnabled, "code-side enabled state reaches WPF");
             });
+            test("inline-ticks", "<Slider x:Name='ticks' Minimum='0' Maximum='1' TickFrequency='0.05' TickPlacement='Inline'/>", page =>
+            {
+                var slider = (System.Windows.Controls.Slider)PeerOf(page.FindName("ticks"));
+                Check(slider.TickPlacement == System.Windows.Controls.Primitives.TickPlacement.BottomRight && slider.TickFrequency == 0.05,
+                      "inline tick markers use WPF's visible tick placement");
+            });
             Check(failures.Count == 0, "compatibility gaps:\n" + string.Join("\n", failures));
             Console.WriteLine("PASS: surveyed compatibility mappings load through WPF");
         }

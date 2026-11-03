@@ -235,6 +235,15 @@ namespace AppxPortable.WinRT.Xaml
                                         continue;
                                     }
                                 }
+                                // WPF has no inside-track tick layout. Its stock
+                                // visible tick bar is the closest display mapping.
+                                if (Equals(reader.Value, "Inline") && valueFrame.Member != null &&
+                                    valueFrame.Member.Type.UnderlyingType == typeof(System.Windows.Controls.Primitives.TickPlacement))
+                                {
+                                    writer.WriteValue("BottomRight");
+                                    reader.Read();
+                                    continue;
+                                }
                                 if (Equals(reader.Value, "SemiLight") && FontWeight(valueFrame))
                                 {
                                     writer.WriteValue("350");
