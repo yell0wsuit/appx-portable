@@ -150,7 +150,14 @@ namespace AppxPortable.WinRT.Xaml
     {
         public ThemeTransitionPeer() { ThemeEffects.Report(GetType().Name.Replace("Peer", "")); }
     }
-    public sealed class EntranceThemeTransitionPeer : ThemeTransitionPeer { public bool IsStaggeringEnabled { get; set; } }
+    public sealed class EntranceThemeTransitionPeer : ThemeTransitionPeer
+    {
+        public bool IsStaggeringEnabled { get; set; }
+        public static readonly DependencyProperty FromHorizontalOffsetProperty = DependencyProperty.Register("FromHorizontalOffset", typeof(double), typeof(EntranceThemeTransitionPeer), new PropertyMetadata(40.0));
+        public static readonly DependencyProperty FromVerticalOffsetProperty = DependencyProperty.Register("FromVerticalOffset", typeof(double), typeof(EntranceThemeTransitionPeer), new PropertyMetadata(0.0));
+        public double FromHorizontalOffset { get { return (double)GetValue(FromHorizontalOffsetProperty); } set { SetValue(FromHorizontalOffsetProperty, value); } }
+        public double FromVerticalOffset { get { return (double)GetValue(FromVerticalOffsetProperty); } set { SetValue(FromVerticalOffsetProperty, value); } }
+    }
     public sealed class ContentThemeTransitionPeer : ThemeTransitionPeer { }
     public sealed class AddDeleteThemeTransitionPeer : ThemeTransitionPeer { }
     public sealed class ReorderThemeTransitionPeer : ThemeTransitionPeer { }

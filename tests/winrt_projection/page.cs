@@ -326,6 +326,44 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         manager.remove_DataRequested(second);
         Check(!raised, "DataRequested is not raised without a share request");
     }
+    // The services MainPage's constructor, license setup, tile controller and
+    // LayoutAwarePage reach before the hub shows, all backed by the native shim.
+    void VerifyStartupServices()
+    {
+        var version = global::Windows.ApplicationModel.Package.Current.Id.Version;
+        Check(version.Major == 1 && version.Minor == 0 && version.Build == 0 && version.Revision == 0, "PackageId.Version fields in SDK order");
+        var pane = global::Windows.UI.ApplicationSettings.SettingsPane.GetForCurrentView();
+        Check(ReferenceEquals(pane, global::Windows.UI.ApplicationSettings.SettingsPane.GetForCurrentView()), "SettingsPane identity");
+        var commands = pane.add_CommandsRequested((sender, args) => { });
+        pane.remove_CommandsRequested(commands);
+        Check(global::Windows.UI.ApplicationSettings.SettingsPane.Edge == global::Windows.UI.ApplicationSettings.SettingsEdgeLocation.Right, "SettingsPane edge");
+        var license = global::Windows.ApplicationModel.Store.CurrentApp.LicenseInformation;
+        bool active = license.IsActive;  // follows the shim's unlockTrial option
+        Check(!license.IsTrial, "offline license is not a trial");
+        var changed = license.add_LicenseChanged(() => { });
+        license.remove_LicenseChanged(changed);
+        var tiles = global::Windows.UI.Notifications.TileUpdateManager.CreateTileUpdaterForApplication();
+        tiles.EnableNotificationQueue(true);
+        tiles.Clear();
+        Check(global::Windows.UI.Notifications.ToastNotificationManager.CreateToastNotifier() != null &&
+              global::Windows.UI.Notifications.ToastNotificationManager.GetTemplateContent(global::Windows.UI.Notifications.ToastTemplateType.ToastText01) != null,
+              "toast notifier and template");
+        var window = global::Windows.UI.Core.CoreWindow.GetForCurrentThread();
+        Check(window.Dispatcher.HasThreadAccess, "CoreDispatcher.HasThreadAccess on the view thread");
+        Check(window.GetKeyState(global::Windows.System.VirtualKey.Shift) == global::Windows.UI.Core.CoreVirtualKeyStates.None, "Shift is up");
+        var tokens = new[] {
+            window.add_PointerPressed((sender, args) => { }), window.add_PointerMoved((sender, args) => { }),
+            window.add_PointerReleased((sender, args) => { }), window.add_KeyDown((sender, args) => { }) };
+        Check(new HashSet<global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken>(tokens).Count == 4, "CoreWindow input tokens are distinct");
+        window.remove_PointerPressed(tokens[0]); window.remove_PointerMoved(tokens[1]);
+        window.remove_PointerReleased(tokens[2]); window.remove_KeyDown(tokens[3]);
+        Check(global::Windows.UI.ViewManagement.ApplicationView.TryUnsnap(), "TryUnsnap outside a snapped view");
+        var element = new Grid();
+        Check(element.Dispatcher != null && element.Dispatcher.HasThreadAccess, "XAML objects report the view's CoreDispatcher");
+        var visibility = Window.Current.add_VisibilityChanged((sender, args) => { });
+        Window.Current.remove_VisibilityChanged(visibility);
+        Console.WriteLine("PASS: startup settings, license, tile, toast and CoreWindow input services reach the shim");
+    }
     // The game's splash continuation: RunAsync queues work for the UI thread and
     // completes the returned action once the handler has run.
     void VerifyDispatcher()
@@ -624,6 +662,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         VerifyAnimation();
         Console.WriteLine("PASS: managed Page composes WPF-backed inheritance, content and window identity");
         VerifySharing();
+        VerifyStartupServices();
         VerifyDispatcher();
     }
     // WPF backs XAML under Wine: its dispatcher lives on the shim's view thread and

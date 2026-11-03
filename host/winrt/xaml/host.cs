@@ -4,7 +4,7 @@ namespace AppxPortable.WinRT.Xaml
 {
     // WPF backs Windows.UI.Xaml for managed games under Wine. Its objects live on the
     // shim's view thread, whose message loop also pumps WPF's dispatcher.
-    internal static class Host
+    internal static partial class Host
     {
         private static Dispatcher dispatcher;
 

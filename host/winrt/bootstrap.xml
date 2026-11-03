@@ -17,7 +17,9 @@
     <Property Name="Publisher" />
     <Property Name="ResourceId" />
     <Property Name="Architecture" />
+    <Property Name="Version" />
   </Class>
+  <Struct Name="Windows.ApplicationModel.PackageVersion" />
   <Class Name="Windows.ApplicationModel.DesignMode">
     <Property Name="DesignModeEnabled" />
   </Class>
@@ -49,6 +51,11 @@
     <Method Name="Activate" />
     <Event Name="SizeChanged" />
     <Event Name="Activated" />
+    <Event Name="VisibilityChanged" />
+  </Class>
+  <Delegate Name="Windows.UI.Xaml.WindowVisibilityChangedEventHandler" />
+  <Class Name="Windows.UI.Core.VisibilityChangedEventArgs">
+    <Property Name="Visible" />
   </Class>
   <Delegate Name="Windows.UI.Xaml.WindowActivatedEventHandler" />
   <Class Name="Windows.UI.Core.WindowActivatedEventArgs">
@@ -72,6 +79,9 @@
     <Property Name="Visibility" Wpf="System.Windows.UIElement.VisibilityProperty" />
     <Property Name="VisibilityProperty" Wpf="System.Windows.UIElement.VisibilityProperty" />
     <Property Name="Opacity" Wpf="System.Windows.UIElement.OpacityProperty" />
+    <Property Name="OpacityProperty" Wpf="System.Windows.UIElement.OpacityProperty" />
+    <Property Name="RenderTransform" Wpf="System.Windows.UIElement.RenderTransformProperty" />
+    <Property Name="Transitions" Wpf="AppxPortable.WinRT.Xaml.CompatibilityProperties.TransitionsProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.FrameworkElement" Adapter="Wpf" Peer="System.Windows.FrameworkElement">
     <Property Name="ActualWidth" Wpf="System.Windows.FrameworkElement.ActualWidthProperty" />
@@ -103,6 +113,15 @@
     <Property Name="Source" Wpf="System.Windows.Controls.Image.SourceProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.Controls.Viewbox" Adapter="Wpf" Peer="System.Windows.Controls.Viewbox"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Canvas" Adapter="Wpf" Peer="System.Windows.Controls.Canvas">
+    <Constructor />
+    <Property Name="LeftProperty" Wpf="System.Windows.Controls.Canvas.LeftProperty" />
+    <Method Name="GetLeft" Wpf="System.Windows.Controls.Canvas.LeftProperty" />
+    <Method Name="SetLeft" Wpf="System.Windows.Controls.Canvas.LeftProperty" />
+    <Property Name="TopProperty" Wpf="System.Windows.Controls.Canvas.TopProperty" />
+    <Method Name="GetTop" Wpf="System.Windows.Controls.Canvas.TopProperty" />
+    <Method Name="SetTop" Wpf="System.Windows.Controls.Canvas.TopProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Controls.ContentPresenter" Adapter="Wpf" Peer="System.Windows.Controls.ContentPresenter"><Constructor />
     <Property Name="Content" Wpf="System.Windows.Controls.ContentPresenter.ContentProperty" />
     <Property Name="Foreground" Wpf="System.Windows.Documents.TextElement.ForegroundProperty" />
@@ -147,6 +166,10 @@
   <Class Name="Windows.UI.Xaml.VisualStateGroup" Adapter="Wpf" Peer="System.Windows.VisualStateGroup"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.GeneralTransform" Adapter="Wpf" Peer="System.Windows.Media.GeneralTransform" />
   <Class Name="Windows.UI.Xaml.Media.Transform" Adapter="Wpf" Peer="System.Windows.Media.Transform" />
+  <Class Name="Windows.UI.Xaml.Media.TranslateTransform" Adapter="Wpf" Peer="System.Windows.Media.TranslateTransform"><Constructor />
+    <Property Name="X" Wpf="System.Windows.Media.TranslateTransform.XProperty" />
+    <Property Name="Y" Wpf="System.Windows.Media.TranslateTransform.YProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Media.CompositeTransform" Adapter="Wpf" Peer="System.Windows.Media.MatrixTransform"><Constructor />
     <Property Name="ScaleX" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.ScaleXProperty" />
     <Property Name="ScaleY" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.ScaleYProperty" />
@@ -172,6 +195,10 @@
   <Enum Name="Windows.UI.Xaml.Controls.ScrollMode" />
   <Enum Name="Windows.UI.Xaml.Controls.ZoomMode" />
   <Class Name="Windows.UI.Xaml.Controls.ScrollViewer" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ScrollViewerPeer"><Constructor />
+    <Property Name="HorizontalOffset" Wpf="System.Windows.Controls.ScrollViewer.HorizontalOffsetProperty" />
+    <Property Name="VerticalOffset" Wpf="System.Windows.Controls.ScrollViewer.VerticalOffsetProperty" />
+    <Property Name="ScrollableWidth" Wpf="System.Windows.Controls.ScrollViewer.ScrollableWidthProperty" />
+    <Property Name="ScrollableHeight" Wpf="System.Windows.Controls.ScrollViewer.ScrollableHeightProperty" />
     <Property Name="HorizontalScrollMode" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.HorizontalScrollModeProperty" />
     <Property Name="VerticalScrollMode" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.VerticalScrollModeProperty" />
     <Property Name="ZoomMode" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.ZoomModeProperty" />
@@ -191,7 +218,10 @@
   <Class Name="Windows.UI.Xaml.Controls.ListView" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ListViewPeer"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.Transition" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Media.Animation.TransitionCollection" Adapter="Wpf" />
-  <Class Name="Windows.UI.Xaml.Media.Animation.EntranceThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.EntranceThemeTransitionPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.EntranceThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.EntranceThemeTransitionPeer"><Constructor />
+    <Property Name="FromHorizontalOffset" Wpf="AppxPortable.WinRT.Xaml.EntranceThemeTransitionPeer.FromHorizontalOffsetProperty" />
+    <Property Name="FromVerticalOffset" Wpf="AppxPortable.WinRT.Xaml.EntranceThemeTransitionPeer.FromVerticalOffsetProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.ContentThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ContentThemeTransitionPeer"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.AddDeleteThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.AddDeleteThemeTransitionPeer"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.ReorderThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ReorderThemeTransitionPeer"><Constructor /></Class>
@@ -208,8 +238,15 @@
     <Constructor />
     <Property Name="IsActive" Wpf="System.Windows.Controls.ProgressBar.IsIndeterminateProperty" />
   </Class>
-  <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" Adapter="Wpf" Peer="System.Windows.Media.Animation.Timeline" />
+  <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" Adapter="Wpf" Peer="System.Windows.Media.Animation.Timeline">
+    <Property Name="Duration" Wpf="System.Windows.Media.Animation.Timeline.DurationProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.Storyboard" Adapter="Wpf" Peer="System.Windows.Media.Animation.Storyboard"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.TimelineCollection" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Media.Animation.DoubleAnimation" Adapter="Wpf" Peer="System.Windows.Media.Animation.DoubleAnimation"><Constructor />
+    <Property Name="From" Wpf="System.Windows.Media.Animation.DoubleAnimation.FromProperty" />
+    <Property Name="To" Wpf="System.Windows.Media.Animation.DoubleAnimation.ToProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.FadeInThemeAnimation" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.FadeInPeer">
     <Constructor />
     <Property Name="TargetName" Wpf="System.Windows.Media.Animation.Storyboard.TargetNameProperty" />
@@ -226,8 +263,12 @@
   <Delegate Name="Windows.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventHandler" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs" Adapter="Wpf" />
   <Delegate Name="Windows.UI.Xaml.RoutedEventHandler" Adapter="Wpf" />
+  <Delegate Name="Windows.UI.Xaml.SizeChangedEventHandler" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.SizeChangedEventArgs" Adapter="Wpf" />
+  <Delegate Name="Windows.UI.Xaml.Input.KeyEventHandler" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Style" Adapter="Wpf" Peer="System.Windows.Style"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.VisualTreeHelper" Adapter="Wpf" />
+  <Class Name="Windows.UI.Colors" Adapter="Wpf" />
   <Enum Name="Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation" />
   <Class Name="Windows.UI.Xaml.RoutedEventArgs" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Input.KeyRoutedEventArgs" Adapter="Wpf" />
@@ -254,21 +295,55 @@
   <!-- Implemented by managed apps; emits IXamlType, IXamlMember and XmlnsDefinition too. -->
   <Interface Name="Windows.UI.Xaml.Markup.IXamlMetadataProvider" Adapter="XamlMetadata" />
   <Delegate Name="Windows.UI.Xaml.ApplicationInitializationCallback" />
-  <!-- A typed wrapper only: its referenced members are completion stubs. -->
-  <Class Name="Windows.ApplicationModel.SuspendingEventArgs" />
+  <Class Name="Windows.ApplicationModel.SuspendingEventArgs">
+    <Property Name="SuspendingOperation" />
+  </Class>
+  <Class Name="Windows.ApplicationModel.SuspendingOperation">
+    <Method Name="GetDeferral" />
+    <Property Name="Deadline" />
+  </Class>
+  <Class Name="Windows.ApplicationModel.SuspendingDeferral">
+    <Method Name="Complete" />
+  </Class>
   <Delegate Name="Windows.UI.Xaml.SuspendingEventHandler" />
-  <Class Name="Windows.UI.Core.PointerEventArgs" />
+  <Class Name="Windows.UI.Core.PointerEventArgs">
+    <Property Name="CurrentPoint" />
+    <Property Name="Handled" />
+  </Class>
+  <Class Name="Windows.UI.Core.KeyEventArgs">
+    <Property Name="VirtualKey" />
+    <Property Name="Handled" />
+  </Class>
+  <Class Name="Windows.UI.Input.PointerPoint">
+    <Property Name="Position" />
+    <Property Name="Properties" />
+  </Class>
+  <Class Name="Windows.UI.Input.PointerPointProperties">
+    <Property Name="IsLeftButtonPressed" />
+    <Property Name="IsMiddleButtonPressed" />
+    <Property Name="IsRightButtonPressed" />
+    <Property Name="IsXButton1Pressed" />
+    <Property Name="IsXButton2Pressed" />
+  </Class>
+  <Enum Name="Windows.UI.Core.CoreVirtualKeyStates" />
   <Enum Name="Windows.System.VirtualKey" />
   <Enum Name="Windows.UI.ViewManagement.ApplicationViewState" />
   <Class Name="Windows.UI.ViewManagement.ApplicationView">
     <Property Name="Value" />
+    <Method Name="TryUnsnap" />
   </Class>
   <Class Name="Windows.UI.Core.CoreWindow">
     <Method Name="GetForCurrentThread" />
     <Property Name="Dispatcher" />
+    <Method Name="GetKeyState" />
+    <Event Name="KeyDown" />
+    <Event Name="PointerMoved" />
+    <Event Name="PointerPressed" />
+    <Event Name="PointerReleased" />
   </Class>
   <Class Name="Windows.UI.Core.CoreDispatcher">
     <Method Name="RunAsync" />
+    <Property Name="HasThreadAccess" />
   </Class>
   <Enum Name="Windows.UI.Core.CoreDispatcherPriority" />
   <Delegate Name="Windows.UI.Core.DispatchedHandler" />
@@ -362,6 +437,50 @@
     <Event Name="DataRequested" />
   </Class>
   <Class Name="Windows.ApplicationModel.DataTransfer.DataRequestedEventArgs" />
+  <!-- Native shim services the game's startup and menus reach. -->
+  <Class Name="Windows.UI.ApplicationSettings.SettingsPane">
+    <Method Name="GetForCurrentView" />
+    <Method Name="Show" />
+    <Property Name="Edge" />
+    <Event Name="CommandsRequested" />
+  </Class>
+  <Enum Name="Windows.UI.ApplicationSettings.SettingsEdgeLocation" />
+  <Class Name="Windows.UI.ApplicationSettings.SettingsPaneCommandsRequestedEventArgs">
+    <Property Name="Request" />
+  </Class>
+  <Class Name="Windows.UI.ApplicationSettings.SettingsPaneCommandsRequest" />
+  <Class Name="Windows.ApplicationModel.Store.CurrentApp">
+    <Property Name="LicenseInformation" />
+  </Class>
+  <Class Name="Windows.ApplicationModel.Store.LicenseInformation">
+    <Property Name="IsActive" />
+    <Property Name="IsTrial" />
+    <Event Name="LicenseChanged" />
+  </Class>
+  <Delegate Name="Windows.ApplicationModel.Store.LicenseChangedEventHandler" />
+  <Class Name="Windows.UI.Notifications.TileUpdateManager">
+    <Method Name="CreateTileUpdaterForApplication" />
+    <Method Name="GetTemplateContent" />
+  </Class>
+  <Enum Name="Windows.UI.Notifications.TileTemplateType" />
+  <Class Name="Windows.UI.Notifications.TileUpdater">
+    <Method Name="Clear" />
+    <Method Name="EnableNotificationQueue" />
+    <Method Name="Update" />
+  </Class>
+  <Class Name="Windows.UI.Notifications.TileNotification">
+    <Constructor />
+  </Class>
+  <Class Name="Windows.UI.Notifications.ToastNotificationManager">
+    <Method Name="CreateToastNotifier" />
+    <Method Name="GetTemplateContent" />
+  </Class>
+  <Enum Name="Windows.UI.Notifications.ToastTemplateType" />
+  <Class Name="Windows.UI.Notifications.ToastNotifier">
+    <Method Name="Show" />
+  </Class>
+  <Class Name="Windows.UI.Notifications.ToastNotification" />
+  <Class Name="Windows.Data.Xml.Dom.XmlDocument" />
   <Class Name="Windows.ApplicationModel.Activation.SplashScreen">
     <Event Name="Dismissed" />
   </Class>

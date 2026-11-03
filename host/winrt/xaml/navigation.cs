@@ -45,6 +45,13 @@ namespace Windows.UI.Xaml.Controls
 
     public partial class Frame
     {
+        private struct Entry { internal Type Type; internal object Parameter; }
+        private readonly List<Entry> back = new List<Entry>(), forward = new List<Entry>();
+        private Entry? current;
+        // Pages whose NavigationCacheMode is not Disabled are kept per type, as UWP's
+        // frame cache does, so returning to them does not construct them again.
+        private readonly Dictionary<Type, object> cache = new Dictionary<Type, object>();
+
         public bool Navigate(Type sourcePageType) { return Navigate(sourcePageType, null); }
 
         // The page comes from the app's XAML metadata, as UWP creates it; a page that
@@ -53,17 +60,51 @@ namespace Windows.UI.Xaml.Controls
         {
             if (sourcePageType == null) throw new ArgumentNullException("sourcePageType");
             CheckThread();
-            object created = Create(sourcePageType);
+            if (!Show(sourcePageType, parameter, NavigationMode.New)) return false;
+            forward.Clear();
+            return true;
+        }
+
+        public int BackStackDepth { get { CheckThread(); return back.Count; } }
+        public bool CanGoBack { get { CheckThread(); return back.Count > 0; } }
+        public bool CanGoForward { get { CheckThread(); return forward.Count > 0; } }
+
+        public void GoBack() { Step(back, forward, NavigationMode.Back); }
+        public void GoForward() { Step(forward, back, NavigationMode.Forward); }
+
+        // UWP fails with E_FAIL when there is no entry to go to.
+        private void Step(List<Entry> from, List<Entry> to, NavigationMode mode)
+        {
+            CheckThread();
+            if (from.Count == 0) throw new global::System.Runtime.InteropServices.COMException("No page to navigate to.", unchecked((int)0x80004005));
+            var target = from[from.Count - 1];
+            var leaving = current;
+            if (!Show(target.Type, target.Parameter, mode, false)) return;
+            from.RemoveAt(from.Count - 1);
+            if (leaving.HasValue) to.Add(leaving.Value);
+        }
+
+        private bool Show(Type type, object parameter, NavigationMode mode, bool record = true)
+        {
+            object cached;
+            object created = cache.TryGetValue(type, out cached) ? cached : Create(type);
             var old = Content as Page;
             if (old != null)
             {
-                var leaving = new NavigatingCancelEventArgs(NavigationMode.New, sourcePageType, parameter);
+                var leaving = new NavigatingCancelEventArgs(mode, type, parameter);
                 old.NavigatingFrom(leaving);
                 if (leaving.Cancel) return false;
             }
+            if (record && current.HasValue) back.Add(current.Value);
+            current = new Entry { Type = type, Parameter = parameter };
             Content = created;
-            var args = new NavigationEventArgs(created, parameter, sourcePageType, NavigationMode.New);
-            if (old != null) old.NavigatedFrom(args);
+            var args = new NavigationEventArgs(created, parameter, type, mode);
+            if (old != null)
+            {
+                old.NavigatedFrom(args);
+                if (old.NavigationCacheMode != NavigationCacheMode.Disabled) cache[old.GetType()] = old;
+                else cache.Remove(old.GetType());
+            }
             var page = created as Page;
             if (page != null) page.NavigatedTo(this, args);
             return true;

@@ -2,11 +2,12 @@ using System.Reflection;
 [assembly: AssemblyVersion("255.255.255.255")]
 namespace Windows.System
 {
-    public enum VirtualKey { Escape = 27 }
+    public enum VirtualKey { Shift = 16, Escape = 27 }
     public enum ProcessorArchitecture { X86 = 0, X64 = 9, Unknown = 65535 }
 }
 namespace Windows.UI.Xaml.Input
 {
+    public delegate void KeyEventHandler(object sender, KeyRoutedEventArgs e);
     public sealed class KeyRoutedEventArgs
     {
         internal KeyRoutedEventArgs() { }
@@ -16,6 +17,7 @@ namespace Windows.UI.Xaml.Input
 }
 namespace Windows.ApplicationModel
 {
+    public struct PackageVersion { public ushort Major; public ushort Minor; public ushort Build; public ushort Revision; }
     public sealed class SuspendingEventArgs { }
     public sealed class Package
     {
@@ -28,6 +30,7 @@ namespace Windows.ApplicationModel
         public string Publisher { get { throw new global::System.NotImplementedException("Windows.ApplicationModel.PackageId.Publisher"); } }
         public string ResourceId { get { throw new global::System.NotImplementedException("Windows.ApplicationModel.PackageId.ResourceId"); } }
         public global::Windows.System.ProcessorArchitecture Architecture { get { throw new global::System.NotImplementedException("Windows.ApplicationModel.PackageId.Architecture"); } }
+        public PackageVersion Version { get { throw new global::System.NotImplementedException(); } }
     }
 }
 namespace Windows.UI.Xaml
@@ -69,6 +72,16 @@ namespace Windows.UI.Xaml
         public global::Windows.UI.Core.CoreWindow CoreWindow { get { throw new global::System.NotImplementedException(); } }
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Activated(WindowActivatedEventHandler handler) { throw new global::System.NotImplementedException(); }
         public void remove_Activated(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_VisibilityChanged(WindowVisibilityChangedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_VisibilityChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+    public delegate void WindowVisibilityChangedEventHandler(object sender, global::Windows.UI.Core.VisibilityChangedEventArgs e);
+    public delegate void SizeChangedEventHandler(object sender, SizeChangedEventArgs e);
+    public sealed class SizeChangedEventArgs : RoutedEventArgs
+    {
+        internal SizeChangedEventArgs() { }
+        public global::Windows.Foundation.Size NewSize { get { throw new global::System.NotImplementedException(); } }
+        public global::Windows.Foundation.Size PreviousSize { get { throw new global::System.NotImplementedException(); } }
     }
     public delegate void WindowActivatedEventHandler(object sender, global::Windows.UI.Core.WindowActivatedEventArgs e);
     public delegate void RoutedEventHandler(object sender, RoutedEventArgs e);
@@ -111,9 +124,19 @@ namespace Windows.UI.Xaml
         public void SetValue(DependencyProperty property, object value) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.SetValue"); }
         public void ClearValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.ClearValue"); }
         public object ReadLocalValue(DependencyProperty property) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyObject.ReadLocalValue"); }
+        public global::Windows.UI.Core.CoreDispatcher Dispatcher { get { throw new global::System.NotImplementedException(); } }
     }
     public enum Visibility { Visible = 0, Collapsed = 1 }
     public enum HorizontalAlignment { Left = 0, Center = 1, Right = 2, Stretch = 3 }
+    public struct Duration
+    {
+        public Duration(global::System.TimeSpan timeSpan) { throw new global::System.NotImplementedException(); }
+        public static implicit operator Duration(global::System.TimeSpan timeSpan) { throw new global::System.NotImplementedException(); }
+        public static Duration Automatic { get { throw new global::System.NotImplementedException(); } }
+        public static Duration Forever { get { throw new global::System.NotImplementedException(); } }
+        public bool HasTimeSpan { get { throw new global::System.NotImplementedException(); } }
+        public global::System.TimeSpan TimeSpan { get { throw new global::System.NotImplementedException(); } }
+    }
     public struct Thickness
     {
         private double _Left, _Top, _Right, _Bottom;
@@ -140,6 +163,14 @@ namespace Windows.UI.Xaml
         public void remove_Tapped(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
         public Visibility Visibility { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public double Opacity { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public static DependencyProperty OpacityProperty { get { throw new global::System.NotImplementedException(); } }
+        public global::Windows.UI.Xaml.Media.Animation.TransitionCollection Transitions { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::Windows.UI.Xaml.Media.Transform RenderTransform { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public void UpdateLayout() { throw new global::System.NotImplementedException(); }
+        public void Measure(global::Windows.Foundation.Size availableSize) { throw new global::System.NotImplementedException(); }
+        public global::Windows.Foundation.Size DesiredSize { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_KeyDown(global::Windows.UI.Xaml.Input.KeyEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_KeyDown(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
     public class FrameworkElement : UIElement
     {
@@ -160,6 +191,8 @@ namespace Windows.UI.Xaml
         public void remove_Loaded(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Unloaded(RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
         public void remove_Unloaded(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_SizeChanged(SizeChangedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_SizeChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
     public class VisualStateManager : DependencyObject
     {
@@ -236,7 +269,25 @@ namespace Windows.UI.Xaml.Controls
         protected virtual void OnKeyUp(global::Windows.UI.Xaml.Input.KeyRoutedEventArgs args) { throw new global::System.NotImplementedException(); }
         protected virtual void OnGotFocus(global::Windows.UI.Xaml.RoutedEventArgs e) { throw new global::System.NotImplementedException(); }
     }
-    public class Viewbox : global::Windows.UI.Xaml.FrameworkElement { internal Viewbox() { } }
+    public class Viewbox : global::Windows.UI.Xaml.FrameworkElement
+    {
+        public Viewbox() { throw new global::System.NotImplementedException(); }
+        public global::Windows.UI.Xaml.UIElement Child { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
+    public class Canvas : Panel
+    {
+        public Canvas() { throw new global::System.NotImplementedException(); }
+        public static global::Windows.UI.Xaml.DependencyProperty LeftProperty { get { throw new global::System.NotImplementedException(); } }
+        public static double GetLeft(global::Windows.UI.Xaml.UIElement element) { throw new global::System.NotImplementedException(); }
+        public static void SetLeft(global::Windows.UI.Xaml.UIElement element, double length) { throw new global::System.NotImplementedException(); }
+    }
+    public class ScrollViewer : ContentControl
+    {
+        internal ScrollViewer() { }
+        public double ScrollableWidth { get { throw new global::System.NotImplementedException(); } }
+        public double HorizontalOffset { get { throw new global::System.NotImplementedException(); } }
+        public void ScrollToHorizontalOffset(double offset) { throw new global::System.NotImplementedException(); }
+    }
     public class ContentPresenter : global::Windows.UI.Xaml.FrameworkElement { internal ContentPresenter() { } }
     public sealed class MediaElement : global::Windows.UI.Xaml.FrameworkElement { internal MediaElement() { } }
     public class TextBlock : global::Windows.UI.Xaml.FrameworkElement
@@ -277,6 +328,11 @@ namespace Windows.UI.Xaml.Controls
         public Frame() { throw new global::System.NotImplementedException("Windows.UI.Xaml.Controls.Frame..ctor"); }
         public bool Navigate(global::System.Type sourcePageType) { throw new global::System.NotImplementedException(); }
         public bool Navigate(global::System.Type sourcePageType, object parameter) { throw new global::System.NotImplementedException(); }
+        public int BackStackDepth { get { throw new global::System.NotImplementedException(); } }
+        public bool CanGoBack { get { throw new global::System.NotImplementedException(); } }
+        public bool CanGoForward { get { throw new global::System.NotImplementedException(); } }
+        public void GoBack() { throw new global::System.NotImplementedException(); }
+        public void GoForward() { throw new global::System.NotImplementedException(); }
     }
 }
 namespace Windows.Devices.Geolocation
@@ -312,6 +368,24 @@ namespace Windows.UI.Core
     {
         public static CoreWindow GetForCurrentThread() { throw new global::System.NotImplementedException("Windows.UI.Core.CoreWindow.GetForCurrentThread"); }
         public CoreDispatcher Dispatcher { get { throw new global::System.NotImplementedException("Windows.UI.Core.CoreWindow.Dispatcher"); } }
+        public CoreVirtualKeyStates GetKeyState(global::Windows.System.VirtualKey virtualKey) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_KeyDown(global::Windows.Foundation.TypedEventHandler<CoreWindow, KeyEventArgs> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_KeyDown(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_PointerPressed(global::Windows.Foundation.TypedEventHandler<CoreWindow, PointerEventArgs> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_PointerPressed(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_PointerMoved(global::Windows.Foundation.TypedEventHandler<CoreWindow, PointerEventArgs> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_PointerMoved(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_PointerReleased(global::Windows.Foundation.TypedEventHandler<CoreWindow, PointerEventArgs> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_PointerReleased(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+    [global::System.Flags] public enum CoreVirtualKeyStates : uint { None = 0, Down = 1, Locked = 2 }
+    public sealed class VisibilityChangedEventArgs { internal VisibilityChangedEventArgs() { } public bool Visible { get { throw new global::System.NotImplementedException(); } } }
+    public sealed class KeyEventArgs { internal KeyEventArgs() { } public global::Windows.System.VirtualKey VirtualKey { get { throw new global::System.NotImplementedException(); } } }
+    public sealed class PointerEventArgs
+    {
+        internal PointerEventArgs() { }
+        public global::Windows.UI.Input.PointerPoint CurrentPoint { get { throw new global::System.NotImplementedException(); } }
+        public bool Handled { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
     public enum CoreDispatcherPriority { Idle = -2, Low = -1, Normal = 0, High = 1 }
     public delegate void DispatchedHandler();
@@ -319,6 +393,59 @@ namespace Windows.UI.Core
     {
         internal CoreDispatcher() { }
         public global::Windows.Foundation.IAsyncAction RunAsync(CoreDispatcherPriority priority, DispatchedHandler agileCallback) { throw new global::System.NotImplementedException("Windows.UI.Core.CoreDispatcher.RunAsync"); }
+        public bool HasThreadAccess { get { throw new global::System.NotImplementedException(); } }
+    }
+}
+namespace Windows.UI.Input
+{
+    public sealed class PointerPoint { internal PointerPoint() { } public PointerPointProperties Properties { get { throw new global::System.NotImplementedException(); } } }
+    public sealed class PointerPointProperties { internal PointerPointProperties() { } public bool IsLeftButtonPressed { get { throw new global::System.NotImplementedException(); } } }
+}
+namespace Windows.UI.ApplicationSettings
+{
+    public enum SettingsEdgeLocation { Right = 0, Left = 1 }
+    public sealed class SettingsPaneCommandsRequestedEventArgs { internal SettingsPaneCommandsRequestedEventArgs() { } }
+    public sealed class SettingsPane
+    {
+        internal SettingsPane() { }
+        public static SettingsPane GetForCurrentView() { throw new global::System.NotImplementedException(); }
+        public static SettingsEdgeLocation Edge { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_CommandsRequested(global::Windows.Foundation.TypedEventHandler<SettingsPane, SettingsPaneCommandsRequestedEventArgs> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_CommandsRequested(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+}
+namespace Windows.ApplicationModel.Store
+{
+    public delegate void LicenseChangedEventHandler();
+    public sealed class LicenseInformation
+    {
+        internal LicenseInformation() { }
+        public bool IsActive { get { throw new global::System.NotImplementedException(); } }
+        public bool IsTrial { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_LicenseChanged(LicenseChangedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_LicenseChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+    public static class CurrentApp { public static LicenseInformation LicenseInformation { get { throw new global::System.NotImplementedException(); } } }
+}
+namespace Windows.Data.Xml.Dom { public sealed class XmlDocument { internal XmlDocument() { } } }
+namespace Windows.UI.Notifications
+{
+    public enum ToastTemplateType { ToastText01 = 4 }
+    public sealed class TileUpdater
+    {
+        internal TileUpdater() { }
+        public void Clear() { throw new global::System.NotImplementedException(); }
+        public void EnableNotificationQueue(bool enable) { throw new global::System.NotImplementedException(); }
+    }
+    public static class TileUpdateManager
+    {
+        public static TileUpdater CreateTileUpdaterForApplication() { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class ToastNotifier { internal ToastNotifier() { } }
+    public static class ToastNotificationManager
+    {
+        public static ToastNotifier CreateToastNotifier() { throw new global::System.NotImplementedException(); }
+        public static global::Windows.Data.Xml.Dom.XmlDocument GetTemplateContent(ToastTemplateType type) { throw new global::System.NotImplementedException(); }
     }
 }
 namespace Windows.Foundation.Collections
@@ -364,6 +491,12 @@ namespace Windows.Networking.Connectivity
 
 namespace Windows.Foundation
 {
+    public struct Size
+    {
+        public Size(double width, double height) { throw new global::System.NotImplementedException(); }
+        public double Width { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double Height { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public struct Rect
     {
         public double X { get { throw new global::System.NotImplementedException(); } }
@@ -513,12 +646,67 @@ namespace Windows.UI.Xaml
 
 namespace Windows.UI.Xaml.Media.Animation
 {
-    public class Timeline : global::Windows.UI.Xaml.DependencyObject { internal Timeline() { } }
+    public class Timeline : global::Windows.UI.Xaml.DependencyObject
+    {
+        internal Timeline() { }
+        public global::Windows.UI.Xaml.Duration Duration { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Completed(global::System.EventHandler<object> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Completed(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class TimelineCollection : global::System.Collections.Generic.IList<Timeline>
+    {
+        internal TimelineCollection() { }
+        public Timeline this[int index] { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public int Count { get { throw new global::System.NotImplementedException(); } }
+        public bool IsReadOnly { get { throw new global::System.NotImplementedException(); } }
+        public void Add(Timeline item) { throw new global::System.NotImplementedException(); }
+        public void Clear() { throw new global::System.NotImplementedException(); }
+        public bool Contains(Timeline item) { throw new global::System.NotImplementedException(); }
+        public void CopyTo(Timeline[] array, int index) { throw new global::System.NotImplementedException(); }
+        public int IndexOf(Timeline item) { throw new global::System.NotImplementedException(); }
+        public void Insert(int index, Timeline item) { throw new global::System.NotImplementedException(); }
+        public bool Remove(Timeline item) { throw new global::System.NotImplementedException(); }
+        public void RemoveAt(int index) { throw new global::System.NotImplementedException(); }
+        public global::System.Collections.Generic.IEnumerator<Timeline> GetEnumerator() { throw new global::System.NotImplementedException(); }
+        global::System.Collections.IEnumerator global::System.Collections.IEnumerable.GetEnumerator() { throw new global::System.NotImplementedException(); }
+    }
+    public sealed class DoubleAnimation : Timeline
+    {
+        public DoubleAnimation() { throw new global::System.NotImplementedException(); }
+        public double? From { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double? To { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public class Storyboard : Timeline
     {
         public Storyboard() { throw new global::System.NotImplementedException(); }
         public void Begin() { throw new global::System.NotImplementedException(); }
         public void Stop() { throw new global::System.NotImplementedException(); }
+        public TimelineCollection Children { get { throw new global::System.NotImplementedException(); } }
+        public static void SetTarget(Timeline timeline, global::Windows.UI.Xaml.DependencyObject target) { throw new global::System.NotImplementedException(); }
+        public static void SetTargetProperty(Timeline element, string path) { throw new global::System.NotImplementedException(); }
+    }
+    public class Transition : global::Windows.UI.Xaml.DependencyObject { internal Transition() { } }
+    public sealed class EntranceThemeTransition : Transition
+    {
+        public EntranceThemeTransition() { throw new global::System.NotImplementedException(); }
+        public double FromHorizontalOffset { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
+    public sealed class TransitionCollection : global::System.Collections.Generic.IList<Transition>
+    {
+        public TransitionCollection() { throw new global::System.NotImplementedException(); }
+        public Transition this[int index] { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public int Count { get { throw new global::System.NotImplementedException(); } }
+        public bool IsReadOnly { get { throw new global::System.NotImplementedException(); } }
+        public void Add(Transition item) { throw new global::System.NotImplementedException(); }
+        public void Clear() { throw new global::System.NotImplementedException(); }
+        public bool Contains(Transition item) { throw new global::System.NotImplementedException(); }
+        public void CopyTo(Transition[] array, int index) { throw new global::System.NotImplementedException(); }
+        public int IndexOf(Transition item) { throw new global::System.NotImplementedException(); }
+        public void Insert(int index, Transition item) { throw new global::System.NotImplementedException(); }
+        public bool Remove(Transition item) { throw new global::System.NotImplementedException(); }
+        public void RemoveAt(int index) { throw new global::System.NotImplementedException(); }
+        public global::System.Collections.Generic.IEnumerator<Transition> GetEnumerator() { throw new global::System.NotImplementedException(); }
+        global::System.Collections.IEnumerator global::System.Collections.IEnumerable.GetEnumerator() { throw new global::System.NotImplementedException(); }
     }
     public class FadeInThemeAnimation : Timeline { internal FadeInThemeAnimation() { } }
     public class FadeOutThemeAnimation : Timeline
@@ -534,15 +722,25 @@ namespace Windows.UI.ViewManagement
     public sealed class ApplicationView
     {
         public static ApplicationViewState Value { get { throw new global::System.NotImplementedException("ApplicationView.Value"); } }
+        public static bool TryUnsnap() { throw new global::System.NotImplementedException(); }
     }
 }
 
 namespace Windows.UI.Xaml.Media
 {
     public class Brush : global::Windows.UI.Xaml.DependencyObject { internal Brush() { } }
+    public class GeneralTransform : global::Windows.UI.Xaml.DependencyObject { internal GeneralTransform() { } }
+    public class Transform : GeneralTransform { internal Transform() { } }
+    public sealed class TranslateTransform : Transform
+    {
+        public TranslateTransform() { throw new global::System.NotImplementedException(); }
+        public double X { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public double Y { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public sealed class SolidColorBrush : Brush
     {
         public SolidColorBrush() { throw new global::System.NotImplementedException(); }
+        public SolidColorBrush(global::Windows.UI.Color color) { throw new global::System.NotImplementedException(); }
         public global::Windows.UI.Color Color { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
 }
@@ -556,6 +754,11 @@ namespace Windows.UI
         public byte R { get { return _R; } set { _R = value; } }
         public byte G { get { return _G; } set { _G = value; } }
         public byte B { get { return _B; } set { _B = value; } }
+    }
+    public static class Colors
+    {
+        public static Color Goldenrod { get { throw new global::System.NotImplementedException(); } }
+        public static Color Gray { get { throw new global::System.NotImplementedException(); } }
     }
 }
 

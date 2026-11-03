@@ -44,6 +44,10 @@ internal static partial class WinrtProjectionGenerator
         var generic = type as GenericInstanceType;
         if (generic != null)
         {
+            // The CLR projects IReference<T> as Nullable<T>; only WPF-backed members
+            // use it (native ABI paths still reject it when they look up the type).
+            if (generic.ElementType.FullName == "Windows.Foundation.IReference`1" && generic.GenericArguments[0].IsValueType)
+                return "global::System.Nullable<" + Name(generic.GenericArguments[0]) + ">";
             if (!selected.Contains(generic.ElementType.FullName)) throw new NotSupportedException("Generic type is not selected: " + type.FullName);
             if (generic.ElementType.FullName == MapViewName) return "global::System.Collections.Generic.IReadOnlyDictionary<string, " + Name(MapViewValue(generic)) + ">";
             // The CLR projects Windows.Foundation.EventHandler<T> as System.EventHandler<T>.
@@ -222,7 +226,7 @@ internal static partial class WinrtProjectionGenerator
         if (view != null && view.ElementType.FullName == MapViewName)
             return Runtime + "NativeStringMapView<" + Name(MapViewValue(view)) + ">.Wrap(" + receiver + ".Object(" + number + "), " +
                 StringMapViewAbi(view) + ", v => " + Wrapped(MapViewValue(view), "v") + ")";
-        if (ClrStructFields.ContainsKey(result.FullName) && selected.Contains(result.FullName))
+        if ((ClrStructFields.ContainsKey(result.FullName) || PlainStruct(result)) && selected.Contains(result.FullName))
             return receiver + ".Value<" + Name(result) + ">(" + number + ")";
         TypeDefinition definition = Find(result.FullName);
         if (definition.IsEnum)
@@ -684,6 +688,30 @@ internal static partial class WinrtProjectionGenerator
             throw new NotSupportedException("Duration needs Windows.UI.Xaml.DurationType");
         output.AppendLine("    [global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.Sequential)]");
         output.Append(ClrStructTemplates[type.FullName]);
+    }
+    // A WinRT struct the CLR does not redirect: public fields in metadata order,
+    // blittable (scalar or 32-bit enum fields), returned by value.
+    private static bool PlainStruct(TypeReference type)
+    {
+        if (ClrStructFields.ContainsKey(type.FullName) || type.FullName == "Windows.Foundation.TimeSpan" || type.FullName == DateTimeName) return false;
+        TypeDefinition definition;
+        return types.TryGetValue(type.FullName, out definition) && definition.IsValueType && !definition.IsEnum;
+    }
+    private static void PlainStructContract(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        if (surface.Name != "Struct" || surface.HasChildNodes || !PlainStruct(type))
+            throw new NotSupportedException("Unsupported struct: " + type.FullName);
+        output.AppendLine("    [global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.Sequential)]");
+        output.AppendLine("    public struct " + type.Name);
+        output.AppendLine("    {");
+        foreach (FieldDefinition field in type.Fields.Where(f => !f.IsStatic))
+        {
+            bool scalar = Scalar(field.FieldType) != null && field.FieldType.FullName != "System.Boolean" && field.FieldType.FullName != "System.Char";
+            bool enumeration = !scalar && selected.Contains(field.FieldType.FullName) && Find(field.FieldType.FullName).IsEnum;
+            if (!scalar && !enumeration) throw new NotSupportedException("Unsupported struct field: " + type.FullName + "." + field.Name);
+            output.AppendLine("        public " + Name(field.FieldType) + " " + field.Name + ";");
+        }
+        output.AppendLine("    }");
     }
     private static readonly Dictionary<string, string> ClrStructTemplates = new Dictionary<string, string>(StringComparer.Ordinal) {
         { "Windows.Foundation.Point", @"    public struct Point
@@ -1928,6 +1956,7 @@ namespace AppxPortable.WinRT.Projected
                         throw new NotSupportedException("Unsupported async surface: " + type.FullName);
                     AsyncContract(output, type);
                 }
+                else if (element.Name == "Struct" && type.IsValueType && !type.IsEnum) PlainStructContract(output, type, element);
                 else if (element.Name == "Enum" && type.IsEnum) Enum(output, type);
                 else if (element.Name == "Delegate" && IsDelegate(type)) Delegate(output, type);
                 else if (element.Name == "Interface" && type.IsInterface) Interface(output, type, element);
@@ -1943,7 +1972,7 @@ namespace AppxPortable.WinRT.Projected
             Console.WriteLine("Generated " + selected.Count + " metadata types into " + args[2]);
             return 0;
         }
-        catch (Exception error) { Console.Error.WriteLine(error.Message); return 1; }
+        catch (Exception error) { Console.Error.WriteLine(Environment.GetEnvironmentVariable("GENERATOR_TRACE") == "1" ? error.ToString() : error.Message); return 1; }
         finally { foreach (ModuleDefinition module in modules) module.Dispose(); }
     }
 }

@@ -50,6 +50,12 @@ namespace AppxPortable.WinRT.Xaml
                 var thickness = (global::Windows.UI.Xaml.Thickness)value;
                 return new System.Windows.Thickness(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
             }
+            if (value is global::Windows.UI.Xaml.Duration && type == typeof(System.Windows.Duration))
+            {
+                var duration = (global::Windows.UI.Xaml.Duration)value;
+                return duration.HasTimeSpan ? new System.Windows.Duration(duration.TimeSpan)
+                    : duration == global::Windows.UI.Xaml.Duration.Forever ? System.Windows.Duration.Forever : System.Windows.Duration.Automatic;
+            }
             // As SetValue on either platform: a value of the wrong type is an invalid argument.
             throw new ArgumentException("No WPF conversion: " + value.GetType().FullName + " -> " + type.FullName);
         }
@@ -71,6 +77,12 @@ namespace AppxPortable.WinRT.Xaml
             {
                 var thickness = (System.Windows.Thickness)value;
                 return new global::Windows.UI.Xaml.Thickness(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
+            }
+            if (value is System.Windows.Duration && type.IsAssignableFrom(typeof(global::Windows.UI.Xaml.Duration)))
+            {
+                var duration = (System.Windows.Duration)value;
+                return duration.HasTimeSpan ? new global::Windows.UI.Xaml.Duration(duration.TimeSpan)
+                    : duration == System.Windows.Duration.Forever ? global::Windows.UI.Xaml.Duration.Forever : global::Windows.UI.Xaml.Duration.Automatic;
             }
             throw new NotSupportedException("No UWP conversion: " + value.GetType().FullName + " -> " + type.FullName);
         }

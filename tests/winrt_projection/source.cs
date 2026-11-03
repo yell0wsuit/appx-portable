@@ -21,6 +21,13 @@ namespace Fixture
         }
     }
     // A game control with its own dependency property, as generated code registers it.
+    // Frame journal pages: MainPage keeps itself with NavigationCacheMode.Required.
+    class CachedPage : Page
+    {
+        internal static int Made;
+        public CachedPage() { ++Made; NavigationCacheMode = Windows.UI.Xaml.Navigation.NavigationCacheMode.Required; }
+    }
+    class PlainPage : Page { internal static int Made; public PlainPage() { ++Made; } }
     class Badge : UserControl
     {
         internal static int Made;
@@ -86,7 +93,7 @@ namespace Fixture
         internal readonly Dictionary<string, SourceXamlType> Types = new Dictionary<string, SourceXamlType>();
         public SourceApp()
         {
-            foreach (var type in new[] { typeof(SourcePage), typeof(Badge), typeof(ModelPage) }) Types.Add(type.FullName, new SourceXamlType(type));
+            foreach (var type in new[] { typeof(SourcePage), typeof(Badge), typeof(ModelPage), typeof(CachedPage), typeof(PlainPage) }) Types.Add(type.FullName, new SourceXamlType(type));
         }
         public IXamlType GetXamlType(Type type) { return type == null ? null : GetXamlType(type.FullName); }
         public IXamlType GetXamlType(string fullName)
@@ -193,6 +200,7 @@ namespace Fixture
             Check(page.Content == null && page.FindName("title") == null && ReferenceEquals(page.FindName("replacement"), page), "reload replaces tree and names");
             Console.WriteLine("PASS: managed loader builds WPF content with names, connections and game types; unsupported input fails explicitly");
             VerifyCompatibility();
+            VerifyStartupSurface();
             VerifyClicks();
             VerifyInputEvents();
             VerifyStyles();
@@ -200,6 +208,136 @@ namespace Fixture
 
         // Independent markup gaps are collected together, rather than hiding behind
         // the first failing resource in the game's large shared dictionary.
+        // The code-side XAML members Bejeweled's MainPage, SettingsCharmBar,
+        // SwapChainBGPanel and LayoutAwarePage use on the way to the hub.
+        void VerifyStartupSurface()
+        {
+            var failures = new List<string>();
+            Action<string, Action> test = (name, verify) => { try { verify(); } catch (Exception error) { failures.Add(name + ": " + error); } };
+            test("transitions", () =>
+            {
+                var element = new Grid();
+                var entrance = new Windows.UI.Xaml.Media.Animation.EntranceThemeTransition();
+                entrance.FromHorizontalOffset = -100;
+                var transitions = new Windows.UI.Xaml.Media.Animation.TransitionCollection();
+                transitions.Add(entrance);
+                element.Transitions = transitions;
+                Check(ReferenceEquals(element.Transitions, transitions) && element.Transitions.Count == 1 &&
+                      ((Windows.UI.Xaml.Media.Animation.EntranceThemeTransition)element.Transitions[0]).FromHorizontalOffset == -100, "element transitions keep identity and offset");
+            });
+            test("scroll-layout", () =>
+            {
+                File.WriteAllText("Pages/startup-scroll.xaml", "<Page" + Ns + "><ScrollViewer x:Name='scroll' Width='100' Height='50' HorizontalScrollBarVisibility='Hidden' VerticalScrollBarVisibility='Disabled' HorizontalScrollMode='Enabled'>" +
+                    "<Grid Width='300' Height='20'/></ScrollViewer></Page>");
+                var page = new SourcePage(); Application.LoadComponent(page, new Uri("ms-appx:///Pages/startup-scroll.xaml"));
+                var scroll = (ScrollViewer)page.FindName("scroll");
+                var root = (System.Windows.UIElement)PeerOf(page);
+                page.Measure(new Windows.Foundation.Size(400, 400));
+                Check(page.DesiredSize.Width == 100 && page.DesiredSize.Height == 50, "Measure reaches WPF and DesiredSize returns its size");
+                root.Arrange(new System.Windows.Rect(0, 0, 400, 400));
+                page.UpdateLayout();
+                var wpfScroll = (System.Windows.Controls.ScrollViewer)PeerOf(scroll);
+                Check(scroll.ScrollableWidth == 200, "ScrollableWidth comes from WPF layout: " + scroll.ScrollableWidth + " extent " + wpfScroll.ExtentWidth + " viewport " + wpfScroll.ViewportWidth +
+                      " template " + (wpfScroll.Template != null) + " actual " + wpfScroll.ActualWidth);
+                scroll.ScrollToHorizontalOffset(50);
+                page.UpdateLayout();
+                Check(scroll.HorizontalOffset == 50, "ScrollToHorizontalOffset applies on the next layout");
+            });
+            test("size-and-keys", () =>
+            {
+                var grid = new Grid();
+                var sizes = new List<Windows.Foundation.Size>();
+                object sender = null;
+                var token = grid.add_SizeChanged((s, e) => { sender = s; sizes.Add(e.NewSize); });
+                grid.Width = 30; grid.Height = 40;
+                grid.Measure(new Windows.Foundation.Size(100, 100));
+                ((System.Windows.UIElement)PeerOf(grid)).Arrange(new System.Windows.Rect(0, 0, 30, 40));
+                grid.UpdateLayout();
+                Check(sizes.Count == 1 && sizes[0].Width == 30 && sizes[0].Height == 40 && ReferenceEquals(sender, grid), "SizeChanged reports the new size with the wrapper as sender: " + sizes.Count);
+                grid.remove_SizeChanged(token);
+                grid.Width = 31;
+                grid.Measure(new Windows.Foundation.Size(100, 100));
+                ((System.Windows.UIElement)PeerOf(grid)).Arrange(new System.Windows.Rect(0, 0, 31, 40));
+                grid.UpdateLayout();
+                Check(sizes.Count == 1, "removed SizeChanged handler was called");
+                var keys = new List<Windows.System.VirtualKey>();
+                var key = grid.add_KeyDown((s, e) => { keys.Add(e.Key); e.Handled = true; });
+                var source = new System.Windows.Interop.HwndSource(new System.Windows.Interop.HwndSourceParameters("startup-keys")) { RootVisual = (System.Windows.Media.Visual)PeerOf(grid) };
+                var args = new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, source, 0, System.Windows.Input.Key.Escape);
+                args.RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent;
+                ((System.Windows.UIElement)PeerOf(grid)).RaiseEvent(args);
+                Check(keys.Count == 1 && keys[0] == Windows.System.VirtualKey.Escape && args.Handled, "KeyDown sees the key and handling");
+                grid.remove_KeyDown(key);
+                source.RootVisual = null; source.Dispose();
+            });
+            test("storyboard-code", () =>
+            {
+                var target = new Grid();
+                var storyboard = new Windows.UI.Xaml.Media.Animation.Storyboard();
+                var fade = new Windows.UI.Xaml.Media.Animation.DoubleAnimation();
+                fade.From = 0; fade.To = 1;
+                fade.Duration = TimeSpan.FromMilliseconds(250);
+                Check(fade.From == 0 && fade.To == 1 && fade.Duration.HasTimeSpan && fade.Duration.TimeSpan == TimeSpan.FromMilliseconds(250), "DoubleAnimation From, To and Duration round trip");
+                Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fade, "Opacity");
+                Windows.UI.Xaml.Media.Animation.Storyboard.SetTarget(fade, target);
+                Check(!storyboard.Children.Contains(fade), "new storyboard is empty");
+                storyboard.Children.Add(fade);
+                Check(storyboard.Children.Count == 1 && storyboard.Children.Contains(fade) && ReferenceEquals(storyboard.Children[0], fade), "Children keeps the wrapper");
+                var peer = (System.Windows.Media.Animation.DoubleAnimation)PeerOf(fade);
+                Check(System.Windows.Media.Animation.Storyboard.GetTarget(peer) == PeerOf(target) &&
+                      System.Windows.Media.Animation.Storyboard.GetTargetProperty(peer).Path == "Opacity", "targets reach WPF");
+                Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fade, "(UIElement.Opacity)");
+                var path = System.Windows.Media.Animation.Storyboard.GetTargetProperty(peer);
+                Check(path.PathParameters.Count == 1 && path.PathParameters[0] == System.Windows.UIElement.OpacityProperty, "qualified UWP paths resolve to WPF properties");
+                Windows.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(fade, "(UIElement.RenderTransform).(TranslateTransform.X)");
+                path = System.Windows.Media.Animation.Storyboard.GetTargetProperty(peer);
+                Check(path.PathParameters.Count == 2 && path.PathParameters[1] == System.Windows.Media.TranslateTransform.XProperty, "nested UWP paths resolve each owner");
+                var token = fade.add_Completed((s, e) => { });
+                fade.remove_Completed(token);
+                storyboard.Children.Clear();
+                Check(storyboard.Children.Count == 0, "Children.Clear");
+            });
+            test("frame-journal", () =>
+            {
+                CachedPage.Made = 0; PlainPage.Made = 0;
+                var frame = new Frame();
+                Check(!frame.CanGoBack && !frame.CanGoForward && frame.BackStackDepth == 0, "new frame has no journal");
+                frame.Navigate(typeof(CachedPage));
+                var cached = frame.Content;
+                frame.Navigate(typeof(PlainPage));
+                Check(frame.BackStackDepth == 1 && frame.CanGoBack && !frame.CanGoForward, "Navigate records the previous page");
+                frame.GoBack();
+                Check(ReferenceEquals(frame.Content, cached) && CachedPage.Made == 1 && frame.CanGoForward && frame.BackStackDepth == 0, "GoBack returns to the cached page instance");
+                frame.GoForward();
+                Check(frame.Content is PlainPage && PlainPage.Made == 2 && frame.BackStackDepth == 1, "GoForward recreates an uncached page");
+                frame.Navigate(typeof(PlainPage));
+                Check(!frame.CanGoForward && frame.BackStackDepth == 2, "Navigate clears the forward stack");
+                try { new Frame().GoBack(); throw new Exception("GoBack without history accepted"); }
+                catch (COMException error) { Check(error.ErrorCode == unchecked((int)0x80004005), "GoBack without history fails with E_FAIL"); }
+            });
+            test("colors-brush-canvas", () =>
+            {
+                var gold = Windows.UI.Colors.Goldenrod;
+                Check(gold.A == 255 && gold.R == 218 && gold.G == 165 && gold.B == 32, "Colors.Goldenrod");
+                var gray = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Gray);
+                Check(gray.Color.R == 128 && ((System.Windows.Media.SolidColorBrush)PeerOf(gray)).Color == System.Windows.Media.Colors.Gray, "SolidColorBrush(Color)");
+                var child = new Grid();
+                Canvas.SetLeft(child, 12);
+                Check(Canvas.GetLeft(child) == 12 && System.Windows.Controls.Canvas.GetLeft((System.Windows.UIElement)PeerOf(child)) == 12 &&
+                      (double)child.GetValue(Canvas.LeftProperty) == 12, "Canvas.Left maps onto WPF");
+                var box = new Viewbox();
+                box.Child = child;
+                Check(ReferenceEquals(box.Child, child), "Viewbox.Child");
+                var move = new Windows.UI.Xaml.Media.TranslateTransform();
+                move.X = 5; move.Y = 6;
+                child.RenderTransform = move;
+                var applied = ((System.Windows.UIElement)PeerOf(child)).RenderTransform.Transform(new System.Windows.Point(1, 1));
+                Check(ReferenceEquals(child.RenderTransform, move) && applied.X == 6 && applied.Y == 7, "RenderTransform and TranslateTransform");
+            });
+            Check(failures.Count == 0, "startup surface gaps:\n" + string.Join("\n", failures));
+            Console.WriteLine("PASS: startup layout, events, storyboards, journal and color members map onto WPF");
+        }
+
         void VerifyCompatibility()
         {
             var failures = new List<string>();
