@@ -42,7 +42,7 @@ namespace AppxPortable.WinRT.Xaml
             using (var text = File.OpenText(path)) Load(component, text, uri.OriginalString);
         }
 
-        internal static string Resolve(Uri uri)
+        internal static string Resolve(Uri uri, bool requireFile = true)
         {
             string relative = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
             string current = PackageRoot;
@@ -52,10 +52,10 @@ namespace AppxPortable.WinRT.Xaml
                 if (!File.Exists(next) && !Directory.Exists(next))
                     next = Directory.Exists(current) ? Directory.EnumerateFileSystemEntries(current)
                         .FirstOrDefault(p => string.Equals(Path.GetFileName(p), segment, StringComparison.OrdinalIgnoreCase)) : null;
-                if (next == null) throw new FileNotFoundException("XAML not found: " + uri.OriginalString, Path.Combine(PackageRoot, relative));
-                current = next;
+                if (next == null && requireFile) throw new FileNotFoundException("XAML not found: " + uri.OriginalString, Path.Combine(PackageRoot, relative));
+                current = next ?? Path.Combine(current, segment);
             }
-            if (!File.Exists(current)) throw new FileNotFoundException("XAML not found: " + uri.OriginalString, current);
+            if (requireFile && !File.Exists(current)) throw new FileNotFoundException("XAML not found: " + uri.OriginalString, current);
             return current;
         }
 
@@ -154,6 +154,14 @@ namespace AppxPortable.WinRT.Xaml
             {
                 var context = UwpSchemaContext.Instance;
                 var settings = new XamlObjectWriterSettings { RootObjectInstance = root };
+                // Package dictionaries contain images that are never used. WPF's
+                // own delayed creation keeps decoding at first use, including its
+                // normal error path, rather than aborting the whole dictionary.
+                settings.AfterBeginInitHandler = (sender, args) =>
+                {
+                    var bitmap = args.Instance as System.Windows.Media.Imaging.BitmapImage;
+                    if (bitmap != null) bitmap.CreateOptions |= System.Windows.Media.Imaging.BitmapCreateOptions.DelayCreation;
+                };
                 settings.AfterPropertiesHandler = (sender, args) => Closed(args.Instance);
                 settings.AfterEndInitHandler = (sender, args) =>
                 {
@@ -222,7 +230,7 @@ namespace AppxPortable.WinRT.Xaml
                                     Uri uri;
                                     if (!Uri.TryCreate(image, UriKind.Absolute, out uri) || uri.Scheme == "ms-appx" || image.StartsWith("/", StringComparison.Ordinal))
                                     {
-                                        writer.WriteValue(new Uri(Resolve(Combine(source, image)), UriKind.Absolute).AbsoluteUri);
+                                        writer.WriteValue(new Uri(Resolve(Combine(source, image), false), UriKind.Absolute).AbsoluteUri);
                                         reader.Read();
                                         continue;
                                     }

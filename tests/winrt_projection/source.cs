@@ -265,6 +265,7 @@ namespace Fixture
                 var source = ((System.Windows.Controls.Image)PeerOf(page.FindName("image"))).Source as System.Windows.Media.Imaging.BitmapSource;
                 Check(source != null && source.PixelWidth == 1, "package image URI resolves to WPF pixels");
             });
+            test("missing-bitmap", "<Page.Resources><BitmapImage x:Key='missing' UriSource='/Assets/missing.png'/></Page.Resources>", page => { });
             test("presenter-content", "<ContentPresenter x:Name='presenter'><Grid/></ContentPresenter>", page =>
                 Check(((System.Windows.Controls.ContentPresenter)PeerOf(page.FindName("presenter"))).Content is System.Windows.Controls.Grid, "UWP ContentPresenter has implicit Content"));
             test("presenter-foreground", "<ContentPresenter x:Name='presenter' Foreground='Red' Content='text'/>", page =>
