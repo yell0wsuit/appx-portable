@@ -1,5 +1,9 @@
 #include "xaml_layer.h"
 #include "log.h"
+#include "host/host.h"
+#include "options.h"
+#include <cstdio>
+#include <atomic>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -19,6 +23,10 @@ struct Frame {
 };
 std::mutex frameMutex;
 Frame latest;
+// When the game last presented. A XAML-only page (Bejeweled's hub) presents
+// nothing, so the shim then shows the XAML frame on the window itself.
+std::atomic<ULONGLONG> lastPresent{0};
+constexpr ULONGLONG presentQuiet = 250;
 
 const char shaderSource[] = R"(
 struct V { float4 position : SV_Position; float2 uv : TEXCOORD0; };
@@ -206,6 +214,7 @@ struct SavedState {
 }
 
 void ComposeXamlLayer(IDXGISwapChain* swap) {
+    lastPresent = GetTickCount64();
     {
         std::lock_guard<std::mutex> lock(frameMutex);
         if (!latest.width) return; // no managed XAML tree, or nothing submitted yet
@@ -246,6 +255,47 @@ void ComposeXamlLayer(IDXGISwapChain* swap) {
 }
 }
 
+namespace appx {
+// [options] Capture: one settled XAML frame as appx-xaml.bmp, beside the
+// swap-chain capture, to see what the managed tree draws.
+static void CaptureXamlFrame(const Frame& frame) {
+    BITMAPINFOHEADER info{};
+    info.biSize = sizeof(info);
+    info.biWidth = static_cast<LONG>(frame.width);
+    info.biHeight = -static_cast<LONG>(frame.height);
+    info.biPlanes = 1;
+    info.biBitCount = 32;
+    BITMAPFILEHEADER header{};
+    header.bfType = 0x4d42;
+    header.bfOffBits = sizeof(header) + sizeof(info);
+    header.bfSize = header.bfOffBits + static_cast<DWORD>(frame.pixels.size());
+    FILE* file{};
+    if (fopen_s(&file, "appx-xaml.bmp", "wb") != 0) return;
+    fwrite(&header, sizeof(header), 1, file);
+    fwrite(&info, sizeof(info), 1, file);
+    fwrite(frame.pixels.data(), frame.pixels.size(), 1, file);
+    fclose(file);
+}
+// The frame on the host window by GDI, scaled to its client area; transparent
+// (premultiplied) pixels show black, where no game frame draws.
+static void ShowXamlFrame(const Frame& frame) {
+    HWND window = HostWindow();
+    RECT client{};
+    if (!window || !IsWindowVisible(window) || IsIconic(window) || !GetClientRect(window, &client)) return;
+    HDC dc = GetDC(window);
+    if (!dc) return;
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = static_cast<LONG>(frame.width);
+    info.bmiHeader.biHeight = -static_cast<LONG>(frame.height);
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    SetStretchBltMode(dc, HALFTONE);
+    StretchDIBits(dc, 0, 0, client.right, client.bottom, 0, 0, frame.width, frame.height, frame.pixels.data(), &info,
+                  DIB_RGB_COLORS, SRCCOPY);
+    ReleaseDC(window, dc);
+}
+}
 // A managed game's newest XAML frame, premultiplied BGRA rows of `stride`
 // bytes; null or an empty size withdraws the layer.
 extern "C" HRESULT __cdecl ShimSubmitXamlFrame(const void* bgra, UINT width, UINT height, UINT stride) noexcept {
@@ -266,5 +316,7 @@ extern "C" HRESULT __cdecl ShimSubmitXamlFrame(const void* bgra, UINT width, UIN
     // As swap-chain frames: whether the managed XAML renderer runs, without flooding the log.
     if (frame.generation <= 3 || frame.generation % 600 == 0)
         appx::Log("TRACE", "XAML frame %u %ux%u", frame.generation, width, height);
+    if (frame.generation == 120 && appx::GetOptions().capture) appx::CaptureXamlFrame(frame);
+    if (GetTickCount64() - appx::lastPresent > appx::presentQuiet) appx::ShowXamlFrame(frame);
     return S_OK;
 }

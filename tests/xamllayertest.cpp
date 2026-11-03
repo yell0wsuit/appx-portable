@@ -38,6 +38,27 @@ static bool CapturedPixel(UINT x, UINT y, DWORD* value) {
     fclose(file);
     return ok;
 }
+static BOOL CALLBACK FindVisible(HWND window, LPARAM found) {
+    if (!IsWindowVisible(window)) return TRUE;
+    *reinterpret_cast<HWND*>(found) = window;
+    return FALSE;
+}
+// A XAML-only page presents nothing; the shim then shows the XAML frame itself.
+static bool WithoutGamePresent(SubmitCall submit) {
+    HWND host = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), FindVisible, reinterpret_cast<LPARAM>(&host));
+    if (!Expect(host != nullptr, "a visible host window")) return false;
+    std::vector<DWORD> red(width * height, 0xffff0000);
+    if (!Check(submit(red.data(), width, height, width * 4), "submit frame without a game present")) return false;
+    HDC dc = GetDC(host);
+    const COLORREF pixel = GetPixel(dc, 5, 5);
+    ReleaseDC(host, dc);
+    if (!Expect(pixel == RGB(255, 0, 0), "the XAML frame shows on the window while the game does not present")) {
+        printf("xamllayertest: window pixel=%08lx\n", pixel);
+        return false;
+    }
+    return true;
+}
 static bool Run(IDXGISwapChain1* swap, ID3D11Device* device, ID3D11DeviceContext* context, SubmitCall submit) {
     ComPtr<ID3D11Texture2D> back;
     ComPtr<ID3D11RenderTargetView> target;
@@ -89,6 +110,13 @@ int main() {
         Callback<IApplicationInitializationCallback>([&](IApplicationInitializationCallbackParams*) -> HRESULT {
             ComPtr<IApplication> app;
             compose->CreateInstance(nullptr, nullptr, &app);
+            HWND host = nullptr;
+            EnumThreadWindows(GetCurrentThreadId(), [](HWND window, LPARAM found) -> BOOL {
+                *reinterpret_cast<HWND*>(found) = window;
+                return FALSE;
+            }, reinterpret_cast<LPARAM>(&host));
+            if (host) ShowWindow(host, SW_SHOWNA);
+            const bool shown = WithoutGamePresent(submit);
             ComPtr<ID3D11Device> device;
             ComPtr<ID3D11DeviceContext> context;
             ComPtr<IDXGIDevice> dxgi;
@@ -112,7 +140,7 @@ int main() {
                 ComPtr<IDXGISwapChain1> swap;
                 if (Check(dxgiFactory->CreateSwapChainForComposition(device.Get(), &desc, nullptr, &swap),
                           "composition swap chain"))
-                    passed = Run(swap.Get(), device.Get(), context.Get(), submit);
+                    passed = shown && Run(swap.Get(), device.Get(), context.Get(), submit);
             }
             PostQuitMessage(0);
             return S_OK;
