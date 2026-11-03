@@ -103,11 +103,12 @@ namespace Fixture
             "<local:Badge x:ConnectionId='2' x:Name='badge' Score='5' Visibility='Collapsed'/></Grid></local:SourcePage>";
 
         static void Check(bool value, string message) { if (!value) throw new Exception(message); }
-        static bool ShimLogContains(string text)
+        static bool ShimLogContains(string text) { return ShimLogOccurrences(text) != 0; }
+        static int ShimLogOccurrences(string text)
         {
-            if (!File.Exists("appx-portable.log")) return false;
+            if (!File.Exists("appx-portable.log")) return 0;
             using (var stream = new FileStream("appx-portable.log", FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            using (var reader = new StreamReader(stream)) return reader.ReadToEnd().Contains(text);
+            using (var reader = new StreamReader(stream)) return reader.ReadToEnd().Split(new[] { text }, StringSplitOptions.None).Length - 1;
         }
         static string Fails(string uri, object component)
         {
@@ -191,7 +192,100 @@ namespace Fixture
             Application.LoadComponent(page, new Uri("ms-appx:///Pages/replacement.xaml"));
             Check(page.Content == null && page.FindName("title") == null && ReferenceEquals(page.FindName("replacement"), page), "reload replaces tree and names");
             Console.WriteLine("PASS: managed loader builds WPF content with names, connections and game types; unsupported input fails explicitly");
+            VerifyCompatibility();
             VerifyStyles();
+        }
+
+        // Independent markup gaps are collected together, rather than hiding behind
+        // the first failing resource in the game's large shared dictionary.
+        void VerifyCompatibility()
+        {
+            var failures = new List<string>();
+            Action<string, string, Action<SourcePage>> test = (name, markup, verify) =>
+            {
+                try
+                {
+                    string file = "Pages/compat-" + name + ".xaml";
+                    File.WriteAllText(file, "<Page" + Ns + ">" + markup + "</Page>");
+                    var page = new SourcePage(); Application.LoadComponent(page, new Uri("ms-appx:///" + file)); verify(page);
+                }
+                catch (Exception error) { failures.Add(name + ": " + error.Message); }
+            };
+            test("transitions", "<Page.Resources><Style x:Key='enter' TargetType='Grid'><Setter Property='ChildrenTransitions'><Setter.Value>" +
+                "<TransitionCollection><EntranceThemeTransition IsStaggeringEnabled='False'/><EntranceThemeTransition/><ContentThemeTransition/><AddDeleteThemeTransition/><ReorderThemeTransition/>" +
+                "</TransitionCollection></Setter.Value></Setter></Style></Page.Resources><Grid Style='{StaticResource enter}'/>", page =>
+            {
+                Check(ShimLogOccurrences("UNIMPL managed Windows.UI.Xaml.Media.Animation.EntranceThemeTransition") == 1, "unsupported transition is logged once");
+                var property = typeof(Panel).GetProperty("ChildrenTransitions");
+                var collection = property.GetValue(page.Content, null);
+                var count = collection.GetType().GetProperty("Count");
+                Check((int)count.GetValue(collection, null) == 5 && ReferenceEquals(collection, property.GetValue(page.Content, null)), "transition collection contents and identity");
+                Exception wrong = null;
+                var thread = new System.Threading.Thread(() => { try { count.GetValue(collection, null); } catch (System.Reflection.TargetInvocationException error) { wrong = error.InnerException; } });
+                thread.Start(); thread.Join();
+                Check(wrong != null && Marshal.GetHRForException(wrong) == unchecked((int)0x8001010e), "transition collection thread affinity");
+            });
+            test("reposition", "<Grid><Grid.Resources><Storyboard x:Key='move'><RepositionThemeAnimation FromHorizontalOffset='-3' TargetName='target'/></Storyboard>" +
+                "</Grid.Resources><TextBlock x:Name='target'/></Grid>", page => Check(ShimLogContains("UNIMPL managed Windows.UI.Xaml.Media.Animation.RepositionThemeAnimation"), "unsupported theme animation is logged"));
+            test("composite", "<Grid x:Name='grid'><Grid.RenderTransform><CompositeTransform ScaleX='2' ScaleY='3' Rotation='90' TranslateX='10' TranslateY='20'/></Grid.RenderTransform></Grid>", page =>
+            {
+                var transform = ((System.Windows.Controls.Grid)PeerOf(page.FindName("grid"))).RenderTransform;
+                var point = transform.Transform(new System.Windows.Point(1, 2));
+                Check(Math.Abs(point.X - 4) < 0.0001 && Math.Abs(point.Y - 22) < 0.0001, "composite scale, rotation and translation reach WPF");
+            });
+            test("toggle", "<ToggleSwitch x:Name='toggle' IsOn='True' Header='Sounds' FontSize='24'/>", page =>
+            {
+                var toggle = (System.Windows.Controls.CheckBox)PeerOf(page.FindName("toggle"));
+                Check(toggle.IsChecked == true && Equals(toggle.Content, "Sounds") && toggle.FontSize == 24, "toggle maps checked state, header and typography");
+            });
+            test("wrap", "<WrapGrid x:Name='wrap' Orientation='Vertical'/>", page =>
+                Check(((System.Windows.Controls.WrapPanel)PeerOf(page.FindName("wrap"))).Orientation == System.Windows.Controls.Orientation.Vertical, "wrap orientation maps onto WPF layout"));
+            test("scroll", "<Page.Resources><Style x:Key='scroll' TargetType='ScrollViewer'><Setter Property='ScrollViewer.HorizontalScrollMode' Value='Enabled'/>" +
+                "<Setter Property='ScrollViewer.VerticalScrollMode' Value='Disabled'/><Setter Property='ScrollViewer.ZoomMode' Value='Disabled'/><Setter Property='TabNavigation' Value='Once'/>" +
+                "</Style></Page.Resources><ScrollViewer x:Name='scroll' Style='{StaticResource scroll}'/>", page =>
+            {
+                var scroll = (System.Windows.Controls.ScrollViewer)PeerOf(page.FindName("scroll"));
+                Check(scroll.VerticalScrollBarVisibility == System.Windows.Controls.ScrollBarVisibility.Disabled &&
+                    scroll.HorizontalScrollBarVisibility != System.Windows.Controls.ScrollBarVisibility.Disabled &&
+                    System.Windows.Input.KeyboardNavigation.GetTabNavigation(scroll) == System.Windows.Input.KeyboardNavigationMode.Once, "scroll modes and keyboard navigation use WPF");
+            });
+            test("list", "<Page.Resources><Style x:Key='list' TargetType='ListView'><Setter Property='IsSwipeEnabled' Value='False'/><Setter Property='TabNavigation' Value='Once'/>" +
+                "<Setter Property='ItemContainerTransitions'><Setter.Value><TransitionCollection/></Setter.Value></Setter></Style></Page.Resources><ListView x:Name='list' Style='{StaticResource list}' ScrollViewer.HorizontalScrollMode='Disabled'/>", page =>
+                Check(PeerOf(page.FindName("list")) is System.Windows.Controls.ListView, "list styles load onto WPF"));
+            test("fade", "<Grid><Grid.Resources><Storyboard x:Key='fade'><FadeInThemeAnimation TargetName='target'/><FadeOutThemeAnimation TargetName='target'/></Storyboard></Grid.Resources>" +
+                "<TextBlock x:Name='target'/></Grid>", page => { });
+            Directory.CreateDirectory("Assets");
+            var image = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            image.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(System.Windows.Media.Imaging.BitmapSource.Create(1, 1, 96, 96,
+                System.Windows.Media.PixelFormats.Bgra32, null, new byte[] { 0, 0, 255, 255 }, 4)));
+            using (var stream = File.Create("Assets/pixel.png")) image.Save(stream);
+            test("images", "<Page.Resources><ImageBrush x:Key='brush' ImageSource='/Assets/pixel.png'/></Page.Resources>" +
+                "<Image x:Name='image' Source='ms-appx:///Assets/pixel.png'/>", page =>
+            {
+                var source = ((System.Windows.Controls.Image)PeerOf(page.FindName("image"))).Source as System.Windows.Media.Imaging.BitmapSource;
+                Check(source != null && source.PixelWidth == 1, "package image URI resolves to WPF pixels");
+            });
+            test("presenter-content", "<ContentPresenter x:Name='presenter'><Grid/></ContentPresenter>", page =>
+                Check(((System.Windows.Controls.ContentPresenter)PeerOf(page.FindName("presenter"))).Content is System.Windows.Controls.Grid, "UWP ContentPresenter has implicit Content"));
+            test("presenter-foreground", "<ContentPresenter x:Name='presenter' Foreground='Red' Content='text'/>", page =>
+                Check(((System.Windows.Media.SolidColorBrush)System.Windows.Documents.TextElement.GetForeground((System.Windows.DependencyObject)PeerOf(page.FindName("presenter")))).Color == System.Windows.Media.Colors.Red,
+                      "presenter foreground uses WPF inherited text foreground"));
+            test("service-template", "<Page.Resources><ControlTemplate x:Key='media' TargetType='Frame'><MediaElement AutoPlay='True' AudioCategory='BackgroundCapableMedia'/></ControlTemplate>" +
+                "<ControlTemplate x:Key='items' TargetType='ListView'><ItemsPresenter Header='header' HeaderTemplate='{x:Null}' Padding='0'/></ControlTemplate></Page.Resources>", page => { });
+            test("selection-disabled", "<RichTextBlock IsTextSelectionEnabled='False'/>", page => { });
+            foreach (var unsupported in new[] {
+                new[] { "<ScrollViewer ZoomMode='Enabled'/>", "ScrollViewer.ZoomMode" },
+                new[] { "<ListView IsSwipeEnabled='True'/>", "ListViewBase.IsSwipeEnabled" },
+                new[] { "<RichTextBlock IsTextSelectionEnabled='True'/>", "RichTextBlock.IsTextSelectionEnabled" },
+                new[] { "<MediaElement AutoPlay='True'/>", "MediaElement.AutoPlay" },
+                new[] { "<ItemsPresenter Header='header'/>", "ItemsPresenter.Header" } })
+            {
+                File.WriteAllText("Pages/unimplemented.xaml", "<Page" + Ns + ">" + unsupported[0] + "</Page>");
+                string failure = Fails("ms-appx:///Pages/unimplemented.xaml", new SourcePage());
+                Check(failure.Contains(unsupported[1]), "unsupported behavior remains named: " + failure);
+            }
+            Check(failures.Count == 0, "compatibility gaps:\n" + string.Join("\n", failures));
+            Console.WriteLine("PASS: surveyed compatibility mappings load through WPF");
         }
 
         const string StylesXaml = "<ResourceDictionary" + Ns + ">" +

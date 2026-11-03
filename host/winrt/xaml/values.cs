@@ -34,6 +34,8 @@ namespace AppxPortable.WinRT.Xaml
         internal static object ToWpf(object value, Type type)
         {
             if (value == null) return null;
+            var transitions = value as global::Windows.UI.Xaml.Media.Animation.TransitionCollection;
+            if (transitions != null) value = transitions.Peer;
             var wrapper = value as global::Windows.UI.Xaml.DependencyObject;
             if (wrapper != null) value = wrapper.peer;
             if (type.IsInstanceOfType(value)) return value;
@@ -56,6 +58,7 @@ namespace AppxPortable.WinRT.Xaml
         {
             if (value == null) return null;
             if (value == System.Windows.DependencyProperty.UnsetValue) return global::Windows.UI.Xaml.DependencyProperty.UnsetValue;
+            if (value is TransitionCollectionPeer) return global::Windows.UI.Xaml.Media.Animation.TransitionCollection.Of((TransitionCollectionPeer)value);
             if (Peers.IsPeer(value)) value = Peers.Wrap(value);
             if (type.IsInstanceOfType(value) && !IsWpf(value.GetType())) return value;
             if (value.GetType().IsEnum && type.IsEnum) return Enumeration(value, type);

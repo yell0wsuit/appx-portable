@@ -13,7 +13,7 @@ namespace AppxPortable.WinRT.Xaml
         private static readonly Dictionary<Type, Func<object, global::Windows.UI.Xaml.DependencyObject>> factories =
             new Dictionary<Type, Func<object, global::Windows.UI.Xaml.DependencyObject>>();
         private static readonly Dictionary<Type, Type> peerTypes = new Dictionary<Type, Type>();
-        private static readonly Dictionary<Type, Dictionary<string, string>> aliases = new Dictionary<Type, Dictionary<string, string>>();
+        private static readonly Dictionary<Type, Dictionary<string, System.Windows.DependencyProperty>> aliases = new Dictionary<Type, Dictionary<string, System.Windows.DependencyProperty>>();
 
         static Peers()
         {
@@ -28,20 +28,20 @@ namespace AppxPortable.WinRT.Xaml
         }
 
         // A UWP member that maps onto a differently named WPF member.
-        internal static void Alias(Type wrapper, string uwp, string wpf)
+        internal static void Alias(Type wrapper, string uwp, System.Windows.DependencyProperty wpf)
         {
-            Dictionary<string, string> names;
-            if (!aliases.TryGetValue(wrapper, out names)) aliases.Add(wrapper, names = new Dictionary<string, string>(StringComparer.Ordinal));
+            Dictionary<string, System.Windows.DependencyProperty> names;
+            if (!aliases.TryGetValue(wrapper, out names)) aliases.Add(wrapper, names = new Dictionary<string, System.Windows.DependencyProperty>(StringComparer.Ordinal));
             names.Add(uwp, wpf);
         }
 
         // The WPF names of a wrapper's members that differ, along its base types.
-        internal static Dictionary<string, string> Aliases(Type wrapper)
+        internal static Dictionary<string, System.Windows.DependencyProperty> Aliases(Type wrapper)
         {
-            var result = new Dictionary<string, string>(StringComparer.Ordinal);
+            var result = new Dictionary<string, System.Windows.DependencyProperty>(StringComparer.Ordinal);
             for (Type type = wrapper; type != null; type = type.BaseType)
             {
-                Dictionary<string, string> names;
+                Dictionary<string, System.Windows.DependencyProperty> names;
                 if (aliases.TryGetValue(type, out names))
                     foreach (var pair in names) if (!result.ContainsKey(pair.Key)) result.Add(pair.Key, pair.Value);
             }
@@ -111,11 +111,50 @@ namespace AppxPortable.WinRT.Xaml
     // They are public because XAML creates only types visible to it.
     // WPF text typography backs the initial RichTextBlock surface; Blocks and overflow
     // remain explicit completion stubs until their document mapping is implemented.
-    public sealed class RichTextPeer : System.Windows.Controls.TextBlock { }
+    public sealed class RichTextPeer : System.Windows.Controls.TextBlock
+    {
+        public bool IsTextSelectionEnabled
+        {
+            get { return false; }
+            set { if (value) throw Errors.Unimplemented("Windows.UI.Xaml.Controls.RichTextBlock.IsTextSelectionEnabled"); }
+        }
+    }
     public sealed class PagePeer : System.Windows.Controls.UserControl { }
     public sealed class FramePeer : System.Windows.Controls.ContentControl { }
     // Placeholders for shim-backed services; they hold a place in the tree.
     public abstract class NativeHostPeer : System.Windows.FrameworkElement { internal NativeHostPeer() { } }
-    public sealed class MediaElementPeer : NativeHostPeer { }
+    public sealed class MediaElementPeer : NativeHostPeer
+    {
+        // Source templates can describe these services now; realizing them requires
+        // the native playback bridge in Plan 2, with an explicit failure until then.
+        public bool AutoPlay
+        {
+            get { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.MediaElement.AutoPlay"); }
+            set { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.MediaElement.AutoPlay"); }
+        }
+        public string AudioCategory
+        {
+            get { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.MediaElement.AudioCategory"); }
+            set { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.MediaElement.AudioCategory"); }
+        }
+    }
+    public sealed class ItemsPresenterPeer : System.Windows.Controls.ItemsPresenter
+    {
+        public object Header
+        {
+            get { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.ItemsPresenter.Header"); }
+            set { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.ItemsPresenter.Header"); }
+        }
+        public System.Windows.DataTemplate HeaderTemplate
+        {
+            get { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.ItemsPresenter.HeaderTemplate"); }
+            set { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.ItemsPresenter.HeaderTemplate"); }
+        }
+        public System.Windows.Thickness Padding
+        {
+            get { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.ItemsPresenter.Padding"); }
+            set { throw Errors.Unimplemented("Windows.UI.Xaml.Controls.ItemsPresenter.Padding"); }
+        }
+    }
     public sealed class SwapChainPanelPeer : NativeHostPeer { }
 }

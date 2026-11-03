@@ -216,6 +216,17 @@ namespace AppxPortable.WinRT.Xaml
                                 var valueFrame = frames.Peek();
                                 if (valueFrame.Type != null && valueFrame.Type.UnderlyingType == typeof(System.Windows.Setter) && valueFrame.Member.Name == "Property")
                                     valueFrame.Setting = reader.Value as string;
+                                var image = reader.Value as string;
+                                if (image != null && ImageSource(valueFrame.Member))
+                                {
+                                    Uri uri;
+                                    if (!Uri.TryCreate(image, UriKind.Absolute, out uri) || uri.Scheme == "ms-appx" || image.StartsWith("/", StringComparison.Ordinal))
+                                    {
+                                        writer.WriteValue(new Uri(Resolve(Combine(source, image)), UriKind.Absolute).AbsoluteUri);
+                                        reader.Read();
+                                        continue;
+                                    }
+                                }
                                 if (Equals(reader.Value, "SemiLight") && FontWeight(valueFrame))
                                 {
                                     writer.WriteValue("350");
@@ -279,6 +290,14 @@ namespace AppxPortable.WinRT.Xaml
                     writer.WriteNode(reader);
                     reader.Read();
                 }
+            }
+
+            private static bool ImageSource(XamlMember member)
+            {
+                if (member == null || member.Type.UnderlyingType == null) return false;
+                return typeof(System.Windows.Media.ImageSource).IsAssignableFrom(member.Type.UnderlyingType) ||
+                    member.Name == "UriSource" && member.DeclaringType != null && member.DeclaringType.UnderlyingType != null &&
+                    typeof(System.Windows.Media.Imaging.BitmapImage).IsAssignableFrom(member.DeclaringType.UnderlyingType);
             }
 
             // UWP names the OpenType weight 350; WPF accepts its numeric spelling.
@@ -390,6 +409,7 @@ namespace AppxPortable.WinRT.Xaml
 
         private UwpSchemaContext() : base(new[] { typeof(System.Windows.FrameworkElement).Assembly })
         {
+            CompatibilityProperties.Initialize();
             // UWP element names: the wrapper types with a WPF peer, by simple name.
             foreach (var pair in Peers.PeerTypes)
                 if (!uwp.ContainsKey(pair.Key.Name))
@@ -399,6 +419,7 @@ namespace AppxPortable.WinRT.Xaml
                     if (names.Count != 0) aliased.Add(pair.Key.Name, new PeerXamlType(wpf.GetXamlType(pair.Value), this, names));
                 }
             uwp["Application"] = typeof(ApplicationPeer);
+            uwp["TransitionCollection"] = typeof(TransitionCollectionPeer);
         }
 
         public override XamlDirective GetXamlDirective(string xamlNamespace, string name) { return wpf.GetXamlDirective(xamlNamespace, name); }
@@ -485,23 +506,33 @@ namespace AppxPortable.WinRT.Xaml
     internal sealed class PeerXamlType : XamlType
     {
         private readonly XamlType peer;
-        private readonly Dictionary<string, string> names;
+        private readonly Dictionary<string, System.Windows.DependencyProperty> names;
 
-        internal PeerXamlType(XamlType peer, XamlSchemaContext context, Dictionary<string, string> names) : base(peer.UnderlyingType, context)
+        internal PeerXamlType(XamlType peer, XamlSchemaContext context, Dictionary<string, System.Windows.DependencyProperty> names) : base(peer.UnderlyingType, context)
         {
             this.peer = peer; this.names = names;
         }
 
         protected override XamlTypeInvoker LookupInvoker() { return peer.Invoker; }
-        protected override XamlMember LookupContentProperty() { return peer.ContentProperty; }
+        protected override XamlMember LookupContentProperty()
+        {
+            return peer.ContentProperty ?? (peer.UnderlyingType == typeof(System.Windows.Controls.ContentPresenter) ? peer.GetMember("Content") : null);
+        }
         protected override XamlMember LookupAliasedProperty(XamlDirective directive) { return peer.GetAliasedProperty(directive); }
-        protected override XamlMember LookupAttachableMember(string name) { return peer.GetAttachableMember(name); }
+        protected override XamlMember LookupAttachableMember(string name)
+        {
+            System.Windows.DependencyProperty property;
+            return names.TryGetValue(name, out property) ? System.Windows.Markup.XamlReader.GetWpfSchemaContext()
+                .GetXamlType(property.OwnerType).GetAttachableMember(property.Name) ?? peer.GetAttachableMember(name) : peer.GetAttachableMember(name);
+        }
         protected override IEnumerable<XamlMember> LookupAllMembers() { return peer.GetAllMembers(); }
 
         protected override XamlMember LookupMember(string name, bool skipReadOnlyCheck)
         {
-            string wpfName;
-            return peer.GetMember(names.TryGetValue(name, out wpfName) ? wpfName : name);
+            System.Windows.DependencyProperty property;
+            if (!names.TryGetValue(name, out property)) return peer.GetMember(name);
+            return peer.GetMember(property.Name) ?? System.Windows.Markup.XamlReader.GetWpfSchemaContext()
+                .GetXamlType(property.OwnerType).GetAttachableMember(property.Name);
         }
     }
 

@@ -141,7 +141,7 @@ internal static partial class WinrtProjectionGenerator
         }
         string wpfName = dp.Substring(dp.LastIndexOf('.') + 1);
         wpfName = wpfName.Substring(0, wpfName.Length - "Property".Length);
-        if (wpfName != name) wpfAliases.Add(new[] { type.FullName, name, wpfName });
+        wpfAliases.Add(new[] { type.FullName, name, dp });
         output.AppendLine("        public " + value + " " + name);
         output.AppendLine("        {");
         output.AppendLine("            get { return (" + value + ")" + XamlRuntime + "Values.Get(this, " + dp + ", typeof(" + value + ")); }");
@@ -186,7 +186,7 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("            Peers.Register(typeof(global::" + pair.Key.FullName + "), typeof(global::" + pair.Value + "), p => new global::" +
                 pair.Key.FullName + "(p));");
         foreach (string[] alias in wpfAliases)
-            output.AppendLine("            Peers.Alias(typeof(global::" + alias[0] + "), \"" + alias[1] + "\", \"" + alias[2] + "\");");
+            output.AppendLine("            Peers.Alias(typeof(global::" + alias[0] + "), \"" + alias[1] + "\", " + alias[2] + ");");
         output.AppendLine("        }");
         output.AppendLine("    }");
         output.AppendLine("}");

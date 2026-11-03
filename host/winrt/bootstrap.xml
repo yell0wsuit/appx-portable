@@ -86,7 +86,9 @@
     <Property Name="Tag" Wpf="System.Windows.FrameworkElement.TagProperty" />
     <Property Name="Style" Wpf="System.Windows.FrameworkElement.StyleProperty" />
   </Class>
-  <Class Name="Windows.UI.Xaml.Controls.Panel" Adapter="Wpf" Peer="System.Windows.Controls.Panel" />
+  <Class Name="Windows.UI.Xaml.Controls.Panel" Adapter="Wpf" Peer="System.Windows.Controls.Panel">
+    <Property Name="ChildrenTransitions" Wpf="AppxPortable.WinRT.Xaml.CompatibilityProperties.ChildrenTransitionsProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Controls.UIElementCollection" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Controls.Grid" Adapter="Wpf" Peer="System.Windows.Controls.Grid">
     <Constructor />
@@ -99,7 +101,14 @@
   </Class>
   <Class Name="Windows.UI.Xaml.Controls.Image" Adapter="Wpf" Peer="System.Windows.Controls.Image"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Controls.Viewbox" Adapter="Wpf" Peer="System.Windows.Controls.Viewbox"><Constructor /></Class>
-  <Class Name="Windows.UI.Xaml.Controls.ContentPresenter" Adapter="Wpf" Peer="System.Windows.Controls.ContentPresenter"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.ContentPresenter" Adapter="Wpf" Peer="System.Windows.Controls.ContentPresenter"><Constructor />
+    <Property Name="Content" Wpf="System.Windows.Controls.ContentPresenter.ContentProperty" />
+    <Property Name="Foreground" Wpf="System.Windows.Documents.TextElement.ForegroundProperty" />
+    <Property Name="ContentTransitions" Wpf="AppxPortable.WinRT.Xaml.CompatibilityProperties.ContentTransitionsProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.ItemsPresenter" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ItemsPresenterPeer"><Constructor />
+    <Property Name="HeaderTransitions" Wpf="AppxPortable.WinRT.Xaml.CompatibilityProperties.HeaderTransitionsProperty" />
+  </Class>
   <!-- Shim-backed services (Plan 2): a transparent placeholder holds their place in the tree. -->
   <Class Name="Windows.UI.Xaml.Controls.MediaElement" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.MediaElementPeer"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Controls.SwapChainBackgroundPanel" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.SwapChainPanelPeer"><Constructor /></Class>
@@ -111,6 +120,57 @@
     <Property Name="FontSize" Wpf="System.Windows.Controls.TextBlock.FontSizeProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.Controls.RichTextBlock" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.RichTextPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.GeneralTransform" Adapter="Wpf" Peer="System.Windows.Media.GeneralTransform" />
+  <Class Name="Windows.UI.Xaml.Media.Transform" Adapter="Wpf" Peer="System.Windows.Media.Transform" />
+  <Class Name="Windows.UI.Xaml.Media.CompositeTransform" Adapter="Wpf" Peer="System.Windows.Media.MatrixTransform"><Constructor />
+    <Property Name="ScaleX" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.ScaleXProperty" />
+    <Property Name="ScaleY" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.ScaleYProperty" />
+    <Property Name="SkewX" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.SkewXProperty" />
+    <Property Name="SkewY" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.SkewYProperty" />
+    <Property Name="Rotation" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.RotationProperty" />
+    <Property Name="TranslateX" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.TranslateXProperty" />
+    <Property Name="TranslateY" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.TranslateYProperty" />
+    <Property Name="CenterX" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.CenterXProperty" />
+    <Property Name="CenterY" Wpf="AppxPortable.WinRT.Xaml.CompositeProperties.CenterYProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.ToggleSwitch" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ToggleSwitchPeer"><Constructor />
+    <Property Name="Header" Wpf="System.Windows.Controls.ContentControl.ContentProperty" />
+    <Property Name="IsOn" Wpf="System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.OrientedVirtualizingPanel" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Controls.VirtualizingPanel" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Controls.WrapGrid" Adapter="Wpf" Peer="System.Windows.Controls.WrapPanel"><Constructor />
+    <Property Name="Orientation" Wpf="System.Windows.Controls.WrapPanel.OrientationProperty" />
+  </Class>
+  <Enum Name="Windows.UI.Xaml.Controls.Orientation" />
+  <Enum Name="Windows.UI.Xaml.Input.KeyboardNavigationMode" />
+  <Enum Name="Windows.UI.Xaml.Controls.ScrollMode" />
+  <Enum Name="Windows.UI.Xaml.Controls.ZoomMode" />
+  <Class Name="Windows.UI.Xaml.Controls.ScrollViewer" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ScrollViewerPeer"><Constructor />
+    <Property Name="HorizontalScrollMode" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.HorizontalScrollModeProperty" />
+    <Property Name="VerticalScrollMode" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.VerticalScrollModeProperty" />
+    <Property Name="ZoomMode" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.ZoomModeProperty" />
+    <Property Name="BringIntoViewOnFocusChange" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.BringIntoViewOnFocusChangeProperty" />
+    <Property Name="IsHorizontalRailEnabled" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.IsHorizontalRailEnabledProperty" />
+    <Property Name="IsVerticalRailEnabled" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.IsVerticalRailEnabledProperty" />
+    <Property Name="IsHorizontalScrollChainingEnabled" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.IsHorizontalScrollChainingEnabledProperty" />
+    <Property Name="IsVerticalScrollChainingEnabled" Wpf="AppxPortable.WinRT.Xaml.ScrollProperties.IsVerticalScrollChainingEnabledProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.ItemsControl" Adapter="Wpf" Peer="System.Windows.Controls.ItemsControl">
+    <Property Name="ItemContainerTransitions" Wpf="AppxPortable.WinRT.Xaml.CompatibilityProperties.ItemContainerTransitionsProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.Selector" Adapter="Wpf" Peer="System.Windows.Controls.Primitives.Selector" />
+  <Class Name="Windows.UI.Xaml.Controls.ListViewBase" Adapter="Wpf">
+    <Property Name="IsSwipeEnabled" Wpf="AppxPortable.WinRT.Xaml.ListViewPeer.IsSwipeEnabledProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.ListView" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ListViewPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.Transition" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Media.Animation.TransitionCollection" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Media.Animation.EntranceThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.EntranceThemeTransitionPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.ContentThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ContentThemeTransitionPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.AddDeleteThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.AddDeleteThemeTransitionPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.ReorderThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ReorderThemeTransitionPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.RepositionThemeAnimation" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.RepositionThemeAnimationPeer"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.Brush" Adapter="Wpf" Peer="System.Windows.Media.Brush" />
   <Class Name="Windows.UI.Xaml.Media.SolidColorBrush" Adapter="Wpf" Peer="System.Windows.Media.SolidColorBrush">
     <Constructor />
@@ -140,7 +200,9 @@
   <Enum Name="Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation" />
   <Class Name="Windows.UI.Xaml.RoutedEventArgs" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Input.KeyRoutedEventArgs" Adapter="Wpf" />
-  <Class Name="Windows.UI.Xaml.Controls.Control" Adapter="Wpf" Peer="System.Windows.Controls.Control"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Control" Adapter="Wpf" Peer="System.Windows.Controls.Control"><Constructor />
+    <Property Name="TabNavigation" Wpf="System.Windows.Input.KeyboardNavigation.TabNavigationProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Controls.ContentControl" Adapter="Wpf" Peer="System.Windows.Controls.ContentControl">
     <Constructor />
     <Property Name="Content" Wpf="System.Windows.Controls.ContentControl.ContentProperty" />
