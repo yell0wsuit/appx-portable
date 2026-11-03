@@ -254,6 +254,32 @@ class StorageIoProjectionTest
         catch (Exception error) { if (error.HResult != unchecked((int)0x80070490)) throw; }
         byte[] copied = bytes.AsBuffer().ToArray();
         Check(copied.Length == bytes.Length && copied[0] == bytes[0], "buffer extensions");
+        // StatsModelView's rank table: a package file read as lines.
+        File.WriteAllText("ranks.txt", "Novice\r\nApprentice\nExpert\rMaster\n");
+        StorageFile ranks = await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///ranks.txt"));
+        Check(ranks.Path == Path.GetFullPath("ranks.txt"), "ms-appx resolves in the package: " + ranks.Path);
+        IList<string> lines = await FileIO.ReadLinesAsync(ranks);
+        Check(lines.Count == 4 && lines[0] == "Novice" && lines[1] == "Apprentice" && lines[2] == "Expert" && lines[3] == "Master",
+              "ReadLinesAsync ends lines at CR, LF and CRLF: " + string.Join("|", lines));
+        // Saved stats: integers over a sequential stream, little-endian by default.
+        File.WriteAllBytes("stats.dat", new byte[] { 1, 0, 0, 0, 0x34, 0x12, 0, 0, 0, 2 });
+        StorageFile stats = await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///stats.dat"));
+        using (IInputStream input = await stats.OpenSequentialReadAsync())
+        using (var reader = new DataReader(input))
+        {
+            Check(await reader.LoadAsync(10) == 10, "sequential stream loads");
+            Check(reader.ReadInt32() == 1 && reader.ReadUInt16() == 0x1234 && reader.ReadUInt32() == 0x02000000, "DataReader integers");
+            try { reader.ReadInt32(); throw new Exception("read past the end accepted"); }
+            catch (Exception error) { Check(error.HResult == unchecked((int)0x8000000B), "E_BOUNDS past the end: " + error.HResult.ToString("x8")); }
+        }
+        // XboxWrapper's caches: whole-file text (UTF-8, no BOM) and bytes.
+        await FileIO.WriteTextAsync(ranks, "xuid \u2713");
+        byte[] cachedText = File.ReadAllBytes(ranks.Path);
+        Check(System.Text.Encoding.UTF8.GetString(cachedText) == "xuid \u2713" && cachedText[0] == (byte)'x', "WriteTextAsync replaces the text without a BOM");
+        await FileIO.WriteBytesAsync(stats, new byte[] { 9, 8 });
+        Check(File.ReadAllBytes(stats.Path).Length == 2, "WriteBytesAsync replaces the bytes");
+        try { await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///missing-ranks.txt")); throw new Exception("missing package file opened"); }
+        catch (Exception error) { Check(error.HResult == unchecked((int)0x80070002), "missing package file fails with file-not-found: " + error.HResult.ToString("x8")); }
         Console.WriteLine("PASS: managed storage awaits native files and reads seekable streams and buffers");
     }
     [MTAThread]

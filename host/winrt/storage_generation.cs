@@ -27,7 +27,12 @@ internal static partial class WinrtProjectionGenerator
             "CreateFileAsync|(System.String,Windows.Storage.CreationCollisionOption)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>",
             "GetFileAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
         StorageInterface(output, "FileStatics", "Windows.Storage.IStorageFileStatics", new[] {
-            "GetFileFromPathAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
+            "GetFileFromPathAsync|(System.String)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>",
+            "GetFileFromApplicationUriAsync|(Windows.Foundation.Uri)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.StorageFile>" });
+        StorageInterface(output, "InputReference", "Windows.Storage.Streams.IInputStreamReference", new[] {
+            "OpenSequentialReadAsync|()->Windows.Foundation.IAsyncOperation`1<Windows.Storage.Streams.IInputStream>" });
+        StorageInterface(output, "UriFactory", "Windows.Foundation.IUriRuntimeClassFactory", new[] {
+            "CreateUri|(System.String)->Windows.Foundation.Uri" });
         StorageInterface(output, "File", "Windows.Storage.IStorageFile", new[] {
             "OpenAsync|(Windows.Storage.FileAccessMode)->Windows.Foundation.IAsyncOperation`1<Windows.Storage.Streams.IRandomAccessStream>" });
         StorageInterface(output, "FileIO", "Windows.Storage.IFileIOStatics", new[] {
@@ -57,6 +62,8 @@ internal static partial class WinrtProjectionGenerator
         StorageInterface(output, "Reader", "Windows.Storage.Streams.IDataReader", new[] {
             "get_UnconsumedBufferLength|()->System.UInt32", "ReadBytes|(System.Byte[])->System.Void",
             "ReadString|(System.UInt32)->System.String",
+            "ReadInt16|()->System.Int16", "ReadUInt16|()->System.UInt16", "ReadInt32|()->System.Int32",
+            "ReadUInt32|()->System.UInt32", "ReadInt64|()->System.Int64", "ReadUInt64|()->System.UInt64",
             "LoadAsync|(System.UInt32)->Windows.Storage.Streams.DataReaderLoadOperation",
             "DetachStream|()->Windows.Storage.Streams.IInputStream" });
         StorageInterface(output, "ReaderFactory", "Windows.Storage.Streams.IDataReaderFactory", new[] {
@@ -88,6 +95,7 @@ internal static partial class WinrtProjectionGenerator
         StorageFuture(output, "File", "Windows.Storage.StorageFile", false);
         StorageFuture(output, "Random", "Windows.Storage.Streams.IRandomAccessStream", false);
         StorageFuture(output, "Stream", "Windows.Storage.Streams.IRandomAccessStreamWithContentType", false);
+        StorageFuture(output, "Input", "Windows.Storage.Streams.IInputStream", false);
         StorageFuture(output, "Read", "Windows.Storage.Streams.IBuffer", true);
         StorageFuture(output, "Text", "System.String", false);
         StorageAction(output);

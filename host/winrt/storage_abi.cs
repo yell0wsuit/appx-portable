@@ -252,6 +252,27 @@ namespace Windows.Storage
             using (var factory = NativeObject.Factory("Windows.Storage.StorageFile", StorageAbi.FileStatics))
                 return NativeFuture<StorageFile>.FromNative(StorageCalls.Text(factory, StorageAbi.FileStatics_GetFileFromPathAsync, path), StorageAbi.FileFuture, FromNative);
         }
+        // ms-appx:/// and ms-appdata:/// resolve in the shim, against the package and app data.
+        public static IAsyncOperation<StorageFile> GetFileFromApplicationUriAsync(Uri uri)
+        {
+            if (uri == null) throw new ArgumentNullException("uri");
+            if (!uri.IsAbsoluteUri) throw new ArgumentException("An application URI must be absolute", "uri");
+            using (var uris = NativeObject.Factory("Windows.Foundation.Uri", StorageAbi.UriFactory))
+            using (var native = StorageCalls.Text(uris, StorageAbi.UriFactory_CreateUri, uri.AbsoluteUri))
+            using (var factory = NativeObject.Factory("Windows.Storage.StorageFile", StorageAbi.FileStatics))
+            using (var access = new NativeObject.Access(factory))
+            using (var argument = new NativeObject.Access(native))
+            {
+                IntPtr result;
+                int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.FileStatics_GetFileFromApplicationUriAsync)(access.Self, argument.Self, out result);
+                return NativeFuture<StorageFile>.FromNative(NativeObject.TakeResult(hr, result), StorageAbi.FileFuture, FromNative);
+            }
+        }
+        public IAsyncOperation<IInputStream> OpenSequentialReadAsync()
+        {
+            using (var reference = native.QueryInterface(StorageAbi.InputReference))
+                return NativeFuture<IInputStream>.FromNative(reference.Object(StorageAbi.InputReference_OpenSequentialReadAsync), StorageAbi.InputFuture, InputStream.FromNative);
+        }
         public IAsyncOperation<IRandomAccessStream> OpenAsync(FileAccessMode accessMode)
         {
             using (var file = native.QueryInterface(StorageAbi.File))
@@ -281,6 +302,37 @@ namespace Windows.Storage
                 IntPtr result; int hr = access.Method<StorageCalls.ObjectCall>(StorageAbi.FileIO_ReadTextAsync)(access.Self, target == null ? IntPtr.Zero : target.Self, out result);
                 return NativeFuture<string>.Wrap(NativeObject.TakeResult(hr, result), StorageAbi.TextFuture, operation => operation.String(StorageAbi.TextFuture.Results));
             }
+        }
+        // Lines of the file's text: CR, LF and CRLF end a line; a final line ending adds no empty line.
+        public static IAsyncOperation<global::System.Collections.Generic.IList<string>> ReadLinesAsync(IStorageFile file)
+        {
+            var lines = new ManagedOperation<global::System.Collections.Generic.IList<string>>();
+            var text = ReadTextAsync(file);
+            text.Completed = (operation, status) =>
+            {
+                if (status != AsyncStatus.Completed) { lines.Fail(operation.ErrorCode ?? new OperationCanceledException()); return; }
+                try
+                {
+                    string value = operation.GetResults();
+                    var split = new global::System.Collections.Generic.List<string>(
+                        global::System.Text.RegularExpressions.Regex.Split(value, "\r\n|\n|\r"));
+                    if (value.Length == 0 || split[split.Count - 1].Length == 0) split.RemoveAt(split.Count - 1);
+                    lines.Complete(split);
+                }
+                catch (Exception error) { lines.Fail(error); }
+            };
+            return lines;
+        }
+        // Whole-file writes, as FileIO replaces the contents: UTF-8 text without a BOM, or bytes.
+        public static IAsyncAction WriteTextAsync(IStorageFile file, string contents)
+        {
+            if (file == null) throw new ArgumentNullException("file");
+            return ManagedAction.Run(() => global::System.IO.File.WriteAllText(file.Path, contents ?? "", new global::System.Text.UTF8Encoding(false)));
+        }
+        public static IAsyncAction WriteBytesAsync(IStorageFile file, byte[] buffer)
+        {
+            if (file == null) throw new ArgumentNullException("file");
+            return ManagedAction.Run(() => global::System.IO.File.WriteAllBytes(file.Path, buffer ?? new byte[0]));
         }
         public static IAsyncAction WriteBufferAsync(IStorageFile file, IBuffer buffer)
         {
@@ -438,6 +490,19 @@ namespace Windows.Storage.Streams
             using (var access = new NativeObject.Access(native))
                 Errors.Check(access.Method<ReadBytesCall>(StorageAbi.Reader_ReadBytes)(access.Self, bytes.Length, bytes.Pointer));
         }
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int Int16Call(IntPtr self, out short value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int UInt16Call(IntPtr self, out ushort value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int Int32Call(IntPtr self, out int value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int UInt32Call(IntPtr self, out uint value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int Int64Call(IntPtr self, out long value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] private delegate int UInt64Call(IntPtr self, out ulong value);
+        // Integers in the reader's ByteOrder, read by the shim.
+        public short ReadInt16() { short v; using (var a = new NativeObject.Access(native)) Errors.Check(a.Method<Int16Call>(StorageAbi.Reader_ReadInt16)(a.Self, out v)); return v; }
+        public ushort ReadUInt16() { ushort v; using (var a = new NativeObject.Access(native)) Errors.Check(a.Method<UInt16Call>(StorageAbi.Reader_ReadUInt16)(a.Self, out v)); return v; }
+        public int ReadInt32() { int v; using (var a = new NativeObject.Access(native)) Errors.Check(a.Method<Int32Call>(StorageAbi.Reader_ReadInt32)(a.Self, out v)); return v; }
+        public uint ReadUInt32() { uint v; using (var a = new NativeObject.Access(native)) Errors.Check(a.Method<UInt32Call>(StorageAbi.Reader_ReadUInt32)(a.Self, out v)); return v; }
+        public long ReadInt64() { long v; using (var a = new NativeObject.Access(native)) Errors.Check(a.Method<Int64Call>(StorageAbi.Reader_ReadInt64)(a.Self, out v)); return v; }
+        public ulong ReadUInt64() { ulong v; using (var a = new NativeObject.Access(native)) Errors.Check(a.Method<UInt64Call>(StorageAbi.Reader_ReadUInt64)(a.Self, out v)); return v; }
         public string ReadString(uint codeUnitCount)
         {
             using (var access = new NativeObject.Access(native))
@@ -520,5 +585,99 @@ namespace AppxPortable.WinRT
     internal sealed partial class NativeObject
     {
         internal void Remember(object wrapper) { IntPtr identity = Identity(); lock (gate) wrappers[identity] = new WeakReference(wrapper); }
+    }
+}
+
+namespace AppxPortable.WinRT
+{
+    // WinRT async results computed in managed code. Completed runs once, when the
+    // operation finishes, or at once when assigned after it has finished.
+    internal abstract class ManagedAsync
+    {
+        private static int nextId;
+        protected readonly object gate = new object();
+        private readonly uint id = (uint)global::System.Threading.Interlocked.Increment(ref nextId);
+        protected AsyncStatus status = AsyncStatus.Started;
+        protected Exception error;
+        public uint Id { get { return id; } }
+        public AsyncStatus Status { get { lock (gate) return status; } }
+        public Exception ErrorCode { get { lock (gate) return error; } }
+        public void Cancel() { Finish(AsyncStatus.Canceled, null); }
+        public void Close() { }
+        internal void Fail(Exception failure) { Finish(AsyncStatus.Error, failure); }
+        protected void Finish(AsyncStatus final, Exception failure)
+        {
+            lock (gate)
+            {
+                if (status != AsyncStatus.Started) return;
+                status = final; error = failure;
+            }
+            Notify();
+        }
+        protected abstract void Notify();
+        protected void Results()
+        {
+            if (status == AsyncStatus.Error) throw error;
+            if (status == AsyncStatus.Canceled) throw new OperationCanceledException();
+            if (status != AsyncStatus.Completed) throw new InvalidOperationException("The operation has not completed");
+        }
+        // WinRT's E_ILLEGAL_DELEGATE_ASSIGNMENT for a second Completed handler.
+        protected static Exception Reassigned() { return new InvalidOperationException("Completed is already set"); }
+    }
+    internal sealed class ManagedOperation<T> : ManagedAsync, IAsyncOperation<T>
+    {
+        private T result;
+        private AsyncOperationCompletedHandler<T> completed;
+        private bool notified;
+        internal void Complete(T value)
+        {
+            lock (gate) { if (status != AsyncStatus.Started) return; result = value; status = AsyncStatus.Completed; }
+            Notify();
+        }
+        public AsyncOperationCompletedHandler<T> Completed
+        {
+            get { lock (gate) return completed; }
+            set { lock (gate) { if (completed != null) throw Reassigned(); completed = value; } Notify(); }
+        }
+        public T GetResults() { lock (gate) { Results(); return result; } }
+        protected override void Notify()
+        {
+            AsyncOperationCompletedHandler<T> handler; AsyncStatus final;
+            lock (gate)
+            {
+                if (notified || completed == null || status == AsyncStatus.Started) return;
+                notified = true; handler = completed; final = status;
+            }
+            handler(this, final);
+        }
+    }
+    internal sealed class ManagedAction : ManagedAsync, IAsyncAction
+    {
+        private AsyncActionCompletedHandler completed;
+        private bool notified;
+        // Runs the work now; a failure becomes the action's error, as awaiting it rethrows.
+        internal static ManagedAction Run(Action work)
+        {
+            var action = new ManagedAction();
+            try { work(); action.Finish(AsyncStatus.Completed, null); }
+            catch (Exception failure) { action.Fail(failure); }
+            return action;
+        }
+        public AsyncActionCompletedHandler Completed
+        {
+            get { lock (gate) return completed; }
+            set { lock (gate) { if (completed != null) throw Reassigned(); completed = value; } Notify(); }
+        }
+        public void GetResults() { lock (gate) Results(); }
+        protected override void Notify()
+        {
+            AsyncActionCompletedHandler handler; AsyncStatus final;
+            lock (gate)
+            {
+                if (notified || completed == null || status == AsyncStatus.Started) return;
+                notified = true; handler = completed; final = status;
+            }
+            handler(this, final);
+        }
     }
 }

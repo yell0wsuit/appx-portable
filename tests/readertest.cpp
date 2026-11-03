@@ -292,6 +292,31 @@ static int StreamReader(IDataReaderStatics* statics) {
     }
     return 0;
 }
+// Integer reads follow the reader's ByteOrder (little-endian until set).
+static int Integers(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**), IDataReaderStatics* statics) {
+    ComPtr<IActivationFactory> factory;
+    ComPtr<IBufferFactory> buffers;
+    ComPtr<IBuffer> buffer;
+    if (FAILED(get(HStringReference(L"Windows.Storage.Streams.Buffer").Get(), &factory)) ||
+        FAILED(factory.As(&buffers)) || FAILED(buffers->Create(10, &buffer)))
+        return 40;
+    ComPtr<::Windows::Storage::Streams::IBufferByteAccess> access;
+    byte* data = nullptr;
+    const byte source[10] = {1, 0, 0, 0, 0, 0, 0, 2, 0x34, 0x12};
+    if (FAILED(buffer.As(&access)) || FAILED(access->Buffer(&data)) || !data) return 41;
+    memcpy(data, source, sizeof(source));
+    ComPtr<IDataReader> reader;
+    if (FAILED(buffer->put_Length(sizeof(source))) || FAILED(statics->FromBuffer(buffer.Get(), &reader))) return 42;
+    INT32 first = 0;
+    UINT32 second = 0;
+    UINT16 third = 0;
+    if (FAILED(reader->ReadInt32(&first)) || first != 1) return 43;
+    if (FAILED(reader->put_ByteOrder(ByteOrder_BigEndian)) || FAILED(reader->ReadUInt32(&second)) || second != 2) return 44;
+    if (FAILED(reader->put_ByteOrder(ByteOrder_LittleEndian)) || FAILED(reader->ReadUInt16(&third)) || third != 0x1234)
+        return 45;
+    if (reader->ReadInt32(&first) != E_BOUNDS || reader->ReadInt32(nullptr) != E_POINTER) return 46;
+    return 0;
+}
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
     auto* dll = LoadLibraryW(L"appxportable.dll");
@@ -369,6 +394,10 @@ int main() {
     if (reader->LoadAsync(1, nullptr) != E_POINTER) return 25;
     if (int failure = StreamReader(statics.Get())) {
         printf("FAIL stream reader %d\n", failure);
+        return failure;
+    }
+    if (int failure = Integers(get, statics.Get())) {
+        printf("FAIL integers %d\n", failure);
         return failure;
     }
     puts("readertest: 0 failure(s)");

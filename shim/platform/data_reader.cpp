@@ -304,6 +304,31 @@ public:
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE ReadByte(BYTE* value) override { return ReadBytes(1, value); }
+    // Fixed-size integers in the reader's ByteOrder.
+    template <class T> HRESULT ReadInteger(T* value) {
+        if (!value) return E_POINTER;
+        BYTE bytes[sizeof(T)];
+        auto hr = ReadBytes(sizeof(T), bytes);
+        if (FAILED(hr)) return hr;
+        ByteOrder order;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            order = byteOrder_;
+        }
+        unsigned long long result = 0;
+        for (size_t i = 0; i < sizeof(T); ++i) {
+            const size_t at = order == ByteOrder_LittleEndian ? sizeof(T) - 1 - i : i;
+            result = (result << 8) | bytes[at];
+        }
+        *value = static_cast<T>(result);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE ReadInt16(INT16* value) override { return ReadInteger(value); }
+    HRESULT STDMETHODCALLTYPE ReadUInt16(UINT16* value) override { return ReadInteger(value); }
+    HRESULT STDMETHODCALLTYPE ReadInt32(INT32* value) override { return ReadInteger(value); }
+    HRESULT STDMETHODCALLTYPE ReadUInt32(UINT32* value) override { return ReadInteger(value); }
+    HRESULT STDMETHODCALLTYPE ReadInt64(INT64* value) override { return ReadInteger(value); }
+    HRESULT STDMETHODCALLTYPE ReadUInt64(UINT64* value) override { return ReadInteger(value); }
     HRESULT STDMETHODCALLTYPE ReadBytes(UINT32 count, BYTE* value) override {
         std::lock_guard<std::mutex> lock(mutex_);
         if (closed_) return RO_E_CLOSED;
