@@ -151,6 +151,14 @@ namespace Fixture
             catch (InvalidOperationException error) { Check(ReferenceEquals(error, failing.Failure), "connector exception identity"); }
             Check(ShimLogContains("managed callback threw System.InvalidOperationException: source callback failure"), "connector failure logged");
 
+            // UWP keys a resource with only x:Name by that name, and the name is findable.
+            File.WriteAllText("Pages/named.xaml", "<Page" + Ns + "><Page.Resources><Storyboard x:Name='intro'/><Storyboard x:Key='k' x:Name='both'/></Page.Resources></Page>");
+            var named = new SourcePage();
+            Application.LoadComponent(named, new Uri("ms-appx:///Pages/named.xaml"));
+            Check(named.Resources.ContainsKey("intro") && named.FindName("intro") is Windows.UI.Xaml.Media.Animation.Storyboard &&
+                  ReferenceEquals(named.Resources["intro"], named.FindName("intro")) && named.Resources.ContainsKey("k") && !named.Resources.ContainsKey("both"),
+                  "x:Name keys a resource that has no x:Key");
+
             File.WriteAllText("Pages/replacement.xaml", "<Page" + Ns + " x:Name='replacement'/>");
             Application.LoadComponent(page, new Uri("ms-appx:///Pages/replacement.xaml"));
             Check(page.Content == null && page.FindName("title") == null && ReferenceEquals(page.FindName("replacement"), page), "reload replaces tree and names");

@@ -114,7 +114,9 @@ namespace AppxPortable.WinRT.Xaml
 
         private sealed class Frame
         {
-            internal bool Got;
+            internal bool Got, InDictionary, Keyed;
+            internal XamlType Type;
+            internal XamlMember Member;
             internal string Name, Source;
             internal int? Connection;
         }
@@ -185,10 +187,13 @@ namespace AppxPortable.WinRT.Xaml
                         case XamlNodeType.StartObject:
                             if (reader.Type.IsUnknown)
                                 throw new XamlException(Where(reader) + ": no WPF mapping for type " + reader.Type.PreferredXamlNamespace + ":" + reader.Type.Name);
-                            frames.Push(new Frame());
+                            frames.Push(new Frame { Type = reader.Type, InDictionary = InDictionary() });
                             break;
                         case XamlNodeType.GetObject:
-                            frames.Push(new Frame { Got = true });
+                            frames.Push(new Frame { Got = true, Type = frames.Count == 0 || frames.Peek().Member == null ? null : frames.Peek().Member.Type });
+                            break;
+                        case XamlNodeType.EndMember:
+                            if (frames.Count != 0) frames.Peek().Member = null;
                             break;
                         case XamlNodeType.EndObject:
                             var frame = frames.Pop();
@@ -196,6 +201,8 @@ namespace AppxPortable.WinRT.Xaml
                             break;
                         case XamlNodeType.StartMember:
                             var member = reader.Member;
+                            if (frames.Count != 0) frames.Peek().Member = member;
+                            if (member == XamlLanguage.Key) frames.Peek().Keyed = true;
                             if (member == XamlLanguage.Class) { reader.Skip(); continue; }
                             if (member == XamlLanguage.ConnectionId)
                             {
@@ -217,9 +224,24 @@ namespace AppxPortable.WinRT.Xaml
                                     (member.DeclaringType == null ? "" : member.DeclaringType.Name + ".") + member.Name);
                             if (member == XamlLanguage.Name || (frames.Count != 0 && IsNameAlias(member)))
                             {
+                                var named = frames.Peek();
                                 writer.WriteNode(reader);
                                 reader.Read();
-                                if (reader.NodeType == XamlNodeType.Value) frames.Peek().Name = (string)reader.Value;
+                                if (reader.NodeType != XamlNodeType.Value) continue;
+                                named.Name = (string)reader.Value;
+                                writer.WriteNode(reader);
+                                reader.Read();
+                                writer.WriteNode(reader);   // EndMember
+                                reader.Read();
+                                named.Member = null;
+                                // UWP keys a dictionary entry that has only x:Name by that name.
+                                if (named.InDictionary && !named.Keyed)
+                                {
+                                    named.Keyed = true;
+                                    writer.WriteStartMember(XamlLanguage.Key);
+                                    writer.WriteValue(named.Name);
+                                    writer.WriteEndMember();
+                                }
                                 continue;
                             }
                             break;
@@ -227,6 +249,14 @@ namespace AppxPortable.WinRT.Xaml
                     writer.WriteNode(reader);
                     reader.Read();
                 }
+            }
+
+            // The object starting now is an entry of the dictionary being filled.
+            private bool InDictionary()
+            {
+                if (frames.Count == 0) return false;
+                var parent = frames.Peek();
+                return parent.Member == XamlLanguage.Items && parent.Type != null && parent.Type.IsDictionary;
             }
 
             private static bool IsNameAlias(XamlMember member)
