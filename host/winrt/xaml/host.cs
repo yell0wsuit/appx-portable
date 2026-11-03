@@ -59,6 +59,7 @@ namespace AppxPortable.WinRT.Xaml
         {
             Content = content;
             ShowContent((System.Windows.UIElement)Peers.Of(content));
+            EnsurePresentation();
         }
     }
 }

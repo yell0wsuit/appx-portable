@@ -10,3 +10,4 @@ EXPORTS
   ShimReportUnimplemented
   ShimReportException
   ShimCreateXamlService
+  ShimSubmitXamlFrame

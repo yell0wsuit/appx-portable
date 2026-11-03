@@ -672,24 +672,32 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         var replacement = new ResourceDictionary(); app.Resources = replacement;
         Check(ReferenceEquals(app.Resources, replacement), "assigned Application.Resources identity");
         app.Resources = dictionary;
+        // Loaded semantics on a tree of its own, in a test-only presentation source.
+        var loose = new Windows.UI.Xaml.Controls.Grid(); var looseChild = new Windows.UI.Xaml.Controls.TextBlock(); loose.Children.Add(looseChild);
         int loaded = 0, removed = 0; object sender = null; RoutedEventArgs args = null;
-        var skipped = child.add_Loaded((s, e) => ++removed); child.remove_Loaded(skipped);
-        child.add_Loaded((s, e) => { ++loaded; sender = s; args = e; });
+        var skipped = looseChild.add_Loaded((s, e) => ++removed); looseChild.remove_Loaded(skipped);
+        looseChild.add_Loaded((s, e) => { ++loaded; sender = s; args = e; });
+        var source = new global::System.Windows.Interop.HwndSource(new global::System.Windows.Interop.HwndSourceParameters("probe")) { RootVisual = (global::System.Windows.Media.Visual)PeerOf(loose) };
         var window = Window.Current; var previous = window.Content;
         window.Content = root;
         // The compositor root layers the window content under the popup overlay.
         var layers = HostRoot() as global::System.Windows.Controls.Grid;
         Check(ReferenceEquals(window.Content, root) && layers != null && layers.Children.Count == 2 && ReferenceEquals(layers.Children[0], PeerOf(root)) &&
               layers.Children[1] is global::System.Windows.Controls.Canvas, "Window.Content identity and compositor root");
-        // A test-only presentation source raises Loaded; the compositor owns the real one.
-        var source = new global::System.Windows.Interop.HwndSource(new global::System.Windows.Interop.HwndSourceParameters("probe")) { RootVisual = layers };
+        Check(global::System.Windows.PresentationSource.FromVisual(layers) != null, "window content has the compositor's presentation source");
+        window.Content = previous;
         deferred.Add(() =>
         {
-            Check(loaded == 1 && removed == 0 && ReferenceEquals(sender, child) && args != null && ReferenceEquals(args.OriginalSource, child), "Loaded reaches managed handlers with wrappers");
+            Check(loaded == 1 && removed == 0 && ReferenceEquals(sender, looseChild) && args != null && ReferenceEquals(args.OriginalSource, looseChild),
+                  "Loaded reaches managed handlers with wrappers");
             source.RootVisual = null; source.Dispose();
-            Console.WriteLine("PASS: WPF-backed tree keeps wrapper identity for children, names, resources and Loaded");
+            // Whatever is the window's content by now was laid out, loaded and rendered for the shim.
+            var current = (global::System.Windows.FrameworkElement)PeerOf(Window.Current.Content);
+            var frames = (int)typeof(DependencyObject).Assembly.GetType("AppxPortable.WinRT.Xaml.Host")
+                .GetProperty("Frames", global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.NonPublic).GetValue(null, null);
+            Check(current.IsLoaded && current.ActualWidth > 0 && frames > 0, "the window's content is loaded, laid out and rendered for the compositor");
+            Console.WriteLine("PASS: WPF-backed tree keeps wrapper identity for children, names, resources and Loaded, and renders for the compositor");
         });
-        window.Content = previous;
     }
     static object HostRoot()
     {

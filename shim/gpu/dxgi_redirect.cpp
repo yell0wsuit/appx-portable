@@ -1,5 +1,6 @@
 #include "dxgi_redirect.h"
 #include "frame_pacing.h"
+#include "xaml_layer.h"
 #include "host/host.h"
 #include "log.h"
 #include "options.h"
@@ -150,7 +151,10 @@ static HRESULT STDMETHODCALLTYPE Present(IDXGISwapChain* swap, UINT sync, UINT f
         std::lock_guard<std::mutex> lock(presentMutex);
         call = presentHooks.at(*reinterpret_cast<void***>(swap)).present;
     }
-    if (!(flags & DXGI_PRESENT_TEST)) CaptureFrame(swap);
+    if (!(flags & DXGI_PRESENT_TEST)) {
+        ComposeXamlLayer(swap);
+        CaptureFrame(swap);
+    }
     PacePresent(swap, flags);
     return call(swap, sync, flags);
 }
@@ -161,7 +165,10 @@ static HRESULT STDMETHODCALLTYPE Present1(IDXGISwapChain1* swap, UINT sync, UINT
         std::lock_guard<std::mutex> lock(presentMutex);
         call = presentHooks.at(*reinterpret_cast<void***>(swap)).present1;
     }
-    if (!(flags & DXGI_PRESENT_TEST)) CaptureFrame(swap);
+    if (!(flags & DXGI_PRESENT_TEST)) {
+        ComposeXamlLayer(swap);
+        CaptureFrame(swap);
+    }
     PacePresent(swap, flags);
     return call(swap, sync, flags, params);
 }
