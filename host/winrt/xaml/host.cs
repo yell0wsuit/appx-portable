@@ -15,5 +15,28 @@ namespace AppxPortable.WinRT.Xaml
         {
             if (dispatcher == null) dispatcher = Dispatcher.CurrentDispatcher;
         }
+
+        // The window's content and the WPF tree the compositor draws.
+        internal static global::Windows.UI.Xaml.UIElement Content { get; private set; }
+        internal static System.Windows.UIElement Root { get; private set; }
+
+        internal static void SetContent(global::Windows.UI.Xaml.UIElement content)
+        {
+            Content = content;
+            Root = (System.Windows.UIElement)Peers.Of(content);
+        }
+    }
+}
+
+namespace Windows.UI.Xaml
+{
+    // The native Window keeps bounds, activation and CoreWindow; its content is WPF.
+    public sealed partial class Window
+    {
+        public UIElement Content
+        {
+            get { return AppxPortable.WinRT.Xaml.Host.Content; }
+            set { AppxPortable.WinRT.Xaml.Host.SetContent(value); }
+        }
     }
 }

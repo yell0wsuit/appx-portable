@@ -68,6 +68,7 @@ internal static partial class WinrtProjectionGenerator
     {
         if (type.FullName == "System.Object") throw new NotSupportedException("Object is wrapped by Unwrap");
         Name(type);
+        RejectWpf(type, "a native result");
         if (type.FullName == "Windows.Foundation.Uri") return Projected(Find(type.FullName));
         // The hand-written storage adapter wraps native buffers and actions.
         if (type.FullName == "Windows.Storage.Streams.IBuffer") return "global::Windows.Storage.Streams.Buffer";
@@ -103,6 +104,7 @@ internal static partial class WinrtProjectionGenerator
     private static string Argument(TypeReference type, string value)
     {
         if (type.FullName == "Windows.Foundation.Uri") return Wrapper(type) + ".ToNative(" + value + ")";
+        RejectWpf(type, "a native argument");
         return Runtime + "NativeObject.Argument(" + value + ", " + ArgumentIid(type) + ")";
     }
 
@@ -267,6 +269,7 @@ internal static partial class WinrtProjectionGenerator
         TypeDefinition definition = Find(type.FullName);
         if (!Available(type.FullName) || definition.IsEnum || definition.IsValueType)
             throw new NotSupportedException("Unsupported parameter type: " + type.FullName + " in " + use);
+        RejectWpf(type, use);
         return definition;
     }
 
@@ -1580,6 +1583,7 @@ namespace AppxPortable.WinRT.Projected
     }
     private static void Class(StringBuilder output, TypeDefinition type, XmlElement surface)
     {
+        RejectNativeXaml(type);
         bool objectMap = surface.GetAttribute("Adapter") == "ObjectMap";
         if (surface.HasAttribute("Adapter") && !objectMap)
             throw new NotSupportedException("Unsupported class adapter: " + type.FullName);
@@ -1611,7 +1615,7 @@ namespace AppxPortable.WinRT.Projected
         {
             if (constructor || overridden.Count != 0 || baseClass != null)
                 throw new NotSupportedException("Unsupported static class surface: " + type.FullName);
-            output.AppendLine("    public static class " + type.Name);
+            output.AppendLine("    public static partial class " + type.Name);
             output.AppendLine("    {");
             foreach (XmlElement member in surface.ChildNodes.OfType<XmlElement>())
             {
@@ -1663,7 +1667,7 @@ namespace AppxPortable.WinRT.Projected
             output.AppendLine("    [" + Interop + "ProjectionType(\"" + Iid(primary) + "\")]");
             if (root) bases.Add(Interop + "INativeObject");
         }
-        output.AppendLine("    public " + (type.IsSealed ? "sealed " : "") + "class " + type.Name +
+        output.AppendLine("    public " + (type.IsSealed ? "sealed " : "") + "partial class " + type.Name +
             (bases.Count == 0 ? "" : " : " + string.Join(", ", bases)));
         output.AppendLine("    {");
         if (objectMap) ObjectMapMembers(output);
@@ -1861,7 +1865,8 @@ namespace AppxPortable.WinRT.Projected
                     throw new NotSupportedException("Unsupported surface kind: " + element.Name);
                 if (!selected.Add(element.GetAttribute("Name"))) throw new InvalidDataException("Duplicate selected type");
                 if (element.Name == "Interface") interfaces.Add(element.GetAttribute("Name"), element);
-                if (element.Name == "Class") {
+                if (element.GetAttribute("Adapter") == "Wpf") wpfTypes.Add(element.GetAttribute("Name"));
+                else if (element.Name == "Class") {
                     classes.Add(Find(element.GetAttribute("Name")));
                     classSurfaces.Add(element.GetAttribute("Name"), element);
                 }
@@ -1879,7 +1884,12 @@ namespace AppxPortable.WinRT.Projected
                 TypeDefinition type = Find(element.GetAttribute("Name"));
                 output.AppendLine("namespace " + type.Namespace);
                 output.AppendLine("{");
-                if (element.GetAttribute("Adapter") == "Uri")
+                if (element.GetAttribute("Adapter") == "Wpf")
+                {
+                    if (component) throw new NotSupportedException("WPF-backed XAML belongs to Windows.dll: " + type.FullName);
+                    WpfClass(output, type, element);
+                }
+                else if (element.GetAttribute("Adapter") == "Uri")
                     UriContract(output, type, element);
                 else if (element.GetAttribute("Adapter") == "ComponentConnector")
                     ComponentConnectorContract(output, type, element);
@@ -1927,6 +1937,7 @@ namespace AppxPortable.WinRT.Projected
                 output.AppendLine("}");
             }
             ManagedContracts(output);
+            WpfRegistry(output);
             if (interop) Provider(output);
             File.WriteAllText(args[2], output.ToString(), new UTF8Encoding(false));
             Console.WriteLine("Generated " + selected.Count + " metadata types into " + args[2]);

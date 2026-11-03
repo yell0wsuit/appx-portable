@@ -449,6 +449,43 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Check(frame.Content == null, "Frame content clear");
         Console.WriteLine("PASS: Frame content preserves managed Page identity, boxed values and clearing");
     }
+    // WPF backs Windows.UI.Xaml under Wine: each wrapper owns a WPF peer.
+    static object PeerOf(object wrapper)
+    {
+        var field = typeof(DependencyObject).GetField("peer", global::System.Reflection.BindingFlags.Instance | global::System.Reflection.BindingFlags.NonPublic);
+        Check(field != null, "wrapper has a WPF peer");
+        return field.GetValue(wrapper);
+    }
+    class VerifyOwner { }
+    static void VerifyWpfElements()
+    {
+        var text = new Windows.UI.Xaml.Controls.TextBlock(); text.Text = "Ω"; text.Visibility = Visibility.Collapsed;
+        var peer = (global::System.Windows.Controls.TextBlock)PeerOf(text);
+        Check(peer.Text == "Ω" && peer.Visibility == global::System.Windows.Visibility.Collapsed, "mapped properties reach the WPF peer");
+        peer.Text = "back"; Check(text.Text == "back", "WPF changes read back through the wrapper");
+        Check(ReferenceEquals(Windows.UI.Xaml.Controls.TextBlock.TextProperty, Windows.UI.Xaml.Controls.TextBlock.TextProperty), "DependencyProperty identity");
+        Check((string)text.GetValue(Windows.UI.Xaml.Controls.TextBlock.TextProperty) == "back", "GetValue through a mapped property");
+        Windows.UI.Xaml.Controls.Grid.SetRow(text, 2);
+        Check(Windows.UI.Xaml.Controls.Grid.GetRow(text) == 2 && global::System.Windows.Controls.Grid.GetRow(peer) == 2, "attached accessors");
+        int changes = 0; object seenOld = null, seenNew = null;
+        DependencyProperty custom = null;
+        custom = DependencyProperty.RegisterAttached("Score", typeof(int), typeof(VerifyOwner), new PropertyMetadata(7, (d, e) =>
+        {
+            ++changes; seenOld = e.OldValue; seenNew = e.NewValue;
+            Check(ReferenceEquals(d, text) && ReferenceEquals(e.Property, custom), "callback sender and property are the wrappers");
+        }));
+        Check((int)text.GetValue(custom) == 7, "game property default");
+        text.SetValue(custom, 9); Check(changes == 1 && (int)seenOld == 7 && (int)seenNew == 9, "game property change callback");
+        Check(text.ReadLocalValue(custom).Equals(9) && ReferenceEquals(new Windows.UI.Xaml.Controls.TextBlock().ReadLocalValue(custom), DependencyProperty.UnsetValue), "ReadLocalValue");
+        text.ClearValue(custom); Check((int)text.GetValue(custom) == 7 && changes == 2, "ClearValue restores the default");
+        var grid = new Windows.UI.Xaml.Controls.Grid();
+        Check(PeerOf(grid) is global::System.Windows.Controls.Grid && grid.Visibility == Visibility.Visible, "Grid wraps a WPF Grid");
+        Exception wrong = null;
+        var thread = new global::System.Threading.Thread(() => { try { var x = text.Text; } catch (Exception e) { wrong = e; } });
+        thread.Start(); thread.Join();
+        Check(wrong != null && Marshal.GetHRForException(wrong) == unchecked((int)0x8001010e), "wrapper thread affinity");
+        Console.WriteLine("PASS: WPF-backed elements map properties, dependency properties and thread affinity");
+    }
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
 #if NATIVE_ABI
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -487,15 +524,18 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
     [MethodImpl(MethodImplOptions.NoInlining)]
     void Verify(DerivedPage page)
     {
-#if FULL_SURFACE
+        VerifyWpfElements();
+#if NATIVE_XAML && FULL_SURFACE
         try { new UnsupportedKeyPage(); throw new Exception("unsupported key override accepted"); }
         catch (NotImplementedException error) { Check(error.Message.Contains("OnKeyUp override"), "unsupported key override is named"); }
         Console.WriteLine("PASS: unselected inherited key overrides still fail construction by name");
 #endif
+#if NATIVE_XAML
         Check(page.Frame == null, "unhosted Page.Frame");
         var content = new Frame(); page.Content = content;
         Check(ReferenceEquals(page.Content, content), "UserControl content identity on Page");
         page.Content = null; Check(page.Content == null, "Page content clear");
+#endif
         var property = DependencyProperty.RegisterAttached("PageState", typeof(string), typeof(DerivedPage), null);
         page.SetValue(property, "composed page"); Check((string)page.GetValue(property) == "composed page", "Page native dependency store");
         // Projection-owned interfaces use TypeKind.Metadata, including the
@@ -518,6 +558,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
             try { page.SetValue(mapProperty, new object()); throw new Exception("wrong metadata generic accepted"); }
             catch (ArgumentException) { }
         }
+#if NATIVE_XAML
         Window.Current.Content = page;
         Check(InvokeWindowKeyDown(1) == 0 && page.KeyDowns == 1, "native inherited key override dispatch");
         GC.Collect(); GC.WaitForPendingFinalizers();
@@ -526,12 +567,17 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Check(InvokeWindowKeyDown(0) == 0 && page.KeyDowns == 2 && page.KeyArgs == null, "null key argument");
         Window.Current.Content = new PartialPage();
         Check(InvokeWindowKeyDown(1) == 0, "unoverridden inherited key callback uses native base");
+#endif
         Window.Current.Content = page;
         Check(ReferenceEquals(Window.Current.Content, page), "Window preserves derived Page identity");
+#if NATIVE_XAML
         Check(ConnectWindowContent(31) == 0, "external component callback HRESULT");
         Check(page.ConnectionId == 31 && ReferenceEquals(page.Connected, page), "external component callback identity");
         page.Connected = null;
+#endif
+#if NATIVE_ABI || NATIVE_XAML
         var partial = new PartialPage();
+#endif
 #if NATIVE_ABI
         Invoke(page);
         Check(page.To == 1 && page.From == 1 && page.Leaving == 1, "native Page override dispatch");
@@ -607,18 +653,24 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         InvokeKey(page);
         Check(page.KeyArgs != null && page.KeyArgs.Handled, "key override recovers after failure");
         Console.WriteLine("PASS: inherited Control key overrides preserve arguments, base calls and exception identity");
-#else
+#elif NATIVE_XAML
         Check(partial.Frame == null, "partial Page construction");
 #endif
+#if NATIVE_XAML
         VerifyVisibility(page);
         VerifyFrameContent(page);
+#endif
         VerifyWindowSize();
+#if NATIVE_XAML
         VerifyApplicationResources();
         VerifyResourceMap();
+#endif
         VerifyApplicationView();
+#if NATIVE_XAML
         VerifyNavigation();
         VerifyWindowActivation(page);
         Console.WriteLine("PASS: managed Page composes native inheritance, content and window identity");
+#endif
         VerifySharing();
         VerifyDispatcher();
     }

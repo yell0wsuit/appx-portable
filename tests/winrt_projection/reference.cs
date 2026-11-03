@@ -85,7 +85,19 @@ namespace Windows.UI.Xaml
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Tick(global::System.EventHandler<object> handler) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer.add_Tick"); }
         public void remove_Tick(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DispatcherTimer.remove_Tick"); }
     }
-    public sealed class PropertyMetadata { }
+    public delegate void PropertyChangedCallback(DependencyObject d, DependencyPropertyChangedEventArgs e);
+    public sealed class DependencyPropertyChangedEventArgs
+    {
+        internal DependencyPropertyChangedEventArgs() { }
+        public DependencyProperty Property { get { throw new global::System.NotImplementedException(); } }
+        public object OldValue { get { throw new global::System.NotImplementedException(); } }
+        public object NewValue { get { throw new global::System.NotImplementedException(); } }
+    }
+    public class PropertyMetadata
+    {
+        public PropertyMetadata(object defaultValue) { throw new global::System.NotImplementedException(); }
+        public PropertyMetadata(object defaultValue, PropertyChangedCallback propertyChangedCallback) { throw new global::System.NotImplementedException(); }
+    }
     public sealed class DependencyProperty
     {
         public static DependencyProperty RegisterAttached(string name, global::System.Type type, global::System.Type owner, PropertyMetadata metadata) { throw new global::System.NotImplementedException("Windows.UI.Xaml.DependencyProperty.RegisterAttached"); }
@@ -143,7 +155,13 @@ namespace Windows.UI.Core
 namespace Windows.UI.Xaml.Controls
 {
     public class Panel : global::Windows.UI.Xaml.FrameworkElement { internal Panel() { } }
-    public class Grid : Panel { internal Grid() { } }
+    public class Grid : Panel
+    {
+        public Grid() { throw new global::System.NotImplementedException(); }
+        public static global::Windows.UI.Xaml.DependencyProperty RowProperty { get { throw new global::System.NotImplementedException(); } }
+        public static int GetRow(global::Windows.UI.Xaml.FrameworkElement element) { throw new global::System.NotImplementedException(); }
+        public static void SetRow(global::Windows.UI.Xaml.FrameworkElement element, int value) { throw new global::System.NotImplementedException(); }
+    }
     public class Image : global::Windows.UI.Xaml.FrameworkElement { internal Image() { } }
     public class Control : global::Windows.UI.Xaml.FrameworkElement
     {
@@ -156,7 +174,8 @@ namespace Windows.UI.Xaml.Controls
     public sealed class MediaElement : global::Windows.UI.Xaml.FrameworkElement { internal MediaElement() { } }
     public class TextBlock : global::Windows.UI.Xaml.FrameworkElement
     {
-        internal TextBlock() { }
+        public TextBlock() { throw new global::System.NotImplementedException(); }
+        public static global::Windows.UI.Xaml.DependencyProperty TextProperty { get { throw new global::System.NotImplementedException(); } }
         public string Text { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
     public class ProgressRing : Control

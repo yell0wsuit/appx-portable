@@ -14,7 +14,7 @@ class VisibilityAliasApp : Application
         catch (ArgumentException error) { if (error.HResult != unchecked((int)0x80070057)) throw; }
         element.Visibility = Visibility.Visible;
         if (element.Visibility != Visibility.Visible) throw new Exception("WinRT setter recovery");
-        Console.WriteLine("PASS: WinRT put_Visibility forwards to native enum property setter");
+        Console.WriteLine("PASS: WinRT put_Visibility forwards to the WPF peer");
         Exit();
     }
 }

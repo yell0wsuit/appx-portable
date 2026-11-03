@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 import zipfile
 
-GENERATOR = ("generator.cs", "storage_generation.cs", "component_generation.cs")
+GENERATOR = ("generator.cs", "storage_generation.cs", "component_generation.cs", "wpf_generation.cs")
 RUNTIME = ("abi.cs", "ccw.cs", "dispatcher.cs", "property_abi.cs", "collections.cs")
 PREBUILT = ("AppxPortable.WinRT.Interop.dll", "System.Runtime.WindowsRuntime.dll", "System.Runtime.WindowsRuntime.UI.Xaml.dll", "Windows.dll")
 

@@ -35,9 +35,7 @@
   <Class Name="Windows.UI.Xaml.Application">
     <Constructor />
     <Property Name="Current" />
-    <Property Name="Resources" />
     <Method Name="Start" />
-    <Method Name="LoadComponent" />
     <Method Name="Exit" />
     <Event Name="Suspending" />
     <Overridable Name="OnActivated" />
@@ -46,7 +44,6 @@
   <Class Name="Windows.UI.Xaml.ApplicationInitializationCallbackParams" />
   <Class Name="Windows.UI.Xaml.Window">
     <Property Name="Current" />
-    <Property Name="Content" />
     <Property Name="Bounds" />
     <Property Name="CoreWindow" />
     <Method Name="Activate" />
@@ -60,95 +57,76 @@
   <Enum Name="Windows.UI.Core.CoreWindowActivationState" />
   <Delegate Name="Windows.UI.Xaml.WindowSizeChangedEventHandler" />
   <Class Name="Windows.UI.Core.WindowSizeChangedEventArgs" />
-  <!-- Frame's class chain; each base is a typed wrapper until its members are needed. -->
-  <Class Name="Windows.UI.Xaml.DependencyObject">
-    <Method Name="GetValue" />
-    <Method Name="SetValue" />
-    <Method Name="ClearValue" />
-    <Method Name="ReadLocalValue" />
-    <Method Name="GetAnimationBaseValue" />
-  </Class>
-  <Class Name="Windows.UI.Xaml.DependencyProperty">
-    <Method Name="Register" />
-    <Method Name="RegisterAttached" />
-    <Property Name="UnsetValue" />
-  </Class>
-  <Class Name="Windows.UI.Xaml.PropertyMetadata" />
+  <!-- WPF backs XAML elements under Wine: each wrapper owns a WPF peer (Peer), and
+       Wpf maps a member onto a WPF dependency property. Unlisted members are
+       hand-written partials in host/winrt/xaml/ or completion stubs. -->
+  <Class Name="Windows.UI.Xaml.DependencyObject" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.DependencyProperty" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.PropertyMetadata" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.DependencyPropertyChangedEventArgs" Adapter="Wpf" />
+  <Delegate Name="Windows.UI.Xaml.PropertyChangedCallback" Adapter="Wpf" />
   <Enum Name="Windows.UI.Xaml.Visibility" />
-  <Class Name="Windows.UI.Xaml.UIElement"><Property Name="Visibility" /></Class>
-  <Class Name="Windows.UI.Xaml.Controls.Panel" />
-  <Class Name="Windows.UI.Xaml.Controls.Grid" />
-  <Class Name="Windows.UI.Xaml.Controls.Image" />
-  <Class Name="Windows.UI.Xaml.Controls.Viewbox" />
-  <Class Name="Windows.UI.Xaml.Controls.ContentPresenter" />
-  <Class Name="Windows.UI.Xaml.Controls.MediaElement" />
-  <Class Name="Windows.UI.Xaml.Controls.TextBlock"><Property Name="Text" /></Class>
-  <Class Name="Windows.UI.Xaml.Controls.ProgressRing"><Property Name="IsActive" /></Class>
-  <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" />
-  <Class Name="Windows.UI.Xaml.Media.Animation.Storyboard">
-    <Method Name="Begin" />
+  <Class Name="Windows.UI.Xaml.UIElement" Adapter="Wpf" Peer="System.Windows.UIElement">
+    <Property Name="Visibility" Wpf="System.Windows.UIElement.VisibilityProperty" />
+    <Property Name="VisibilityProperty" Wpf="System.Windows.UIElement.VisibilityProperty" />
   </Class>
-  <Class Name="Windows.UI.Xaml.Media.Animation.FadeInThemeAnimation" />
-  <Class Name="Windows.UI.Xaml.Media.Animation.FadeOutThemeAnimation" />
-  <Class Name="Windows.UI.Xaml.ResourceDictionary" Adapter="ObjectMap">
+  <Class Name="Windows.UI.Xaml.FrameworkElement" Adapter="Wpf" Peer="System.Windows.FrameworkElement">
+    <Property Name="ActualWidth" Wpf="System.Windows.FrameworkElement.ActualWidthProperty" />
+    <Property Name="ActualHeight" Wpf="System.Windows.FrameworkElement.ActualHeightProperty" />
+  </Class>
+  <Class Name="Windows.UI.Xaml.Controls.Panel" Adapter="Wpf" Peer="System.Windows.Controls.Panel" />
+  <Class Name="Windows.UI.Xaml.Controls.Grid" Adapter="Wpf" Peer="System.Windows.Controls.Grid">
     <Constructor />
+    <Property Name="RowProperty" Wpf="System.Windows.Controls.Grid.RowProperty" />
+    <Method Name="GetRow" Wpf="System.Windows.Controls.Grid.RowProperty" />
+    <Method Name="SetRow" Wpf="System.Windows.Controls.Grid.RowProperty" />
+    <Property Name="ColumnProperty" Wpf="System.Windows.Controls.Grid.ColumnProperty" />
+    <Method Name="GetColumn" Wpf="System.Windows.Controls.Grid.ColumnProperty" />
+    <Method Name="SetColumn" Wpf="System.Windows.Controls.Grid.ColumnProperty" />
   </Class>
-  <Class Name="Windows.UI.Xaml.FrameworkElement">
-    <Property Name="Resources" />
-    <Property Name="Style" />
-    <Property Name="ActualWidth" />
-    <Property Name="ActualHeight" />
-    <Method Name="FindName" />
-    <Event Name="Loaded" />
-    <Event Name="Unloaded" />
+  <Class Name="Windows.UI.Xaml.Controls.Image" Adapter="Wpf" Peer="System.Windows.Controls.Image"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Viewbox" Adapter="Wpf" Peer="System.Windows.Controls.Viewbox"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.ContentPresenter" Adapter="Wpf" Peer="System.Windows.Controls.ContentPresenter"><Constructor /></Class>
+  <!-- Shim-backed services (Plan 2): a transparent placeholder holds their place in the tree. -->
+  <Class Name="Windows.UI.Xaml.Controls.MediaElement" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.MediaElementPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.SwapChainBackgroundPanel" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.SwapChainPanelPeer"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.TextBlock" Adapter="Wpf" Peer="System.Windows.Controls.TextBlock">
+    <Constructor />
+    <Property Name="Text" Wpf="System.Windows.Controls.TextBlock.TextProperty" />
+    <Property Name="TextProperty" Wpf="System.Windows.Controls.TextBlock.TextProperty" />
   </Class>
-  <Delegate Name="Windows.UI.Xaml.RoutedEventHandler" />
-  <Class Name="Windows.UI.Xaml.Style" />
-  <Class Name="Windows.UI.Xaml.Media.VisualTreeHelper">
-    <Method Name="GetChildrenCount" />
-    <Method Name="GetChild" />
+  <!-- WPF has no ring; an indeterminate ProgressBar stands in. -->
+  <Class Name="Windows.UI.Xaml.Controls.ProgressRing" Adapter="Wpf" Peer="System.Windows.Controls.ProgressBar">
+    <Constructor />
+    <Property Name="IsActive" Wpf="System.Windows.Controls.ProgressBar.IsIndeterminateProperty" />
   </Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" Adapter="Wpf" Peer="System.Windows.Media.Animation.Timeline" />
+  <Class Name="Windows.UI.Xaml.Media.Animation.Storyboard" Adapter="Wpf" Peer="System.Windows.Media.Animation.Storyboard"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.Animation.FadeInThemeAnimation" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Media.Animation.FadeOutThemeAnimation" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.ResourceDictionary" Adapter="Wpf" Peer="System.Windows.ResourceDictionary"><Constructor /></Class>
+  <Delegate Name="Windows.UI.Xaml.RoutedEventHandler" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Style" Adapter="Wpf" Peer="System.Windows.Style"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Media.VisualTreeHelper" Adapter="Wpf" />
   <Enum Name="Windows.UI.Xaml.Controls.Primitives.ComponentResourceLocation" />
-  <Class Name="Windows.UI.Xaml.RoutedEventArgs" />
-  <Class Name="Windows.UI.Xaml.Input.KeyRoutedEventArgs">
-    <Property Name="Key" />
-    <Property Name="Handled" />
-  </Class>
-  <Class Name="Windows.UI.Xaml.Controls.Control">
-    <Overridable Name="OnKeyDown" />
-  </Class>
-  <Class Name="Windows.UI.Xaml.Controls.ContentControl">
-    <Property Name="Content" />
-  </Class>
-  <Class Name="Windows.UI.Xaml.Controls.UserControl">
-    <Property Name="Content" />
-  </Class>
-  <Class Name="Windows.UI.Xaml.Controls.Page">
-    <Constructor />
-    <Property Name="Frame" />
-    <Property Name="NavigationCacheMode" />
-    <Overridable Name="OnNavigatedTo" />
-    <Overridable Name="OnNavigatedFrom" />
-    <Overridable Name="OnNavigatingFrom" />
-  </Class>
+  <Class Name="Windows.UI.Xaml.RoutedEventArgs" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Input.KeyRoutedEventArgs" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Controls.Control" Adapter="Wpf" Peer="System.Windows.Controls.Control"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.ContentControl" Adapter="Wpf" Peer="System.Windows.Controls.ContentControl"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.UserControl" Adapter="Wpf" Peer="System.Windows.Controls.UserControl"><Constructor /></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Page" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.PagePeer"><Constructor /></Class>
   <Enum Name="Windows.UI.Xaml.Navigation.NavigationCacheMode" />
-  <Class Name="Windows.UI.Xaml.Navigation.NavigationEventArgs">
-    <Property Name="Uri" />
-  </Class>
+  <Class Name="Windows.UI.Xaml.Navigation.NavigationEventArgs" Adapter="Wpf" />
   <Class Name="Windows.Foundation.Uri" Adapter="Uri" />
   <Interface Name="Windows.UI.Xaml.Markup.IComponentConnector" Adapter="ComponentConnector" />
-  <Class Name="Windows.UI.Xaml.Navigation.NavigatingCancelEventArgs" />
-  <Class Name="Windows.UI.Xaml.Controls.Frame">
-    <Constructor />
-    <Method Name="Navigate" Arities="1 2" />
-  </Class>
+  <Class Name="Windows.UI.Xaml.Navigation.NavigatingCancelEventArgs" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Controls.Frame" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.FramePeer"><Constructor /></Class>
   <!-- Implemented by managed apps; emits IXamlType, IXamlMember and XmlnsDefinition too. -->
   <Interface Name="Windows.UI.Xaml.Markup.IXamlMetadataProvider" Adapter="XamlMetadata" />
   <Delegate Name="Windows.UI.Xaml.ApplicationInitializationCallback" />
   <!-- A typed wrapper only: its referenced members are completion stubs. -->
   <Class Name="Windows.ApplicationModel.SuspendingEventArgs" />
   <Delegate Name="Windows.UI.Xaml.SuspendingEventHandler" />
-  <Class Name="Windows.UI.Xaml.Controls.SwapChainBackgroundPanel" />
   <Class Name="Windows.UI.Core.PointerEventArgs" />
   <Enum Name="Windows.System.VirtualKey" />
   <Enum Name="Windows.UI.ViewManagement.ApplicationViewState" />
