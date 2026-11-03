@@ -159,6 +159,13 @@ namespace Fixture
                   ReferenceEquals(named.Resources["intro"], named.FindName("intro")) && named.Resources.ContainsKey("k") && !named.Resources.ContainsKey("both"),
                   "x:Name keys a resource that has no x:Key");
 
+            // A mapped member named differently in WPF keeps its UWP name in markup.
+            File.WriteAllText("Pages/ring.xaml", "<Page" + Ns + "><ProgressRing x:Name='ring' IsActive='True'/></Page>");
+            var ringPage = new SourcePage();
+            Application.LoadComponent(ringPage, new Uri("ms-appx:///Pages/ring.xaml"));
+            var ring = ringPage.FindName("ring") as ProgressRing;
+            Check(ring != null && ring.IsActive, "UWP member names of mapped peers resolve in markup");
+
             File.WriteAllText("Pages/replacement.xaml", "<Page" + Ns + " x:Name='replacement'/>");
             Application.LoadComponent(page, new Uri("ms-appx:///Pages/replacement.xaml"));
             Check(page.Content == null && page.FindName("title") == null && ReferenceEquals(page.FindName("replacement"), page), "reload replaces tree and names");

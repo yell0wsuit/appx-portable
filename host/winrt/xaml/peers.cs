@@ -13,6 +13,7 @@ namespace AppxPortable.WinRT.Xaml
         private static readonly Dictionary<Type, Func<object, global::Windows.UI.Xaml.DependencyObject>> factories =
             new Dictionary<Type, Func<object, global::Windows.UI.Xaml.DependencyObject>>();
         private static readonly Dictionary<Type, Type> peerTypes = new Dictionary<Type, Type>();
+        private static readonly Dictionary<Type, Dictionary<string, string>> aliases = new Dictionary<Type, Dictionary<string, string>>();
 
         static Peers()
         {
@@ -24,6 +25,27 @@ namespace AppxPortable.WinRT.Xaml
         {
             factories.Add(peer, factory);
             peerTypes.Add(wrapper, peer);
+        }
+
+        // A UWP member that maps onto a differently named WPF member.
+        internal static void Alias(Type wrapper, string uwp, string wpf)
+        {
+            Dictionary<string, string> names;
+            if (!aliases.TryGetValue(wrapper, out names)) aliases.Add(wrapper, names = new Dictionary<string, string>(StringComparer.Ordinal));
+            names.Add(uwp, wpf);
+        }
+
+        // The WPF names of a wrapper's members that differ, along its base types.
+        internal static Dictionary<string, string> Aliases(Type wrapper)
+        {
+            var result = new Dictionary<string, string>(StringComparer.Ordinal);
+            for (Type type = wrapper; type != null; type = type.BaseType)
+            {
+                Dictionary<string, string> names;
+                if (aliases.TryGetValue(type, out names))
+                    foreach (var pair in names) if (!result.ContainsKey(pair.Key)) result.Add(pair.Key, pair.Value);
+            }
+            return result;
         }
 
         // UWP wrapper types and the WPF types they create.

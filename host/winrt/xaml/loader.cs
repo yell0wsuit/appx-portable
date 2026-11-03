@@ -300,6 +300,7 @@ namespace AppxPortable.WinRT.Xaml
         private static UwpSchemaContext instance;
         private static readonly XamlSchemaContext wpf = System.Windows.Markup.XamlReader.GetWpfSchemaContext();
         private readonly Dictionary<string, Type> uwp = new Dictionary<string, Type>(StringComparer.Ordinal);
+        private readonly Dictionary<string, XamlType> aliased = new Dictionary<string, XamlType>(StringComparer.Ordinal);
         private readonly Dictionary<string, XamlType> app = new Dictionary<string, XamlType>(StringComparer.Ordinal);
 
         internal static UwpSchemaContext Instance { get { return instance ?? (instance = new UwpSchemaContext()); } }
@@ -308,7 +309,12 @@ namespace AppxPortable.WinRT.Xaml
         {
             // UWP element names: the wrapper types with a WPF peer, by simple name.
             foreach (var pair in Peers.PeerTypes)
-                if (!uwp.ContainsKey(pair.Key.Name)) uwp.Add(pair.Key.Name, pair.Value);
+                if (!uwp.ContainsKey(pair.Key.Name))
+                {
+                    uwp.Add(pair.Key.Name, pair.Value);
+                    var names = Peers.Aliases(pair.Key);
+                    if (names.Count != 0) aliased.Add(pair.Key.Name, new PeerXamlType(wpf.GetXamlType(pair.Value), this, names));
+                }
             uwp["Application"] = typeof(ApplicationPeer);
         }
 
@@ -317,6 +323,8 @@ namespace AppxPortable.WinRT.Xaml
         protected override XamlType GetXamlType(string xamlNamespace, string name, params XamlType[] typeArguments)
         {
             Type peer;
+            XamlType known;
+            if (xamlNamespace == Presentation && aliased.TryGetValue(name, out known)) return known;
             if (xamlNamespace == Presentation && (typeArguments == null || typeArguments.Length == 0) && uwp.TryGetValue(name, out peer))
                 return wpf.GetXamlType(peer);
             if (xamlNamespace == Presentation && (name == "Binding" || name == "BindingExtension"))
@@ -386,6 +394,31 @@ namespace AppxPortable.WinRT.Xaml
                 object value = owner.metadata != null ? owner.metadata.ActivateInstance() : Activator.CreateInstance(owner.type);
                 return Peers.Of((global::Windows.UI.Xaml.DependencyObject)value);
             }
+        }
+    }
+
+    // A UWP element whose mapped members are named differently in WPF (ProgressRing
+    // IsActive on a ProgressBar's IsIndeterminate): WPF's members under UWP names.
+    internal sealed class PeerXamlType : XamlType
+    {
+        private readonly XamlType peer;
+        private readonly Dictionary<string, string> names;
+
+        internal PeerXamlType(XamlType peer, XamlSchemaContext context, Dictionary<string, string> names) : base(peer.UnderlyingType, context)
+        {
+            this.peer = peer; this.names = names;
+        }
+
+        protected override XamlTypeInvoker LookupInvoker() { return peer.Invoker; }
+        protected override XamlMember LookupContentProperty() { return peer.ContentProperty; }
+        protected override XamlMember LookupAliasedProperty(XamlDirective directive) { return peer.GetAliasedProperty(directive); }
+        protected override XamlMember LookupAttachableMember(string name) { return peer.GetAttachableMember(name); }
+        protected override IEnumerable<XamlMember> LookupAllMembers() { return peer.GetAllMembers(); }
+
+        protected override XamlMember LookupMember(string name, bool skipReadOnlyCheck)
+        {
+            string wpfName;
+            return peer.GetMember(names.TryGetValue(name, out wpfName) ? wpfName : name);
         }
     }
 

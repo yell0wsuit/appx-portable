@@ -14,6 +14,8 @@ internal static partial class WinrtProjectionGenerator
     private const string DependencyObjectName = "Windows.UI.Xaml.DependencyObject";
     private static readonly HashSet<string> wpfTypes = new HashSet<string>(StringComparer.Ordinal);
     private static readonly List<KeyValuePair<TypeDefinition, string>> wpfPeers = new List<KeyValuePair<TypeDefinition, string>>();
+    // Mapped members whose WPF name differs: markup keeps the UWP name.
+    private static readonly List<string[]> wpfAliases = new List<string[]>();
     // Shim-backed XAML classes; every other Windows.UI.Xaml class is WPF-backed.
     private static readonly string[] nativeXaml = {
         "Windows.UI.Xaml.Application", "Windows.UI.Xaml.ApplicationInitializationCallbackParams",
@@ -137,6 +139,9 @@ internal static partial class WinrtProjectionGenerator
                 dp + ", typeof(" + WpfValueType(type, name) + ")); } }");
             return;
         }
+        string wpfName = dp.Substring(dp.LastIndexOf('.') + 1);
+        wpfName = wpfName.Substring(0, wpfName.Length - "Property".Length);
+        if (wpfName != name) wpfAliases.Add(new[] { type.FullName, name, wpfName });
         output.AppendLine("        public " + value + " " + name);
         output.AppendLine("        {");
         output.AppendLine("            get { return (" + value + ")" + XamlRuntime + "Values.Get(this, " + dp + ", typeof(" + value + ")); }");
@@ -180,6 +185,8 @@ internal static partial class WinrtProjectionGenerator
         foreach (var pair in wpfPeers)
             output.AppendLine("            Peers.Register(typeof(global::" + pair.Key.FullName + "), typeof(global::" + pair.Value + "), p => new global::" +
                 pair.Key.FullName + "(p));");
+        foreach (string[] alias in wpfAliases)
+            output.AppendLine("            Peers.Alias(typeof(global::" + alias[0] + "), \"" + alias[1] + "\", \"" + alias[2] + "\");");
         output.AppendLine("        }");
         output.AppendLine("    }");
         output.AppendLine("}");
