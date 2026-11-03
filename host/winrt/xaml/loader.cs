@@ -124,7 +124,7 @@ namespace AppxPortable.WinRT.Xaml
             internal System.Windows.ResourceDictionary Theme;
             internal XamlType Type;
             internal XamlMember Member;
-            internal string Name, Source;
+            internal string Name, Source, Setting;
             internal int? Connection;
         }
 
@@ -210,6 +210,20 @@ namespace AppxPortable.WinRT.Xaml
                             var frame = frames.Pop();
                             closing = frame.Got ? null : frame;
                             break;
+                        case XamlNodeType.Value:
+                            if (frames.Count != 0)
+                            {
+                                var valueFrame = frames.Peek();
+                                if (valueFrame.Type != null && valueFrame.Type.UnderlyingType == typeof(System.Windows.Setter) && valueFrame.Member.Name == "Property")
+                                    valueFrame.Setting = reader.Value as string;
+                                if (Equals(reader.Value, "SemiLight") && FontWeight(valueFrame))
+                                {
+                                    writer.WriteValue("350");
+                                    reader.Read();
+                                    continue;
+                                }
+                            }
+                            break;
                         case XamlNodeType.StartMember:
                             var member = reader.Member;
                             if (frames.Count != 0) frames.Peek().Member = member;
@@ -265,6 +279,15 @@ namespace AppxPortable.WinRT.Xaml
                     writer.WriteNode(reader);
                     reader.Read();
                 }
+            }
+
+            // UWP names the OpenType weight 350; WPF accepts its numeric spelling.
+            private static bool FontWeight(Frame frame)
+            {
+                return frame.Type != null && (frame.Type.UnderlyingType == typeof(System.Windows.FontWeight) ||
+                    frame.Member != null && frame.Member.Type.UnderlyingType == typeof(System.Windows.FontWeight) ||
+                    frame.Type.UnderlyingType == typeof(System.Windows.Setter) && frame.Member != null && frame.Member.Name == "Value" &&
+                    (frame.Setting == "FontWeight" || frame.Setting != null && frame.Setting.EndsWith(".FontWeight", StringComparison.Ordinal)));
             }
 
             private static bool Dictionary(XamlType type)

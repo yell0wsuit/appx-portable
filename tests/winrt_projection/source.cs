@@ -175,14 +175,17 @@ namespace Fixture
             Check(ring != null && ring.IsActive, "UWP member names of mapped peers resolve in markup");
 
             // RichTextBlock's typographic styles use WPF's text rendering.
-            File.WriteAllText("Pages/rich.xaml", "<Page" + Ns + "><Page.Resources><Style x:Key='rich' TargetType='RichTextBlock'>" +
-                "<Setter Property='FontSize' Value='20'/><Setter Property='TextWrapping' Value='Wrap'/><Setter Property='TextTrimming' Value='WordEllipsis'/>" +
-                "</Style></Page.Resources><RichTextBlock x:Name='rich' Style='{StaticResource rich}'/></Page>");
+            File.WriteAllText("Pages/rich.xaml", "<Page" + Ns + "><Page.Resources><FontWeight x:Key='weight'>SemiLight</FontWeight><Style x:Key='rich' TargetType='RichTextBlock'>" +
+                "<Setter Property='FontSize' Value='20'/><Setter Property='FontWeight' Value='SemiLight'/><Setter Property='TextWrapping' Value='Wrap'/><Setter Property='TextTrimming' Value='WordEllipsis'/>" +
+                "</Style></Page.Resources><StackPanel><RichTextBlock x:Name='rich' Style='{StaticResource rich}'/><TextBlock x:Name='weight' FontWeight='SemiLight' Text='SemiLight'/></StackPanel></Page>");
             var richPage = new SourcePage();
             Application.LoadComponent(richPage, new Uri("ms-appx:///Pages/rich.xaml"));
             var rich = (System.Windows.Controls.TextBlock)PeerOf(richPage.FindName("rich"));
             Check(rich.FontSize == 20 && rich.TextWrapping == System.Windows.TextWrapping.Wrap && rich.TextTrimming == System.Windows.TextTrimming.WordEllipsis,
                   "RichTextBlock styles reach WPF text properties");
+
+            Check(((System.Windows.Controls.TextBlock)PeerOf(richPage.FindName("weight"))).Text == "SemiLight" && rich.FontWeight.ToOpenTypeWeight() == 350 && ((System.Windows.Controls.TextBlock)PeerOf(richPage.FindName("weight"))).FontWeight.ToOpenTypeWeight() == 350 &&
+                  ((System.Windows.FontWeight)((System.Windows.FrameworkElement)PeerOf(richPage)).Resources["weight"]).ToOpenTypeWeight() == 350, "SemiLight typography maps to OpenType weight 350");
 
             File.WriteAllText("Pages/replacement.xaml", "<Page" + Ns + " x:Name='replacement'/>");
             Application.LoadComponent(page, new Uri("ms-appx:///Pages/replacement.xaml"));
