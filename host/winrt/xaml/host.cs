@@ -69,16 +69,31 @@ namespace Windows.UI.Xaml
     public partial class Application
     {
         private ResourceDictionary resources;
+        private bool initialized;
 
         public ResourceDictionary Resources
         {
             get
             {
+                Initialize();
                 if (resources == null) AppxPortable.WinRT.Xaml.Host.SetResources(resources = new ResourceDictionary());
                 return resources;
             }
-            set { AppxPortable.WinRT.Xaml.Host.SetResources(resources = value); }
+            set { initialized = true; AppxPortable.WinRT.Xaml.Host.SetResources(resources = value); }
         }
+
+        // Windows loads the package's App.xaml for the app (Windows 8 apps'
+        // InitializeComponent does not), unless the app loaded its own source first.
+        internal void Initialize()
+        {
+            if (initialized) return;
+            initialized = true;
+            var uri = new global::System.Uri("ms-appx:///App.xaml");
+            if (global::System.IO.File.Exists(global::System.IO.Path.Combine(AppxPortable.WinRT.Xaml.XamlLoader.PackageRoot, "App.xaml")))
+                LoadComponent(this, uri);
+        }
+
+        internal void Loaded() { initialized = true; }
     }
 
     // The native Window keeps bounds, activation and CoreWindow; its content is WPF.

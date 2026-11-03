@@ -118,7 +118,15 @@ namespace Fixture
 
         void Verify()
         {
+            // Windows loads the package's App.xaml itself; apps' InitializeComponent need not.
+            Directory.CreateDirectory("Common");
+            File.WriteAllText("Common/Styles.xaml", StylesXaml);
+            File.WriteAllText("App.xaml", AppXaml);
             Directory.CreateDirectory("Pages");
+            File.WriteAllText("Pages/early.xaml", "<Page" + Ns + "><TextBlock x:Name='early' Style='{StaticResource Big}'/></Page>");
+            var early = new SourcePage();
+            Application.LoadComponent(early, new Uri("ms-appx:///Pages/early.xaml"));
+            Check(((TextBlock)early.FindName("early")).FontSize == 42 && Resources.ContainsKey("Big"), "the conventional App.xaml loads before the first page");
             File.WriteAllText("Pages/My Page.xaml", PageXaml);
             var page = new SourcePage();
             Application.LoadComponent(page, new Uri("ms-appx:///Pages/My%20Page.xaml"));

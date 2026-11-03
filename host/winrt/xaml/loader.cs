@@ -65,6 +65,12 @@ namespace AppxPortable.WinRT.Xaml
             var wrapper = component as global::Windows.UI.Xaml.DependencyObject;
             if (app == null && wrapper == null) throw new NotSupportedException("Cannot load XAML into " + component.GetType().FullName);
             Host.EnsureTheme();
+            if (app != null) app.Loaded();
+            else
+            {
+                var current = global::Windows.UI.Xaml.Application.Current;
+                if (current != null) current.Initialize();
+            }
             object root = app != null ? new ApplicationPeer() : Values.Dependency(wrapper);
             Reset(root);
             var load = new Loading(component, root, source);
