@@ -289,6 +289,8 @@ namespace AppxPortable.WinRT.Xaml
             Type peer;
             if (xamlNamespace == Presentation && (typeArguments == null || typeArguments.Length == 0) && uwp.TryGetValue(name, out peer))
                 return wpf.GetXamlType(peer);
+            if (xamlNamespace == Presentation && (name == "Binding" || name == "BindingExtension"))
+                return wpf.GetXamlType(typeof(UwpBinding));
             // Theme resources are fixed (dark theme), so a static lookup serves.
             if (xamlNamespace == Presentation && (name == "ThemeResource" || name == "ThemeResourceExtension"))
                 return wpf.GetXamlType(typeof(System.Windows.StaticResourceExtension));
@@ -309,29 +311,35 @@ namespace AppxPortable.WinRT.Xaml
             if (type == null) return null;
             Type wrapper = type;
             while (wrapper != null && Peers.PeerType(wrapper) == null) wrapper = wrapper.BaseType;
-            value = wrapper == null ? wpf.GetXamlType(type) : new AppXamlType(type, Peers.PeerType(wrapper), metadata, this);
+            value = wrapper == null ? (XamlType)new AppObjectType(type, metadata, this) : new AppXamlType(type, wpf.GetXamlType(Peers.PeerType(wrapper)), metadata, this);
             app.Add(fullName, value);
             return value;
         }
     }
 
-    // An app class derived from a UWP wrapper: WPF sees its peer.
+    // An app class derived from a UWP wrapper: WPF sees its peer, with the peer's
+    // WPF members (dependency properties, so bindings and styles apply to them).
     internal sealed class AppXamlType : XamlType
     {
         private readonly Type type;
+        private readonly XamlType peer;
         private readonly global::Windows.UI.Xaml.Markup.IXamlType metadata;
 
-        internal AppXamlType(Type type, Type peer, global::Windows.UI.Xaml.Markup.IXamlType metadata, XamlSchemaContext context)
-            : base(peer, context)
+        internal AppXamlType(Type type, XamlType peer, global::Windows.UI.Xaml.Markup.IXamlType metadata, XamlSchemaContext context)
+            : base(peer.UnderlyingType, context)
         {
-            this.type = type; this.metadata = metadata;
+            this.type = type; this.peer = peer; this.metadata = metadata;
         }
 
         protected override XamlTypeInvoker LookupInvoker() { return new Creator(this); }
+        protected override XamlMember LookupContentProperty() { return peer.ContentProperty; }
+        protected override XamlMember LookupAliasedProperty(XamlDirective directive) { return peer.GetAliasedProperty(directive); }
+        protected override XamlMember LookupAttachableMember(string name) { return peer.GetAttachableMember(name); }
+        protected override IEnumerable<XamlMember> LookupAllMembers() { return peer.GetAllMembers(); }
 
         protected override XamlMember LookupMember(string name, bool skipReadOnlyCheck)
         {
-            var member = base.LookupMember(name, skipReadOnlyCheck);
+            var member = peer.GetMember(name);
             if (member != null) return member;
             var property = GameProperties.Find(type, name);
             return property == null ? null : new AppMember(name, this, property);
@@ -347,6 +355,34 @@ namespace AppxPortable.WinRT.Xaml
             {
                 object value = owner.metadata != null ? owner.metadata.ActivateInstance() : Activator.CreateInstance(owner.type);
                 return Peers.Of((global::Windows.UI.Xaml.DependencyObject)value);
+            }
+        }
+    }
+
+    // Any other app class (converters, view models): created as the app's XAML
+    // metadata creates it, which reaches internal types too.
+    internal sealed class AppObjectType : XamlType
+    {
+        private readonly global::Windows.UI.Xaml.Markup.IXamlType metadata;
+
+        internal AppObjectType(Type type, global::Windows.UI.Xaml.Markup.IXamlType metadata, XamlSchemaContext context) : base(type, context)
+        {
+            this.metadata = metadata;
+        }
+
+        protected override bool LookupIsPublic() { return true; }
+        protected override bool LookupIsConstructible() { return true; }
+        protected override XamlTypeInvoker LookupInvoker() { return new Creator(this); }
+
+        private sealed class Creator : XamlTypeInvoker
+        {
+            private readonly AppObjectType owner;
+
+            internal Creator(AppObjectType owner) : base(owner) { this.owner = owner; }
+
+            public override object CreateInstance(object[] arguments)
+            {
+                return owner.metadata != null ? owner.metadata.ActivateInstance() : Activator.CreateInstance(owner.UnderlyingType, true);
             }
         }
     }

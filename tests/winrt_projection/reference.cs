@@ -538,3 +538,12 @@ namespace Windows.UI
         public byte B { get { return _B; } set { _B = value; } }
     }
 }
+
+namespace Windows.UI.Xaml.Data
+{
+    public interface IValueConverter
+    {
+        object Convert(object value, global::System.Type targetType, object parameter, string language);
+        object ConvertBack(object value, global::System.Type targetType, object parameter, string language);
+    }
+}

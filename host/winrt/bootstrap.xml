@@ -116,6 +116,7 @@
     <Property Name="Color" Wpf="System.Windows.Media.SolidColorBrush.ColorProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.VisualStateManager" Adapter="Wpf" />
+  <Interface Name="Windows.UI.Xaml.Data.IValueConverter" Adapter="Wpf" />
   <!-- WPF has no ring; an indeterminate ProgressBar stands in. -->
   <Class Name="Windows.UI.Xaml.Controls.ProgressRing" Adapter="Wpf" Peer="System.Windows.Controls.ProgressBar">
     <Constructor />

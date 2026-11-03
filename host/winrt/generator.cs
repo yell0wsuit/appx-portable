@@ -1864,7 +1864,7 @@ namespace AppxPortable.WinRT.Projected
                 if (element.Name != "Class" && element.Name != "Enum" && element.Name != "Delegate" && element.Name != "Interface" && element.Name != "Struct")
                     throw new NotSupportedException("Unsupported surface kind: " + element.Name);
                 if (!selected.Add(element.GetAttribute("Name"))) throw new InvalidDataException("Duplicate selected type");
-                if (element.Name == "Interface") interfaces.Add(element.GetAttribute("Name"), element);
+                if (element.Name == "Interface" && element.GetAttribute("Adapter") != "Wpf") interfaces.Add(element.GetAttribute("Name"), element);
                 if (element.GetAttribute("Adapter") == "Wpf") wpfTypes.Add(element.GetAttribute("Name"));
                 else if (element.Name == "Class") {
                     classes.Add(Find(element.GetAttribute("Name")));

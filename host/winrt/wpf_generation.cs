@@ -56,9 +56,23 @@ internal static partial class WinrtProjectionGenerator
             string.Join(", ", invoke.Parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ");");
     }
 
+    // An interface apps implement and the adapter calls (IValueConverter): methods only.
+    private static void WpfInterface(StringBuilder output, TypeDefinition type, XmlElement surface)
+    {
+        if (surface.HasChildNodes || !type.IsInterface || type.HasProperties || type.HasEvents || type.HasGenericParameters)
+            throw new NotSupportedException("Unsupported WPF interface surface: " + type.FullName);
+        output.AppendLine("    public interface " + type.Name);
+        output.AppendLine("    {");
+        foreach (MethodDefinition method in type.Methods)
+            output.AppendLine("        " + (method.ReturnType.FullName == "System.Void" ? "void" : Name(method.ReturnType)) + " " + method.Name + "(" +
+                string.Join(", ", method.Parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ");");
+        output.AppendLine("    }");
+    }
+
     private static void WpfClass(StringBuilder output, TypeDefinition type, XmlElement surface)
     {
         if (surface.Name == "Delegate") { WpfDelegate(output, type, surface); return; }
+        if (surface.Name == "Interface") { WpfInterface(output, type, surface); return; }
         if (surface.Name != "Class" || type.IsEnum || type.IsValueType || type.IsInterface || IsDelegate(type))
             throw new NotSupportedException("Unsupported WPF surface: " + type.FullName);
         bool isStatic = type.IsAbstract && type.IsSealed;

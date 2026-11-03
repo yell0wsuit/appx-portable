@@ -28,6 +28,34 @@ namespace Fixture
         public Badge() { ++Made; }
         public int Score { get { return (int)GetValue(ScoreProperty); } set { SetValue(ScoreProperty, value); } }
     }
+    // LayoutAwarePage's DefaultViewModel: an observable string-keyed map.
+    class MapChange : EventArgs { public string Key { get; set; } }
+    class TestMap : Dictionary<string, object>
+    {
+        public event EventHandler<MapChange> MapChanged;
+        public void Put(string key, object value) { this[key] = value; if (MapChanged != null) MapChanged(this, new MapChange { Key = key }); }
+    }
+    class ModelPage : SourcePage
+    {
+        readonly TestMap model = new TestMap();
+        public TestMap DefaultViewModel { get { return model; } }
+    }
+    // A UWP converter: language is a string, target types are UWP's.
+    class Fmt : Windows.UI.Xaml.Data.IValueConverter
+    {
+        internal static Type Target; internal static object Parameter; internal static string Language;
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            Target = targetType; Parameter = parameter; Language = language;
+            return value + " " + parameter;
+        }
+        public object ConvertBack(object value, Type targetType, object parameter, string language) { throw new NotSupportedException(); }
+    }
+    class Boom : Windows.UI.Xaml.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language) { throw new InvalidOperationException("converter failure"); }
+        public object ConvertBack(object value, Type targetType, object parameter, string language) { throw new NotSupportedException(); }
+    }
     // An app type as generated XamlTypeInfo describes it.
     class SourceXamlType : IXamlType
     {
@@ -58,7 +86,7 @@ namespace Fixture
         internal readonly Dictionary<string, SourceXamlType> Types = new Dictionary<string, SourceXamlType>();
         public SourceApp()
         {
-            foreach (var type in new[] { typeof(SourcePage), typeof(Badge) }) Types.Add(type.FullName, new SourceXamlType(type));
+            foreach (var type in new[] { typeof(SourcePage), typeof(Badge), typeof(ModelPage) }) Types.Add(type.FullName, new SourceXamlType(type));
         }
         public IXamlType GetXamlType(Type type) { return type == null ? null : GetXamlType(type.FullName); }
         public IXamlType GetXamlType(string fullName)
@@ -174,6 +202,46 @@ namespace Fixture
             string light = Fails("ms-appx:///light.xaml", this);
             Check(light.Contains("Light"), "an unsupported theme is named: " + light);
             Console.WriteLine("PASS: styles, templates, merged and theme resources load through WPF");
+            VerifyBindings();
+        }
+
+        const string BindingXaml = "<local:ModelPage x:Class='Fixture.ModelPage'" + Ns + " xmlns:local='using:Fixture'" +
+            " DataContext='{Binding DefaultViewModel, RelativeSource={RelativeSource Self}}'>" +
+            "<local:ModelPage.Resources><local:Fmt x:Key='Fmt'/><local:Boom x:Key='Boom'/></local:ModelPage.Resources><StackPanel>" +
+            "<TextBlock x:Name='score' Text='{Binding Score, Converter={StaticResource Fmt}, ConverterParameter=pts}'/>" +
+            "<TextBlock x:Name='echo' Text='{Binding Text, ElementName=score}'/>" +
+            "<TextBlock x:Name='plain' Text='{Binding Count}'/>" +
+            "<TextBlock x:Name='boom' Text='{Binding Score, Converter={StaticResource Boom}}'/>" +
+            "</StackPanel></local:ModelPage>";
+
+        // Bindings settle once WPF's dispatcher has run; the checks wait for a tick.
+        void VerifyBindings()
+        {
+            File.WriteAllText("Pages/binding.xaml", BindingXaml);
+            var page = new ModelPage();
+            page.DefaultViewModel.Put("Count", 5);
+            Application.LoadComponent(page, new Uri("ms-appx:///Pages/binding.xaml"));
+            page.DefaultViewModel.Put("Score", 3);
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+            int ticks = 0;
+            timer.add_Tick((sender, args) =>
+            {
+                try
+                {
+                    if (++ticks == 1) { page.DefaultViewModel.Put("Score", 4); return; }
+                    timer.Stop();
+                    var score = (TextBlock)page.FindName("score");
+                    Check(score.Text == "4 pts", "map key binding through a UWP converter follows changes: '" + score.Text + "'");
+                    Check(Fmt.Target == typeof(string) && (string)Fmt.Parameter == "pts" && !string.IsNullOrEmpty(Fmt.Language), "converter sees UWP target type, parameter and language");
+                    Check(((TextBlock)page.FindName("echo")).Text == "4 pts", "ElementName binding");
+                    Check(((TextBlock)page.FindName("plain")).Text == "5", "default conversion without a converter");
+                    Check(ShimLogContains("managed callback threw System.InvalidOperationException: converter failure"), "converter failure logged");
+                    Console.WriteLine("PASS: bindings resolve game properties, observable maps, element names and UWP converters");
+                    Exit();
+                }
+                catch (Exception error) { Console.Error.WriteLine(error); Environment.Exit(1); }
+            });
+            timer.Start();
         }
         static object PeerOf(object wrapper)
         {
@@ -184,7 +252,6 @@ namespace Fixture
         {
             try { Verify(); }
             catch (Exception error) { Console.Error.WriteLine(error); Environment.Exit(1); }
-            Exit();
         }
     }
     class SourceProjectionTest
