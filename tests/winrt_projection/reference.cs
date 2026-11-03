@@ -130,6 +130,14 @@ namespace Windows.UI.Xaml
     public class UIElement : DependencyObject
     {
         internal UIElement() { }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_PointerEntered(global::Windows.UI.Xaml.Input.PointerEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_PointerEntered(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_PointerExited(global::Windows.UI.Xaml.Input.PointerEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_PointerExited(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_PointerPressed(global::Windows.UI.Xaml.Input.PointerEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_PointerPressed(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Tapped(global::Windows.UI.Xaml.Input.TappedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Tapped(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
         public Visibility Visibility { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public double Opacity { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
@@ -571,5 +579,46 @@ namespace Windows.UI.Xaml.Media.Imaging
     {
         public BitmapImage() { throw new global::System.NotImplementedException(); }
         public BitmapImage(global::System.Uri source) { throw new global::System.NotImplementedException(); }
+    }
+}
+
+namespace Windows.UI.Xaml.Input
+{
+    public delegate void PointerEventHandler(object sender, PointerRoutedEventArgs args);
+    public delegate void TappedEventHandler(object sender, TappedRoutedEventArgs args);
+    public sealed class PointerRoutedEventArgs : global::Windows.UI.Xaml.RoutedEventArgs
+    {
+        public bool Handled { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
+    public sealed class TappedRoutedEventArgs : global::Windows.UI.Xaml.RoutedEventArgs
+    {
+        public bool Handled { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
+}
+namespace Windows.UI.Xaml.Controls.Primitives
+{
+    public delegate void RangeBaseValueChangedEventHandler(object sender, RangeBaseValueChangedEventArgs args);
+    public sealed class RangeBaseValueChangedEventArgs : global::Windows.UI.Xaml.RoutedEventArgs
+    {
+        public double NewValue { get { throw new global::System.NotImplementedException(); } }
+        public double OldValue { get { throw new global::System.NotImplementedException(); } }
+    }
+    public class RangeBase : global::Windows.UI.Xaml.Controls.Control
+    {
+        internal RangeBase() { }
+        public double Value { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_ValueChanged(RangeBaseValueChangedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_ValueChanged(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+}
+namespace Windows.UI.Xaml.Controls
+{
+    public class Slider : global::Windows.UI.Xaml.Controls.Primitives.RangeBase { internal Slider() { } }
+    public class ToggleSwitch : Control
+    {
+        internal ToggleSwitch() { }
+        public bool IsOn { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Toggled(global::Windows.UI.Xaml.RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
+        public void remove_Toggled(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
 }

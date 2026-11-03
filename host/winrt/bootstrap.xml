@@ -126,7 +126,9 @@
   <Class Name="Windows.UI.Xaml.Controls.Button" Adapter="Wpf" Peer="System.Windows.Controls.Button"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Controls.Primitives.ToggleButton" Adapter="Wpf" Peer="System.Windows.Controls.Primitives.ToggleButton"></Class>
   <Class Name="Windows.UI.Xaml.Controls.RadioButton" Adapter="Wpf" Peer="System.Windows.Controls.RadioButton"><Constructor /></Class>
-  <Class Name="Windows.UI.Xaml.Controls.Primitives.RangeBase" Adapter="Wpf" Peer="System.Windows.Controls.Primitives.RangeBase"></Class>
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.RangeBase" Adapter="Wpf" Peer="System.Windows.Controls.Primitives.RangeBase">
+    <Property Name="Value" Wpf="System.Windows.Controls.Primitives.RangeBase.ValueProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Controls.Slider" Adapter="Wpf" Peer="System.Windows.Controls.Slider"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Controls.ProgressBar" Adapter="Wpf" Peer="System.Windows.Controls.ProgressBar"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Controls.Border" Adapter="Wpf" Peer="System.Windows.Controls.Border"><Constructor /></Class>
@@ -217,6 +219,12 @@
     <Property Name="TargetName" Wpf="System.Windows.Media.Animation.Storyboard.TargetNameProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.ResourceDictionary" Adapter="Wpf" Peer="System.Windows.ResourceDictionary"><Constructor /></Class>
+  <Delegate Name="Windows.UI.Xaml.Input.PointerEventHandler" Adapter="Wpf" />
+  <Delegate Name="Windows.UI.Xaml.Input.TappedEventHandler" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Input.PointerRoutedEventArgs" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Input.TappedRoutedEventArgs" Adapter="Wpf" />
+  <Delegate Name="Windows.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventHandler" Adapter="Wpf" />
+  <Class Name="Windows.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs" Adapter="Wpf" />
   <Delegate Name="Windows.UI.Xaml.RoutedEventHandler" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Style" Adapter="Wpf" Peer="System.Windows.Style"><Constructor /></Class>
   <Class Name="Windows.UI.Xaml.Media.VisualTreeHelper" Adapter="Wpf" />

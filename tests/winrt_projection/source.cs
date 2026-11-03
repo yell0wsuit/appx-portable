@@ -194,6 +194,7 @@ namespace Fixture
             Console.WriteLine("PASS: managed loader builds WPF content with names, connections and game types; unsupported input fails explicitly");
             VerifyCompatibility();
             VerifyClicks();
+            VerifyInputEvents();
             VerifyStyles();
         }
 
@@ -341,6 +342,52 @@ namespace Fixture
             button.remove_Click(token);
             Check(ShimLogContains("managed callback threw System.InvalidOperationException: click callback failure"), "click callback exception logged");
             Console.WriteLine("PASS: typed buttons forward WPF clicks, tokens and callback failures");
+        }
+
+        void VerifyInputEvents()
+        {
+            File.WriteAllText("Pages/input-events.xaml", "<Page" + Ns + "><Grid><Slider x:Name='slider'/><ToggleSwitch x:Name='toggle'/></Grid></Page>");
+            var page = new SourcePage(); Application.LoadComponent(page, new Uri("ms-appx:///Pages/input-events.xaml"));
+            var element = (UIElement)page.Content; var peer = (System.Windows.UIElement)PeerOf(element);
+            Action<System.Windows.RoutedEvent, Func<Windows.UI.Xaml.Input.PointerEventHandler, System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken>, Action<System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken>> pointer = (routed, add, remove) =>
+            {
+                int count = 0;
+                var token = add((sender, args) => { ++count; Check(ReferenceEquals(sender, element) && ReferenceEquals(args.OriginalSource, element), "pointer wrapper identity"); args.Handled = true; });
+                System.Windows.Input.MouseEventArgs argsWpf = routed == System.Windows.UIElement.MouseDownEvent ?
+                    (System.Windows.Input.MouseEventArgs)new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 1, System.Windows.Input.MouseButton.Left) :
+                    new System.Windows.Input.MouseEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 1);
+                argsWpf.RoutedEvent = routed; peer.RaiseEvent(argsWpf);
+                Check(count == 1 && argsWpf.Handled, "pointer routed event and Handled");
+                remove(token); argsWpf.Handled = false; peer.RaiseEvent(argsWpf); Check(count == 1, "pointer removal");
+            };
+            pointer(System.Windows.UIElement.MouseEnterEvent, element.add_PointerEntered, element.remove_PointerEntered);
+            pointer(System.Windows.UIElement.MouseLeaveEvent, element.add_PointerExited, element.remove_PointerExited);
+            pointer(System.Windows.UIElement.MouseDownEvent, element.add_PointerPressed, element.remove_PointerPressed);
+            int taps = 0;
+            var tapped = element.add_Tapped((sender, args) => { ++taps; Check(ReferenceEquals(sender, element) && ReferenceEquals(args.OriginalSource, element), "tap identity"); args.Handled = true; });
+            Action<System.Windows.RoutedEvent> mouse = routed => peer.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 1, System.Windows.Input.MouseButton.Left) { RoutedEvent = routed });
+            mouse(System.Windows.UIElement.MouseLeftButtonUpEvent); Check(taps == 0, "a release without a press is not a tap");
+            mouse(System.Windows.UIElement.MouseLeftButtonDownEvent); mouse(System.Windows.UIElement.MouseLeftButtonUpEvent); Check(taps == 1, "mouse click synthesizes a tap");
+            element.remove_Tapped(tapped); mouse(System.Windows.UIElement.MouseLeftButtonDownEvent); mouse(System.Windows.UIElement.MouseLeftButtonUpEvent); Check(taps == 1, "tap removal");
+            var inner = new Grid(); ((Grid)element).Children.Add(inner);
+            var innerPeer = (System.Windows.UIElement)PeerOf(inner); int innerTaps = 0, outerTaps = 0; bool handled = true;
+            var innerToken = inner.add_Tapped((sender, args) => { ++innerTaps; args.Handled = handled; });
+            var outerToken = element.add_Tapped((sender, args) => { ++outerTaps; Check(ReferenceEquals(args.OriginalSource, inner), "bubbling tap retains original child wrapper"); });
+            Action clickInner = () =>
+            {
+                innerPeer.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 1, System.Windows.Input.MouseButton.Left) { RoutedEvent = System.Windows.UIElement.MouseDownEvent });
+                innerPeer.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 1, System.Windows.Input.MouseButton.Left) { RoutedEvent = System.Windows.UIElement.MouseUpEvent });
+            };
+            clickInner(); Check(innerTaps == 1 && outerTaps == 0, "a handled tap stops at the child");
+            handled = false; clickInner(); Check(innerTaps == 2 && outerTaps == 1, "an unhandled tap bubbles to the parent exactly once");
+            inner.remove_Tapped(innerToken); element.remove_Tapped(outerToken);
+            var slider = (Slider)page.FindName("slider"); int changes = 0;
+            var changed = slider.add_ValueChanged((sender, args) => { ++changes; Check(ReferenceEquals(sender, slider) && args.OldValue == 0 && args.NewValue == 3, "range values and sender"); });
+            slider.Value = 3; slider.remove_ValueChanged(changed); slider.Value = 4; Check(changes == 1, "range event removal");
+            var toggle = (ToggleSwitch)page.FindName("toggle"); int toggles = 0;
+            var toggled = toggle.add_Toggled((sender, args) => { ++toggles; Check(ReferenceEquals(sender, toggle), "toggle sender"); });
+            toggle.IsOn = true; toggle.IsOn = false; toggle.remove_Toggled(toggled); toggle.IsOn = true; Check(toggles == 2, "checked and unchecked forward as Toggled, with removal");
+            Console.WriteLine("PASS: pointer, tapped, range and toggle events use WPF with tokens and UWP arguments");
         }
 
         const string StylesXaml = "<ResourceDictionary" + Ns + ">" +

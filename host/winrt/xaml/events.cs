@@ -125,3 +125,54 @@ namespace AppxPortable.WinRT.Xaml
         }
     }
 }
+
+namespace Windows.UI.Xaml.Controls.Primitives
+{
+    public sealed partial class RangeBaseValueChangedEventArgs
+    {
+        private readonly double oldValue, newValue;
+        internal RangeBaseValueChangedEventArgs(global::System.Windows.RoutedPropertyChangedEventArgs<double> args)
+            : base(Values.FromWpf(args.OriginalSource, typeof(object))) { oldValue = args.OldValue; newValue = args.NewValue; }
+        public double OldValue { get { return oldValue; } }
+        public double NewValue { get { return newValue; } }
+    }
+    public partial class RangeBase
+    {
+        private Dictionary<long, Delegate> valueChanged;
+        public EventRegistrationToken add_ValueChanged(RangeBaseValueChangedEventHandler handler)
+        {
+            if (handler == null) throw new ArgumentNullException("handler");
+            var peer = (global::System.Windows.Controls.Primitives.RangeBase)Values.Dependency(this);
+            global::System.Windows.RoutedPropertyChangedEventHandler<double> callback = (s, e) => Host.Callback(() => handler(this, new RangeBaseValueChangedEventArgs(e)));
+            peer.ValueChanged += callback;
+            return Tokens.Add(ref valueChanged, callback);
+        }
+        public void remove_ValueChanged(EventRegistrationToken token)
+        {
+            var peer = (global::System.Windows.Controls.Primitives.RangeBase)Values.Dependency(this);
+            var callback = Tokens.Remove(valueChanged, token) as global::System.Windows.RoutedPropertyChangedEventHandler<double>;
+            if (callback != null) peer.ValueChanged -= callback;
+        }
+    }
+}
+namespace Windows.UI.Xaml.Controls
+{
+    public partial class ToggleSwitch
+    {
+        private Dictionary<long, Delegate> toggled;
+        public EventRegistrationToken add_Toggled(RoutedEventHandler handler)
+        {
+            if (handler == null) throw new ArgumentNullException("handler");
+            var peer = (global::System.Windows.Controls.Primitives.ToggleButton)Values.Dependency(this);
+            global::System.Windows.RoutedEventHandler callback = (s, e) => Host.Callback(() => handler(this, new RoutedEventArgs(Values.FromWpf(e.OriginalSource, typeof(object)))));
+            peer.Checked += callback; peer.Unchecked += callback;
+            return Tokens.Add(ref toggled, callback);
+        }
+        public void remove_Toggled(EventRegistrationToken token)
+        {
+            var peer = (global::System.Windows.Controls.Primitives.ToggleButton)Values.Dependency(this);
+            var callback = Tokens.Remove(toggled, token) as global::System.Windows.RoutedEventHandler;
+            if (callback != null) { peer.Checked -= callback; peer.Unchecked -= callback; }
+        }
+    }
+}
