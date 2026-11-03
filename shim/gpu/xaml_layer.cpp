@@ -263,5 +263,8 @@ extern "C" HRESULT __cdecl ShimSubmitXamlFrame(const void* bgra, UINT width, UIN
                static_cast<const BYTE*>(bgra) + static_cast<size_t>(y) * stride, static_cast<size_t>(width) * 4);
     frame.width = width;
     frame.height = height;
+    // As swap-chain frames: whether the managed XAML renderer runs, without flooding the log.
+    if (frame.generation <= 3 || frame.generation % 600 == 0)
+        appx::Log("TRACE", "XAML frame %u %ux%u", frame.generation, width, height);
     return S_OK;
 }
