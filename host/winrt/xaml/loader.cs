@@ -250,6 +250,15 @@ namespace AppxPortable.WinRT.Xaml
                                     reader.Read();
                                     continue;
                                 }
+                                // Package fonts ("/Fonts/a.otf#Face", ms-appx:///...) name files in
+                                // the package; WPF resolves them against a BaseUri this loader does
+                                // not have, so they become absolute file URIs.
+                                if (reader.Value is string && FontFamily(valueFrame))
+                                {
+                                    writer.WriteValue(PackageFonts((string)reader.Value));
+                                    reader.Read();
+                                    continue;
+                                }
                             }
                             break;
                         case XamlNodeType.StartMember:
@@ -324,6 +333,32 @@ namespace AppxPortable.WinRT.Xaml
                     frame.Member != null && frame.Member.Type.UnderlyingType == typeof(System.Windows.FontWeight) ||
                     frame.Type.UnderlyingType == typeof(System.Windows.Setter) && frame.Member != null && frame.Member.Name == "Value" &&
                     (frame.Setting == "FontWeight" || frame.Setting != null && frame.Setting.EndsWith(".FontWeight", StringComparison.Ordinal)));
+            }
+
+            private static bool FontFamily(Frame frame)
+            {
+                return frame.Type != null && (frame.Type.UnderlyingType == typeof(System.Windows.Media.FontFamily) ||
+                    frame.Member != null && frame.Member.Type.UnderlyingType == typeof(System.Windows.Media.FontFamily) ||
+                    frame.Type.UnderlyingType == typeof(System.Windows.Setter) && frame.Member != null && frame.Member.Name == "Value" &&
+                    (frame.Setting == "FontFamily" || frame.Setting != null && frame.Setting.EndsWith(".FontFamily", StringComparison.Ordinal)));
+            }
+
+            // Each comma-separated family: package-rooted file references become file URIs.
+            internal static string PackageFonts(string value)
+            {
+                var families = value.Split(',');
+                for (int i = 0; i < families.Length; ++i)
+                {
+                    string family = families[i].Trim(), path = null;
+                    if (family.StartsWith("ms-appx:///", StringComparison.OrdinalIgnoreCase)) path = family.Substring("ms-appx:///".Length);
+                    else if (family.StartsWith("/", StringComparison.Ordinal)) path = family.Substring(1);
+                    if (path == null) continue;
+                    int face = path.IndexOf('#');
+                    string file = face < 0 ? path : path.Substring(0, face);
+                    var uri = new Uri(System.IO.Path.Combine(PackageRoot, Uri.UnescapeDataString(file).Replace('/', System.IO.Path.DirectorySeparatorChar)));
+                    families[i] = uri.AbsoluteUri + (face < 0 ? "" : path.Substring(face));
+                }
+                return string.Join(",", families);
             }
 
             private static bool Dictionary(XamlType type)

@@ -334,6 +334,31 @@ namespace Fixture
                 var applied = ((System.Windows.UIElement)PeerOf(child)).RenderTransform.Transform(new System.Windows.Point(1, 1));
                 Check(ReferenceEquals(child.RenderTransform, move) && applied.X == 6 && applied.Y == 7, "RenderTransform and TranslateTransform");
             });
+            test("package-fonts", () =>
+            {
+                // "/Fonts/a.otf#Face" and ms-appx:/// fonts come from the package, in
+                // attributes and style setters; rendering them must not fail.
+                File.WriteAllText("Pages/startup-font.xaml", "<Page" + Ns + "><Page.Resources><Style x:Key='styled' TargetType='TextBlock'>" +
+                    "<Setter Property='FontFamily' Value='/Fonts/probe-face.ttf#Tahoma'/></Style></Page.Resources><StackPanel x:Name='panel'>" +
+                    "<TextBlock x:Name='direct' FontFamily='ms-appx:///Fonts/probe-face.ttf#Tahoma, Segoe UI' Text='Gems'/>" +
+                    "<TextBlock x:Name='styled' Style='{StaticResource styled}' Text='Gems'/></StackPanel></Page>");
+                var page = new SourcePage(); Application.LoadComponent(page, new Uri("ms-appx:///Pages/startup-font.xaml"));
+                foreach (var name in new[] { "direct", "styled" })
+                {
+                    var text = (System.Windows.Controls.TextBlock)PeerOf(page.FindName(name));
+                    var face = new System.Windows.Media.Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch);
+                    System.Windows.Media.GlyphTypeface glyphs;
+                    Check(face.TryGetGlyphTypeface(out glyphs) && glyphs.FontUri.LocalPath.EndsWith("probe-face.ttf", StringComparison.OrdinalIgnoreCase),
+                          name + " uses the package font file: " + text.FontFamily.Source);
+                }
+                var panel = (System.Windows.FrameworkElement)PeerOf(page.FindName("panel"));
+                panel.Measure(new System.Windows.Size(200, 100)); panel.Arrange(new System.Windows.Rect(0, 0, 200, 100));
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(200, 100, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                bitmap.Render(panel);
+                var pixels = new byte[200 * 100 * 4];
+                bitmap.CopyPixels(pixels, 800, 0);
+                Check(Array.Exists(pixels, b => b != 0), "package-font text renders");
+            });
             test("popup-overlay", () =>
             {
                 // MainPage_Loaded opens a code-created popup at window offsets.

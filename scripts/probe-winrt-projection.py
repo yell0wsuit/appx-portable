@@ -433,6 +433,9 @@ def main():
         copy_owned_file(output / "source-winrt.exe", folder / source.name)
         deploy(projection, folder / "Windows.dll")
         copy_owned_file(page_fixture, folder / "page_projection_fixture.dll")
+        # A package font, as games ship them: Wine's own Tahoma under Fonts/.
+        (folder / "Fonts").mkdir(exist_ok=True)
+        copy_owned_file(wine.parent.parent / "share/wine/fonts/tahoma.ttf", folder / "Fonts/probe-face.ttf")
         run("source", [source.name], cwd=folder, environment={"APPX_PORTABLE_LOG": "1"},
             marker="PASS: managed loader builds WPF content with names, connections and game types; unsupported input fails explicitly")
 
