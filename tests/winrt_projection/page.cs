@@ -279,6 +279,8 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
     }
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int SetHostMinimized(int minimized);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int SendHostKey(uint message, uint key);
     // LayoutAwarePage's setup: Window bounds, CoreWindow, activation and cache mode.
     static void VerifyWindowActivation(DerivedPage page)
     {
@@ -382,6 +384,16 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         Check(new HashSet<global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken>(tokens).Count == 4, "CoreWindow input tokens are distinct");
         window.remove_PointerPressed(tokens[0]); window.remove_PointerMoved(tokens[1]);
         window.remove_PointerReleased(tokens[2]); window.remove_KeyDown(tokens[3]);
+        // LayoutAwarePage's back keys: accelerators see each key first; a handled one stops there.
+        int accelerators = 0, coreKeys = 0;
+        var seen = default(Windows.UI.Core.CoreAcceleratorKeyEventType); var pressed = default(Windows.System.VirtualKey);
+        var accelerator = window.Dispatcher.add_AcceleratorKeyActivated((sender, args) => { ++accelerators; seen = args.EventType; pressed = args.VirtualKey; args.Handled = true; });
+        var coreKey = window.add_KeyDown((sender, args) => ++coreKeys);
+        Check(SendHostKey(0x100, 27) == 0 && accelerators == 1 && seen == Windows.UI.Core.CoreAcceleratorKeyEventType.KeyDown &&
+              pressed == Windows.System.VirtualKey.Escape && coreKeys == 0, "AcceleratorKeyActivated sees the key first and Handled stops it");
+        window.Dispatcher.remove_AcceleratorKeyActivated(accelerator);
+        Check(SendHostKey(0x100, 27) == 0 && accelerators == 1 && coreKeys == 1, "removed accelerator handler; CoreWindow sees unhandled keys");
+        window.remove_KeyDown(coreKey);
         Check(global::Windows.UI.ViewManagement.ApplicationView.TryUnsnap(), "TryUnsnap outside a snapped view");
         var element = new Grid();
         Check(element.Dispatcher != null && element.Dispatcher.HasThreadAccess, "XAML objects report the view's CoreDispatcher");

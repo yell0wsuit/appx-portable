@@ -2,6 +2,7 @@ EXPORTS
   SendWindowSize
   FlushWindowEvents
   SetHostMinimized
+  SendHostKey
   ValidateWindowSizeArgs
   InvokePageOverrides
   InvokeKeyDown

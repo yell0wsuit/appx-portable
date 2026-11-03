@@ -151,6 +151,44 @@ public:
         return S_OK;
     }
 };
+// CoreDispatcher.AcceleratorKeyActivated: every key message, before CoreWindow.
+class AcceleratorArgs final
+    : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::WinRt>,
+                                          IAcceleratorKeyEventArgs, ICoreWindowEventArgs> {
+    InspectableClass(L"Windows.UI.Core.AcceleratorKeyEventArgs", BaseTrust);
+    CoreAcceleratorKeyEventType type_;
+    ABI::Windows::System::VirtualKey key_;
+    CorePhysicalKeyStatus status_;
+    boolean handled_ = false;
+
+public:
+    AcceleratorArgs(CoreAcceleratorKeyEventType type, ABI::Windows::System::VirtualKey key, CorePhysicalKeyStatus status)
+        : type_(type), key_(key), status_(status) {}
+    HRESULT STDMETHODCALLTYPE get_EventType(CoreAcceleratorKeyEventType* value) override {
+        if (!value) return E_POINTER;
+        *value = type_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_VirtualKey(ABI::Windows::System::VirtualKey* value) override {
+        if (!value) return E_POINTER;
+        *value = key_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_KeyStatus(CorePhysicalKeyStatus* value) override {
+        if (!value) return E_POINTER;
+        *value = status_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Handled(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = handled_;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE put_Handled(boolean value) override {
+        handled_ = value;
+        return S_OK;
+    }
+};
 // CoreWindow.CharacterReceived.
 class CharacterArgs final
     : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::WinRt>,

@@ -128,3 +128,35 @@ namespace AppxPortable.WinRT.Xaml
         }
     }
 }
+
+namespace Windows.UI.Xaml.Controls
+{
+    public partial class ItemsControl
+    {
+        public ItemContainerGenerator ItemContainerGenerator
+        {
+            get { return ItemContainerGenerator.Of(((global::System.Windows.Controls.ItemsControl)Values.Dependency(this)).ItemContainerGenerator); }
+        }
+    }
+
+    // Maps items to their containers through WPF's generator; containers are wrappers.
+    public sealed partial class ItemContainerGenerator
+    {
+        private static readonly global::System.Runtime.CompilerServices.ConditionalWeakTable<global::System.Windows.Controls.ItemContainerGenerator, ItemContainerGenerator> wrappers =
+            new global::System.Runtime.CompilerServices.ConditionalWeakTable<global::System.Windows.Controls.ItemContainerGenerator, ItemContainerGenerator>();
+        private readonly global::System.Windows.Controls.ItemContainerGenerator generator;
+        private ItemContainerGenerator(global::System.Windows.Controls.ItemContainerGenerator generator) { this.generator = generator; }
+        internal static ItemContainerGenerator Of(global::System.Windows.Controls.ItemContainerGenerator generator)
+        {
+            return generator == null ? null : wrappers.GetValue(generator, g => new ItemContainerGenerator(g));
+        }
+        private static global::System.Windows.DependencyObject Container(DependencyObject container)
+        {
+            return container == null ? null : (global::System.Windows.DependencyObject)Peers.Of(container);
+        }
+        public int IndexFromContainer(DependencyObject container) { return generator.IndexFromContainer(Container(container)); }
+        public DependencyObject ContainerFromIndex(int index) { return (DependencyObject)Peers.Wrap(generator.ContainerFromIndex(index)); }
+        public object ItemFromContainer(DependencyObject container) { return Values.FromWpf(generator.ItemFromContainer(Container(container)), typeof(object)); }
+        public DependencyObject ContainerFromItem(object item) { return (DependencyObject)Peers.Wrap(generator.ContainerFromItem(Values.ToWpf(item, typeof(object)))); }
+    }
+}

@@ -270,6 +270,7 @@
   <Class Name="Windows.UI.Xaml.Controls.ItemsControl" Adapter="Wpf" Peer="System.Windows.Controls.ItemsControl">
     <Property Name="ItemContainerTransitions" Wpf="AppxPortable.WinRT.Xaml.CompatibilityProperties.ItemContainerTransitionsProperty" />
   </Class>
+  <Class Name="Windows.UI.Xaml.Controls.ItemContainerGenerator" Adapter="Wpf" />
   <Class Name="Windows.UI.Xaml.Controls.Primitives.Selector" Adapter="Wpf" Peer="System.Windows.Controls.Primitives.Selector" />
   <Class Name="Windows.UI.Xaml.Controls.ListViewBase" Adapter="Wpf">
     <Property Name="IsSwipeEnabled" Wpf="AppxPortable.WinRT.Xaml.ListViewPeer.IsSwipeEnabledProperty" />
@@ -426,6 +427,13 @@
   <Class Name="Windows.UI.Core.CoreDispatcher">
     <Method Name="RunAsync" />
     <Property Name="HasThreadAccess" />
+    <Event Name="AcceleratorKeyActivated" />
+  </Class>
+  <Enum Name="Windows.UI.Core.CoreAcceleratorKeyEventType" />
+  <Class Name="Windows.UI.Core.AcceleratorKeyEventArgs">
+    <Property Name="EventType" />
+    <Property Name="VirtualKey" />
+    <Property Name="Handled" />
   </Class>
   <Enum Name="Windows.UI.Core.CoreDispatcherPriority" />
   <Delegate Name="Windows.UI.Core.DispatchedHandler" />

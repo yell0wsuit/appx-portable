@@ -359,6 +359,18 @@ namespace Fixture
                 bitmap.CopyPixels(pixels, 800, 0);
                 Check(Array.Exists(pixels, b => b != 0), "package-font text renders");
             });
+            test("item-containers", () =>
+            {
+                // ListItemIndexConverter: a container's index in its list.
+                File.WriteAllText("Pages/startup-list.xaml", "<Page" + Ns + "><ListView x:Name='list'><ListViewItem x:Name='first'/><ListViewItem x:Name='second'/></ListView></Page>");
+                var page = new SourcePage(); Application.LoadComponent(page, new Uri("ms-appx:///Pages/startup-list.xaml"));
+                page.Measure(new Windows.Foundation.Size(200, 200));
+                var list = (ItemsControl)page.FindName("list");
+                var second = (DependencyObject)page.FindName("second");
+                Check(ReferenceEquals(list.ItemContainerGenerator, list.ItemContainerGenerator), "generator identity");
+                Check(list.ItemContainerGenerator.IndexFromContainer(second) == 1 && ReferenceEquals(list.ItemContainerGenerator.ContainerFromIndex(1), second),
+                      "IndexFromContainer and ContainerFromIndex use WPF's generator");
+            });
             test("popup-overlay", () =>
             {
                 // MainPage_Loaded opens a code-created popup at window offsets.

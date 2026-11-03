@@ -281,6 +281,17 @@ namespace Windows.UI.Xaml.Controls
         public static double GetLeft(global::Windows.UI.Xaml.UIElement element) { throw new global::System.NotImplementedException(); }
         public static void SetLeft(global::Windows.UI.Xaml.UIElement element, double length) { throw new global::System.NotImplementedException(); }
     }
+    public class ItemsControl : Control
+    {
+        internal ItemsControl() { }
+        public ItemContainerGenerator ItemContainerGenerator { get { throw new global::System.NotImplementedException(); } }
+    }
+    public sealed class ItemContainerGenerator
+    {
+        internal ItemContainerGenerator() { }
+        public int IndexFromContainer(global::Windows.UI.Xaml.DependencyObject container) { throw new global::System.NotImplementedException(); }
+        public global::Windows.UI.Xaml.DependencyObject ContainerFromIndex(int index) { throw new global::System.NotImplementedException(); }
+    }
     public class ScrollViewer : ContentControl
     {
         internal ScrollViewer() { }
@@ -401,11 +412,21 @@ namespace Windows.UI.Core
     }
     public enum CoreDispatcherPriority { Idle = -2, Low = -1, Normal = 0, High = 1 }
     public delegate void DispatchedHandler();
+    public enum CoreAcceleratorKeyEventType { Character = 2, DeadCharacter = 3, KeyDown = 0, KeyUp = 1, SystemCharacter = 6, SystemDeadCharacter = 7, SystemKeyDown = 4, SystemKeyUp = 5 }
+    public sealed class AcceleratorKeyEventArgs
+    {
+        internal AcceleratorKeyEventArgs() { }
+        public CoreAcceleratorKeyEventType EventType { get { throw new global::System.NotImplementedException(); } }
+        public global::Windows.System.VirtualKey VirtualKey { get { throw new global::System.NotImplementedException(); } }
+        public bool Handled { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public sealed class CoreDispatcher
     {
         internal CoreDispatcher() { }
         public global::Windows.Foundation.IAsyncAction RunAsync(CoreDispatcherPriority priority, DispatchedHandler agileCallback) { throw new global::System.NotImplementedException("Windows.UI.Core.CoreDispatcher.RunAsync"); }
         public bool HasThreadAccess { get { throw new global::System.NotImplementedException(); } }
+        public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_AcceleratorKeyActivated(global::Windows.Foundation.TypedEventHandler<CoreDispatcher, AcceleratorKeyEventArgs> handler) { throw new global::System.NotImplementedException(); }
+        public void remove_AcceleratorKeyActivated(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
 }
 namespace Windows.UI.Input

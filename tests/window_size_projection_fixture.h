@@ -76,6 +76,15 @@ extern "C" HRESULT __cdecl SetHostMinimized(int minimized) {
     ShowWindow(host, minimized ? SW_MINIMIZE : SW_RESTORE);
     return window_size_fixture::Drain();
 }
+// A key message to the host window, as the user typing.
+extern "C" HRESULT __cdecl SendHostKey(UINT message, WPARAM key) {
+    HWND host = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), window_size_fixture::FindHost, reinterpret_cast<LPARAM>(&host));
+    if (!host) return E_FAIL;
+    const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
+    SendMessageW(host, message, key, up ? 0xC0000001 : 1);
+    return window_size_fixture::Drain();
+}
 extern "C" HRESULT __cdecl ValidateWindowSizeArgs(ABI::Windows::UI::Core::IWindowSizeChangedEventArgs* args) {
     if (!args) return E_POINTER;
     ABI::Windows::Foundation::Size size{};

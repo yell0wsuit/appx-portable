@@ -415,6 +415,8 @@ void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (message == WM_KEYDOWN && TextInputKey(wparam)) return;
     const bool keyboard = message == WM_KEYDOWN || message == WM_KEYUP || message == WM_SYSKEYDOWN ||
                           message == WM_SYSKEYUP || message == WM_CHAR;
+    // Accelerator keys come first, as on Windows; a handled one goes no further.
+    if (keyboard && !IslandsMode() && AcceleratorKeyMessage(message, wparam, lparam)) return;
     if ((coreInput || keyboard || !ElementPointerHandlers()) && coreWindow)
         coreWindow->OnInput(message, wparam, lparam);
 }

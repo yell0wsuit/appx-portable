@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <memory>
 #include "com/async_action.h"
+#include "event_args.h"
+#include <wrl/event.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Core;
 namespace appx {
@@ -18,7 +20,9 @@ public:
         return S_OK;
     }
 };
-class Dispatcher final : public RuntimeClass<RuntimeClassFlags<WinRt>, ICoreDispatcher, FtmBase> {
+using AcceleratorHandler =
+    __FITypedEventHandler_2_Windows__CUI__CCore__CCoreDispatcher_Windows__CUI__CCore__CAcceleratorKeyEventArgs;
+class Dispatcher final : public RuntimeClass<RuntimeClassFlags<WinRt>, ICoreDispatcher, ICoreAcceleratorKeys, FtmBase> {
     APPX_LOG_MISSING_INTERFACES("CoreDispatcher")
     InspectableClass(L"Windows.UI.Core.CoreDispatcher", BaseTrust);
     DWORD thread_;
@@ -42,8 +46,27 @@ class Dispatcher final : public RuntimeClass<RuntimeClassFlags<WinRt>, ICoreDisp
         }
     }
 
+    EventSource<AcceleratorHandler> accelerators_;
+
 public:
     explicit Dispatcher(DWORD thread = 0) : thread_(thread) {}
+    HRESULT STDMETHODCALLTYPE add_AcceleratorKeyActivated(AcceleratorHandler* handler, EventRegistrationToken* token) override {
+        return accelerators_.Add(handler, token);
+    }
+    HRESULT STDMETHODCALLTYPE remove_AcceleratorKeyActivated(EventRegistrationToken token) override {
+        return accelerators_.Remove(token);
+    }
+    // True when a handler marked the key handled; CoreWindow then does not see it.
+    bool RaiseAccelerator(CoreAcceleratorKeyEventType type, WPARAM key, LPARAM lparam, bool released) {
+        if (!accelerators_.GetSize()) return false;
+        auto args = Make<AcceleratorArgs>(type, static_cast<ABI::Windows::System::VirtualKey>(key), KeyStatus(lparam, released));
+        if (!args) return false;
+        auto hr = accelerators_.InvokeAll(this, args.Get());
+        if (FAILED(hr)) Log("FAIL", "AcceleratorKeyActivated handler hr=%08lx", hr);
+        boolean handled = false;
+        args->get_Handled(&handled);
+        return handled != 0;
+    }
     HRESULT STDMETHODCALLTYPE get_HasThreadAccess(boolean* value) override {
         if (!value) return E_POINTER;
         *value = Owner() == GetCurrentThreadId();
@@ -115,10 +138,28 @@ public:
         return FAILED(hr) ? hr : action.CopyTo(value);
     }
 };
+static ComPtr<Dispatcher>& HostDispatcher() {
+    static auto dispatcher = Make<Dispatcher>();
+    return dispatcher;
+}
 HRESULT MakeDispatcher(ICoreDispatcher** value) {
     if (!value) return E_POINTER;
-    static auto dispatcher = Make<Dispatcher>();
+    auto& dispatcher = HostDispatcher();
     return dispatcher ? dispatcher.CopyTo(value) : E_OUTOFMEMORY;
+}
+bool AcceleratorKeyMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    CoreAcceleratorKeyEventType type;
+    switch (message) {
+    case WM_KEYDOWN: type = CoreAcceleratorKeyEventType_KeyDown; break;
+    case WM_KEYUP: type = CoreAcceleratorKeyEventType_KeyUp; break;
+    case WM_SYSKEYDOWN: type = CoreAcceleratorKeyEventType_SystemKeyDown; break;
+    case WM_SYSKEYUP: type = CoreAcceleratorKeyEventType_SystemKeyUp; break;
+    case WM_CHAR: type = CoreAcceleratorKeyEventType_Character; break;
+    case WM_SYSCHAR: type = CoreAcceleratorKeyEventType_SystemCharacter; break;
+    default: return false;
+    }
+    auto& dispatcher = HostDispatcher();
+    return dispatcher && dispatcher->RaiseAccelerator(type, wparam, lparam, message == WM_KEYUP || message == WM_SYSKEYUP);
 }
 HRESULT MakeThreadDispatcher(ICoreDispatcher** value) {
     if (!value) return E_POINTER;
