@@ -28,7 +28,13 @@ namespace AppxPortable.WinRT.Xaml
                 new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
             resources = new System.Windows.ResourceDictionary();
             using (var theme = typeof(Host).Assembly.GetManifestResourceStream("AppxPortable.WinRT.Xaml.theme.xaml"))
-                resources.MergedDictionaries.Add((System.Windows.ResourceDictionary)System.Windows.Markup.XamlReader.Load(theme));
+            {
+                var dictionary = (System.Windows.ResourceDictionary)System.Windows.Markup.XamlReader.Load(theme);
+                // Implicit styles match an element's exact type: UWP-created viewers share the theme's.
+                var viewer = (System.Windows.Style)dictionary[typeof(System.Windows.Controls.ScrollViewer)];
+                dictionary[typeof(ScrollViewerPeer)] = new System.Windows.Style(typeof(ScrollViewerPeer), viewer);
+                resources.MergedDictionaries.Add(dictionary);
+            }
             application.Resources = resources;
         }
 

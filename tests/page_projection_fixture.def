@@ -5,6 +5,7 @@ EXPORTS
   SendHostKey
   SendHostMouse
   SetHostRealInput
+  SendHostWheel
   ValidateWindowSizeArgs
   InvokePageOverrides
   InvokeKeyDown

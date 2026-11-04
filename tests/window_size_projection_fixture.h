@@ -100,6 +100,17 @@ extern "C" HRESULT __cdecl SendHostMouse(UINT message, int x, int y) {
     SendMessageW(host, message, (keys[VK_LBUTTON] & 0x80) ? MK_LBUTTON : 0, MAKELPARAM(x, y));
     return window_size_fixture::Drain();
 }
+// A wheel notch at a client point; wheel messages carry screen coordinates.
+extern "C" HRESULT __cdecl SendHostWheel(int x, int y, int delta) {
+    HWND host = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), window_size_fixture::FindHost, reinterpret_cast<LPARAM>(&host));
+    if (!host) return E_FAIL;
+    POINT point{x, y};
+    ClientToScreen(host, &point);
+    SendMessageW(host, WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(static_cast<short>(delta))),
+                 MAKELPARAM(point.x, point.y));
+    return window_size_fixture::Drain();
+}
 // Scripted mouse messages need the real cursor out of the way: a disabled
 // window receives no real input, while sent messages still arrive.
 extern "C" HRESULT __cdecl SetHostRealInput(int enabled) {

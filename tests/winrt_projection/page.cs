@@ -285,6 +285,8 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
     static extern int SendHostMouse(uint message, int x, int y);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int SetHostRealInput(int enabled);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int SendHostWheel(int x, int y, int delta);
 
     // The hub's buttons: host mouse messages reach the WPF tree, at the client
     // point, and CoreWindow still sees every one of them.
@@ -328,6 +330,33 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         window.Content = previous;
         Check(SetHostRealInput(1) == 0, "host window takes real input again");
         Console.WriteLine("PASS: host mouse messages click XAML buttons at the client point and still reach CoreWindow");
+    }
+    // The hub: scroll bars overlay a viewer's content, as UWP's do, and the
+    // wheel scrolls a viewer that only scrolls horizontally sideways.
+    static void VerifyHostWheel()
+    {
+        Check(SetHostRealInput(0) == 0, "host window ignores real input");
+        var window = Window.Current; var previous = window.Content;
+        var root = new Windows.UI.Xaml.Controls.Canvas();
+        var viewer = new Windows.UI.Xaml.Controls.ScrollViewer();
+        var peer = (global::System.Windows.Controls.ScrollViewer)PeerOf(viewer);
+        peer.Width = 200; peer.Height = 100;
+        peer.HorizontalScrollBarVisibility = global::System.Windows.Controls.ScrollBarVisibility.Auto;
+        peer.VerticalScrollBarVisibility = global::System.Windows.Controls.ScrollBarVisibility.Disabled;
+        peer.Content = new global::System.Windows.Controls.Border { Width = 1000, Height = 100, Background = global::System.Windows.Media.Brushes.Transparent };
+        Windows.UI.Xaml.Controls.Canvas.SetLeft(viewer, 20); Windows.UI.Xaml.Controls.Canvas.SetTop(viewer, 30);
+        root.Children.Add(viewer);
+        window.Content = root;
+        var layers = (global::System.Windows.UIElement)HostRoot();
+        layers.UpdateLayout();
+        Check(peer.ViewportWidth == 200 && peer.ViewportHeight == 100 && viewer.ScrollableWidth == 800,
+              "scroll bars overlay the content: viewport " + peer.ViewportWidth + "x" + peer.ViewportHeight + ", scrollable " + viewer.ScrollableWidth);
+        Check(SendHostMouse(0x200, 70, 50) == 0 && SendHostWheel(70, 50, -120) == 0, "host wheel delivered");
+        layers.UpdateLayout(); layers.UpdateLayout();
+        Check(viewer.HorizontalOffset > 0 && peer.VerticalOffset == 0, "a wheel notch scrolls a horizontal-only viewer sideways: " + viewer.HorizontalOffset);
+        window.Content = previous;
+        Check(SetHostRealInput(1) == 0, "host window takes real input again");
+        Console.WriteLine("PASS: scroll bars overlay viewer content and the host wheel scrolls a horizontal viewer sideways");
     }
     // LayoutAwarePage's setup: Window bounds, CoreWindow, activation and cache mode.
     static void VerifyWindowActivation(DerivedPage page)
@@ -757,6 +786,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
                 .GetProperty("Frames", global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.NonPublic).GetValue(null, null);
             Check(current.IsLoaded && current.ActualWidth > 0 && frames > 0, "the window's content is loaded, laid out and rendered for the compositor");
             VerifyHostMouse();
+            VerifyHostWheel();
             Console.WriteLine("PASS: WPF-backed tree keeps wrapper identity for children, names, resources and Loaded, and renders for the compositor");
         });
     }

@@ -295,7 +295,7 @@ namespace Windows.UI.Xaml.Controls
     }
     public class ScrollViewer : ContentControl
     {
-        internal ScrollViewer() { }
+        public ScrollViewer() { throw new global::System.NotImplementedException(); }
         public double ScrollableWidth { get { throw new global::System.NotImplementedException(); } }
         public double HorizontalOffset { get { throw new global::System.NotImplementedException(); } }
         public void ScrollToHorizontalOffset(double offset) { throw new global::System.NotImplementedException(); }

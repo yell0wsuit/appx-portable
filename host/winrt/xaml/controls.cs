@@ -24,6 +24,20 @@ namespace AppxPortable.WinRT.Xaml
         {
             RequestBringIntoView += (s, e) => { if (!ScrollProperties.GetBringIntoViewOnFocusChange(this)) e.Handled = true; };
         }
+
+        // UWP turns the wheel sideways for a viewer that scrolls only
+        // horizontally (a hub); WPF's wheel scrolls only vertically.
+        protected override void OnMouseWheel(System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (!e.Handled && ScrollInfo != null && ScrollableHeight <= 0 && ScrollableWidth > 0 &&
+                HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled)
+            {
+                if (e.Delta < 0) ScrollInfo.MouseWheelRight(); else ScrollInfo.MouseWheelLeft();
+                e.Handled = true;
+                return;
+            }
+            base.OnMouseWheel(e);
+        }
     }
 
     public static class ScrollProperties
