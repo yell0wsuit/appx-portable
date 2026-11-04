@@ -641,6 +641,17 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         args.RoutedEvent = global::System.Windows.Input.Keyboard.KeyDownEvent;
         ((global::System.Windows.UIElement)PeerOf(target)).RaiseEvent(args);
     }
+    static int ShimLogCount(string text)
+    {
+        if (!global::System.IO.File.Exists("appx-portable.log")) return 0;
+        using (var stream = new global::System.IO.FileStream("appx-portable.log", global::System.IO.FileMode.Open, global::System.IO.FileAccess.Read, global::System.IO.FileShare.ReadWrite | global::System.IO.FileShare.Delete))
+        using (var reader = new global::System.IO.StreamReader(stream))
+        {
+            string log = reader.ReadToEnd(); int count = 0;
+            for (int at = log.IndexOf(text, StringComparison.Ordinal); at >= 0; at = log.IndexOf(text, at + text.Length, StringComparison.Ordinal)) ++count;
+            return count;
+        }
+    }
     static bool ShimLogContains(string text)
     {
         if (!global::System.IO.File.Exists("appx-portable.log")) return false;
@@ -656,8 +667,13 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         page.Failure = new InvalidOperationException("key override failure");
         try { RaiseKey(page, global::System.Windows.Input.Key.Escape, source); throw new Exception("key override error accepted"); }
         catch (InvalidOperationException error) { Check(ReferenceEquals(error, page.Failure), "key override exception identity"); }
+        page.Failure = new InvalidOperationException("key override failure");
+        try { RaiseKey(page, global::System.Windows.Input.Key.Escape, source); throw new Exception("repeated key override error accepted"); }
+        catch (InvalidOperationException error) { Check(ReferenceEquals(error, page.Failure), "repeated key override exception identity"); }
         page.Failure = null;
         Check(ShimLogContains("managed callback threw System.InvalidOperationException: key override failure"), "key override failure logged");
+        // A failure that repeats the same way (a timer's handler) is logged once.
+        Check(ShimLogCount("managed callback threw System.InvalidOperationException: key override failure") == 1, "repeated failure logged once");
         var partial = new PartialPage();
         source.RootVisual = (global::System.Windows.Media.Visual)PeerOf(partial);
         RaiseKey(partial, global::System.Windows.Input.Key.Escape, source);

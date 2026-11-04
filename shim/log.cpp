@@ -5,6 +5,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <mutex>
+#include <set>
 #include <string>
 
 namespace appx {
@@ -88,14 +89,29 @@ void LogActivation(HSTRING name, REFIID iid, HRESULT result) noexcept {
         iid.Data3, iid.Data4[0], iid.Data4[1], iid.Data4[2], iid.Data4[3], iid.Data4[4], iid.Data4[5], iid.Data4[6],
         iid.Data4[7], result);
 }
+// Managed reports repeat: a game timer can hit the same completion stub, or the
+// same handler can fail the same way, every second. Each distinct report is
+// logged once.
+static bool FirstReport(const wchar_t* category, const wchar_t* text) noexcept {
+    static std::mutex mutex;
+    static std::set<std::wstring> seen;
+    try {
+        std::lock_guard<std::mutex> lock(mutex);
+        return seen.insert(std::wstring(category) + L'|' + text).second;
+    } catch (...) {
+        return true; // Out of memory: log rather than lose it.
+    }
+}
 }
 // Completion stubs in the managed projection name the member they stand in for,
 // so a call the game swallows (a discarded Task) still leaves a trace.
 extern "C" void __cdecl ShimReportUnimplemented(const wchar_t* member) noexcept {
-    appx::Log("UNIMPL", "managed %ls", member ? member : L"(unnamed)");
+    if (!member) member = L"(unnamed)";
+    if (appx::FirstReport(L"UNIMPL", member)) appx::Log("UNIMPL", "managed %ls", member);
 }
 // A managed callback's exception that no managed caller will rethrow, such as an
 // event handler's: native event raisers discard handler failures.
 extern "C" void __cdecl ShimReportException(const wchar_t* text) noexcept {
-    appx::Log("FAIL", "managed callback threw %ls", text ? text : L"(no description)");
+    if (!text) text = L"(no description)";
+    if (appx::FirstReport(L"FAIL", text)) appx::Log("FAIL", "managed callback threw %ls", text);
 }
