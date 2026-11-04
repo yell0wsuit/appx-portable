@@ -6,15 +6,20 @@ using System.Windows.Media.Imaging;
 
 namespace AppxPortable.WinRT.Xaml
 {
-    // Puts the window's WPF tree on screen: a hidden HwndSource gives it a
-    // presentation source (layout, templates, Loaded, input), and every tick of
-    // the shim's CompositionTarget clock renders it offscreen for the shim to
-    // blend over the game's swap chain when the game presents. The host window's
+    // Puts the window's WPF tree on screen: an off-screen layered HwndSource gives
+    // it a presentation source (layout, templates, Loaded, input), and WPF's own
+    // compositor renders it there, only where something changed. The shim takes
+    // each layered present as the XAML frame (never showing the window) and blends
+    // it over the game's swap chain when the game presents. The host window's
     // mouse messages are forwarded to that source.
     internal static partial class Host
     {
         [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         private static extern int ShimSubmitXamlFrame(byte[] bgra, uint width, uint height, uint stride);
+        [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        private static extern int ShimCaptureXamlWindow(IntPtr window);
+        [DllImport("appxportable.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        private static extern uint ShimXamlFrameCount();
         [DllImport("user32.dll", ExactSpelling = true)]
         private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
         private const uint NoMoveZOrderActivate = 0x0002 | 0x0004 | 0x0010;  // SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
@@ -22,16 +27,17 @@ namespace AppxPortable.WinRT.Xaml
         // visible, non-activating tool popup kept off-screen.
         private const int PopupStyle = unchecked((int)(0x80000000 | 0x10000000));  // WS_POPUP | WS_VISIBLE
         private const int ToolNoActivate = 0x00000080 | 0x08000000;               // WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
-        private const int OffScreen = -32000;
+        private const int OffScreen = -16000;
 
         private static HwndSource presentation;
         private static RenderTargetBitmap target;
         private static byte[] pixels;
         private static int width, height;
-        private static bool failed;
+        private static bool failed, layered;
+        private static int rendered;
 
         // Frames handed to the shim, for diagnostics and probes.
-        internal static int Frames { get; private set; }
+        internal static int Frames { get { return layered ? (int)ShimXamlFrameCount() : rendered; } }
 
         internal static void EnsurePresentation()
         {
@@ -42,10 +48,22 @@ namespace AppxPortable.WinRT.Xaml
                 ExtendedWindowStyle = ToolNoActivate,
                 PositionX = OffScreen,
                 PositionY = OffScreen,
-                Width = 1,
-                Height = 1,
+                Width = Math.Max(1, (int)Math.Round(global::Windows.UI.Xaml.Window.Current.Bounds.Width)),
+                Height = Math.Max(1, (int)Math.Round(global::Windows.UI.Xaml.Window.Current.Bounds.Height)),
+                UsesPerPixelOpacity = true,
             };
-            presentation = new HwndSource(parameters) { RootVisual = Layers };
+            presentation = new HwndSource(parameters);
+            // Before the tree is attached, so the first, whole frame is taken too.
+            // Without the shim's capture (x64) every tick renders the tree itself.
+            layered = ShimCaptureXamlWindow(presentation.Handle) >= 0;
+            if (!layered)
+            {
+                // Do not run WPF's layered renderer alongside the bitmap fallback.
+                presentation.Dispose();
+                parameters.UsesPerPixelOpacity = false;
+                presentation = new HwndSource(parameters);
+            }
+            presentation.RootVisual = Layers;
             global::Windows.UI.Xaml.Media.CompositionTarget.add_Rendering((sender, args) => Render());
             ForwardInput();
         }
@@ -157,15 +175,19 @@ namespace AppxPortable.WinRT.Xaml
                 {
                     width = w; height = h;
                     SetWindowPos(presentation.Handle, IntPtr.Zero, 0, 0, w, h, NoMoveZOrderActivate);
-                    target = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
-                    pixels = new byte[w * h * 4];
+                    if (!layered)
+                    {
+                        target = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+                        pixels = new byte[w * h * 4];
+                    }
                 }
+                if (layered) return;  // WPF presents the window's changes itself
                 Layers.UpdateLayout();
                 target.Clear();
                 target.Render(Layers);
                 target.CopyPixels(pixels, w * 4, 0);
                 Errors.Check(ShimSubmitXamlFrame(pixels, (uint)w, (uint)h, (uint)(w * 4)));
-                ++Frames;
+                ++rendered;
             }
             catch (Exception error)
             {

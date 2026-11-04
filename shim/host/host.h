@@ -7,6 +7,9 @@ HWND HostWindow() noexcept;
 // A child window covering the host's client area, on top of earlier ones,
 // for one redirected swap chain. Closing it (WM_CLOSE) destroys it.
 HWND CreateSurfaceWindow() noexcept;
+// The GDI XAML fallback sits above retained game swap-chain surfaces.
+HWND ShowXamlFallbackWindow();
+void HideXamlFallbackWindow();
 DWORD HostThread() noexcept;
 void ActivateHostWindow();
 bool IsHostFullscreen() noexcept;

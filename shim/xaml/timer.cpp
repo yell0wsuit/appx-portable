@@ -6,6 +6,7 @@
 #include "com/factory.h"
 #include "registry.h"
 #include "host/host.h"
+#include "gpu/xaml_layer.h"
 #include <windows.ui.xaml.media.h>
 #include <wrl/event.h>
 #include <map>
@@ -174,7 +175,9 @@ public:
     CompositionTargetFactory() : Factory(L"Windows.UI.Xaml.Media.CompositionTarget") {}
     HRESULT Render() {
         auto args = Make<RenderingArgs>();
-        return args ? rendering_.InvokeAll(nullptr, args.Get()) : E_OUTOFMEMORY;
+        const auto hr = args ? rendering_.InvokeAll(nullptr, args.Get()) : E_OUTOFMEMORY;
+        PresentIdleXamlFrame();
+        return hr;
     }
     HRESULT STDMETHODCALLTYPE add_Rendering(RenderHandler* handler, EventRegistrationToken* token) override {
         if (GetCurrentThreadId() != thread_) return RPC_E_WRONG_THREAD;

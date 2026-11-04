@@ -12,3 +12,5 @@ EXPORTS
   ShimCreateXamlService
   ShimSubmitXamlFrame
   ShimSetXamlInputHandler
+  ShimCaptureXamlWindow
+  ShimXamlFrameCount

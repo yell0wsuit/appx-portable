@@ -4,6 +4,7 @@
 #include "pointer.h"
 #include "placement.h"
 #include "gpu/dxgi_redirect.h"
+#include "gpu/xaml_layer.h"
 #include "package/package.h"
 #include "log.h"
 #include <atomic>
@@ -50,6 +51,45 @@ static void ApplyHostCursor() {
     HWND under = WindowFromPoint(point);
     ScreenToClient(window, &point);
     if ((under == window || IsChild(window, under)) && PtInRect(&client, point)) SetCursor(HostCursor());
+}
+static HWND xamlFallback;
+static std::atomic<bool> xamlFallbackShown{false};
+static constexpr wchar_t XamlFallbackClass[] = L"AppxPortableXamlFrame";
+static LRESULT CALLBACK XamlFallbackProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+    if (message == WM_NCHITTEST) return HTTRANSPARENT;
+    if (message == WM_ERASEBKGND) return 1;
+    const auto result = DefWindowProcW(hwnd, message, wparam, lparam);
+    if (message == WM_PAINT) PresentIdleXamlFrame(true);
+    return result;
+}
+HWND ShowXamlFallbackWindow() {
+    if (!window || GetCurrentThreadId() != thread) return nullptr;
+    if (!xamlFallback) {
+        WNDCLASSW type{};
+        type.lpfnWndProc = XamlFallbackProc;
+        type.hInstance = GetModuleHandleW(nullptr);
+        type.lpszClassName = XamlFallbackClass;
+        if (!RegisterClassW(&type) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return nullptr;
+        xamlFallback = CreateWindowExW(0, XamlFallbackClass, nullptr, WS_CHILD | WS_CLIPSIBLINGS | WS_DISABLED, 0, 0, 1,
+                                       1, window, nullptr, type.hInstance, nullptr);
+        if (!xamlFallback) return nullptr;
+    }
+    RECT client{};
+    GetClientRect(window, &client);
+    xamlFallbackShown = true;
+    SetWindowPos(xamlFallback, HWND_TOP, 0, 0, client.right, client.bottom, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    return xamlFallback;
+}
+void HideXamlFallbackWindow() {
+    if (!xamlFallbackShown.exchange(false)) return;
+    auto hide = [] {
+        // A newer idle frame may have been shown while this hide was queued.
+        if (xamlFallback && !xamlFallbackShown.load()) ShowWindow(xamlFallback, SW_HIDE);
+    };
+    if (GetCurrentThreadId() == thread)
+        hide();
+    else
+        PostHostWork(0, hide);
 }
 static constexpr wchar_t SurfaceClass[] = L"AppxPortableSurface";
 // Composition swap chains are independent layers, and the game creates its
@@ -101,8 +141,10 @@ static void AcceptCallsFromOtherApartments() {
 static HWND CreateSurfaceOnHostThread() {
     RECT client{};
     GetClientRect(window, &client);
-    HWND surface = CreateWindowExW(0, SurfaceClass, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0,
-                                   client.right, client.bottom, window, nullptr, GetModuleHandleW(nullptr), nullptr);
+    // Presentation children must also be skipped by native WindowFromPoint;
+    // HTTRANSPARENT alone does not remove them from that hit test.
+    HWND surface = CreateWindowExW(0, SurfaceClass, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_DISABLED, 0,
+                                   0, client.right, client.bottom, window, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (surface) SetWindowPos(surface, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     return surface;
 }
@@ -260,6 +302,11 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wparam, LPARA
         if (!(lparam & (1L << 30))) placement.SetFullscreen(!placement.IsFullscreen());
         return 0;
     }
+    if (message == WM_PAINT) {
+        const auto result = DefWindowProcW(hwnd, message, wparam, lparam);
+        PresentIdleXamlFrame(true);
+        return result;
+    }
     if (message == CreateSurfaceMessage) return reinterpret_cast<LRESULT>(CreateSurfaceOnHostThread());
     if ((message == WM_WINDOWPOSCHANGED && (reinterpret_cast<WINDOWPOS*>(lparam)->flags & SWP_SHOWWINDOW)) ||
         (message == WM_SIZE && wparam != SIZE_MINIMIZED))
@@ -408,7 +455,10 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
         }
         if (result == -1) hr = HRESULT_FROM_WIN32(GetLastError());
     }
+    ShutdownXamlLayer();
     if (IsWindow(window)) DestroyWindow(window);
+    xamlFallback = nullptr;
+    xamlFallbackShown = false;
     if (smallIcon) DestroyIcon(smallIcon);
     if (largeIcon) DestroyIcon(largeIcon);
     {
