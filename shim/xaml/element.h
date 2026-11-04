@@ -37,7 +37,7 @@ HRESULT MakeGrid(IInspectable** value);
 // A named element of Windows 8 source XAML: the Win10 elements plus text
 // entry. S_FALSE with null for element types the shim does not stand in.
 HRESULT MakeSourceXamlElement(const wchar_t* tag, IInspectable** value);
-HRESULT MakeMediaElement(IInspectable** value);
+HRESULT MakeMediaElement(IInspectable** value, bool audioOnly = false);
 HRESULT QueueElementLoaded(IInspectable* value);
 HRESULT DeliverElementLoaded(IInspectable* object);
 HRESULT CurrentApplication(ABI::Windows::UI::Xaml::IApplication** value);

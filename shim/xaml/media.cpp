@@ -292,7 +292,7 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
     // Kept for callers; Wine has no background audio policy for it to select.
     AudioCategory audioCategory_ = AudioCategory_Other;
     double volume_ = 1;
-    bool ready_ = false, playRequested_ = false, failedOnce_ = false;
+    bool ready_ = false, playRequested_ = false, failedOnce_ = false, audioOnly_ = false;
     MediaElementState state_ = MediaElementState_Closed;
     Stretch stretch_ = Stretch_Uniform;
     Visibility visibility_ = Visibility_Visible;
@@ -374,7 +374,7 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
         if (event == MF_MEDIA_ENGINE_EVENT_LOADEDMETADATA) {
             ready_ = true;
             state_ = MediaElementState_Stopped;
-            if (engine_->HasVideo()) hr = video_.Start(surface_, engine_.Get(), dispatch_);
+            if (!audioOnly_ && engine_->HasVideo()) hr = video_.Start(surface_, engine_.Get(), dispatch_);
             // Start before raising Opened; handlers can Stop or replace Source.
             if (SUCCEEDED(hr) && playRequested_) hr = Play();
             if (SUCCEEDED(hr)) {
@@ -430,13 +430,15 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
         ComPtr<IMFMediaEngineClassFactory> factory;
         hr = CoCreateInstance(CLSID_MFMediaEngineClassFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
         if (FAILED(hr)) return hr;
-        hr = video_.Initialize(api);
-        if (FAILED(hr)) return hr;
-        surface_ = CreateSurfaceWindow();
-        if (!surface_) return E_FAIL;
-        hr = ApplyClip();
-        if (FAILED(hr)) return hr;
-        ApplyVisibility();
+        if (!audioOnly_) {
+            hr = video_.Initialize(api);
+            if (FAILED(hr)) return hr;
+            surface_ = CreateSurfaceWindow();
+            if (!surface_) return E_FAIL;
+            hr = ApplyClip();
+            if (FAILED(hr)) return hr;
+            ApplyVisibility();
+        }
         dispatch_ = std::make_shared<MediaDispatch>();
         dispatch_->deliver = [this](DWORD event, HRESULT result) { OnEvent(event, result); };
         auto notify = Make<EngineNotify>(dispatch_);
@@ -444,12 +446,14 @@ class MediaElement final : public Element<MediaElement, DefaultIMediaElement, De
         ComPtr<IMFAttributes> attributes;
         hr = api.createAttributes(&attributes, 3);
         if (SUCCEEDED(hr)) hr = attributes->SetUnknown(MF_MEDIA_ENGINE_CALLBACK, notify.Get());
-        if (SUCCEEDED(hr)) hr = attributes->SetUnknown(MF_MEDIA_ENGINE_DXGI_MANAGER, video_.Manager());
+        if (SUCCEEDED(hr) && !audioOnly_) hr = attributes->SetUnknown(MF_MEDIA_ENGINE_DXGI_MANAGER, video_.Manager());
         // Frame-server mode: frames are copied out, never presented by the engine.
-        if (SUCCEEDED(hr)) hr = attributes->SetUINT32(MF_MEDIA_ENGINE_VIDEO_OUTPUT_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM);
-        if (SUCCEEDED(hr)) hr = factory->CreateInstance(0, attributes.Get(), &engine_);
+        if (SUCCEEDED(hr) && !audioOnly_)
+            hr = attributes->SetUINT32(MF_MEDIA_ENGINE_VIDEO_OUTPUT_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM);
+        if (SUCCEEDED(hr))
+            hr = factory->CreateInstance(audioOnly_ ? MF_MEDIA_ENGINE_AUDIOONLY : 0, attributes.Get(), &engine_);
         if (FAILED(hr)) return hr;
-        video_.SetFit(FitFor(stretch_));
+        if (!audioOnly_) video_.SetFit(FitFor(stretch_));
         engine_->SetVolume(volume_);
         engine_->SetMuted(muted_);
         engine_->SetLoop(looping_);
@@ -465,6 +469,8 @@ public:
     static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Controls.MediaElement";
     explicit MediaElement(IInspectable* outer) : Element(outer) {}
     ~MediaElement() { Close(); }
+    // The WPF facade provides background audio, with no native visual or input target.
+    void SetAudioOnly(bool value) { audioOnly_ = value; }
     HRESULT STDMETHODCALLTYPE put_Clip(IRectangleGeometry* value) override {
         auto hr = Element::put_Clip(value);
         return FAILED(hr) ? hr : ApplyClip();
@@ -539,7 +545,7 @@ public:
         if (SUCCEEDED(hr)) {
             state_ = MediaElementState_Playing;
             // Audio-only sources (background music) have nothing to show.
-            if (engine_->HasVideo()) ShowWindow(surface_, SW_SHOW);
+            if (!audioOnly_ && engine_->HasVideo()) ShowWindow(surface_, SW_SHOW);
         }
         return hr;
     }
@@ -616,11 +622,12 @@ public:
     }
 };
 }
-HRESULT MakeMediaElement(IInspectable** value) {
+HRESULT MakeMediaElement(IInspectable** value, bool audioOnly) {
     if (!value) return E_POINTER;
     *value = nullptr;
     ComPtr<IMediaElement> media;
     auto hr = Compose<MediaElement>(nullptr, nullptr, media.GetAddressOf());
+    if (SUCCEEDED(hr)) static_cast<MediaElement*>(media.Get())->SetAudioOnly(audioOnly);
     return FAILED(hr) ? hr : media.CopyTo(value);
 }
 }

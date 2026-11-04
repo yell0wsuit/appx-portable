@@ -895,7 +895,7 @@ const ShimClass userControlClass{L"Windows.UI.Xaml.Controls.UserControl", MakeCo
 extern "C" HRESULT __cdecl ShimCreateXamlService(const wchar_t* name, IInspectable** value) noexcept {
     if (!name || !value) return E_POINTER;
     *value = nullptr;
-    if (!wcscmp(name, L"Windows.UI.Xaml.Controls.MediaElement")) return appx::MakeMediaElement(value);
+    if (!wcscmp(name, L"Windows.UI.Xaml.Controls.MediaElement")) return appx::MakeMediaElement(value, true);
     if (!wcscmp(name, L"Windows.UI.Xaml.Controls.SwapChainBackgroundPanel")) return appx::MakeBackgroundPanel(value);
     appx::Log("UNIMPL", "ShimCreateXamlService %ls", name);
     return CLASS_E_CLASSNOTAVAILABLE;

@@ -123,6 +123,60 @@ int wmain(int argc, wchar_t** argv) {
             CHECK(SUCCEEDED(uris->CreateUri(HStringReference(url.c_str()).Get(), &good)));
             CHECK(
                 SUCCEEDED(uris->CreateUri(HStringReference(L"ms-appx:///Assets/does-not-exist.mp4").Get(), &missing)));
+            // The WPF facade uses media as a background-audio service. It must
+            // not add a full-window video child or intercept the board's input.
+            auto service = reinterpret_cast<HRESULT(__cdecl*)(const wchar_t*, IInspectable**)>(
+                GetProcAddress(dll, "ShimCreateXamlService"));
+            CHECK(service != nullptr);
+            ComPtr<IInspectable> audioObject;
+            CHECK(service && SUCCEEDED(service(L"Windows.UI.Xaml.Controls.MediaElement", &audioObject)));
+            ComPtr<IMediaElement> audio;
+            CHECK(audioObject && SUCCEEDED(audioObject.As(&audio)));
+            HWND childBefore = GetWindow(TestWindow(), GW_CHILD);
+            if (audio) {
+                bool audioDone = false;
+                int audioOpened = 0, audioEnded = 0;
+                auto openedAudio = Callback<IRoutedEventHandler>([&](IInspectable*, IRoutedEventArgs*) -> HRESULT {
+                    ++audioOpened;
+                    CHECK(GetCurrentThreadId() == uiThread);
+                    CHECK(GetWindow(TestWindow(), GW_CHILD) == childBefore);
+                    MediaElementState state{};
+                    CHECK(SUCCEEDED(audio->get_CurrentState(&state)) && state == MediaElementState_Playing);
+                    return S_OK;
+                });
+                auto endedAudio = Callback<IRoutedEventHandler>([&](IInspectable*, IRoutedEventArgs*) -> HRESULT {
+                    ++audioEnded;
+                    audioDone = true;
+                    return S_OK;
+                });
+                auto failedAudio =
+                    Callback<IExceptionRoutedEventHandler>([&](IInspectable*, IExceptionRoutedEventArgs*) -> HRESULT {
+                        CHECK(false);
+                        audioDone = true;
+                        return S_OK;
+                    });
+                EventRegistrationToken audioOpenToken{}, audioEndToken{}, audioFailToken{};
+                CHECK(SUCCEEDED(audio->add_MediaOpened(openedAudio.Get(), &audioOpenToken)));
+                CHECK(SUCCEEDED(audio->add_MediaEnded(endedAudio.Get(), &audioEndToken)));
+                CHECK(SUCCEEDED(audio->add_MediaFailed(failedAudio.Get(), &audioFailToken)));
+                CHECK(SUCCEEDED(audio->put_AutoPlay(true)));
+                CHECK(SUCCEEDED(audio->put_Source(good.Get())));
+                const auto until = GetTickCount64() + 10000;
+                while (!audioDone && GetTickCount64() < until) {
+                    MSG message{};
+                    while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+                        TranslateMessage(&message);
+                        DispatchMessageW(&message);
+                    }
+                    Sleep(1);
+                }
+                CHECK(audioDone && audioOpened == 1 && audioEnded == 1);
+                CHECK(SUCCEEDED(audio->Stop()));
+                CHECK(SUCCEEDED(audio->put_Source(nullptr)));
+                CHECK(SUCCEEDED(audio->remove_MediaOpened(audioOpenToken)));
+                CHECK(SUCCEEDED(audio->remove_MediaEnded(audioEndToken)));
+                CHECK(SUCCEEDED(audio->remove_MediaFailed(audioFailToken)));
+            }
             auto onOpened = Callback<IRoutedEventHandler>([&](IInspectable* sender, IRoutedEventArgs* args) -> HRESULT {
                 CHECK(GetCurrentThreadId() == uiThread && sender && args);
                 ++opened;
