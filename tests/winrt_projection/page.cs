@@ -324,8 +324,16 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
         global::System.Windows.Input.Mouse.Synchronize();
         Check(global::System.Windows.Input.Mouse.DirectlyOver != null && SendHostMouse(Down, 119, 69) == 0 && SendHostMouse(Up, 119, 69) == 0 && clicks == 3,
               "a click after a layout change without a move: clicks=" + clicks);
+        // Leaving the window ends the hover, but not a press dragged outside it.
+        const uint Leave = 0x2A3;
+        var peer = (global::System.Windows.UIElement)PeerOf(button);
+        Check(SendHostMouse(Move, 70, 50) == 0 && peer.IsMouseOver, "the pointer hovers the Button");
+        Check(SendHostMouse(Leave, 0, 0) == 0 && !peer.IsMouseOver && global::System.Windows.Input.Mouse.DirectlyOver == null, "leaving the window ends the hover");
+        Check(SendHostMouse(Move, 70, 50) == 0 && SendHostMouse(Down, 70, 50) == 0 && SendHostMouse(Leave, 0, 0) == 0 &&
+              ((global::System.Windows.Controls.Primitives.ButtonBase)peer).IsPressed && SendHostMouse(Up, 70, 50) == 0 && clicks == 4,
+              "a press survives the pointer leaving the window: clicks=" + clicks);
         button.remove_Click(click);
-        Check(SendHostMouse(Down, 70, 50) == 0 && SendHostMouse(Up, 70, 50) == 0 && clicks == 3 && released == 6, "removed Click handler was called");
+        Check(SendHostMouse(Down, 70, 50) == 0 && SendHostMouse(Up, 70, 50) == 0 && clicks == 4 && released == 7, "removed Click handler was called");
         core.remove_PointerPressed(down); core.remove_PointerMoved(move); core.remove_PointerReleased(up);
         window.Content = previous;
         Check(SetHostRealInput(1) == 0, "host window takes real input again");

@@ -437,9 +437,22 @@ static void HookXamlWindowFromPoint() noexcept {
     originalWindowFromPoint = reinterpret_cast<WindowFromPointCall>(original);
     if (!original) Log("UNIMPL", "WindowFromPoint hook for the XAML source: hover is lost when its layout changes");
 }
+// Leaving the window ends the tree's hover; the host asks for WM_MOUSELEAVE
+// once the pointer is over it. A disabled window gets no real pointer input, so
+// it does not track the real pointer leaving either.
+static bool trackingLeave = false;
 static void XamlInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    if (!xamlInput) return;
     switch (message) {
     case WM_MOUSEMOVE:
+        if (!trackingLeave && IsWindowEnabled(HostWindow())) {
+            TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, HostWindow(), 0};
+            trackingLeave = TrackMouseEvent(&track) != FALSE;
+        }
+        break;
+    case WM_MOUSELEAVE:
+        trackingLeave = false;
+        break;
     case WM_LBUTTONDOWN:
     case WM_LBUTTONUP:
     case WM_LBUTTONDBLCLK:

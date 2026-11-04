@@ -66,7 +66,7 @@ namespace AppxPortable.WinRT.Xaml
         private static extern bool ClientToScreen(IntPtr window, ref Position point);
         [StructLayout(LayoutKind.Sequential)]
         private struct Position { public int X, Y; }
-        private const uint MouseQuery = 0x009B, MouseMove = 0x0200, MouseWheel = 0x020A, CaptureChanged = 0x0215;
+        private const uint MouseQuery = 0x009B, MouseMove = 0x0200, MouseWheel = 0x020A, CaptureChanged = 0x0215, MouseLeave = 0x02A3;
         private const int AnyButton = 0x0001 | 0x0002 | 0x0010 | 0x0020 | 0x0040;  // MK_LBUTTON | MK_RBUTTON | MK_MBUTTON | MK_XBUTTON1 | MK_XBUTTON2
         private static InputHandler input;  // the shim holds only the function pointer
 
@@ -94,6 +94,15 @@ namespace AppxPortable.WinRT.Xaml
             try
             {
                 if (presentation == null || presentation.IsDisposed || presentation.CompositionTarget == null) return;
+                if (message == MouseLeave)
+                {
+                    // The forwarded-input provider ignores leave: move its pointer off
+                    // the tree, which ends every hover. A press dragged outside keeps going.
+                    if (System.Windows.Input.Mouse.PrimaryDevice.ActiveSource == presentation && System.Windows.Input.Mouse.Captured == null &&
+                        (unchecked((int)(long)Buttons(wparam)) & AnyButton) == 0)
+                        SendMessageW(presentation.Handle, MouseMove, IntPtr.Zero, Pack(new Position { X = -1, Y = -1 }));
+                    return;
+                }
                 var toDevice = presentation.CompositionTarget.TransformToDevice;
                 int packed = unchecked((int)(long)lparam);
                 var at = new Position
