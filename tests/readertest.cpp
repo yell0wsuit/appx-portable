@@ -311,14 +311,40 @@ static int Integers(HRESULT(WINAPI* get)(HSTRING, IActivationFactory**), IDataRe
     UINT32 second = 0;
     UINT16 third = 0;
     if (FAILED(reader->ReadInt32(&first)) || first != 1) return 43;
-    if (FAILED(reader->put_ByteOrder(ByteOrder_BigEndian)) || FAILED(reader->ReadUInt32(&second)) || second != 2) return 44;
+    if (FAILED(reader->put_ByteOrder(ByteOrder_BigEndian)) || FAILED(reader->ReadUInt32(&second)) || second != 2)
+        return 44;
     if (FAILED(reader->put_ByteOrder(ByteOrder_LittleEndian)) || FAILED(reader->ReadUInt16(&third)) || third != 0x1234)
         return 45;
     if (reader->ReadInt32(&first) != E_BOUNDS || reader->ReadInt32(nullptr) != E_POINTER) return 46;
     return 0;
 }
+// Games read files their native code wrote without setting ByteOrder, so the
+// shim's reader must start in the order Windows' own does. Ask Windows' reader
+// before the shim is loaded; Wine has no implementation of its own to ask.
+static int SystemByteOrder() {
+    if (GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version")) {
+        printf("SKIP system DataReader byte order: no Windows implementation under Wine\n");
+        return 0;
+    }
+    ComPtr<IBufferFactory> buffers;
+    ComPtr<IDataReaderStatics> statics;
+    ComPtr<IBuffer> buffer;
+    ComPtr<IDataReader> reader;
+    ByteOrder order{};
+    if (FAILED(RoGetActivationFactory(HStringReference(L"Windows.Storage.Streams.Buffer").Get(),
+                                      IID_PPV_ARGS(&buffers))) ||
+        FAILED(buffers->Create(4, &buffer)) ||
+        FAILED(RoGetActivationFactory(HStringReference(L"Windows.Storage.Streams.DataReader").Get(),
+                                      IID_PPV_ARGS(&statics))) ||
+        FAILED(statics->FromBuffer(buffer.Get(), &reader)) || FAILED(reader->get_ByteOrder(&order)))
+        return 50;
+    printf("Windows DataReader default byte order: %s\n",
+           order == ByteOrder_LittleEndian ? "LittleEndian" : "BigEndian");
+    return order == ByteOrder_LittleEndian ? 0 : 51; // the shim's default, checked below (17)
+}
 int main() {
     RoInitialize(RO_INIT_MULTITHREADED);
+    if (int failed = SystemByteOrder()) return failed;
     auto* dll = LoadLibraryW(L"appxportable.dll");
     if (!dll) return 1;
     auto get = reinterpret_cast<HRESULT(WINAPI*)(HSTRING, IActivationFactory**)>(GetProcAddress(dll, "ShimGetFactory"));
