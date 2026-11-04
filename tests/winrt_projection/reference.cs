@@ -280,6 +280,7 @@ namespace Windows.UI.Xaml.Controls
         public static global::Windows.UI.Xaml.DependencyProperty LeftProperty { get { throw new global::System.NotImplementedException(); } }
         public static double GetLeft(global::Windows.UI.Xaml.UIElement element) { throw new global::System.NotImplementedException(); }
         public static void SetLeft(global::Windows.UI.Xaml.UIElement element, double length) { throw new global::System.NotImplementedException(); }
+        public static void SetTop(global::Windows.UI.Xaml.UIElement element, double length) { throw new global::System.NotImplementedException(); }
     }
     public class ItemsControl : Control
     {
@@ -326,7 +327,7 @@ namespace Windows.UI.Xaml.Controls
         internal ProgressRing() { }
         public bool IsActive { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
-    public class Button : global::Windows.UI.Xaml.Controls.Primitives.ButtonBase { internal Button() { } }
+    public class Button : global::Windows.UI.Xaml.Controls.Primitives.ButtonBase { public Button() { throw new global::System.NotImplementedException(); } }
     public class ContentControl : Control
     {
         public ContentControl() { throw new global::System.NotImplementedException(); }

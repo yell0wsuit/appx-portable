@@ -11,3 +11,4 @@ EXPORTS
   ShimReportException
   ShimCreateXamlService
   ShimSubmitXamlFrame
+  ShimSetXamlInputHandler

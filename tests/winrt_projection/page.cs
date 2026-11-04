@@ -281,6 +281,54 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
     static extern int SetHostMinimized(int minimized);
     [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     static extern int SendHostKey(uint message, uint key);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int SendHostMouse(uint message, int x, int y);
+    [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int SetHostRealInput(int enabled);
+
+    // The hub's buttons: host mouse messages reach the WPF tree, at the client
+    // point, and CoreWindow still sees every one of them.
+    static void VerifyHostMouse()
+    {
+        const uint Move = 0x200, Down = 0x201, Up = 0x202;
+        // The probe window is on screen; the real cursor must not move between scripted messages.
+        Check(SetHostRealInput(0) == 0, "host window ignores real input");
+        var window = Window.Current; var previous = window.Content;
+        var root = new Windows.UI.Xaml.Controls.Canvas();
+        var button = new Windows.UI.Xaml.Controls.Button { Width = 100, Height = 40 };
+        Windows.UI.Xaml.Controls.Canvas.SetLeft(button, 20); Windows.UI.Xaml.Controls.Canvas.SetTop(button, 30);
+        root.Children.Add(button);
+        window.Content = root;
+        ((global::System.Windows.UIElement)HostRoot()).UpdateLayout();
+        int clicks = 0, pressed = 0, moved = 0, released = 0; object sender = null; RoutedEventArgs clicked = null;
+        var click = button.add_Click((s, e) => { ++clicks; sender = s; clicked = e; });
+        var core = Windows.UI.Core.CoreWindow.GetForCurrentThread();
+        var down = core.add_PointerPressed((s, e) => ++pressed);
+        var move = core.add_PointerMoved((s, e) => ++moved);
+        var up = core.add_PointerReleased((s, e) => ++released);
+        Check(SendHostMouse(Move, 70, 50) == 0 && SendHostMouse(Down, 70, 50) == 0 && SendHostMouse(Up, 70, 50) == 0, "host click delivered");
+        Check(clicks == 1 && ReferenceEquals(sender, button) && clicked != null && ReferenceEquals(clicked.OriginalSource, button),
+              "a host click inside a Button raises Click once with the wrapper: clicks=" + clicks);
+        Check(pressed == 1 && moved == 1 && released == 1, "CoreWindow sees the pointer over a XAML button: " + pressed + "/" + moved + "/" + released);
+        Check(SendHostMouse(Move, 10, 50) == 0 && SendHostMouse(Down, 10, 50) == 0 && SendHostMouse(Up, 10, 50) == 0 && clicks == 1 && pressed == 2,
+              "a host click left of the Button misses it: clicks=" + clicks);
+        Check(SendHostMouse(Move, 70, 50) == 0 && SendHostMouse(Down, 70, 50) == 0 && SendHostMouse(Move, 200, 50) == 0 &&
+              SendHostMouse(Up, 200, 50) == 0 && clicks == 1, "a press dragged off the Button does not click: clicks=" + clicks);
+        Check(SendHostMouse(Down, 119, 69) == 0 && SendHostMouse(Up, 119, 69) == 0 && clicks == 2, "a click at the Button's far corner: clicks=" + clicks);
+        // WPF hit-tests again after layout changes, through the window under the
+        // point: a click that follows one without a move still lands.
+        button.Width = 110;
+        ((global::System.Windows.UIElement)HostRoot()).UpdateLayout();
+        global::System.Windows.Input.Mouse.Synchronize();
+        Check(global::System.Windows.Input.Mouse.DirectlyOver != null && SendHostMouse(Down, 119, 69) == 0 && SendHostMouse(Up, 119, 69) == 0 && clicks == 3,
+              "a click after a layout change without a move: clicks=" + clicks);
+        button.remove_Click(click);
+        Check(SendHostMouse(Down, 70, 50) == 0 && SendHostMouse(Up, 70, 50) == 0 && clicks == 3 && released == 6, "removed Click handler was called");
+        core.remove_PointerPressed(down); core.remove_PointerMoved(move); core.remove_PointerReleased(up);
+        window.Content = previous;
+        Check(SetHostRealInput(1) == 0, "host window takes real input again");
+        Console.WriteLine("PASS: host mouse messages click XAML buttons at the client point and still reach CoreWindow");
+    }
     // LayoutAwarePage's setup: Window bounds, CoreWindow, activation and cache mode.
     static void VerifyWindowActivation(DerivedPage page)
     {
@@ -708,6 +756,7 @@ class PageApp : Application, Windows.UI.Xaml.Markup.IXamlMetadataProvider
             var frames = (int)typeof(DependencyObject).Assembly.GetType("AppxPortable.WinRT.Xaml.Host")
                 .GetProperty("Frames", global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.NonPublic).GetValue(null, null);
             Check(current.IsLoaded && current.ActualWidth > 0 && frames > 0, "the window's content is loaded, laid out and rendered for the compositor");
+            VerifyHostMouse();
             Console.WriteLine("PASS: WPF-backed tree keeps wrapper identity for children, names, resources and Loaded, and renders for the compositor");
         });
     }

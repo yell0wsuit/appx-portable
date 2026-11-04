@@ -11,6 +11,7 @@
 #include "platform/text_input.h"
 #include "com/factory.h"
 #include "host/pointer.h"
+#include "entry/hotpatch.h"
 #include <windowsx.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Core;
@@ -409,6 +410,60 @@ void CoreHostMessage(UINT message, WPARAM wparam, LPARAM lparam) {
 // and so does the mouse while no XAML element handles pointer events.
 static bool coreInput = false;
 void EnableCoreWindowInput() noexcept { coreInput = true; }
+// A managed XAML tree (WPF) hears every host mouse message as well, with the
+// position in client pixels; neither it nor CoreWindow filters the other, as
+// CoreWindow pointer events fire over handled XAML elements on Windows.
+using XamlInputHandler = void(__cdecl*)(UINT message, WPARAM wparam, LPARAM lparam);
+static XamlInputHandler xamlInput;
+// WPF hit-tests the window under a screen point (WindowFromPoint) whenever its
+// layout changes. Its source window sits off-screen, where Wine finds no
+// window, so a point inside that window answers with it; any other point,
+// where nothing of ours can be, is the system's answer.
+static HWND xamlSource;
+using WindowFromPointCall = HWND(WINAPI*)(POINT);
+static WindowFromPointCall originalWindowFromPoint;
+static HWND WINAPI XamlWindowFromPoint(POINT point) {
+    HWND source = xamlSource;
+    RECT bounds{};
+    if (source && IsWindowVisible(source) && GetWindowRect(source, &bounds) && PtInRect(&bounds, point)) return source;
+    return originalWindowFromPoint(point);
+}
+static void HookXamlWindowFromPoint() noexcept {
+    static bool hooked = false;
+    if (hooked) return;
+    hooked = true;
+    auto* original = Hotpatch(GetModuleHandleW(L"user32.dll"), "WindowFromPoint",
+                              reinterpret_cast<void*>(&XamlWindowFromPoint), true);
+    originalWindowFromPoint = reinterpret_cast<WindowFromPointCall>(original);
+    if (!original) Log("UNIMPL", "WindowFromPoint hook for the XAML source: hover is lost when its layout changes");
+}
+static void XamlInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    switch (message) {
+    case WM_MOUSEMOVE:
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_LBUTTONDBLCLK:
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP:
+    case WM_RBUTTONDBLCLK:
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONUP:
+    case WM_MBUTTONDBLCLK:
+    case WM_XBUTTONDOWN:
+    case WM_XBUTTONUP:
+    case WM_XBUTTONDBLCLK:
+        break;
+    case WM_MOUSEWHEEL: {
+        POINT position{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
+        ScreenToClient(HostWindow(), &position);
+        lparam = MAKELPARAM(position.x, position.y);
+        break;
+    }
+    default:
+        return;
+    }
+    if (auto handler = xamlInput) handler(message, wparam, lparam);
+}
 void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     // Text goes to a focused text edit context instead, as on Windows.
     if (message == WM_CHAR && TextInputCharacter(wparam)) return;
@@ -419,6 +474,9 @@ void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     if (keyboard && !IslandsMode() && AcceleratorKeyMessage(message, wparam, lparam)) return;
     if ((coreInput || keyboard || !ElementPointerHandlers()) && coreWindow)
         coreWindow->OnInput(message, wparam, lparam);
+    // After CoreWindow has taken capture for a press, which the XAML host
+    // borrows to activate its tree and then hands back.
+    XamlInputMessage(message, wparam, lparam);
 }
 // CoreWindow.GetForCurrentThread: the game's window on the UI thread, as on
 // Windows, and none on any other thread.
@@ -441,4 +499,13 @@ HRESULT MakeCoreWindowFactory(IActivationFactory** value) {
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
 const ShimClass coreWindowClass{L"Windows.UI.Core.CoreWindow", MakeCoreWindowFactory};
+}
+// The managed XAML host's receiver for host mouse messages and the off-screen
+// window its tree lives in; a null handler stops forwarding.
+extern "C" HRESULT __cdecl ShimSetXamlInputHandler(HWND source, appx::XamlInputHandler handler) noexcept {
+    if (handler && (!source || !IsWindow(source))) return E_INVALIDARG;
+    appx::xamlSource = handler ? source : nullptr;
+    appx::xamlInput = handler;
+    if (handler) appx::HookXamlWindowFromPoint();
+    return S_OK;
 }

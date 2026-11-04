@@ -85,6 +85,30 @@ extern "C" HRESULT __cdecl SendHostKey(UINT message, WPARAM key) {
     SendMessageW(host, message, key, up ? 0xC0000001 : 1);
     return window_size_fixture::Drain();
 }
+// A mouse message to the host window at a client point, as the user clicking:
+// the thread's key state shows the left button down from press to release, as
+// it does while real mouse messages are dispatched.
+extern "C" HRESULT __cdecl SendHostMouse(UINT message, int x, int y) {
+    HWND host = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), window_size_fixture::FindHost, reinterpret_cast<LPARAM>(&host));
+    if (!host) return E_FAIL;
+    BYTE keys[256]{};
+    if (!GetKeyboardState(keys)) return E_FAIL;
+    if (message == WM_LBUTTONDOWN) keys[VK_LBUTTON] = 0x80;
+    if (message == WM_LBUTTONUP) keys[VK_LBUTTON] = 0;
+    if (!SetKeyboardState(keys)) return E_FAIL;
+    SendMessageW(host, message, (keys[VK_LBUTTON] & 0x80) ? MK_LBUTTON : 0, MAKELPARAM(x, y));
+    return window_size_fixture::Drain();
+}
+// Scripted mouse messages need the real cursor out of the way: a disabled
+// window receives no real input, while sent messages still arrive.
+extern "C" HRESULT __cdecl SetHostRealInput(int enabled) {
+    HWND host = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), window_size_fixture::FindHost, reinterpret_cast<LPARAM>(&host));
+    if (!host) return E_FAIL;
+    EnableWindow(host, enabled != 0);
+    return window_size_fixture::Drain();
+}
 extern "C" HRESULT __cdecl ValidateWindowSizeArgs(ABI::Windows::UI::Core::IWindowSizeChangedEventArgs* args) {
     if (!args) return E_POINTER;
     ABI::Windows::Foundation::Size size{};

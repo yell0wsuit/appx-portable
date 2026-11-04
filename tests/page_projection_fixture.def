@@ -3,6 +3,8 @@ EXPORTS
   FlushWindowEvents
   SetHostMinimized
   SendHostKey
+  SendHostMouse
+  SetHostRealInput
   ValidateWindowSizeArgs
   InvokePageOverrides
   InvokeKeyDown
