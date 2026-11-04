@@ -328,6 +328,7 @@ namespace Windows.UI.Xaml.Controls
         public bool IsActive { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
     public class Button : global::Windows.UI.Xaml.Controls.Primitives.ButtonBase { public Button() { throw new global::System.NotImplementedException(); } }
+    public class RadioButton : global::Windows.UI.Xaml.Controls.Primitives.ToggleButton { public RadioButton() { throw new global::System.NotImplementedException(); } }
     public class ContentControl : Control
     {
         public ContentControl() { throw new global::System.NotImplementedException(); }
@@ -730,6 +731,11 @@ namespace Windows.UI.Xaml.Controls.Primitives
         internal ButtonBase() { }
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Click(global::Windows.UI.Xaml.RoutedEventHandler handler) { throw new global::System.NotImplementedException(); }
         public void remove_Click(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
+    }
+    public class ToggleButton : ButtonBase
+    {
+        internal ToggleButton() { }
+        public global::System.Nullable<bool> IsChecked { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
 }
 

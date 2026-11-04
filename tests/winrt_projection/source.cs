@@ -587,6 +587,15 @@ namespace Fixture
                 control.IsEnabled = false;
                 Check(!control.IsEnabled && !((System.Windows.Controls.Button)PeerOf(control)).IsEnabled, "code-side enabled state reaches WPF");
             });
+            // Leaderboards' constructor checks its first tab in code.
+            test("radio-checked", "<RadioButton x:Name='radio'/>", page =>
+            {
+                var radio = (Windows.UI.Xaml.Controls.RadioButton)page.FindName("radio");
+                radio.IsChecked = true;
+                Check(radio.IsChecked == true && ((System.Windows.Controls.RadioButton)PeerOf(radio)).IsChecked == true, "code-side checked state reaches WPF");
+                radio.IsChecked = null;
+                Check(radio.IsChecked == null && ((System.Windows.Controls.RadioButton)PeerOf(radio)).IsChecked == null, "indeterminate checked state round-trips");
+            });
             test("inline-ticks", "<Slider x:Name='ticks' Minimum='0' Maximum='1' TickFrequency='0.05' TickPlacement='Inline'/>", page =>
             {
                 var slider = (System.Windows.Controls.Slider)PeerOf(page.FindName("ticks"));
