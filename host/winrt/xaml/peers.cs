@@ -130,7 +130,34 @@ namespace AppxPortable.WinRT.Xaml
             set { if (value) throw Errors.Unimplemented("Windows.UI.Xaml.Controls.RichTextBlock.IsTextSelectionEnabled"); }
         }
     }
-    public sealed class ProgressRingPeer : System.Windows.Controls.ProgressBar { }
+    // UWP's ring animates only while active and shown, and an inactive one draws
+    // nothing but keeps its space. WPF's indeterminate bar animates even while
+    // collapsed, which keeps WPF rendering every frame.
+    public sealed class ProgressRingPeer : System.Windows.Controls.ProgressBar
+    {
+        public static readonly System.Windows.DependencyProperty IsActiveProperty = System.Windows.DependencyProperty.Register("IsActive", typeof(bool),
+            typeof(ProgressRingPeer), new System.Windows.PropertyMetadata(false, (d, e) => ((ProgressRingPeer)d).Update()));
+        public bool IsActive { get { return (bool)GetValue(IsActiveProperty); } set { SetValue(IsActiveProperty, value); } }
+
+        public ProgressRingPeer()
+        {
+            IsVisibleChanged += (sender, args) => Update();
+            Update();
+        }
+
+        public override void OnApplyTemplate()
+        {
+            base.OnApplyTemplate();
+            Update();
+        }
+
+        private void Update()
+        {
+            IsIndeterminate = IsActive && IsVisible;
+            var content = System.Windows.Media.VisualTreeHelper.GetChildrenCount(this) > 0 ? System.Windows.Media.VisualTreeHelper.GetChild(this, 0) as System.Windows.UIElement : null;
+            if (content != null) content.Visibility = IsActive ? System.Windows.Visibility.Visible : System.Windows.Visibility.Hidden;
+        }
+    }
     public sealed class PagePeer : System.Windows.Controls.UserControl { }
     public sealed class FramePeer : System.Windows.Controls.ContentControl { }
     // Placeholders for shim-backed services; they hold a place in the tree.

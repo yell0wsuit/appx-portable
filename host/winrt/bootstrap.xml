@@ -309,7 +309,7 @@
   <!-- WPF has no ring; an indeterminate ProgressBar stands in. -->
   <Class Name="Windows.UI.Xaml.Controls.ProgressRing" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ProgressRingPeer">
     <Constructor />
-    <Property Name="IsActive" Wpf="System.Windows.Controls.ProgressBar.IsIndeterminateProperty" />
+    <Property Name="IsActive" Wpf="AppxPortable.WinRT.Xaml.ProgressRingPeer.IsActiveProperty" />
   </Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.Timeline" Adapter="Wpf" Peer="System.Windows.Media.Animation.Timeline">
     <Property Name="Duration" Wpf="System.Windows.Media.Animation.Timeline.DurationProperty" />

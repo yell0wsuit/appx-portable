@@ -189,6 +189,26 @@ namespace Fixture
             Application.LoadComponent(ringPage, new Uri("ms-appx:///Pages/ring.xaml"));
             var ring = ringPage.FindName("ring") as ProgressRing;
             Check(ring != null && ring.IsActive, "UWP member names of mapped peers resolve in markup");
+            // An active ring animates only while shown and an inactive one draws
+            // nothing, as UWP's; WPF's indeterminate bar animates while collapsed.
+            var bar = (System.Windows.Controls.ProgressBar)PeerOf(ring);
+            Check(!bar.IsIndeterminate, "a ring outside any window does not animate");
+            using (var shown = new System.Windows.Interop.HwndSource(new System.Windows.Interop.HwndSourceParameters("ring")
+                   { WindowStyle = unchecked((int)0x90000000), PositionX = -32000, PositionY = -32000, Width = 100, Height = 100 }) { RootVisual = (System.Windows.Media.Visual)PeerOf(ringPage) })
+            {
+                bar.UpdateLayout();
+                Check(bar.IsVisible && bar.IsIndeterminate, "an active ring animates while shown");
+                ring.Visibility = Visibility.Collapsed; bar.UpdateLayout();
+                Check(!bar.IsIndeterminate, "a collapsed active ring does not animate");
+                ring.Visibility = Visibility.Visible; bar.UpdateLayout();
+                Check(bar.IsIndeterminate, "a ring shown again animates again");
+                ring.IsActive = false; bar.UpdateLayout();
+                var drawn = (System.Windows.UIElement)System.Windows.Media.VisualTreeHelper.GetChild(bar, 0);
+                Check(!bar.IsIndeterminate && drawn.Visibility == System.Windows.Visibility.Hidden && bar.ActualWidth > 0, "an inactive ring draws nothing and keeps its space");
+                ring.IsActive = true;
+                Check(drawn.Visibility == System.Windows.Visibility.Visible && bar.IsIndeterminate, "a ring made active again draws");
+                shown.RootVisual = null;
+            }
 
             // RichTextBlock's typographic styles use WPF's text rendering.
             File.WriteAllText("Pages/rich.xaml", "<Page" + Ns + "><Page.Resources><FontWeight x:Key='weight'>SemiLight</FontWeight><Style x:Key='rich' TargetType='RichTextBlock'>" +
