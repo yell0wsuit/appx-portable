@@ -16,7 +16,9 @@ on Metal. Metal has no geometry shaders, so that renderer stops at 9_3 too.
 On MoltenVK, wined3d leaves out the host-memory handle type Wine adds to
 every buffer and image of a 32-bit process, which MoltenVK rejects.
 D3D9 uses integer pixel centers; offset its Vulkan viewport by half a pixel
-to match that convention (including WPF layered-window rendering).
+to match that convention (including WPF layered-window rendering). MoltenVK
+also needs static primitive topology for correct triangle-fan draws; using a dynamic
+fan on a triangle-list pipeline loses triangles (for example, parts of WPF text).
 
 The SM4 and GLSL changes are taken from ctr2-uwp-shim. Built by
 scripts/build-wined3d.sh; see docs/building.md.
@@ -279,3 +281,12 @@ scripts/build-wined3d.sh; see docs/building.md.
 +            }
              viewport->width = src_viewport->width;
              viewport->height = src_viewport->height;
+
+--- a/dlls/wined3d/adapter_vk.c
++++ b/dlls/wined3d/adapter_vk.c
+@@ -2373,1 +2373,4 @@
+-    vk_info->dynamic_state2 = device_info.dynamic_state2_features.extendedDynamicState2;
++    /* MoltenVK loses triangles when a fan is selected dynamically on a
++     * triangle-list pipeline. Use the actual topology in the pipeline key. */
++    vk_info->dynamic_state2 = device_info.dynamic_state2_features.extendedDynamicState2
++            && !adapter_vk->moltenvk;
