@@ -11,6 +11,7 @@
 #include "platform/text_input.h"
 #include "com/factory.h"
 #include "host/pointer.h"
+#include "xaml/key.h"
 #include <windowsx.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Core;
@@ -417,6 +418,7 @@ void CoreInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
                           message == WM_SYSKEYUP || message == WM_CHAR;
     if ((coreInput || keyboard || !ElementPointerHandlers()) && coreWindow)
         coreWindow->OnInput(message, wparam, lparam);
+    XamlInputMessage(message, wparam, lparam);
 }
 // CoreWindow.GetForCurrentThread: the game's window on the UI thread, as on
 // Windows, and none on any other thread.

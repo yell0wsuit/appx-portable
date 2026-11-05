@@ -13,5 +13,6 @@ assets are included here.
 | [Bejeweled LIVE](bejeweled/README.md) | Bejeweled LIVE 4.0.0.10 x86: declares the original dark theme before static brushes load; settings labels verified |
 | [Where's My Mickey?](wheresmymickey/README.md) | Where's My Mickey? 1.1.0.30: intro and gameplay work with the current runtime; first level completed with three stars |
 | [Microsoft Sudoku](mssudoku/README.md) | Microsoft Sudoku 1.7.10190.0 x86: closes the incompatible video-loading popup; menu, Very Easy tutorial dismissal, and number entry verified |
+| [Minion Rush](minionrush/README.md) | 4.1.4.1 x86: skips blocking startup analytics so the game can initialize with StubIap enabled; manual application |
 
 Each patch documents its supported game files, changes, and restore procedure.

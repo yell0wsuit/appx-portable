@@ -96,6 +96,24 @@ int main(int argc, char** argv) {
             level != ABI::Windows::Networking::Connectivity::NetworkConnectivityLevel_InternetAccess ||
             profile->GetNetworkConnectivityLevel(nullptr) != E_POINTER)
             return 42;
+        // Minion Rush polls this from its network worker and classifies the
+        // connection by IANA type. A missing adapter terminates that thread.
+        ComPtr<ABI::Windows::Networking::Connectivity::INetworkAdapter> adapter, sameAdapter;
+        UINT32 interfaceType = 0;
+        if (profile->get_NetworkAdapter(nullptr) != E_POINTER || FAILED(profile->get_NetworkAdapter(&adapter)) ||
+            !adapter || FAILED(profile->get_NetworkAdapter(&sameAdapter)) || adapter != sameAdapter ||
+            FAILED(adapter->get_IanaInterfaceType(&interfaceType)) || interfaceType != 6 ||
+            adapter->get_IanaInterfaceType(nullptr) != E_POINTER)
+            return 67;
+        GUID adapterId{}, sameId{};
+        if (FAILED(adapter->get_NetworkAdapterId(&adapterId)) || adapterId == GUID_NULL ||
+            FAILED(sameAdapter->get_NetworkAdapterId(&sameId)) || adapterId != sameId)
+            return 68;
+        ComPtr<__FIAsyncOperation_1_Windows__CNetworking__CConnectivity__CConnectionProfile> connected;
+        ComPtr<ABI::Windows::Networking::Connectivity::IConnectionProfile> connectedProfile;
+        if (FAILED(adapter->GetConnectedProfileAsync(&connected)) || !connected ||
+            FAILED(connected->GetResults(&connectedProfile)) || !connectedProfile)
+            return 69;
         // Cut the Rope 2 queries the Windows 8.1 profile while initializing.
         ComPtr<ABI::Windows::Networking::Connectivity::IConnectionProfile2> profile2;
         boolean wireless = true;

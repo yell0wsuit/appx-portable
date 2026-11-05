@@ -14,6 +14,8 @@
 #include <dxgi1_2.h>
 #include <vector>
 #include <cmath>
+#include <winrt/Windows.Foundation.Collections.h>
+#include <winrt/Windows.UI.Xaml.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
 using namespace ABI::Windows::UI::Xaml::Controls;
@@ -63,7 +65,32 @@ HRESULT MakeRectangleGeometryFactory(IActivationFactory** value) {
     auto factory = Make<RectangleGeometryFactory>();
     return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
 }
-class Panel final : public Element<Panel, DefaultISwapChainPanel, ISwapChainPanelNative> {
+class __declspec(uuid("a50a4bbd-8361-469c-90da-e9a40c7474df")) PanelState : public DefaultIPanel {
+    winrt::Windows::Foundation::Collections::IVector<winrt::Windows::UI::Xaml::UIElement> children_ =
+        winrt::single_threaded_vector<winrt::Windows::UI::Xaml::UIElement>();
+    ComPtr<ABI::Windows::UI::Xaml::Media::IBrush> background_;
+
+public:
+    HRESULT STDMETHODCALLTYPE get_Children(__FIVector_1_Windows__CUI__CXaml__CUIElement** value) override {
+        if (!value) return E_POINTER;
+        winrt::copy_to_abi(children_, *reinterpret_cast<void**>(value));
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Background(ABI::Windows::UI::Xaml::Media::IBrush** value) override {
+        if (!value) return E_POINTER;
+        return background_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE put_Background(ABI::Windows::UI::Xaml::Media::IBrush* value) override {
+        background_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_IsItemsHost(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        return S_OK;
+    }
+};
+class Panel final : public Element<Panel, DefaultISwapChainPanel, PanelState, ISwapChainPanelNative> {
     ComPtr<IDXGISwapChain> swapChain_;
     EventSource<ABI::Windows::Foundation::ITypedEventHandler<SwapChainPanel*, IInspectable*>> scaleChanged_;
 
@@ -114,7 +141,7 @@ HRESULT MakePanel(IInspectable** value) {
     return hr;
 }
 class BackgroundPanel final
-    : public Element<BackgroundPanel, ISwapChainBackgroundPanel, DefaultIPanel, ISwapChainBackgroundPanelNative> {
+    : public Element<BackgroundPanel, ISwapChainBackgroundPanel, PanelState, ISwapChainBackgroundPanelNative> {
     ComPtr<IDXGISwapChain> swapChain_;
 
 public:
@@ -142,7 +169,7 @@ HRESULT MakeBackgroundPanel(IInspectable** value) {
 }
 // MainPage's root Grid. InitializeComponent safe_casts FindName's result to
 // Grid^, so a null or non-Grid object breaks the generated field binding.
-class Grid final : public Element<Grid, DefaultIGrid, DefaultIPanel> {
+class Grid final : public Element<Grid, DefaultIGrid, PanelState> {
 public:
     static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Controls.Grid";
     explicit Grid(IInspectable* outer) : Element(outer) {}
@@ -167,6 +194,85 @@ HRESULT MakeGrid(IInspectable** value) {
     grid->Release();
     return hr;
 }
+// DirectX games use a Canvas as an overlay without Windows' XAML core.
+class Canvas final : public Element<Canvas, ICanvas, PanelState> {
+public:
+    static constexpr const wchar_t* Name = L"Windows.UI.Xaml.Controls.Canvas";
+    explicit Canvas(IInspectable* outer) : Element(outer) {}
+};
+class CanvasFactory final : public Factory<ICanvasFactory, ICanvasStatics> {
+    HRESULT GetPosition(IUIElement* element, UINT index, DOUBLE* value) {
+        if (!value) return E_POINTER;
+        if (!element) return E_INVALIDARG;
+        ComPtr<ICanvasPlacement> placement;
+        const auto hr = element->QueryInterface(IID_PPV_ARGS(&placement));
+        return FAILED(hr) ? hr : placement->GetCanvasPosition(index, value);
+    }
+    HRESULT SetPosition(IUIElement* element, UINT index, DOUBLE value) {
+        if (!element || std::isinf(value)) return E_INVALIDARG;
+        ComPtr<ICanvasPlacement> placement;
+        const auto hr = element->QueryInterface(IID_PPV_ARGS(&placement));
+        return FAILED(hr) ? hr : placement->SetCanvasPosition(index, value);
+    }
+
+public:
+    CanvasFactory() : Factory(Canvas::Name) {}
+    HRESULT STDMETHODCALLTYPE ActivateInstance(IInspectable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        ComPtr<ICanvas> canvas;
+        const auto hr = Compose<Canvas>(nullptr, nullptr, canvas.GetAddressOf());
+        return FAILED(hr) ? hr : canvas.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE CreateInstance(IInspectable* outer, IInspectable** inner, ICanvas** value) override {
+        return Compose<Canvas>(outer, inner, value);
+    }
+    HRESULT STDMETHODCALLTYPE get_LeftProperty(IDependencyProperty** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        Log("UNIMPL", "Canvas.LeftProperty");
+        return E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE get_TopProperty(IDependencyProperty** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        Log("UNIMPL", "Canvas.TopProperty");
+        return E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE get_ZIndexProperty(IDependencyProperty** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        Log("UNIMPL", "Canvas.ZIndexProperty");
+        return E_NOTIMPL;
+    }
+    HRESULT STDMETHODCALLTYPE GetLeft(IUIElement* element, DOUBLE* value) override {
+        return GetPosition(element, 0, value);
+    }
+    HRESULT STDMETHODCALLTYPE SetLeft(IUIElement* element, DOUBLE value) override {
+        return SetPosition(element, 0, value);
+    }
+    HRESULT STDMETHODCALLTYPE GetTop(IUIElement* element, DOUBLE* value) override {
+        return GetPosition(element, 1, value);
+    }
+    HRESULT STDMETHODCALLTYPE SetTop(IUIElement* element, DOUBLE value) override {
+        return SetPosition(element, 1, value);
+    }
+    HRESULT STDMETHODCALLTYPE GetZIndex(IUIElement* element, INT32* value) override {
+        if (!value) return E_POINTER;
+        DOUBLE zIndex = 0;
+        const auto hr = GetPosition(element, 2, &zIndex);
+        *value = static_cast<INT32>(zIndex);
+        return hr;
+    }
+    HRESULT STDMETHODCALLTYPE SetZIndex(IUIElement* element, INT32 value) override {
+        return SetPosition(element, 2, value);
+    }
+};
+HRESULT MakeCanvasFactory(IActivationFactory** value) {
+    auto factory = Make<CanvasFactory>();
+    return factory ? factory.CopyTo(value) : E_OUTOFMEMORY;
+}
+const ShimClass canvasClass{Canvas::Name, MakeCanvasFactory};
 class TextChangedArgs final : public RuntimeClass<RuntimeClassFlags<WinRt>, ITextChangedEventArgs, IRoutedEventArgs> {
     InspectableClass(L"Windows.UI.Xaml.Controls.TextChangedEventArgs", BaseTrust);
     ComPtr<IInspectable> source_;
@@ -417,6 +523,7 @@ template <class T, class I> static HRESULT MakeElement(IInspectable** value) {
 HRESULT MakeSourceXamlElement(const wchar_t* tag, IInspectable** value) {
     if (!value) return E_POINTER;
     *value = nullptr;
+    if (!wcscmp(tag, L"Canvas")) return MakeElement<Canvas, ICanvas>(value);
     if (!wcscmp(tag, L"TextBox")) return MakeElement<TextBox, ITextBox>(value);
     if (!wcscmp(tag, L"PasswordBox")) return MakeElement<PasswordBox, IPasswordBox>(value);
     return MakeWin10XamlElement(tag, value);

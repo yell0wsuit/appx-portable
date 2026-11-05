@@ -8,6 +8,7 @@
 #include <windows.ui.xaml.h>
 #include <windows.ui.xaml.controls.h>
 #include <windows.ui.xaml.media.h>
+#include <windows.ui.xaml.input.h>
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 #include <cstdio>
@@ -165,6 +166,84 @@ int main(int argc, char**) {
         SendMessageW(host, WM_KEYDOWN, VK_SPACE, 1);
         SendMessageW(host, WM_KEYUP, VK_SPACE, static_cast<LPARAM>(0xC0000001u));
         CHECK((keys == std::vector<int>{VK_SPACE, -VK_SPACE}));
+        // XAML keys originate at the graphics panel and bubble to the page.
+        // Verify arguments, removal, handled routing and detached content.
+        ComPtr<IInspectable> panel;
+        ComPtr<IUIElement> panelUi;
+        CHECK(SUCCEEDED(element->FindName(HStringReference(L"SwapChainPanel").Get(), &panel)));
+        CHECK(panel && SUCCEEDED(panel.As(&panelUi)));
+        std::vector<int> xamlKeys;
+        bool handleAtPanel = false;
+        auto onPanelKey =
+            Callback<Input::IKeyEventHandler>([&](IInspectable* sender, Input::IKeyRoutedEventArgs* args) -> HRESULT {
+                ComPtr<IUnknown> senderId, panelId;
+                sender->QueryInterface(IID_PPV_ARGS(&senderId));
+                panel.As(&panelId);
+                CHECK(senderId == panelId);
+                ABI::Windows::System::VirtualKey key{};
+                CorePhysicalKeyStatus status{};
+                CHECK(SUCCEEDED(args->get_Key(&key)) && key == ABI::Windows::System::VirtualKey_Space);
+                CHECK(SUCCEEDED(args->get_KeyStatus(&status)));
+                CHECK(status.ScanCode == 0x39 && status.RepeatCount == 1);
+                CHECK(status.WasKeyDown == status.IsKeyReleased);
+                ComPtr<IRoutedEventArgs> routed;
+                ComPtr<IInspectable> source;
+                CHECK(SUCCEEDED(args->QueryInterface(IID_PPV_ARGS(&routed))));
+                CHECK(routed && SUCCEEDED(routed->get_OriginalSource(&source)));
+                ComPtr<IUnknown> sourceId;
+                if (source) source.As(&sourceId);
+                CHECK(sourceId == panelId);
+                ComPtr<Input::IKeyRoutedEventArgs2> original;
+                CHECK(SUCCEEDED(args->QueryInterface(IID_PPV_ARGS(&original))));
+                CHECK(original && SUCCEEDED(original->get_OriginalKey(&key)) &&
+                      key == ABI::Windows::System::VirtualKey_Space);
+                boolean handled = true;
+                CHECK(SUCCEEDED(args->get_Handled(&handled)) && !handled);
+                xamlKeys.push_back(status.IsKeyReleased ? -1 : 1);
+                return args->put_Handled(handleAtPanel);
+            });
+        auto onPageKey =
+            Callback<Input::IKeyEventHandler>([&](IInspectable*, Input::IKeyRoutedEventArgs* args) -> HRESULT {
+                CorePhysicalKeyStatus status{};
+                args->get_KeyStatus(&status);
+                xamlKeys.push_back(status.IsKeyReleased ? -2 : 2);
+                return S_OK;
+            });
+        EventRegistrationToken panelDown{}, panelUp{}, pageDown{}, pageUp{};
+        CHECK(panelUi && SUCCEEDED(panelUi->add_KeyDown(onPanelKey.Get(), &panelDown)));
+        CHECK(panelUi && SUCCEEDED(panelUi->add_KeyUp(onPanelKey.Get(), &panelUp)));
+        CHECK(SUCCEEDED(ui->add_KeyDown(onPageKey.Get(), &pageDown)));
+        CHECK(SUCCEEDED(ui->add_KeyUp(onPageKey.Get(), &pageUp)));
+        auto sendKeys = [&](bool system) {
+            SendMessageW(host, system ? WM_SYSKEYDOWN : WM_KEYDOWN, VK_SPACE, 0x00390001);
+            SendMessageW(host, system ? WM_SYSKEYUP : WM_KEYUP, VK_SPACE, static_cast<LPARAM>(0xC0390001u));
+        };
+        sendKeys(false);
+        CHECK((xamlKeys == std::vector<int>{1, 2, -1, -2}));
+        xamlKeys.clear();
+        handleAtPanel = true;
+        EventRegistrationToken laterDown{}, laterUp{};
+        // Once handled, later ordinary handlers on the same element are skipped too.
+        CHECK(panelUi && SUCCEEDED(panelUi->add_KeyDown(onPageKey.Get(), &laterDown)));
+        CHECK(panelUi && SUCCEEDED(panelUi->add_KeyUp(onPageKey.Get(), &laterUp)));
+        sendKeys(true);
+        CHECK((xamlKeys == std::vector<int>{1, -1}));
+        CHECK(panelUi && SUCCEEDED(panelUi->remove_KeyDown(laterDown)));
+        CHECK(panelUi && SUCCEEDED(panelUi->remove_KeyUp(laterUp)));
+        xamlKeys.clear();
+        CHECK(SUCCEEDED(window->put_Content(nullptr)));
+        sendKeys(false);
+        CHECK(xamlKeys.empty());
+        CHECK(SUCCEEDED(window->put_Content(ui.Get())));
+        CHECK(panelUi && SUCCEEDED(panelUi->remove_KeyDown(panelDown)));
+        CHECK(panelUi && SUCCEEDED(panelUi->remove_KeyUp(panelUp)));
+        sendKeys(false);
+        CHECK((xamlKeys == std::vector<int>{2, -2}));
+        xamlKeys.clear();
+        CHECK(SUCCEEDED(ui->remove_KeyDown(pageDown)));
+        CHECK(SUCCEEDED(ui->remove_KeyUp(pageUp)));
+        sendKeys(false);
+        CHECK(xamlKeys.empty());
         Then([] {
             CHECK((states == std::vector<int>{1}));
             CHECK((visibility == std::vector<int>{1}));

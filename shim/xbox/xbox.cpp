@@ -7,6 +7,7 @@
 #include "registry.h"
 #include "xbox_abi.h"
 #include "marketplace_abi.h"
+#include "achievements_abi.h"
 #include "class_operation.h"
 #include "com/factory.h"
 #include "com/failed_operation.h"
@@ -74,6 +75,79 @@ HRESULT Nobody(IInspectable** value) {
     *value = nullptr;
     return S_OK;
 }
+class EmptyAchievementIterator final : public RuntimeClass<RuntimeClassFlags<WinRt>, IAchievementIterator, FtmBase> {
+    InspectableClass(L"Windows.Foundation.Collections.IIterator`1", BaseTrust);
+
+public:
+    HRESULT STDMETHODCALLTYPE get_Current(IInspectable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return E_BOUNDS;
+    }
+    HRESULT STDMETHODCALLTYPE get_HasCurrent(boolean* value) override {
+        if (!value) return E_POINTER;
+        *value = false;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE MoveNext(boolean* value) override { return get_HasCurrent(value); }
+    HRESULT STDMETHODCALLTYPE GetMany(UINT32 capacity, IInspectable** values, UINT32* actual) override {
+        if (!actual || (capacity && !values)) return E_POINTER;
+        *actual = 0;
+        return S_OK;
+    }
+};
+class EmptyAchievementView final
+    : public RuntimeClass<RuntimeClassFlags<WinRt>, IAchievementVectorView, IAchievementIterable, FtmBase> {
+    InspectableClass(L"Windows.Foundation.Collections.IVectorView`1", BaseTrust);
+
+public:
+    HRESULT STDMETHODCALLTYPE GetAt(UINT32, IInspectable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return E_BOUNDS;
+    }
+    HRESULT STDMETHODCALLTYPE get_Size(UINT32* value) override {
+        if (!value) return E_POINTER;
+        *value = 0;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE IndexOf(IInspectable*, UINT32* index, boolean* found) override {
+        if (!index || !found) return E_POINTER;
+        *index = 0;
+        *found = false;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetMany(UINT32 start, UINT32 capacity, IInspectable** values, UINT32* actual) override {
+        if (!actual || (capacity && !values)) return E_POINTER;
+        *actual = 0;
+        return start == 0 ? S_OK : E_BOUNDS;
+    }
+    HRESULT STDMETHODCALLTYPE First(IAchievementIterator** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto iterator = Make<EmptyAchievementIterator>();
+        return iterator ? iterator.CopyTo(value) : E_OUTOFMEMORY;
+    }
+};
+// The stand-in identity has no server account and therefore no cached Xbox
+// achievements. Enumeration still completes successfully, just like its local
+// profile lookup, instead of producing an unobserved network-error task.
+class LocalAchievements final : public RuntimeClass<RuntimeClassFlags<WinRt>, IAchievementCollection, FtmBase> {
+    InspectableClass(L"Microsoft.Xbox.AchievementCollection", BaseTrust);
+    ComPtr<EmptyAchievementView> items_ = Make<EmptyAchievementView>();
+
+public:
+    HRESULT STDMETHODCALLTYPE get_Items(IInspectable** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        return items_ ? items_.CopyTo(value) : E_OUTOFMEMORY;
+    }
+    HRESULT STDMETHODCALLTYPE get_TotalRecords(UINT32* value) override {
+        if (!value) return E_POINTER;
+        *value = 0;
+        return S_OK;
+    }
+};
 // The local player, with no Xbox account or credentials.
 class LocalIdentity final : public RuntimeClass<RuntimeClassFlags<WinRt>, IUserIdentity, FtmBase> {
     InspectableClass(L"Microsoft.Xbox.Foundation.UserIdentity", BaseTrust);
@@ -204,7 +278,7 @@ public:
     }
 };
 
-// Microsoft.Xbox.User in both SDK layouts; remote service methods fail offline.
+// Microsoft.Xbox.User in both SDK layouts, including the local player's data.
 #define APPX_XBOX_USER_COMMON                                                                                          \
     HRESULT STDMETHODCALLTYPE get_Identity(IInspectable** identity) override { return SignedInIdentity(identity); }    \
     HRESULT STDMETHODCALLTYPE get_Status(IInspectable** status) override { return Nobody(status); }                    \
@@ -217,6 +291,10 @@ public:
     }                                                                                                                  \
     HRESULT STDMETHODCALLTYPE GetAchievementsAsync(UINT32, UINT32, boolean, IInspectable*, IInspectable** op)          \
         override {                                                                                                     \
+        if (LocalSignedIn()) {                                                                                         \
+            Log("TRACE", "Xbox LIVE local: User.GetAchievementsAsync (empty cache)");                                  \
+            return Success<IAchievementCollection>(Make<LocalAchievements>(), op);                                     \
+        }                                                                                                              \
         return FailedClass("User.GetAchievementsAsync", "Microsoft.Xbox.AchievementCollection",                        \
                            defaults::AchievementCollection, op);                                                       \
     }                                                                                                                  \

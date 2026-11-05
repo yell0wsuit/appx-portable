@@ -4,6 +4,7 @@
 // Package.Current, and CoreWindow.GetForCurrentThread off the UI thread.
 #include "com/pinterface.h"
 #include "xbox/xbox_abi.h"
+#include "xbox/achievements_abi.h"
 #include <windows.applicationmodel.h>
 #include <windows.applicationmodel.background.h>
 #include <windows.ui.core.h>
@@ -130,8 +131,45 @@ int main(int argc, char**) {
             ComPtr<ABI::Windows::Foundation::IAsyncInfo> info;
             CHECK(achievements && SUCCEEDED(achievements.As(&info)));
             HRESULT error{};
-            CHECK(info && SUCCEEDED(info->get_ErrorCode(&error)) &&
-                  error == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
+            CHECK(info && SUCCEEDED(info->get_ErrorCode(&error)) && error == S_OK);
+            ABI::Windows::Foundation::AsyncStatus achievementStatus{};
+            CHECK(info && SUCCEEDED(info->get_Status(&achievementStatus)) &&
+                  achievementStatus == ABI::Windows::Foundation::AsyncStatus::Completed);
+            ComPtr<appx::xbox::IAchievementCollection> collection;
+            auto* achievementAsync = static_cast<OperationAbi*>(static_cast<IInspectable*>(typed.Get()));
+            CHECK(achievementAsync && SUCCEEDED(achievementAsync->GetResults(collection.GetAddressOf())) && collection);
+            Handler achievementHandler{handlerTable};
+            CHECK(achievementAsync &&
+                  SUCCEEDED(achievementAsync->put_Completed(reinterpret_cast<IUnknown*>(&achievementHandler))));
+            CHECK(achievementHandler.calls == 1 &&
+                  achievementHandler.status == ABI::Windows::Foundation::AsyncStatus::Completed);
+            UINT32 count = 99;
+            CHECK(collection && SUCCEEDED(collection->get_TotalRecords(&count)) && count == 0);
+            ComPtr<IInspectable> items;
+            ComPtr<appx::xbox::IAchievementVectorView> view;
+            ComPtr<appx::xbox::IAchievementIterable> iterable;
+            CHECK(collection && SUCCEEDED(collection->get_Items(&items)) && items && SUCCEEDED(items.As(&view)) &&
+                  SUCCEEDED(items.As(&iterable)));
+            CHECK(view && SUCCEEDED(view->get_Size(&count)) && count == 0);
+            ComPtr<IInspectable> missing;
+            CHECK(view && view->GetAt(0, &missing) == E_BOUNDS && !missing);
+            CHECK(view && view->GetAt(0, nullptr) == E_POINTER);
+            CHECK(view && SUCCEEDED(view->GetMany(0, 0, nullptr, &count)) && count == 0);
+            CHECK(view && view->GetMany(1, 0, nullptr, &count) == E_BOUNDS);
+            ComPtr<appx::xbox::IAchievementIterator> iterator;
+            boolean hasCurrent = true;
+            CHECK(iterable && SUCCEEDED(iterable->First(&iterator)) && iterator);
+            CHECK(iterator && SUCCEEDED(iterator->get_HasCurrent(&hasCurrent)) && !hasCurrent);
+            CHECK(iterator && SUCCEEDED(iterator->MoveNext(&hasCurrent)) && !hasCurrent);
+            CHECK(iterator && iterator->get_Current(&missing) == E_BOUNDS && !missing);
+            const std::string achievementClass =
+                "rc(Microsoft.Xbox.Achievement;{843a65e0-8ed2-45a3-8524-6983a9ad7fdd})";
+            CHECK(appx::ParameterizedIid("pinterface({bbe1fa4c-b0e3-4583-baef-1f1b2e483e56};" + achievementClass +
+                                         ")") == __uuidof(appx::xbox::IAchievementVectorView));
+            CHECK(appx::ParameterizedIid("pinterface({faa585ea-6214-4217-afda-7f46de5869b3};" + achievementClass +
+                                         ")") == __uuidof(appx::xbox::IAchievementIterable));
+            CHECK(appx::ParameterizedIid("pinterface({6a79e863-4300-459a-9966-cbb660963ee1};" + achievementClass +
+                                         ")") == __uuidof(appx::xbox::IAchievementIterator));
             // The local player's profile loads offline.
             ComPtr<IInspectable> profile;
             ComPtr<appx::xbox::IUserProfile> loaded;
@@ -144,6 +182,14 @@ int main(int argc, char**) {
                 CHECK(SUCCEEDED(static_cast<OperationAbi*>(static_cast<IInspectable*>(typed.Get()))
                                     ->GetResults(loaded.GetAddressOf())) &&
                       loaded);
+            // Signed-out requests retain the normal offline error path.
+            ComPtr<ABI::Windows::Foundation::IAsyncAction> signOut;
+            CHECK(live && SUCCEEDED(live->SignOutAsync(&signOut)));
+            ComPtr<IInspectable> signedOutAchievements, signIn;
+            CHECK(SUCCEEDED(user->GetAchievementsAsync(0, 100, false, nullptr, &signedOutAchievements)));
+            CHECK(signedOutAchievements && SUCCEEDED(signedOutAchievements.As(&info)) &&
+                  SUCCEEDED(info->get_ErrorCode(&error)) && error == HRESULT_FROM_WIN32(ERROR_NETWORK_UNREACHABLE));
+            CHECK(live && SUCCEEDED(live->SignInAsync(&signIn)));
         };
         if (argc > 1) {
             ComPtr<appx::xbox::IUser12> user;

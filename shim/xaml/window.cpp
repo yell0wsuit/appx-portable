@@ -7,6 +7,9 @@
 #include "registry.h"
 #include <wrl/event.h>
 #include "host/dispatcher.h"
+#include "xaml/key.h"
+#include <windows.ui.xaml.controls.h>
+#include <vector>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml;
 namespace appx {
@@ -100,6 +103,55 @@ public:
     }
 };
 static ComPtr<Window> xamlWindow;
+void XamlInputMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+    const bool released = message == WM_KEYUP || message == WM_SYSKEYUP;
+    if (!released && message != WM_KEYDOWN && message != WM_SYSKEYDOWN) return;
+    if (!xamlWindow) return;
+    ComPtr<IUIElement> content;
+    if (FAILED(xamlWindow->get_Content(&content)) || !content) return;
+    // The shim's DirectX views use a content chain ending at a graphics panel.
+    // Snapshot and retain the route before invoking handlers, which can replace it.
+    std::vector<ComPtr<IInspectable>> route;
+    ComPtr<IInspectable> current;
+    content.As(&current);
+    while (current && route.size() < 64) {
+        ComPtr<IUnknown> identity;
+        current.As(&identity);
+        for (auto& element : route) {
+            ComPtr<IUnknown> previous;
+            element.As(&previous);
+            if (previous == identity) return; // Malformed cyclic content.
+        }
+        route.push_back(current);
+        ComPtr<IInspectable> child;
+        ComPtr<Controls::IContentControl> container;
+        ComPtr<Controls::IUserControl> userControl;
+        ComPtr<IPointerTargetProvider> panel;
+        if (SUCCEEDED(current.As(&container))) container->get_Content(&child);
+        if (!child && SUCCEEDED(current.As(&userControl))) {
+            ComPtr<IUIElement> element;
+            userControl->get_Content(&element);
+            if (element) element.As(&child);
+        }
+        if (!child && SUCCEEDED(current.As(&panel))) panel->GetPointerTarget(&child);
+        current = child;
+    }
+    auto args = Make<XamlKeyArgs>(route.back().Get(), wparam, lparam, released);
+    if (!args) return;
+    for (auto element = route.rbegin(); element != route.rend(); ++element) {
+        ComPtr<IXamlKeyTarget> target;
+        if (SUCCEEDED(element->As(&target))) {
+            const auto hr = target->RaiseKey(released, args.Get());
+            if (FAILED(hr)) {
+                Log("FAIL", "XAML key handler hr=%08lx", hr);
+                return;
+            }
+        }
+        boolean handled = false;
+        args->get_Handled(&handled);
+        if (handled) break;
+    }
+}
 bool HasXamlWindow() { return xamlWindow != nullptr; }
 HRESULT DeliverWindowLoaded() {
     if (!xamlWindow || !IsWindowVisible(HostWindow())) return S_OK;
