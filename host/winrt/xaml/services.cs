@@ -85,6 +85,36 @@ namespace AppxPortable.WinRT.Xaml
         }
 
         private NativeObject native;
+        private bool unloaded;
+        private int? pendingCommand;
+
+        public MediaElementPeer()
+        {
+            // Windows shuts down a removed MediaElement's engine, even when
+            // the app retains the element. Entering the tree reloads Source.
+            Unloaded += (sender, args) => Host.Callback(() =>
+            {
+                unloaded = true;
+                pendingCommand = null;
+                if (native != null) Invoke(StopSlot);
+            });
+            Loaded += (sender, args) => Host.Callback(() =>
+            {
+                if (!unloaded) return;
+                unloaded = false;
+                var command = pendingCommand;
+                pendingCommand = null;
+                if (native == null)
+                {
+                    if (Source == null && !command.HasValue) return;
+                    var created = Native;
+                }
+                else SendProperties(true);
+                // WPF raises Loaded later than Window.Content is assigned;
+                // preserve a Play/Pause/Stop issued during that transition.
+                if (command.HasValue) Invoke(command.Value);
+            });
+        }
 
         private static System.Windows.DependencyProperty Register(string name, Type type, object value)
         {
@@ -101,15 +131,25 @@ namespace AppxPortable.WinRT.Xaml
                 if (native != null) return native;
                 using (var instance = NativeServices.Create("Windows.UI.Xaml.Controls.MediaElement"))
                     native = instance.QueryInterface(MediaElementIid);
-                foreach (var property in new[] { AutoPlayProperty, IsMutedProperty, IsLoopingProperty, VolumeProperty, AudioCategoryProperty, SourceProperty })
-                    if (ReadLocalValue(property) != System.Windows.DependencyProperty.UnsetValue || property == VolumeProperty)
-                        Send(property, GetValue(property));
+                SendProperties();
                 return native;
             }
         }
 
+        private void SendProperties(bool all = false)
+        {
+            foreach (var property in new[] { AutoPlayProperty, IsMutedProperty, IsLoopingProperty, VolumeProperty, AudioCategoryProperty, SourceProperty })
+                if (all || ReadLocalValue(property) != System.Windows.DependencyProperty.UnsetValue || property == VolumeProperty)
+                    Send(property, GetValue(property));
+        }
+
         private void Forward(System.Windows.DependencyProperty property, object value)
         {
+            if (unloaded)
+            {
+                if (property == SourceProperty) pendingCommand = null;
+                return;  // replay current properties on reattachment
+            }
             if (native == null) { var created = Native; return; }  // creation sends current values
             Send(property, value);
         }
@@ -141,9 +181,15 @@ namespace AppxPortable.WinRT.Xaml
             using (var call = new NativeObject.Access(target)) Errors.Check(call.Method<Action0>(slot)(call.Self));
         }
 
-        internal void Play() { Invoke(PlaySlot); }
-        internal void Pause() { Invoke(PauseSlot); }
-        internal void Stop() { Invoke(StopSlot); }
+        private void Command(int slot)
+        {
+            if (unloaded) pendingCommand = slot;
+            else Invoke(slot);
+        }
+
+        internal void Play() { Command(PlaySlot); }
+        internal void Pause() { Command(PauseSlot); }
+        internal void Stop() { Command(StopSlot); }
     }
 }
 

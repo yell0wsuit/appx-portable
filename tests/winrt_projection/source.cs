@@ -118,6 +118,67 @@ namespace Fixture
             "<local:Badge x:ConnectionId='2' x:Name='badge' Score='5' Visibility='Collapsed'/></Grid></local:SourcePage>";
 
         static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        delegate int MediaStateCall(IntPtr self, out int state);
+
+        // Observe the real native player; the wrapper intentionally exposes no
+        // CurrentState projection. Keep its COM handle alive across the ABI call.
+        static int MediaState(MediaElement music)
+        {
+            var peer = PeerOf(music);
+            var handle = (SafeHandle)peer.GetType().GetField("native", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(peer);
+            if (handle == null) return 0;
+            bool retained = false;
+            try
+            {
+                handle.DangerousAddRef(ref retained);
+                IntPtr self = handle.DangerousGetHandle();
+                // SDK IMediaElement::get_CurrentState, slot 27.
+                var call = (MediaStateCall)Marshal.GetDelegateForFunctionPointer(Marshal.ReadIntPtr(Marshal.ReadIntPtr(self), 27 * IntPtr.Size), typeof(MediaStateCall));
+                int state;
+                Marshal.ThrowExceptionForHR(call(self, out state));
+                return state;
+            }
+            finally { if (retained) handle.DangerousRelease(); }
+        }
+
+        static void PumpUntil(Func<bool> condition, string message)
+        {
+            if (condition()) return;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var frame = new System.Windows.Threading.DispatcherFrame();
+            var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+                { Interval = TimeSpan.FromMilliseconds(10) };
+            Exception failure = null;
+            timer.Tick += (s, e) =>
+            {
+                try { if (condition() || watch.ElapsedMilliseconds >= 8000) frame.Continue = false; }
+                catch (Exception error) { failure = error; frame.Continue = false; }
+            };
+            timer.Start();
+            try { System.Windows.Threading.Dispatcher.PushFrame(frame); }
+            finally { timer.Stop(); }
+            if (failure != null) throw failure;
+            Check(condition(), message);
+        }
+
+        static void WriteMediaWave()
+        {
+            // Twenty seconds of silent PCM: assertions finish before EOF even
+            // if the platform's looping notification is delayed.
+            const int bytes = 8000 * 2 * 20;
+            Directory.CreateDirectory("Assets");
+            using (var wave = new BinaryWriter(File.Create("Assets/media-lifecycle.wav")))
+            {
+                wave.Write(System.Text.Encoding.ASCII.GetBytes("RIFF")); wave.Write(36 + bytes);
+                wave.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt ")); wave.Write(16);
+                wave.Write((short)1); wave.Write((short)1); wave.Write(8000); wave.Write(16000);
+                wave.Write((short)2); wave.Write((short)16);
+                wave.Write(System.Text.Encoding.ASCII.GetBytes("data")); wave.Write(bytes);
+                wave.Write(new byte[bytes]);
+            }
+        }
+
         static bool ShimLogContains(string text) { return ShimLogOccurrences(text) != 0; }
         static int ShimLogOccurrences(string text)
         {
@@ -582,6 +643,90 @@ namespace Fixture
                 var music = (Windows.UI.Xaml.Controls.MediaElement)page.FindName("music");
                 Check(!music.AutoPlay && music.IsLooping && music.Volume == 0.5 && music.AudioCategory == Windows.UI.Xaml.Media.AudioCategory.BackgroundCapableMedia,
                       "media markup values");
+            });
+            WriteMediaWave();
+            test("media-lifecycle", "<MediaElement x:Name='music' AutoPlay='True' IsLooping='True' Volume='0' AudioCategory='BackgroundCapableMedia'/>", page =>
+            {
+                var music = (MediaElement)page.FindName("music");
+                var peer = (System.Windows.FrameworkElement)PeerOf(music);
+                var source = new Uri("ms-appx:///Assets/media-lifecycle.wav");
+                music.Source = source;
+                using (var shown = new System.Windows.Interop.HwndSource(new System.Windows.Interop.HwndSourceParameters("media-lifecycle")
+                       { WindowStyle = unchecked((int)0x90000000), PositionX = -32000, PositionY = -32000, Width = 100, Height = 100 }))
+                {
+                    try
+                    {
+                        shown.RootVisual = (System.Windows.Media.Visual)PeerOf(page);
+                        PumpUntil(() => peer.IsLoaded && MediaState(music) == 3, "attached media reaches native Playing before lifecycle checks");
+                        // Replace the whole root, as the menu-to-board transition
+                        // does, retaining the UWP wrapper and its page for reuse.
+                        shown.RootVisual = new System.Windows.Controls.Grid();
+                        PumpUntil(() => !peer.IsLoaded, "replacing the root unloads retained media");
+                        Check(MediaState(music) == 5, "unloading retained media stops its native playback");
+                        Check(music.Source == source && music.Volume == 0 && music.IsLooping && music.AutoPlay,
+                              "unloading media preserves source and playback properties");
+
+                        shown.RootVisual = (System.Windows.Media.Visual)PeerOf(page);
+                        PumpUntil(() => peer.IsLoaded && MediaState(music) == 3, "AutoPlay restarts retained media when reattached");
+                        shown.RootVisual = new System.Windows.Controls.Grid();
+                        PumpUntil(() => !peer.IsLoaded, "reattached media unloads again");
+                        Check(MediaState(music) == 5, "a second detach stops restarted playback");
+
+                        music.AutoPlay = false;
+                        shown.RootVisual = (System.Windows.Media.Visual)PeerOf(page);
+                        PumpUntil(() => peer.IsLoaded, "media with AutoPlay disabled is reattached");
+                        var settled = System.Diagnostics.Stopwatch.StartNew();
+                        PumpUntil(() => settled.ElapsedMilliseconds >= 250, "reattached media settles without autoplay");
+                        Check(MediaState(music) == 5, "AutoPlay false keeps reattached media stopped");
+                        music.Play();
+                        PumpUntil(() => MediaState(music) == 3, "explicit Play restarts reattached media with AutoPlay false");
+
+                        shown.RootVisual = new System.Windows.Controls.Grid();
+                        PumpUntil(() => !peer.IsLoaded, "explicitly playing media unloads");
+                        Check(MediaState(music) == 5, "detaching explicitly playing media stops its native player");
+                        File.Copy("Assets/media-lifecycle.wav", "Assets/media-lifecycle-next.wav", true);
+                        var nextSource = new Uri("ms-appx:///Assets/media-lifecycle-next.wav");
+                        music.Source = nextSource;
+                        music.Volume = 0.25;
+                        settled.Restart();
+                        PumpUntil(() => settled.ElapsedMilliseconds >= 250, "unloaded property changes settle");
+                        Check(MediaState(music) == 5, "changing Source and Volume while unloaded does not reopen playback");
+                        shown.RootVisual = (System.Windows.Media.Visual)PeerOf(page);
+                        Check(!peer.IsLoaded, "reattachment leaves time for an explicit command before Loaded");
+                        music.Play();
+                        PumpUntil(() => peer.IsLoaded && MediaState(music) == 3, "Play before Loaded survives reattachment with AutoPlay false");
+                        Check(music.Source == nextSource && music.Volume == 0.25 && music.IsLooping && !music.AutoPlay,
+                              "deferred Source and Volume survive the pre-Loaded Play transition");
+
+                        shown.RootVisual = new System.Windows.Controls.Grid();
+                        PumpUntil(() => !peer.IsLoaded, "media unloads before a queued command is replaced by Source");
+                        music.Play();
+                        music.Source = source;
+                        shown.RootVisual = (System.Windows.Media.Visual)PeerOf(page);
+                        PumpUntil(() => peer.IsLoaded, "media with a newer Source is reattached");
+                        settled.Restart();
+                        PumpUntil(() => settled.ElapsedMilliseconds >= 250, "new Source autoplay policy settles");
+                        Check(MediaState(music) == 5, "a newer Source resets an earlier queued Play to AutoPlay false");
+
+                        shown.RootVisual = new System.Windows.Controls.Grid();
+                        PumpUntil(() => !peer.IsLoaded, "media unloads before clearing its local Source");
+                        Check(MediaState(music) == 5, "native playback is stopped before Source is cleared");
+                        var sourceProperty = (System.Windows.DependencyProperty)peer.GetType().GetField("SourceProperty",
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).GetValue(null);
+                        peer.ClearValue(sourceProperty);
+                        music.AutoPlay = true;
+                        shown.RootVisual = (System.Windows.Media.Visual)PeerOf(page);
+                        PumpUntil(() => peer.IsLoaded, "media with cleared Source is reattached");
+                        settled.Restart();
+                        PumpUntil(() => settled.ElapsedMilliseconds >= 250, "cleared Source reattachment settles");
+                        Check(music.Source == null && MediaState(music) == 0, "cleared Source reaches native Closed on reattachment");
+                        music.Play();
+                        settled.Restart();
+                        PumpUntil(() => settled.ElapsedMilliseconds >= 250, "Play after clearing Source settles");
+                        Check(MediaState(music) == 0, "explicit Play cannot resurrect the source cleared while unloaded");
+                    }
+                    finally { music.Stop(); shown.RootVisual = null; }
+                }
             });
             test("wrapper-types", "<Page.Resources><ImageBrush x:Name='ImageBrush'/><BitmapImage x:Name='BitmapImage' UriSource='/Assets/pixel.png'/>" +
                 "<VisualState x:Name='VisualState'/><VisualStateGroup x:Name='VisualStateGroup'/></Page.Resources><StackPanel x:Name='StackPanel'>" +
