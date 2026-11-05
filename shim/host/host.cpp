@@ -55,6 +55,14 @@ static void ApplyHostCursor() {
 }
 static HWND xamlFallback;
 static std::atomic<bool> xamlFallbackShown{false};
+static constexpr wchar_t SurfaceClass[] = L"AppxPortableSurface";
+static void ShowGameSurfaces(bool visible) {
+    for (HWND child = GetWindow(window, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
+        wchar_t name[64]{};
+        if (GetClassNameW(child, name, ARRAYSIZE(name)) && wcscmp(name, SurfaceClass) == 0)
+            ShowWindow(child, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+    }
+}
 static constexpr wchar_t XamlFallbackClass[] = L"AppxPortableXamlFrame";
 static LRESULT CALLBACK XamlFallbackProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
     if (message == WM_NCHITTEST) return HTTRANSPARENT;
@@ -78,6 +86,9 @@ HWND ShowXamlFallbackWindow() {
     RECT client{};
     GetClientRect(window, &client);
     xamlFallbackShown = true;
+    // Wine's native GPU view can remain above a GDI sibling despite HWND_TOP.
+    // Retained swap chains must not cover the XAML-only view after rendering stops.
+    ShowGameSurfaces(false);
     SetWindowPos(xamlFallback, HWND_TOP, 0, 0, client.right, client.bottom, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     return xamlFallback;
 }
@@ -85,14 +96,16 @@ void HideXamlFallbackWindow() {
     if (!xamlFallbackShown.exchange(false)) return;
     auto hide = [] {
         // A newer idle frame may have been shown while this hide was queued.
-        if (xamlFallback && !xamlFallbackShown.load()) ShowWindow(xamlFallback, SW_HIDE);
+        if (xamlFallback && !xamlFallbackShown.load()) {
+            ShowGameSurfaces(true);
+            ShowWindow(xamlFallback, SW_HIDE);
+        }
     };
     if (GetCurrentThreadId() == thread)
         hide();
     else
         PostHostWork(0, hide);
 }
-static constexpr wchar_t SurfaceClass[] = L"AppxPortableSurface";
 // Composition swap chains are independent layers, and the game creates its
 // next one (on resize) before releasing the old. A window holds one flip-model
 // swap chain at a time, so each redirected swap chain gets its own child
@@ -144,7 +157,8 @@ static HWND CreateSurfaceOnHostThread() {
     GetClientRect(window, &client);
     // Presentation children must also be skipped by native WindowFromPoint;
     // HTTRANSPARENT alone does not remove them from that hit test.
-    HWND surface = CreateWindowExW(0, SurfaceClass, nullptr, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_DISABLED, 0,
+    const DWORD style = WS_CHILD | WS_CLIPSIBLINGS | WS_DISABLED | (xamlFallbackShown.load() ? 0 : WS_VISIBLE);
+    HWND surface = CreateWindowExW(0, SurfaceClass, nullptr, style, 0,
                                    0, client.right, client.bottom, window, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (surface) SetWindowPos(surface, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     return surface;

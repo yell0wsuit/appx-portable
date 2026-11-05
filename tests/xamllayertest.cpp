@@ -321,6 +321,9 @@ static bool Run(IDXGISwapChain1* swap, ID3D11Device* device, ID3D11DeviceContext
                 "a retained XAML frame shows after the game's last present") &&
          ok;
     HWND paintWindow = FindWindowExW(host, nullptr, L"AppxPortableXamlFrame", nullptr);
+    HWND gameSurface = FindWindowExW(host, nullptr, L"AppxPortableSurface", nullptr);
+    ok = Expect(gameSurface && !IsWindowVisible(gameSurface),
+                "the XAML-only view hides retained GPU surfaces after game presents stop") && ok;
     if (!paintWindow) paintWindow = host;
     HDC dc = GetDC(paintWindow);
     RECT client{};
@@ -346,6 +349,19 @@ static bool Run(IDXGISwapChain1* swap, ID3D11Device* device, ID3D11DeviceContext
                     HostPixel(host, false, false) == RGB(0, 255, 255),
                 "a delayed hide cannot hide a newer retained frame") &&
          ok;
+    ComPtr<IDXGIFactory2> gpuFactory;
+    ComPtr<IDXGISwapChain1> replacement;
+    DXGI_SWAP_CHAIN_DESC1 replacementDesc{};
+    if (!Check(swap->GetParent(IID_PPV_ARGS(&gpuFactory)), "swap-chain factory") ||
+        !Check(swap->GetDesc1(&replacementDesc), "swap-chain description") ||
+        !Check(gpuFactory->CreateSwapChainForComposition(device, &replacementDesc, nullptr, &replacement),
+               "replacement while XAML is visible")) return false;
+    HWND replacementSurface = FindWindowExW(host, nullptr, L"AppxPortableSurface", nullptr);
+    ok = Expect(replacementSurface && replacementSurface != gameSurface && !IsWindowVisible(replacementSurface),
+                "creating a retained swap chain cannot cover the XAML-only view before Present") && ok;
+    ok = Check(replacement->Present(0, 0), "resume game present") && ok;
+    ok = Expect(IsWindowVisible(replacementSurface) && !IsWindowVisible(paintWindow),
+                "resuming game presentation restores its surface and hides the XAML-only view") && ok;
     ok = Check(clock->remove_Rendering(token), "stop composition clock") && ok;
     return Check(submit(nullptr, 0, 0, 0), "withdraw layer") && ok;
 }
