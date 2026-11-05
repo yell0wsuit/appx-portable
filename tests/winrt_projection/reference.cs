@@ -278,6 +278,7 @@ namespace Windows.UI.Xaml.Controls
     {
         public Canvas() { throw new global::System.NotImplementedException(); }
         public static global::Windows.UI.Xaml.DependencyProperty LeftProperty { get { throw new global::System.NotImplementedException(); } }
+        public static global::Windows.UI.Xaml.DependencyProperty TopProperty { get { throw new global::System.NotImplementedException(); } }
         public static double GetLeft(global::Windows.UI.Xaml.UIElement element) { throw new global::System.NotImplementedException(); }
         public static void SetLeft(global::Windows.UI.Xaml.UIElement element, double length) { throw new global::System.NotImplementedException(); }
         public static void SetTop(global::Windows.UI.Xaml.UIElement element, double length) { throw new global::System.NotImplementedException(); }
@@ -439,7 +440,22 @@ namespace Windows.UI.Input
 namespace Windows.UI.ApplicationSettings
 {
     public enum SettingsEdgeLocation { Right = 0, Left = 1 }
-    public sealed class SettingsPaneCommandsRequestedEventArgs { internal SettingsPaneCommandsRequestedEventArgs() { } }
+    public sealed class SettingsPaneCommandsRequestedEventArgs
+    {
+        internal SettingsPaneCommandsRequestedEventArgs() { }
+        public SettingsPaneCommandsRequest Request { get { throw new global::System.NotImplementedException(); } }
+    }
+    public sealed class SettingsPaneCommandsRequest
+    {
+        internal SettingsPaneCommandsRequest() { }
+        public global::System.Collections.Generic.IList<SettingsCommand> ApplicationCommands { get { throw new global::System.NotImplementedException(); } }
+    }
+    public sealed class SettingsCommand : global::Windows.UI.Popups.IUICommand
+    {
+        public SettingsCommand(object id, string label, global::Windows.UI.Popups.UICommandInvokedHandler handler) { throw new global::System.NotImplementedException(); }
+        public object Id { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public string Label { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
     public sealed class SettingsPane
     {
         internal SettingsPane() { }
@@ -448,6 +464,11 @@ namespace Windows.UI.ApplicationSettings
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_CommandsRequested(global::Windows.Foundation.TypedEventHandler<SettingsPane, SettingsPaneCommandsRequestedEventArgs> handler) { throw new global::System.NotImplementedException(); }
         public void remove_CommandsRequested(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
+}
+namespace Windows.UI.Popups
+{
+    public interface IUICommand { object Id { get; set; } string Label { get; set; } }
+    public delegate void UICommandInvokedHandler(IUICommand command);
 }
 namespace Windows.ApplicationModel.Store
 {
@@ -714,6 +735,7 @@ namespace Windows.UI.Xaml.Markup
 
 namespace Windows.UI.Xaml.Controls.Primitives
 {
+    public enum EdgeTransitionLocation { Left = 0, Top = 1, Right = 2, Bottom = 3 }
     public enum ComponentResourceLocation { Application, Nested }
     public sealed class Popup : global::Windows.UI.Xaml.FrameworkElement
     {
@@ -723,6 +745,7 @@ namespace Windows.UI.Xaml.Controls.Primitives
         public double HorizontalOffset { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public double VerticalOffset { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public bool IsLightDismissEnabled { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+        public global::Windows.UI.Xaml.Media.Animation.TransitionCollection ChildTransitions { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
         public global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken add_Closed(global::System.EventHandler<object> handler) { throw new global::System.NotImplementedException(); }
         public void remove_Closed(global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationToken token) { throw new global::System.NotImplementedException(); }
     }
@@ -811,6 +834,11 @@ namespace Windows.UI.Xaml.Media.Animation
     {
         public EntranceThemeTransition() { throw new global::System.NotImplementedException(); }
         public double FromHorizontalOffset { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
+    }
+    public sealed class PaneThemeTransition : Transition
+    {
+        public PaneThemeTransition() { throw new global::System.NotImplementedException(); }
+        public global::Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation Edge { get { throw new global::System.NotImplementedException(); } set { throw new global::System.NotImplementedException(); } }
     }
     public sealed class TransitionCollection : global::System.Collections.Generic.IList<Transition>
     {

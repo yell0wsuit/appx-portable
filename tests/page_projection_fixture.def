@@ -1,4 +1,6 @@
 EXPORTS
+  CreateSettingsCommandsRequest
+  InvokeSettingsCommand
   SendWindowSize
   FlushWindowEvents
   SetHostMinimized

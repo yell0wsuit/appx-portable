@@ -5,8 +5,42 @@
 #include <windows.ui.xaml.markup.h>
 #include <windows.ui.xaml.input.h>
 #include <wrl.h>
+#pragma warning(disable : 4996)
+#include <winrt/Windows.Foundation.Collections.h>
+#include <winrt/Windows.UI.ApplicationSettings.h>
+#include <winrt/Windows.UI.Popups.h>
 using namespace Microsoft::WRL;
 using namespace ABI::Windows::UI::Xaml::Navigation;
+struct FixtureSettingsRequest
+    : winrt::implements<FixtureSettingsRequest, winrt::Windows::UI::ApplicationSettings::ISettingsPaneCommandsRequest> {
+    winrt::Windows::Foundation::Collections::IVector<winrt::Windows::UI::ApplicationSettings::SettingsCommand>
+        commands = winrt::single_threaded_vector<winrt::Windows::UI::ApplicationSettings::SettingsCommand>();
+    auto ApplicationCommands() { return commands; }
+};
+extern "C" HRESULT __cdecl CreateSettingsCommandsRequest(IInspectable** value) {
+    if (!value) return E_POINTER;
+    *value = nullptr;
+    try {
+        *value = reinterpret_cast<IInspectable*>(winrt::detach_abi(winrt::make<FixtureSettingsRequest>()));
+        return S_OK;
+    } catch (...) {
+        return winrt::to_hresult();
+    }
+}
+extern "C" HRESULT __cdecl InvokeSettingsCommand(IInspectable* request, UINT32 index) {
+    if (!request) return E_POINTER;
+    try {
+        winrt::Windows::UI::ApplicationSettings::SettingsPaneCommandsRequest value{nullptr};
+        winrt::copy_from_abi(value, request);
+        auto command = value.ApplicationCommands().GetAt(index).as<winrt::Windows::UI::Popups::IUICommand>();
+        auto invoked = command.Invoked();
+        if (!invoked) return E_UNEXPECTED;
+        invoked(command);
+        return S_OK;
+    } catch (...) {
+        return winrt::to_hresult();
+    }
+}
 class TestKeyArgs final
     : public RuntimeClass<RuntimeClassFlags<WinRt>, ABI::Windows::UI::Xaml::Input::IKeyRoutedEventArgs> {
     InspectableClass(L"Windows.UI.Xaml.Input.KeyRoutedEventArgs", BaseTrust);

@@ -3,7 +3,7 @@ using System;
 namespace AppxPortable.WinRT.Xaml
 {
     // UWP values to and from WPF: wrappers become their peers, enums convert by
-    // name. Anything else must already be the target type, or the call fails.
+    // name, and numeric boxes widen to double-valued properties.
     internal static class Values
     {
         internal static System.Windows.DependencyObject Dependency(global::Windows.UI.Xaml.DependencyObject owner)
@@ -39,6 +39,11 @@ namespace AppxPortable.WinRT.Xaml
             var wrapper = value as global::Windows.UI.Xaml.DependencyObject;
             if (wrapper != null) value = wrapper.peer;
             if (type.IsInstanceOfType(value)) return value;
+            // WinRT SetValue accepts numeric IPropertyValue boxes for double
+            // properties (for example Canvas.Top assigned a boxed Int32 zero).
+            if (type == typeof(double) && (value is sbyte || value is byte || value is short || value is ushort ||
+                value is int || value is uint || value is long || value is ulong || value is float))
+                return System.Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
             if (value.GetType().IsEnum && type.IsEnum) return Enumeration(value, type);
             if (value is global::Windows.UI.Color && type == typeof(System.Windows.Media.Color))
             {

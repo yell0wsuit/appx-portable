@@ -175,6 +175,17 @@ namespace AppxPortable.WinRT.Xaml
     public sealed class ContentThemeTransitionPeer : ThemeTransitionPeer { }
     public sealed class AddDeleteThemeTransitionPeer : ThemeTransitionPeer { }
     public sealed class ReorderThemeTransitionPeer : ThemeTransitionPeer { }
+    public sealed class PaneThemeTransitionPeer : ThemeTransitionPeer
+    {
+        public static readonly DependencyProperty EdgeProperty = DependencyProperty.Register("Edge",
+            typeof(global::Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation), typeof(PaneThemeTransitionPeer),
+            new PropertyMetadata(global::Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation.Left));
+        public global::Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation Edge
+        {
+            get { return (global::Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation)GetValue(EdgeProperty); }
+            set { SetValue(EdgeProperty, value); }
+        }
+    }
     public sealed class TransitionCollectionPeer : System.Collections.ObjectModel.Collection<ThemeTransitionPeer>
     {
         private readonly System.Windows.Threading.Dispatcher dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;

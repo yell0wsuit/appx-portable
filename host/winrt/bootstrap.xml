@@ -296,6 +296,11 @@
   <Class Name="Windows.UI.Xaml.Media.Animation.ReorderThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.ReorderThemeTransitionPeer">
     <Constructor />
   </Class>
+  <Enum Name="Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation" />
+  <Class Name="Windows.UI.Xaml.Media.Animation.PaneThemeTransition" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.PaneThemeTransitionPeer">
+    <Constructor />
+    <Property Name="Edge" Wpf="AppxPortable.WinRT.Xaml.PaneThemeTransitionPeer.EdgeProperty" />
+  </Class>
   <Class Name="Windows.UI.Xaml.Media.Animation.RepositionThemeAnimation" Adapter="Wpf" Peer="AppxPortable.WinRT.Xaml.RepositionThemeAnimationPeer">
     <Constructor />
   </Class>
@@ -457,6 +462,7 @@
   <Enum Name="Windows.Storage.ApplicationDataCreateDisposition" />
   <Interface Name="Windows.Foundation.Collections.IPropertySet" Adapter="StringObjectMap" />
   <Interface Name="Windows.Foundation.Collections.IMapView`2" Adapter="StringMapView" />
+  <Interface Name="Windows.Foundation.Collections.IVector`1" Adapter="ObjectVector" />
   <Enum Name="Windows.Foundation.AsyncStatus" />
   <Interface Name="Windows.Foundation.IAsyncInfo" Adapter="Async" />
   <Interface Name="Windows.Foundation.IAsyncAction" Adapter="Async" />
@@ -540,7 +546,19 @@
   <Class Name="Windows.UI.ApplicationSettings.SettingsPaneCommandsRequestedEventArgs">
     <Property Name="Request" />
   </Class>
-  <Class Name="Windows.UI.ApplicationSettings.SettingsPaneCommandsRequest" />
+  <Class Name="Windows.UI.ApplicationSettings.SettingsPaneCommandsRequest">
+    <Property Name="ApplicationCommands" />
+  </Class>
+  <Class Name="Windows.UI.ApplicationSettings.SettingsCommand">
+    <Constructor />
+    <Property Name="Id" />
+    <Property Name="Label" />
+  </Class>
+  <Interface Name="Windows.UI.Popups.IUICommand">
+    <Property Name="Id" />
+    <Property Name="Label" />
+  </Interface>
+  <Delegate Name="Windows.UI.Popups.UICommandInvokedHandler" />
   <Class Name="Windows.ApplicationModel.Store.CurrentApp">
     <Property Name="LicenseInformation" />
   </Class>

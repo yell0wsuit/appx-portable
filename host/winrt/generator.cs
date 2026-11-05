@@ -50,6 +50,7 @@ internal static partial class WinrtProjectionGenerator
                 return "global::System.Nullable<" + Name(generic.GenericArguments[0]) + ">";
             if (!selected.Contains(generic.ElementType.FullName)) throw new NotSupportedException("Generic type is not selected: " + type.FullName);
             if (generic.ElementType.FullName == MapViewName) return "global::System.Collections.Generic.IReadOnlyDictionary<string, " + Name(MapViewValue(generic)) + ">";
+            if (generic.ElementType.FullName == VectorName) return "global::System.Collections.Generic.IList<" + Name(VectorItem(generic)) + ">";
             // The CLR projects Windows.Foundation.EventHandler<T> as System.EventHandler<T>.
             string element = generic.ElementType.FullName == EventHandlerName ? "System.EventHandler" : generic.ElementType.FullName.Split('`')[0];
             return "global::" + element + "<" + string.Join(", ", generic.GenericArguments.Select(Name)) + ">";
@@ -224,6 +225,9 @@ internal static partial class WinrtProjectionGenerator
         // The CLR projects DateTime, FILETIME ticks in UTC, as a local DateTimeOffset.
         if (result.FullName == DateTimeName) return "global::System.DateTimeOffset.FromFileTime(" + receiver + ".Int64(" + number + "))";
         var view = result as GenericInstanceType;
+        if (view != null && view.ElementType.FullName == VectorName)
+            return Runtime + "NativeObjectVector<" + Name(VectorItem(view)) + ">.Wrap(" + receiver + ".Object(" + number + "), " +
+                ObjectVectorAbi(view) + ", v => " + Wrapped(VectorItem(view), "v") + ")";
         if (view != null && view.ElementType.FullName == MapViewName)
             return Runtime + "NativeStringMapView<" + Name(MapViewValue(view)) + ">.Wrap(" + receiver + ".Object(" + number + "), " +
                 StringMapViewAbi(view) + ", v => " + Wrapped(MapViewValue(view), "v") + ")";
@@ -249,7 +253,7 @@ internal static partial class WinrtProjectionGenerator
             output.AppendLine("                using (var factory = " + Runtime + "NativeObject.Factory(\"" + type.FullName + "\", " + Guid(owner) + "))");
             return "factory";
         }
-        if (type.IsInterface ? owner == type : !composable && owner == DefaultInterface(type)) return "native";
+        if (type.IsInterface ? owner == type && !composable : !composable && owner == DefaultInterface(type)) return "native";
         output.AppendLine("                using (var self = native.QueryInterface(" + Guid(owner) + "))");
         return "self";
     }
@@ -1191,7 +1195,7 @@ namespace AppxPortable.WinRT.Projected
     private static PropertyDefinition Getter(TypeDefinition owner, string name)
     {
         PropertyDefinition definition = owner.Properties.SingleOrDefault(p => p.Name == name);
-        if (definition == null || definition.GetMethod == null || definition.SetMethod != null || definition.Parameters.Count != 0)
+        if (definition == null || definition.GetMethod == null || definition.Parameters.Count != 0)
             throw new NotSupportedException("Unsupported property: " + owner.FullName + "." + name);
         return definition;
     }
@@ -1200,6 +1204,7 @@ namespace AppxPortable.WinRT.Projected
     // queries for the interface per call; the interface's own wrapper holds it.
     private static void InterfaceProperty(StringBuilder output, TypeDefinition iface, string name, bool query)
     {
+        if (Getter(iface, name).SetMethod != null) { Property(output, iface, name, query); return; }
         MethodDefinition getter = Getter(iface, name).GetMethod;
         int slot = Slot(iface, getter);
         output.AppendLine("        // " + iface.FullName + "::" + getter.Name + ", slot " + Literal(slot));
@@ -1320,6 +1325,51 @@ namespace AppxPortable.WinRT.Projected
         CollectionMethod(Find("Windows.Foundation.Collections.IKeyValuePair`2"), 2, "get_Value", "()->!1");
     }
     private const string MapViewName = "Windows.Foundation.Collections.IMapView`2";
+    private const string VectorName = "Windows.Foundation.Collections.IVector`1";
+    private static void ValidateVector()
+    {
+        if (!selected.Contains(VectorName) || interfaces[VectorName].GetAttribute("Adapter") != "ObjectVector")
+            throw new NotSupportedException("Object vector adapter is not selected: " + VectorName);
+        var vector = Find(VectorName);
+        if (!vector.Methods.Select(m => m.Name).SequenceEqual(new[] { "GetAt", "get_Size", "GetView", "IndexOf", "SetAt", "InsertAt", "RemoveAt", "Append", "RemoveAtEnd", "Clear", "GetMany", "ReplaceAll" }))
+            throw new NotSupportedException("Unsupported collection ABI: " + vector.FullName + " method order");
+        CollectionMethod(vector, 1, "GetAt", "(System.UInt32)->!0");
+        CollectionMethod(vector, 1, "get_Size", "()->System.UInt32");
+        CollectionMethod(vector, 1, "IndexOf", "(!0,System.UInt32&)->System.Boolean");
+        CollectionMethod(vector, 1, "SetAt", "(System.UInt32,!0)->System.Void");
+        CollectionMethod(vector, 1, "InsertAt", "(System.UInt32,!0)->System.Void");
+        CollectionMethod(vector, 1, "RemoveAt", "(System.UInt32)->System.Void");
+        CollectionMethod(vector, 1, "Append", "(!0)->System.Void");
+        CollectionMethod(vector, 1, "Clear", "()->System.Void");
+        IterationContract();
+    }
+    private static TypeReference VectorItem(GenericInstanceType vector)
+    {
+        ValidateVector();
+        TypeReference item = vector.GenericArguments.Single();
+        if (item.FullName == "System.String" || item.FullName == "System.Object" ||
+            item.IsValueType || item.IsArray || item.IsGenericParameter || item is GenericInstanceType)
+            throw new NotSupportedException("Unsupported object vector element: " + item.FullName);
+        if (IsDelegate(Parameter(item, vector.FullName)))
+            throw new NotSupportedException("Unsupported object vector: " + vector.FullName);
+        return item;
+    }
+    private static string ObjectVectorAbi(GenericInstanceType vector)
+    {
+        TypeReference item = VectorItem(vector);
+        var definition = Find(VectorName);
+        var iterable = Find("Windows.Foundation.Collections.IIterable`1");
+        var iterator = Find("Windows.Foundation.Collections.IIterator`1");
+        string signature = EventSignature(item);
+        return "new " + Runtime + "ObjectVectorAbi { Vector = new global::System.Guid(\"" + Parameterized(definition, signature) + "\"), " +
+            "Iterable = new global::System.Guid(\"" + Parameterized(iterable, signature) + "\"), Item = " + ArgumentIid(item) + ", " +
+            "GetAt = " + Literal(NamedSlot(definition, "GetAt")) + ", Size = " + Literal(NamedSlot(definition, "get_Size")) + ", " +
+            "IndexOf = " + Literal(NamedSlot(definition, "IndexOf")) + ", SetAt = " + Literal(NamedSlot(definition, "SetAt")) + ", " +
+            "InsertAt = " + Literal(NamedSlot(definition, "InsertAt")) + ", RemoveAt = " + Literal(NamedSlot(definition, "RemoveAt")) + ", " +
+            "Append = " + Literal(NamedSlot(definition, "Append")) + ", Clear = " + Literal(NamedSlot(definition, "Clear")) + ", " +
+            "First = " + Literal(NamedSlot(iterable, "First")) + ", Current = " + Literal(NamedSlot(iterator, "get_Current")) + ", " +
+            "HasCurrent = " + Literal(NamedSlot(iterator, "get_HasCurrent")) + ", MoveNext = " + Literal(NamedSlot(iterator, "MoveNext")) + " }";
+    }
     private static void ValidateMapView()
     {
         if (!selected.Contains(MapViewName) || interfaces[MapViewName].GetAttribute("Adapter") != "StringMapView")
@@ -1419,7 +1469,7 @@ namespace AppxPortable.WinRT.Projected
         }).ToList();
         output.AppendLine("    public interface " + type.Name);
         output.AppendLine("    {");
-        foreach (string name in members) output.AppendLine("        " + Name(Getter(type, name).GetMethod.ReturnType) + " " + name + " { get; }");
+        foreach (string name in members) output.AppendLine("        " + Name(Getter(type, name).GetMethod.ReturnType) + " " + name + " { get; " + (Getter(type, name).SetMethod != null ? "set; " : "") + "}");
         foreach (MethodDefinition method in methods)
             output.AppendLine("        " + Name(method.ReturnType) + " " + method.Name + "(" + string.Join(", ", method.Parameters.Select(p => Name(p.ParameterType) + " @" + p.Name)) + ");");
         output.AppendLine("    }");
@@ -1948,6 +1998,12 @@ namespace AppxPortable.WinRT.Projected
                     if (element.Name != "Interface" || element.HasChildNodes || type.FullName != MapViewName)
                         throw new NotSupportedException("Unsupported map view surface: " + type.FullName);
                     ValidateMapView();
+                }
+                else if (element.GetAttribute("Adapter") == "ObjectVector")
+                {
+                    if (element.Name != "Interface" || element.HasChildNodes || type.FullName != VectorName)
+                        throw new NotSupportedException("Unsupported object vector surface: " + type.FullName);
+                    ValidateVector();
                 }
                 else if (element.GetAttribute("Adapter") == "EventHandler")
                 {

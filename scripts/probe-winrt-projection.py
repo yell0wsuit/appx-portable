@@ -390,7 +390,9 @@ def main():
                 ("wpf-mapping", ('<Property Name="Text" Wpf="System.Windows.Controls.TextBlock.TextProperty" />', '<Property Name="Text" Wpf="System.Windows.Controls.TextBlock.Text" />'),
                  "Unsupported WPF mapping: Windows.UI.Xaml.Controls.TextBlock.Text"),
                 ("wpf-member", ('<Property Name="Text" Wpf="System.Windows.Controls.TextBlock.TextProperty" />', '<Property Name="NoSuch" Wpf="System.Windows.Controls.TextBlock.TextProperty" />'),
-                 "Unsupported WPF mapping: Windows.UI.Xaml.Controls.TextBlock.NoSuch")):
+                 "Unsupported WPF mapping: Windows.UI.Xaml.Controls.TextBlock.NoSuch"),
+                ("object-vector-string", ('</Projection>', '<Class Name="Windows.Storage.Pickers.FileOpenPicker"><Property Name="FileTypeFilter" /></Class></Projection>'),
+                 "Unsupported object vector element: System.String")):
             require(change[0] in surface, "bootstrap.xml lacks the " + kind + " entry")
             changed = output / ("bootstrap-" + kind + ".xml")
             changed.write_text(surface.replace(change[0], change[1]), encoding="utf-8")

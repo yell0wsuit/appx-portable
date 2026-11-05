@@ -33,6 +33,12 @@ namespace AppxPortable.WinRT.Xaml
                 // Implicit styles match an element's exact type: UWP-created viewers share the theme's.
                 var viewer = (System.Windows.Style)dictionary[typeof(System.Windows.Controls.ScrollViewer)];
                 dictionary[typeof(ScrollViewerPeer)] = new System.Windows.Style(typeof(ScrollViewerPeer), viewer);
+                // WPF's CheckBox defaults to black text. UWP's dark-theme
+                // ToggleSwitch header uses the application foreground brush.
+                var toggle = new System.Windows.Style(typeof(ToggleSwitchPeer));
+                toggle.Setters.Add(new System.Windows.Setter(System.Windows.Controls.Control.ForegroundProperty,
+                    dictionary["ApplicationForegroundThemeBrush"]));
+                dictionary[typeof(ToggleSwitchPeer)] = toggle;
                 resources.MergedDictionaries.Add(dictionary);
             }
             application.Resources = resources;

@@ -62,6 +62,19 @@ namespace AppxPortable.WinRT.Xaml
 
         internal event EventHandler Opened, Closed;
 
+        static PopupPeer()
+        {
+            var changed = new System.Windows.PropertyChangedCallback((d, e) =>
+            {
+                var popup = (PopupPeer)d;
+                if (popup.IsOpen) popup.Place();
+            });
+            System.Windows.Controls.Canvas.LeftProperty.OverrideMetadata(typeof(PopupPeer),
+                new System.Windows.FrameworkPropertyMetadata(double.NaN, changed));
+            System.Windows.Controls.Canvas.TopProperty.OverrideMetadata(typeof(PopupPeer),
+                new System.Windows.FrameworkPropertyMetadata(double.NaN, changed));
+        }
+
         public PopupPeer()
         {
             // An in-tree popup is positioned relative to where it sits.
@@ -112,6 +125,16 @@ namespace AppxPortable.WinRT.Xaml
             {
                 var at = TransformToAncestor(root).Transform(new System.Windows.Point());
                 x += at.X; y += at.Y;
+            }
+            else
+            {
+                // A code-created Popup can remain detached (or under a detached
+                // Viewbox). Its Canvas position still anchors it in the window.
+                // In-tree transforms above already include attached positions.
+                double left = System.Windows.Controls.Canvas.GetLeft(this);
+                double top = System.Windows.Controls.Canvas.GetTop(this);
+                if (!double.IsNaN(left)) x += left;
+                if (!double.IsNaN(top)) y += top;
             }
             System.Windows.Controls.Canvas.SetLeft(child, x);
             System.Windows.Controls.Canvas.SetTop(child, y);

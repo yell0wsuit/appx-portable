@@ -5,6 +5,123 @@ using System.Runtime.InteropServices;
 
 namespace AppxPortable.WinRT
 {
+    // Closed native object-vector IIDs and SDK slots are emitted from WinMD.
+    internal sealed class ObjectVectorAbi
+    {
+        internal Guid Vector { get; set; }
+        internal Guid Iterable { get; set; }
+        internal Guid Item { get; set; }
+        internal int GetAt { get; set; }
+        internal int Size { get; set; }
+        internal int IndexOf { get; set; }
+        internal int SetAt { get; set; }
+        internal int InsertAt { get; set; }
+        internal int RemoveAt { get; set; }
+        internal int Append { get; set; }
+        internal int Clear { get; set; }
+        internal int First { get; set; }
+        internal int Current { get; set; }
+        internal int HasCurrent { get; set; }
+        internal int MoveNext { get; set; }
+    }
+
+    // Delegates must be outside the generic adapter: Mono cannot marshal a
+    // delegate nested in a generic type through GetDelegateForFunctionPointer.
+    internal static class ObjectVectorCalls
+    {
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int GetAtCall(IntPtr self, uint index, out IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int GetCall(IntPtr self, out IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int SetAtCall(IntPtr self, uint index, IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int IndexOfCall(IntPtr self, IntPtr value, out uint index, out byte found);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] internal delegate int IndexCall(IntPtr self, uint index);
+    }
+
+    internal sealed class NativeObjectVector<T> : IList<T>, INativeWrapper where T : class
+    {
+        private readonly NativeObject native;
+        private readonly ObjectVectorAbi abi;
+        private readonly Func<NativeObject, T> convert;
+        private NativeObjectVector(NativeObject value, ObjectVectorAbi abi, Func<NativeObject, T> convert)
+        { native = value; this.abi = abi; this.convert = convert; }
+        internal static IList<T> Wrap(NativeObject value, ObjectVectorAbi abi, Func<NativeObject, T> convert)
+        { return NativeObject.Wrap<IList<T>>(value, abi.Vector, v => new NativeObjectVector<T>(v, abi, convert)); }
+        NativeObject INativeWrapper.Native { get { return native; } }
+        public int Count { get { return checked((int)native.UInt32(abi.Size)); } }
+        public bool IsReadOnly { get { return false; } }
+        private uint Index(int index, bool insert)
+        {
+            int count = Count;
+            if (index < 0 || index > count || !insert && index == count) throw new ArgumentOutOfRangeException("index");
+            return checked((uint)index);
+        }
+        private T Read(NativeObject receiver, int slot, uint? index)
+        {
+            using (var call = new NativeObject.Access(receiver))
+            {
+                IntPtr value;
+                int hr = index.HasValue ? call.Method<ObjectVectorCalls.GetAtCall>(slot)(call.Self, index.Value, out value)
+                    : call.Method<ObjectVectorCalls.GetCall>(slot)(call.Self, out value);
+                if (hr < 0 && value != IntPtr.Zero) Marshal.Release(value);
+                StringMapCalls.Check(hr);
+                return convert(NativeObject.ObjectResult(hr, value));
+            }
+        }
+        public T this[int index]
+        {
+            get { return Read(native, abi.GetAt, Index(index, false)); }
+            set { Write(index, value, abi.SetAt, false); }
+        }
+        private void Write(int index, T value, int slot, bool insert)
+        {
+            uint position = Index(index, insert);
+            using (var argument = NativeObject.Argument(value, abi.Item))
+            using (var call = new NativeObject.Access(native))
+                StringMapCalls.Check(call.Method<ObjectVectorCalls.SetAtCall>(slot)(call.Self, position, argument == null ? IntPtr.Zero : argument.DangerousGetHandle()));
+        }
+        public void Add(T value)
+        {
+            using (var argument = NativeObject.Argument(value, abi.Item)) native.Call(abi.Append, argument);
+        }
+        public void Insert(int index, T value) { Write(index, value, abi.InsertAt, true); }
+        public void RemoveAt(int index)
+        {
+            uint position = Index(index, false);
+            using (var call = new NativeObject.Access(native))
+                StringMapCalls.Check(call.Method<ObjectVectorCalls.IndexCall>(abi.RemoveAt)(call.Self, position));
+        }
+        public void Clear() { native.Call(abi.Clear); }
+        public int IndexOf(T value)
+        {
+            using (var argument = NativeObject.Argument(value, abi.Item))
+            using (var call = new NativeObject.Access(native))
+            {
+                uint index; byte found;
+                StringMapCalls.Check(call.Method<ObjectVectorCalls.IndexOfCall>(abi.IndexOf)(call.Self, argument == null ? IntPtr.Zero : argument.DangerousGetHandle(), out index, out found));
+                return found != 0 ? checked((int)index) : -1;
+            }
+        }
+        public bool Contains(T value) { return IndexOf(value) >= 0; }
+        public bool Remove(T value) { int index = IndexOf(value); if (index < 0) return false; RemoveAt(index); return true; }
+        public void CopyTo(T[] array, int index)
+        {
+            StringMapCalls.ArraySpace(array, index, Count);
+            foreach (var item in this) array[index++] = item;
+        }
+        public IEnumerator<T> GetEnumerator()
+        {
+            using (var iterable = native.QueryInterface(abi.Iterable))
+            using (var iterator = iterable.Object(abi.First))
+            {
+                while (StringMapCalls.Boolean(iterator, abi.HasCurrent))
+                {
+                    yield return Read(iterator, abi.Current, null);
+                    StringMapCalls.Boolean(iterator, abi.MoveNext);
+                }
+            }
+        }
+        IEnumerator IEnumerable.GetEnumerator() { return GetEnumerator(); }
+    }
+
     // The generator supplies closed interface IIDs and method slots from WinMD.
     internal sealed class MapAbi
     {

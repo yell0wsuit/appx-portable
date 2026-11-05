@@ -118,6 +118,21 @@ namespace Fixture
             "<local:Badge x:ConnectionId='2' x:Name='badge' Score='5' Visibility='Collapsed'/></Grid></local:SourcePage>";
 
         static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+        [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        static extern int CreateSettingsCommandsRequest(out IntPtr value);
+        [DllImport("page_projection_fixture.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        static extern int InvokeSettingsCommand(IntPtr request, uint index);
+
+        static Windows.UI.ApplicationSettings.SettingsPaneCommandsRequest SettingsRequest()
+        {
+            IntPtr value;
+            Marshal.ThrowExceptionForHR(CreateSettingsCommandsRequest(out value));
+            var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+            var abi = typeof(Application).Assembly.GetType("AppxPortable.WinRT.NativeObject");
+            using (var native = (SafeHandle)abi.GetMethod("TakeResult", flags).Invoke(null, new object[] { 0, value }))
+                return (Windows.UI.ApplicationSettings.SettingsPaneCommandsRequest)typeof(Windows.UI.ApplicationSettings.SettingsPaneCommandsRequest)
+                    .GetMethod("FromNative", flags).Invoke(null, new object[] { native });
+        }
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         delegate int MediaStateCall(IntPtr self, out int state);
 
@@ -543,6 +558,32 @@ namespace Fixture
                 Check(!popup.IsOpen && closed == 2 && overlay.Background == null, "a press outside the child dismisses it");
                 popup.remove_Closed(token);
             });
+            test("popup-detached-position", () =>
+            {
+                var popup = new Windows.UI.Xaml.Controls.Primitives.Popup();
+                var holder = new Viewbox { Child = popup };
+                var child = new Grid();
+                popup.Child = child;
+                popup.HorizontalOffset = 5; popup.VerticalOffset = 7;
+                popup.SetValue(Canvas.LeftProperty, 683.0);
+                popup.SetValue(Canvas.TopProperty, 0); // Native XAML accepts a boxed integer for a double DP.
+                var visual = (System.Windows.UIElement)PeerOf(child);
+                try
+                {
+                    popup.IsOpen = true;
+                    Check(System.Windows.Controls.Canvas.GetLeft(visual) == 688 && System.Windows.Controls.Canvas.GetTop(visual) == 7,
+                          "detached popup honors its attached position plus explicit offsets");
+                    popup.SetValue(Canvas.LeftProperty, 700);
+                    popup.SetValue(Canvas.TopProperty, 10);
+                    Check(System.Windows.Controls.Canvas.GetLeft(visual) == 705 && System.Windows.Controls.Canvas.GetTop(visual) == 17,
+                          "attached position changes move an open detached popup immediately");
+                    bool rejected = false;
+                    try { popup.SetValue(Canvas.TopProperty, "10"); }
+                    catch (ArgumentException) { rejected = true; }
+                    Check(rejected, "numeric dependency property conversion still rejects strings");
+                }
+                finally { popup.IsOpen = false; holder.Child = null; }
+            });
             Check(failures.Count == 0, "startup surface gaps:\n" + string.Join("\n", failures));
             Console.WriteLine("PASS: startup layout, events, storyboards, journal and color members map onto WPF");
         }
@@ -643,6 +684,73 @@ namespace Fixture
                 var music = (Windows.UI.Xaml.Controls.MediaElement)page.FindName("music");
                 Check(!music.AutoPlay && music.IsLooping && music.Volume == 0.5 && music.AudioCategory == Windows.UI.Xaml.Media.AudioCategory.BackgroundCapableMedia,
                       "media markup values");
+            });
+            test("settings-toggle-foreground", "<StackPanel Background='Black'><ToggleSwitch x:Name='toggle' Header='Sounds'/><ToggleSwitch x:Name='authored' Foreground='Red'/></StackPanel>", page =>
+            {
+                var toggle = (System.Windows.Controls.CheckBox)PeerOf(page.FindName("toggle"));
+                var authored = (System.Windows.Controls.CheckBox)PeerOf(page.FindName("authored"));
+                toggle.Measure(new System.Windows.Size(300, 100));
+                var brush = toggle.Foreground as System.Windows.Media.SolidColorBrush;
+                Check(brush != null && brush.Color.R == 255 && brush.Color.G == 255 && brush.Color.B == 255 && brush.Color.A != 0,
+                      "dark-theme toggle headers use a visible theme foreground on black panels");
+                Check(((System.Windows.Media.SolidColorBrush)authored.Foreground).Color == System.Windows.Media.Colors.Red,
+                      "the toggle theme preserves authored foregrounds");
+            });
+            test("settings-pane-transition", "<Popup x:Name='settings'><Popup.ChildTransitions><TransitionCollection><PaneThemeTransition Edge='Right'/></TransitionCollection></Popup.ChildTransitions></Popup>", page =>
+            {
+                var popup = (Windows.UI.Xaml.Controls.Primitives.Popup)page.FindName("settings");
+                var transition = (Windows.UI.Xaml.Media.Animation.PaneThemeTransition)popup.ChildTransitions[0];
+                Check(transition.Edge == Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation.Right,
+                      "settings pane transition retains its authored edge");
+                transition.Edge = Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation.Left;
+                Check(((Windows.UI.Xaml.Media.Animation.PaneThemeTransition)popup.ChildTransitions[0]).Edge == Windows.UI.Xaml.Controls.Primitives.EdgeTransitionLocation.Left,
+                      "settings pane transition code-side edge stays in the popup collection");
+                Check(ShimLogContains("Windows.UI.Xaml.Media.Animation.PaneThemeTransition"), "unsupported pane animation is logged explicitly");
+            });
+            test("settings-commands", "<Grid/>", page =>
+            {
+                var request = SettingsRequest();
+                var commands = request.ApplicationCommands;
+                Check(commands.Count == 0 && !commands.IsReadOnly, "native settings request exposes a mutable empty command list");
+                int invoked = 0;
+                var popup = new Windows.UI.Xaml.Controls.Primitives.Popup { Child = new TextBlock { Text = "App settings" } };
+                Windows.UI.ApplicationSettings.SettingsCommand first = null;
+                first = new Windows.UI.ApplicationSettings.SettingsCommand("settings", "Settings Ω", command =>
+                {
+                    Check(ReferenceEquals(command, first) && (string)command.Id == "updated" && command.Label == "Changed Ω",
+                          "native command invocation preserves managed identity and mutable Id/Label");
+                    ++invoked; popup.IsOpen = true;
+                });
+                var second = new Windows.UI.ApplicationSettings.SettingsCommand(42, "Other", null);
+                Check((string)first.Id == "settings" && first.Label == "Settings Ω" && (int)second.Id == 42, "settings command factory retains string and boxed integer IDs");
+                first.Id = "updated"; first.Label = "Changed Ω";
+                commands.Add(first); commands.Add(second);
+                Check(commands.Count == 2 && ReferenceEquals(commands[0], first) && commands.IndexOf(second) == 1 && commands.Contains(first),
+                      "settings IList append, index, membership and identity use the native vector");
+                commands.Insert(1, null);
+                Check(commands.Count == 3 && commands[1] == null, "settings vector accepts a null element");
+                commands[1] = second;
+                var copy = new Windows.UI.ApplicationSettings.SettingsCommand[4]; commands.CopyTo(copy, 1);
+                Check(copy[0] == null && ReferenceEquals(copy[1], first) && ReferenceEquals(copy[2], second), "settings command CopyTo preserves offset and identity");
+                commands.RemoveAt(2);
+                Check(commands.Remove(second) && !commands.Remove(second) && commands.Count == 1, "settings command removal reports membership");
+                int enumerated = 0; foreach (var item in commands) { Check(ReferenceEquals(item, first), "native command enumeration identity"); ++enumerated; }
+                Check(enumerated == 1, "native command enumeration count");
+                try
+                {
+                    var native = (SafeHandle)request.GetType().GetField("native", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(request);
+                    bool retained = false;
+                    try
+                    {
+                        native.DangerousAddRef(ref retained);
+                        Marshal.ThrowExceptionForHR(InvokeSettingsCommand(native.DangerousGetHandle(), 0));
+                    }
+                    finally { if (retained) native.DangerousRelease(); }
+                    Check(invoked == 1 && popup.IsOpen, "native settings command callback opens the app's popup");
+                }
+                finally { popup.IsOpen = false; }
+                commands.Clear();
+                Check(commands.Count == 0 && commands.IndexOf(first) == -1, "settings vector Clear removes commands");
             });
             WriteMediaWave();
             test("media-lifecycle", "<MediaElement x:Name='music' AutoPlay='True' IsLooping='True' Volume='0' AudioCategory='BackgroundCapableMedia'/>", page =>

@@ -99,6 +99,44 @@ public:
 };
 
 namespace ProjectedSettings = winrt::Windows::UI::ApplicationSettings;
+class SettingsCommand final : public RuntimeClass<RuntimeClassFlags<WinRt>, ABI::Windows::UI::Popups::IUICommand> {
+    InspectableClass(L"Windows.UI.ApplicationSettings.SettingsCommand", BaseTrust);
+    ComPtr<IInspectable> id_;
+    Wrappers::HString label_;
+    ComPtr<ABI::Windows::UI::Popups::IUICommandInvokedHandler> invoked_;
+
+public:
+    HRESULT STDMETHODCALLTYPE get_Id(IInspectable** value) override { return id_.CopyTo(value); }
+    HRESULT STDMETHODCALLTYPE put_Id(IInspectable* value) override {
+        id_ = value;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE get_Label(HSTRING* value) override { return label_.CopyTo(value); }
+    HRESULT STDMETHODCALLTYPE put_Label(HSTRING value) override { return label_.Set(value); }
+    HRESULT STDMETHODCALLTYPE get_Invoked(ABI::Windows::UI::Popups::IUICommandInvokedHandler** value) override {
+        return invoked_.CopyTo(value);
+    }
+    HRESULT STDMETHODCALLTYPE put_Invoked(ABI::Windows::UI::Popups::IUICommandInvokedHandler* value) override {
+        invoked_ = value;
+        return S_OK;
+    }
+};
+class SettingsCommandFactory final : public Factory<Settings::ISettingsCommandFactory> {
+public:
+    SettingsCommandFactory() : Factory(L"Windows.UI.ApplicationSettings.SettingsCommand") {}
+    HRESULT STDMETHODCALLTYPE CreateSettingsCommand(IInspectable* id, HSTRING label,
+                                                    ABI::Windows::UI::Popups::IUICommandInvokedHandler* invoked,
+                                                    ABI::Windows::UI::Popups::IUICommand** value) override {
+        if (!value) return E_POINTER;
+        *value = nullptr;
+        auto command = Make<SettingsCommand>();
+        if (!command) return E_OUTOFMEMORY;
+        auto hr = command->put_Label(label);
+        if (SUCCEEDED(hr)) hr = command->put_Id(id);
+        if (SUCCEEDED(hr)) hr = command->put_Invoked(invoked);
+        return FAILED(hr) ? hr : command.CopyTo(value);
+    }
+};
 struct SettingsRequest : winrt::implements<SettingsRequest, ProjectedSettings::ISettingsPaneCommandsRequest> {
     winrt::Windows::Foundation::Collections::IVector<ProjectedSettings::SettingsCommand> commands =
         winrt::single_threaded_vector<ProjectedSettings::SettingsCommand>();
@@ -392,6 +430,7 @@ template <class T> HRESULT Shared(IActivationFactory** value) {
 }
 HRESULT MakeShareFactory(IActivationFactory** value) { return Shared<ShareFactory>(value); }
 HRESULT MakeSettingsPaneFactory(IActivationFactory** value) { return Shared<SettingsFactory>(value); }
+HRESULT MakeSettingsCommandFactory(IActivationFactory** value) { return Shared<SettingsCommandFactory>(value); }
 HRESULT ShowGameSettings() {
     return PostHostWork(0, [] {
         auto pane = CurrentSettingsPane();
@@ -410,6 +449,8 @@ HRESULT MakeMessageDialogFactory(IActivationFactory** value) { return Shared<Mes
 const ShimClass shareClass{L"Windows.ApplicationModel.DataTransfer.DataTransferManager", MakeShareFactory};
 const ShimClass settingsPaneClass{L"Windows.UI.ApplicationSettings.SettingsPane", MakeSettingsPaneFactory,
                                   ShimPolicy::Replace, InIslands};
+const ShimClass settingsCommandClass{L"Windows.UI.ApplicationSettings.SettingsCommand", MakeSettingsCommandFactory,
+                                     ShimPolicy::FillMissing};
 const ShimClass tilesClass{L"Windows.UI.Notifications.TileUpdateManager", MakeTileFactory, ShimPolicy::Replace,
                            InIslands};
 // Windows' own tile content where it exists (Islands); the shim's under Wine.
