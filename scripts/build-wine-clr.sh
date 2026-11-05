@@ -47,4 +47,9 @@ ${host[@]+"${host[@]}"} make -j"$(getconf _NPROCESSORS_ONLN)" \
 cp dlls/wow64cpu/x86_64-windows/wow64cpu.dll "$output/wow64cpu.dll"
 cp "$archive" "$output/wine-$version.tar.xz"
 cp "$root/wine/wow64cpu.patch" "$root/scripts/build-wine-clr.sh" "$output/"
+if [[ $(uname) == Darwin ]]; then
+  bash "$root/scripts/build-macos-menu.sh" "$output"
+  cp "$root/wine/game_menu.m" "$root/scripts/build-macos-menu.sh" "$output/"
+  cp "$root/tests/macos/game_menu.m" "$output/game_menu_test.m"
+fi
 echo "Built Wine $version WoW64 component in $output"

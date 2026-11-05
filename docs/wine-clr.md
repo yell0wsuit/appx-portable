@@ -66,6 +66,17 @@ replacement WinRT assemblies and a XAML engine are separate milestones.
 
 ## CI runtime delivery
 
+The runtime also includes `appxmenu.so`, built from `wine/game_menu.m` with
+`scripts/build-macos-menu.sh`. It adds **Game Menu > Game settings…** to Cocoa's
+menu bar. The Windows host polls its actions on the game's UI thread and opens
+the game's registered `SettingsPane` commands. The bridge does not assign
+Command+,. Its fixed-width Unix-call arguments support both x86 WoW64 and x64;
+ordinary Windows and Wine runtimes without the helper retain Ctrl+, and the
+window's system-menu entry. This helper uses Wine 11.18's private Unix-call ABI.
+The native Cocoa regression checks menu installation, action delivery, cleanup,
+and preservation of an existing Command+, item. `macmenutest --expect-menu`
+additionally checks the Windows-to-Cocoa path in the packaged runtime.
+
 The user selected a patched runtime built in CI. `.github/workflows/wine-clr.yml`
 builds the CPU module from pinned source, replaces it in the checksum-pinned
 Gcenx Wine 11.18 bundle, ad-hoc signs and verifies the modified app, and runs the

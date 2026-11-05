@@ -3,6 +3,8 @@
 #include "assets.h"
 #include "pointer.h"
 #include "placement.h"
+#include "mac_menu.h"
+#include "settings_menu.h"
 #include "gpu/dxgi_redirect.h"
 #include "gpu/xaml_layer.h"
 #include "package/package.h"
@@ -32,7 +34,6 @@ static constexpr UINT WorkMessage = WM_APP + 1;
 static constexpr UINT CreateSurfaceMessage = WM_APP + 2;
 static constexpr UINT FullscreenMessage = WM_APP + 3;
 static constexpr UINT ActivateMessage = WM_APP + 4;
-static constexpr UINT SettingsMenuId = 0x1F00;
 static WindowPlacement placement;
 static std::atomic<float> minimumWidth{0}, minimumHeight{0};
 void SetHostMinimumSize(float width, float height) noexcept {
@@ -418,11 +419,7 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
                              CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, nullptr,
                              nullptr, cls.hInstance, nullptr);
     if (!window) return HRESULT_FROM_WIN32(GetLastError());
-    if (IslandsMode()) {
-        auto menu = GetSystemMenu(window, FALSE);
-        InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_STRING, SettingsMenuId, L"Game settings\tCtrl+,");
-        InsertMenuW(menu, SC_CLOSE, MF_BYCOMMAND | MF_SEPARATOR, 0, nullptr);
-    }
+    InitializeSettingsMenu(window);
     // The window icon is the manifest's small logo, at the file resources.pri
     // picks for this display.
     const auto& package = CurrentPackage();
@@ -438,23 +435,22 @@ HRESULT RunHost(const std::function<HRESULT()>& initialize) {
     placement.Initialize(window);
     HRESULT hr = IslandsMode() ? S_OK : InitializeGraphicsRedirect();
     if (FAILED(hr)) Log("FAIL", "DXGI redirect initialization hr=%08lx", hr);
-    if (SUCCEEDED(hr)) hr = initialize();
+    if (SUCCEEDED(hr)) {
+        InitializeMacGameMenu(window);
+        hr = initialize();
+    }
     if (SUCCEEDED(hr)) {
         MSG msg{};
         BOOL result;
         while ((result = GetMessageW(&msg, nullptr, 0, 0)) > 0) {
-            if (IslandsMode() &&
-                (msg.hwnd == window || IsChild(window, msg.hwnd) || GetAncestor(msg.hwnd, GA_ROOTOWNER) == window) &&
-                msg.message == WM_KEYDOWN && msg.wParam == VK_OEM_COMMA && (GetKeyState(VK_CONTROL) & 0x8000)) {
-                if (!(msg.lParam & (1L << 30))) ShowGameSettings();
-                continue;
-            }
             if (IslandsMode() && IslandPreTranslate(&msg)) continue;
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
         if (result == -1) hr = HRESULT_FROM_WIN32(GetLastError());
     }
+    ShutdownMacGameMenu(window);
+    ShutdownSettingsMenu();
     ShutdownXamlLayer();
     if (IsWindow(window)) DestroyWindow(window);
     xamlFallback = nullptr;

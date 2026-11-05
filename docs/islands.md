@@ -14,10 +14,15 @@ Managed mode uses real Windows XAML, a desktop window, and a composed `SwapChain
 
 ## Settings and scrolling
 
-In XAML Islands mode, press **Ctrl+,** or choose **Game settings** from the
+Press **Ctrl+,** or choose **Game settings** from the
 title-bar menu (**Alt+Space**, or right-click the title bar). The host requests
 the game's own `SettingsPane` commands and invokes the selected command on its
 UI thread. Sudoku exposes **About**, **Game options**, and **How to play**.
+The same entry points work with the WPF-backed Wine host. With the bundled
+macOS Wine runtime, **Game Menu > Game settings…** provides a native menu-bar
+entry without assigning **Command+,**. Bejeweled registers **Bejeweled Settings**,
+**Privacy Policy**, **Terms of Use**, and **EULA**; the first opens its own XAML panel.
+The WPF path loads pane transitions without animating them and logs that limitation once.
 Its original `SettingsFlyout` controls are hosted in an island popup, positioned
 at the right edge and resized with the game window. A flyout narrowed by a small
 window returns to its own width when the window widens, and its size is
@@ -96,9 +101,18 @@ Requires Windows 10 1903 or later and desktop .NET Framework 4.x. Touch/pen inpu
 
 ## Wine
 
-Managed games do not run under Wine yet, and `pyappxportable` warns when it installs one there. Two gaps block them, both in Wine rather than in appx-portable:
+Wine lacks Windows' XAML Islands implementation. The WPF-backed projection is
+the alternative path used for Bejeweled LIVE under Wine. On Apple silicon it
+also needs the [patched CLR runtime](wine-clr.md). The macOS **Game Menu** entry
+requires the runtime's `appxmenu.so`; Ctrl+, and the title-bar entry remain
+available without that helper.
+
+The original Islands-only investigation identified these Wine prerequisites:
 
 - XAML Islands hosts the game in Windows' own XAML. Wine 11.18's `windows.ui.xaml.dll` implements none of the `Windows.UI.Xaml` classes, such as `DesktopWindowXamlSource` or the controls, only helpers like `Uri` and `PropertySet`.
 - On macOS, wine-mono 11.3.0 under Wine Devel 11.18 hangs at full CPU in any 32-bit .NET program, right after loading `mscorlib`. 64-bit .NET programs run. `appx-host.exe` is 32-bit because CLR hosting is x86 only.
 
-Tested with Bejeweled LIVE 4.0.0.10 on Wine Devel 11.18 (macOS, Apple silicon): `appx-host.exe` never reaches the shim. Native games, which use the portable XAML backend, are unaffected.
+Before the CLR patch and WPF-backed projection, Bejeweled LIVE 4.0.0.10 on
+Wine Devel 11.18 (macOS, Apple silicon) never reached the shim. That historical
+result does not describe the current WPF path. Native games use the portable
+XAML backend.

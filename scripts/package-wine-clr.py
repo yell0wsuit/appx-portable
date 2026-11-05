@@ -85,11 +85,15 @@ def main():
     if not target.is_file():
         raise SystemExit("base archive has no expected WoW64 component")
     shutil.copyfile(cpu, target)
+    menu = build / "appxmenu.so"
+    menu_target = app / "Contents/Resources/wine/lib/wine/x86_64-unix/appxmenu.so"
+    shutil.copyfile(menu, menu_target)
     # Replacing a sealed resource invalidates the upstream app signature.
     subprocess.run(["codesign", "--force", "--deep", "--sign", "-",
                     "--preserve-metadata=entitlements,requirements,flags,runtime", str(app)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     manifest = dict(schema=1, wine_version="11.18", cpu_sha256=hashlib.sha256(data).hexdigest(),
+                    menu_sha256=hashlib.sha256(menu_target.read_bytes()).hexdigest(),
                     base_url=url, base_sha256=expected,
                     patch_sha256=hashlib.sha256((build / "wow64cpu.patch").read_bytes()).hexdigest(),
                     source_sha256=hashlib.sha256((build / "wine-11.18.tar.xz").read_bytes()).hexdigest())
@@ -102,6 +106,10 @@ def main():
     with tarfile.open(build / "appx-portable-wine-clr-sources.tar.xz", "w:xz", preset=1) as output:
         for name in ("wine-11.18.tar.xz", "wow64cpu.patch", "build-wine-clr.sh"):
             output.add(build / name, arcname=name)
+        for name, path in (("game_menu.m", "wine/game_menu.m"),
+                           ("build-macos-menu.sh", "scripts/build-macos-menu.sh"),
+                           ("game_menu_test.m", "tests/macos/game_menu.m")):
+            output.add(build / name, arcname=path)
         output.add(stage / "wine-clr.json", arcname="wine-clr.json")
     print(json.dumps(dict(archive=str(artifact), sha256=hashlib.sha256(artifact.read_bytes()).hexdigest())))
 

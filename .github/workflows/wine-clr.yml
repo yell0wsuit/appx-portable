@@ -4,6 +4,9 @@ on:
     pull_request:
         paths:
             - 'wine/wow64cpu.patch'
+            - 'wine/game_menu.m'
+            - 'scripts/build-macos-menu.sh'
+            - 'tests/macos/**'
             - 'scripts/*wine-clr*'
             - 'tests/wine_clr/**'
             - '.github/workflows/wine-clr.yml'
