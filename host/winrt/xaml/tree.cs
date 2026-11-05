@@ -20,7 +20,7 @@ namespace Windows.UI.Xaml
         }
 
         // The logical parent, as UWP's.
-        public DependencyObject Parent { get { return Peers.Wrap(Element.Parent); } }
+        public DependencyObject Parent { get { return Peers.Wrap((object)PopupPeer.ParentOf(Element) ?? Element.Parent); } }
 
         public ResourceDictionary Resources
         {

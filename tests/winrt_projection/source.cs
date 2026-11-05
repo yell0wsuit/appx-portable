@@ -534,6 +534,7 @@ namespace Fixture
                 var popup = new Windows.UI.Xaml.Controls.Primitives.Popup();
                 var child = new Grid();
                 popup.Child = child;
+                Check(ReferenceEquals(child.Parent, popup), "a closed popup retains its child's public logical parent");
                 popup.HorizontalOffset = 40; popup.VerticalOffset = 25;
                 int closed = 0;
                 var token = popup.add_Closed((sender, args) => { Check(ReferenceEquals(sender, popup), "Closed sender"); ++closed; });
@@ -544,10 +545,12 @@ namespace Fixture
                 Check(overlay != null && System.Windows.Controls.Canvas.GetLeft(visual) == 40 && System.Windows.Controls.Canvas.GetTop(visual) == 25,
                       "an open popup's child sits in the window overlay at its offsets");
                 Check(System.Windows.Media.VisualTreeHelper.GetParent(overlay) is System.Windows.Controls.Grid, "the overlay is a layer of the window root");
+                Check(ReferenceEquals(child.Parent, popup), "the internal overlay must not replace the popup child's public parent");
                 popup.HorizontalOffset = 50;
                 Check(System.Windows.Controls.Canvas.GetLeft(visual) == 50, "moving an open popup");
-                popup.IsOpen = false;
+                ((Windows.UI.Xaml.Controls.Primitives.Popup)child.Parent).IsOpen = false;
                 Check(System.Windows.Media.VisualTreeHelper.GetParent(visual) == null && closed == 1, "closing removes the child and raises Closed");
+                Check(ReferenceEquals(child.Parent, popup), "closing retains popup ownership for reopening");
                 // Light dismiss: a press on the overlay outside the child closes it.
                 popup.IsLightDismissEnabled = true;
                 popup.IsOpen = true;
@@ -557,6 +560,8 @@ namespace Fixture
                 overlay.RaiseEvent(press);
                 Check(!popup.IsOpen && closed == 2 && overlay.Background == null, "a press outside the child dismisses it");
                 popup.remove_Closed(token);
+                popup.Child = null;
+                Check(child.Parent == null, "clearing Popup.Child releases its logical parent");
             });
             test("popup-detached-position", () =>
             {

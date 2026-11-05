@@ -44,6 +44,13 @@ namespace AppxPortable.WinRT.Xaml
     public sealed class PopupPeer : System.Windows.FrameworkElement
     {
         private static readonly List<PopupPeer> open = new List<PopupPeer>();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.DependencyObject, PopupPeer> parents =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<System.Windows.DependencyObject, PopupPeer>();
+        internal static PopupPeer ParentOf(System.Windows.DependencyObject child)
+        {
+            PopupPeer parent;
+            return parents.TryGetValue(child, out parent) ? parent : null;
+        }
 
         public static readonly System.Windows.DependencyProperty ChildProperty = System.Windows.DependencyProperty.Register("Child",
             typeof(System.Windows.UIElement), typeof(PopupPeer), new System.Windows.PropertyMetadata(null, (d, e) => ((PopupPeer)d).ChildChanged(e)));
@@ -89,6 +96,10 @@ namespace AppxPortable.WinRT.Xaml
 
         private void ChildChanged(System.Windows.DependencyPropertyChangedEventArgs e)
         {
+            var previous = e.OldValue as System.Windows.DependencyObject;
+            var next = e.NewValue as System.Windows.DependencyObject;
+            if (previous != null && ReferenceEquals(ParentOf(previous), this)) parents.Remove(previous);
+            if (next != null) parents.Add(next, this);
             if (!IsOpen) return;
             var overlay = Host.Overlay;
             if (e.OldValue != null) overlay.Children.Remove((System.Windows.UIElement)e.OldValue);
